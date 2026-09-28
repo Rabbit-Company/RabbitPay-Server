@@ -27,7 +27,7 @@ jobs:
       - run: bun run build:web
       - run: bun run build
       - run: tar -czf rabbitpay-server-linux-${{ matrix.arch }}.tar.gz rabbitpay-server web/dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rabbitpay-server-linux-${{ matrix.arch }}
           path: rabbitpay-server-linux-${{ matrix.arch }}.tar.gz
