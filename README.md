@@ -195,6 +195,7 @@ review. Bug reports and feature requests are welcome as issues.
 
 Please report vulnerabilities privately to
 [info@rabbitpay.net](mailto:info@rabbitpay.net) instead of opening a public issue.
+See the [security policy](SECURITY.md) for details.
 
 ## License
 

@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Security issues must be reported privately. See the security policy.
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where does it happen?
+      options:
+        - rabbitpay.net
+        - Self-hosted with Docker
+        - Self-hosted with the binary
+        - Self-hosted from source
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Leave empty for rabbitpay.net.
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      description: Self-hosted only.
+      options:
+        - SQLite
+        - MySQL
+        - PostgreSQL
+        - YugabyteDB
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you expected to happen, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server logs or browser console output. Remove keys, tokens and customer data first.
+      render: text
