@@ -12,11 +12,12 @@ import { brandingOf } from "../../branding";
 import { availableFor } from "../../payments/methods";
 import { accountingPeriodLocked } from "../../accounting-periods";
 import { createInvoice } from "../../invoice-service";
-import { InvoiceDataIncomplete } from "../../invoice-validation";
+import { InvoiceDataIncomplete, prepareInvoiceIssue } from "../../invoice-validation";
+import { calculateTotals } from "../../invoicing";
+import { orderReference } from "../../invoice-numbers";
 import { OutOfStock, stockShortage } from "../../item-keys";
 import { canEmail } from "../../email/mailer";
 import { queueInvoiceEmail } from "../../email/messages";
-import { enqueueLater } from "../../webhooks/events";
 import { documentStorage } from "../../document-storage";
 import { brandImages, imagePath, storeBySlug, type LoadedStore } from "../../store/store";
 import { isSlug } from "../../store/config";
@@ -344,27 +345,40 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 	}
 
 	const now = Date.now();
+	const number = orderReference();
 	let invoice: InvoiceRow;
 	try {
 		const customer = await upsertCustomer(store.project.uuid, email, input.customer);
-		invoice = await createInvoice(store.project.uuid, {
-			customer,
-			currency: quote.currency,
-			items: quote.invoice_items,
-			discount_amount: quote.invoice_discount,
-			due_date: now + store.config.checkout.payment_days * DAY,
-			supply_date: now,
-			notes: null,
-			metadata: {
-				store: store.settings.slug,
-				terms_accepted_at: now,
-				...(quote.withdrawal_waiver ? { withdrawal_waived_at: now } : {}),
-				...(quote.coupon ? { coupon: quote.coupon.code } : {}),
+		const totals = calculateTotals(quote.invoice_items, quote.invoice_discount);
+		await prepareInvoiceIssue(
+			store.project,
+			{ currency: quote.currency, customer, due_date: now, supply_date: now, tax_amount: totals.tax_amount },
+			totals.items,
+			now
+		);
+		invoice = await createInvoice(
+			store.project.uuid,
+			{
+				customer,
+				currency: quote.currency,
+				items: quote.invoice_items,
+				discount_amount: quote.invoice_discount,
+				due_date: now + store.config.checkout.payment_days * DAY,
+				supply_date: null,
+				notes: null,
+				metadata: {
+					store: store.settings.slug,
+					order: number,
+					terms_accepted_at: now,
+					...(quote.withdrawal_waiver ? { withdrawal_waived_at: now } : {}),
+					...(quote.coupon ? { coupon: quote.coupon.code } : {}),
+				},
+				status: "draft",
+				source: "invoice",
+				created_by: null,
 			},
-			status: "open",
-			source: "invoice",
-			created_by: null,
-		});
+			{ draftReference: number, holdKeys: true }
+		);
 	} catch (err) {
 		await returnStock(store.project.uuid, input.lines);
 		if (coupon) await unclaimCoupon(coupon.uuid);
@@ -375,9 +389,10 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 
 	const address = shippingAddressOf(input, quote);
 	await Database`
-		INSERT INTO store_orders(invoice, project, email, fulfillment, shipping_method, shipping_address, note, tracking_url, stock_returned, created, updated)
+		INSERT INTO store_orders(invoice, project, email, fulfillment, shipping_method, shipping_address, note, tracking_url, stock_returned, number,
+			created, updated)
 		VALUES(${invoice.uuid}, ${store.project.uuid}, ${email}, 'pending', ${quote.shipping?.name ?? null}, ${address ? JSON.stringify(address) : null},
-			${input.note}, NULL, 0, ${now}, ${now})
+			${input.note}, NULL, 0, ${number}, ${now}, ${now})
 	`;
 	if (coupon && quote.coupon) await recordRedemption(coupon, invoice.uuid, email, quote.discount_amount);
 	await recordLicenseOrder(invoice.uuid, store.project.uuid, quote.licenses);
@@ -385,21 +400,20 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 
 	if (canEmail(store.project)) {
 		try {
-			await queueInvoiceEmail(store.project, invoice, { to: email, kind: "invoice", message: null, sentBy: null, payLink: true });
+			await queueInvoiceEmail(store.project, invoice, {
+				to: email,
+				kind: "order_placed",
+				message: null,
+				sentBy: null,
+				attachInvoice: false,
+				attachEslog: false,
+				payLink: true,
+			});
 		} catch (err) {
 			Logger.error(`[STORE] Could not queue the order email for ${invoice.reference}: ${err}`);
 		}
 	}
 
-	enqueueLater(store.project.uuid, "invoice.issued", {
-		invoice: invoice.uuid,
-		reference: invoice.reference,
-		status: invoice.status,
-		currency: invoice.currency,
-		total_amount: invoice.total_amount,
-		due_date: invoice.due_date,
-		store_order: true,
-	});
 	Logger.info(`[STORE] Order ${invoice.reference} placed in ${store.settings.slug}`);
 
 	return Utils.ok(ctx, { invoice: invoice.uuid, reference: invoice.reference, total_amount: invoice.total_amount, currency: invoice.currency }, 201);

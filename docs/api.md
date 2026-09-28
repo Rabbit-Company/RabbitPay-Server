@@ -310,17 +310,17 @@ exactly the same input and produce identical totals. A test asserts that.
 Set a webhook URL on the project and RabbitPay posts events to it as they happen,
 so an integration does not have to poll.
 
-| Event                    | Fired when                                        |
-| ------------------------ | ------------------------------------------------- |
-| `invoice.issued`         | A draft is opened, or the machine API raises one. |
-| `invoice.partially_paid` | Part of an invoice is settled.                    |
-| `invoice.paid`           | An invoice is settled in full.                    |
-| `invoice.overdue`        | An unpaid invoice passes its due date.            |
-| `invoice.refunded`       | Everything paid on an invoice is refunded.        |
-| `invoice.canceled`       | An invoice is withdrawn.                          |
-| `payment.received`       | A payment is seen but has not settled yet.        |
-| `payment.confirmed`      | A payment settles.                                |
-| `payment.refunded`       | A refund is issued.                               |
+| Event                    | Fired when                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `invoice.issued`         | A draft is opened, a paid store order is issued, or the machine API raises one. |
+| `invoice.partially_paid` | Part of an invoice is settled.                                                  |
+| `invoice.paid`           | An invoice is settled in full.                                                  |
+| `invoice.overdue`        | An unpaid invoice passes its due date.                                          |
+| `invoice.refunded`       | Everything paid on an invoice is refunded.                                      |
+| `invoice.canceled`       | An invoice is withdrawn.                                                        |
+| `payment.received`       | A payment is seen but has not settled yet.                                      |
+| `payment.confirmed`      | A payment settles.                                                              |
+| `payment.refunded`       | A refund is issued.                                                             |
 
 Each delivery is a POST carrying:
 

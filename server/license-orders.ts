@@ -58,6 +58,9 @@ export async function issueLicenseOrder(invoiceId: string): Promise<number> {
 		InvoiceItemRow,
 		"uuid" | "item" | "sort_order"
 	>[];
+	const [store] = (await Database`SELECT number FROM store_orders WHERE invoice = ${invoiceId}`) as { number: string | null }[];
+	const note =
+		store?.number && store.number !== invoice.reference ? `Store order ${store.number}, invoice ${invoice.reference}` : `Store order ${invoice.reference}`;
 	const licenses = JSON.parse(order.grants) as OrderedLicense[];
 	const timestamp = Date.now();
 
@@ -82,7 +85,7 @@ export async function issueLicenseOrder(invoiceId: string): Promise<number> {
 					currency: invoice.currency,
 					buyer_name: customer?.name ?? null,
 					buyer_email: customer?.email ?? null,
-					note: `Store order ${invoice.reference}`,
+					note,
 				},
 				license.quantity,
 				null,

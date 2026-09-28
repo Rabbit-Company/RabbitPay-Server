@@ -553,14 +553,15 @@ export async function orderView(slug: string, invoice: string): Promise<HTMLElem
 					"div",
 					{ class: "sf-order-hero sf-order-canceled" },
 					el("h1", {}, t("shop.order_canceled")),
-					el("p", {}, t("shop.order_reference", { reference: order.reference }))
+					el("p", {}, t("shop.order_reference", { reference: order.number }))
 				)
 			: el(
 					"div",
 					{ class: "sf-order-hero" },
 					el("span", { class: "sf-order-check" }, icon("check", 30)),
 					el("h1", {}, payable ? t("shop.order_received") : t("shop.order_thanks")),
-					el("p", {}, t("shop.order_reference", { reference: order.reference })),
+					el("p", {}, t("shop.order_reference", { reference: order.number })),
+					order.invoice_reference ? el("p", { class: "sf-muted" }, t("shop.order_invoice", { reference: order.invoice_reference })) : null,
 					payable ? el("p", { class: "sf-muted" }, t("shop.order_pay_by", { date: longDate(order.due_date) })) : null,
 					pay
 				);
@@ -636,7 +637,7 @@ function ordersList(ctx: StoreContext, orders: CustomerOrder[]): HTMLElement {
 			return el(
 				"a",
 				{ class: "sf-order-row", href },
-				el("div", {}, el("strong", {}, order.reference), el("span", { class: "sf-muted" }, `${order.store} | ${longDate(order.created)}`)),
+				el("div", {}, el("strong", {}, order.number), el("span", { class: "sf-muted" }, `${order.store} | ${longDate(order.created)}`)),
 				el("span", { class: `sf-state sf-state-${order.fulfillment}` }, t(`shop.fulfillment_${order.fulfillment}`)),
 				el("span", { class: "pill pill-" + order.payment_status }, statusLabel(order.payment_status)),
 				el("strong", {}, money(order.total_amount, order.currency))

@@ -157,6 +157,8 @@ export interface StoreAddress {
 export interface StoreOrder {
 	invoice: string;
 	reference: string;
+	number: string;
+	invoice_reference: string | null;
 	email: string;
 	customer_name: string | null;
 	fulfillment: StoreFulfillment;
@@ -1626,6 +1628,7 @@ export interface ProcessorState {
 
 export interface PublicInvoice {
 	reference: string;
+	document: "invoice" | "order";
 	merchant: string;
 	status: string;
 	currency: string;

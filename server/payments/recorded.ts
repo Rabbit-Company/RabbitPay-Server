@@ -5,6 +5,16 @@ import type { InvoiceRow } from "../database/models";
 
 export const PAYABLE_STATUSES = ["open", "overdue", "partially_paid"];
 
+export async function awaitsStorePayment(invoice: Pick<InvoiceRow, "uuid" | "status">): Promise<boolean> {
+	if (invoice.status !== "draft") return false;
+	const [order] = (await Database`SELECT fulfillment FROM store_orders WHERE invoice = ${invoice.uuid}`) as { fulfillment: string }[];
+	return order !== undefined && order.fulfillment !== "canceled";
+}
+
+export async function acceptsPayment(invoice: Pick<InvoiceRow, "uuid" | "status">): Promise<boolean> {
+	return PAYABLE_STATUSES.includes(invoice.status) || (await awaitsStorePayment(invoice));
+}
+
 export interface RecordedPayment {
 	invoice: InvoiceRow;
 	processor: string;

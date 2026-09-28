@@ -241,6 +241,8 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 		);
 		const settled = invoice.status === "paid";
 		const closed = invoice.status === "canceled";
+		const order = invoice.document === "order";
+		const date = formatDate(invoice.due_date, invoice.date_format as DateFormat, invoice.timezone);
 
 		const summary = el(
 			"div",
@@ -249,9 +251,9 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 				"div",
 				{ class: "pay-head" },
 				el("div", {}, el("p", { class: "muted" }, invoice.merchant), el("h1", {}, formatMoney(invoice.outstanding || invoice.total_amount, invoice.currency))),
-				statusPill(invoice.status, t)
+				statusPill(order && invoice.status === "draft" ? "open" : invoice.status, t)
 			),
-			el("p", { class: "muted mono" }, invoice.reference),
+			el("p", { class: "muted mono" }, order ? t("pay.order_number", { reference: invoice.reference }) : invoice.reference),
 			el(
 				"div",
 				{ class: "totals" },
@@ -276,8 +278,8 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 					el("span", { class: "mono" }, formatMoney(invoice.outstanding, invoice.currency))
 				)
 			),
-			el("p", { class: "muted" }, t("pay.due_on", { date: formatDate(invoice.due_date, invoice.date_format as DateFormat, invoice.timezone) })),
-			pdfLink(invoiceId, t)
+			el("p", { class: "muted" }, order ? t("pay.pay_by", { date }) : t("pay.due_on", { date })),
+			order ? el("p", { class: "muted" }, t("pay.order_note")) : pdfLink(invoiceId, t)
 		);
 
 		const items =

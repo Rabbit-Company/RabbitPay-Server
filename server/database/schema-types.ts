@@ -59,6 +59,7 @@ const TEXT_LENGTHS: Record<string, number> = {
 	period: 7,
 	day: 64,
 	reference: 64,
+	number: 64,
 	wallet_key: 64,
 	processor: 32,
 	code: 255,

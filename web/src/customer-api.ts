@@ -74,6 +74,7 @@ export type CustomerProfileInput = Omit<CustomerProfile, "email" | "saved" | "up
 export interface CustomerOrder {
 	invoice: string;
 	reference: string;
+	number: string;
 	store: string;
 	store_url: string | null;
 	fulfillment: StoreFulfillment;

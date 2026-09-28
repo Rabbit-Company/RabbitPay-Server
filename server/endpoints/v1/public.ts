@@ -27,9 +27,8 @@ import { brandingOf, loadLogo } from "../../branding";
 import { invoicePdf, pdfResponse } from "../../invoice-pdf";
 import { issueSnapshotFor, snapshotLogo } from "../../invoice-snapshot";
 import { creditNoteSnapshotFor, creditNoteSnapshotLogo } from "../../credit-note-snapshot";
+import { acceptsPayment, awaitsStorePayment } from "../../payments/recorded";
 import type { CreditNoteRow, InvoiceItemRow, InvoiceRow, ProjectRow } from "../../database/models";
-
-const PAYABLE_STATUSES = ["open", "overdue", "partially_paid"];
 
 const publicLimit = rateLimit({ windowMs: 60 * 1000, max: 60, message: "Too many requests. Please slow down." });
 const documentLimit = rateLimit({ windowMs: 60 * 1000, max: 10, message: "Too many requests. Please slow down." });
@@ -114,7 +113,8 @@ Server.app.get("/api/v1/public/invoices/:invoice", publicLimit, async (ctx) => {
 	if (!Validate.uuid(invoiceId)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);
 
 	const found = await load(invoiceId);
-	if (!found || found.invoice.status === "draft") return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+	const order = found ? await awaitsStorePayment(found.invoice) : false;
+	if (!found || (found.invoice.status === "draft" && !order)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
 
 	const items = (await Database`
 		SELECT description, quantity, unit, unit_price, tax_rate, tax_amount, total_price FROM invoice_items WHERE invoice = ${invoiceId} ORDER BY sort_order
@@ -127,6 +127,7 @@ Server.app.get("/api/v1/public/invoices/:invoice", publicLimit, async (ctx) => {
 
 	return Utils.ok(ctx, {
 		reference: found.invoice.reference,
+		document: order ? "order" : "invoice",
 		merchant: displayNameOf(found.project),
 		status: found.invoice.status,
 		currency: found.invoice.currency,
@@ -167,7 +168,7 @@ Server.app.post("/api/v1/public/invoices/:invoice/pay/:processor", publicLimit, 
 
 	const found = await load(invoiceId);
 	if (!found) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!PAYABLE_STATUSES.includes(found.invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
+	if (!(await acceptsPayment(found.invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
 
 	const processor = ctx.params["processor"];
 	const available = await availableFor(found.project.uuid);

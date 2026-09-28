@@ -34,6 +34,7 @@ import type { CustomerRow, InvoiceRow } from "../../database/models";
 import { accountingPeriodLocked } from "../../accounting-periods";
 import { fiscalDocumentFor } from "../../fiscal/documents";
 import { resolveReferenceDocument, type ReferenceDocumentInput } from "../../reference-document";
+import { awaitsStorePayment } from "../../payments/recorded";
 
 interface CreateInvoiceBody extends ReferenceDocumentInput {
 	customer?: string | null;
@@ -164,7 +165,7 @@ Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Pe
 
 	const invoice = await loadInvoice(project.uuid, invoiceId);
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!isEditable(invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
 
 	let data: UpdateInvoiceBody;
 	try {
@@ -460,7 +461,7 @@ Server.app.delete("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), P
 
 	const invoice = await loadInvoice(project.uuid, invoiceId);
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!isEditable(invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
 
 	await Database`DELETE FROM invoices WHERE uuid = ${invoiceId}`;
 

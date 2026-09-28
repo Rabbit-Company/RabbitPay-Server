@@ -232,3 +232,8 @@ export async function createLicenseProductSchema(sql: SQL, dialect: Dialect) {
 		`CREATE INDEX IF NOT EXISTS idx_license_orders_pending ON license_orders(minted_at, created)`,
 	]);
 }
+
+export async function addStoreOrderNumbers(sql: SQL, dialect: Dialect) {
+	await sql.unsafe(`ALTER TABLE store_orders ADD COLUMN number ${schemaTypes(dialect).text("number")}`);
+	await sql`UPDATE store_orders SET number = (SELECT reference FROM invoices WHERE invoices.uuid = store_orders.invoice)`;
+}

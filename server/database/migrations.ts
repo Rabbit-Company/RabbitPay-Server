@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import type { Dialect } from "./dialect";
 import { schemaTypes } from "./schema-types";
 import { createSchema, run } from "./schema";
-import { createLicenseProductSchema, createStoreCouponSchema, createStoreSchema } from "./store-schema";
+import { addStoreOrderNumbers, createLicenseProductSchema, createStoreCouponSchema, createStoreSchema } from "./store-schema";
 import {
 	addEmployeeSeats,
 	addEmployeeWorkforceSettings,
@@ -291,6 +291,7 @@ export const MIGRATIONS: Migration[] = [
 	},
 	{ version: 25, name: "employee seats", up: addEmployeeSeats },
 	{ version: 26, name: "license products", up: createLicenseProductSchema },
+	{ version: 27, name: "store order numbers", up: addStoreOrderNumbers },
 ];
 
 export class SchemaTooNew extends Error {

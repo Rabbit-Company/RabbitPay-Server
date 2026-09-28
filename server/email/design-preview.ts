@@ -27,6 +27,13 @@ const DEFAULT_KEYS: Record<CustomerEmailKind, Partial<Record<keyof EmailTexts, T
 	receipt: { subject: "email.receipt.subject", heading: "email.receipt.heading", intro: "email.receipt.intro", button: "email.receipt.button" },
 	credit_note: { subject: "email.credit_note.subject", heading: "email.credit_note.heading", intro: "email.credit_note.intro" },
 	keys: { subject: "email.keys.subject", heading: "email.keys.heading", intro: "email.keys.intro", button: "email.keys.button", closing: "email.keys.keep" },
+	order_placed: {
+		subject: "email.order_placed.subject",
+		heading: "email.order_placed.heading",
+		intro: "email.order_placed.intro",
+		button: "email.invoice.button",
+		closing: "email.order_placed.closing",
+	},
 	order_processing: {
 		subject: "email.order.subject_processing",
 		heading: "email.order.heading_processing",
@@ -77,6 +84,17 @@ export async function previewEmail(project: ProjectRow, design: EmailDesign, kin
 	const url = `${Utils.publicUrl()}/pay/preview`;
 	const reference = "260924000042";
 
+	if (kind === "order_placed") {
+		return invoiceEmail(
+			brand,
+			kind,
+			{ reference: "ORDER-482915073", currency: project.currency, total, tax, outstanding: total, dueDate: now + 3 * DAY, paid: false },
+			lines,
+			url,
+			null,
+			{ custom }
+		);
+	}
 	if (kind === "invoice" || kind === "reminder_before" || kind === "reminder_after") {
 		const due = kind === "reminder_after" ? now - 3 * DAY : kind === "reminder_before" ? now + 3 * DAY : now + 14 * DAY;
 		return invoiceEmail(brand, kind, { reference, currency: project.currency, total, tax, outstanding: total, dueDate: due, paid: false }, lines, url, null, {

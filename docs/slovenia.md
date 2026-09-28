@@ -184,7 +184,8 @@ Once it is on, issued invoices are numbered `PREMISE-DEVICE-NUMBER`, for example
 `SPLET-1-15`, counting up without gaps on each device. When a payment that needs
 verification settles, RabbitPay computes the ZOI, signs the message and sends it
 to FURS with mutual TLS. An invoice issued earlier and paid later keeps its
-original issue time. Terminal sales are sent straight away. When FURS cannot be
+original issue time. Store orders are only numbered and issued when their
+payment arrives, so unpaid orders take no numbers. Terminal sales are sent straight away. When FURS cannot be
 reached, the invoice waits, is retried with growing delays and is then sent
 marked as a subsequent submission. Each record has a deadline of two working
 days for terminal sales and ten for invoices paid later. A rejection keeps its

@@ -10,7 +10,7 @@ import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { ProcessorType } from "../../payments/types";
-import { PAYABLE_STATUSES, recordPayment } from "../../payments/recorded";
+import { acceptsPayment, recordPayment } from "../../payments/recorded";
 import { FISCAL_PROCESSORS, fiscalBlocked } from "../../fiscal/config";
 import { fiscalDocumentFor } from "../../fiscal/documents";
 import { applyBalance, balanceFor, refundableAmount, REFUND_TYPES, SETTLED_PAYMENT_STATUSES, SETTLED_REFUND_STATUSES } from "../../payments/ledger";
@@ -158,7 +158,7 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 		SELECT * FROM invoices WHERE uuid = ${data.invoice!} AND project = ${project.uuid}
 	`) as InvoiceRow[];
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!PAYABLE_STATUSES.includes(invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
+	if (!(await acceptsPayment(invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
 	if (data.currency !== undefined && data.currency !== invoice.currency) return Utils.fail(ctx, ErrorCode.CURRENCY_MISMATCH);
 
 	const status = data.status ?? "completed";

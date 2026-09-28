@@ -791,16 +791,17 @@ Server.app.get(`${base}/orders`, Auth.required(), Permissions.require(Permission
 		payment === "paid"
 			? Database`AND i.status = 'paid'`
 			: payment === "unpaid"
-				? Database`AND i.status IN ('open', 'overdue', 'partially_paid')`
+				? Database`AND i.status IN ('draft', 'open', 'overdue', 'partially_paid')`
 				: payment === "to_ship"
 					? Database`AND i.status = 'paid' AND o.fulfillment IN ('pending', 'processing')`
 					: Database``;
 	const where = Database`o.project = ${project.uuid} ${fulfillmentFilter} ${paymentFilter}
-		AND (LOWER(i.reference) LIKE ${pattern} OR LOWER(o.email) LIKE ${pattern} OR LOWER(COALESCE(c.name, '')) LIKE ${pattern})`;
+		AND (LOWER(i.reference) LIKE ${pattern} OR LOWER(COALESCE(o.number, '')) LIKE ${pattern}
+			OR LOWER(o.email) LIKE ${pattern} OR LOWER(COALESCE(c.name, '')) LIKE ${pattern})`;
 
 	const rows = (await Database`
-		SELECT o.*, i.reference, i.status, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount, i.due_date, c.name AS customer_name,
-			sc.code AS coupon_code, r.discount AS coupon_discount
+		SELECT o.*, i.reference, i.status, i.issued_at, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount, i.due_date,
+			c.name AS customer_name, sc.code AS coupon_code, r.discount AS coupon_discount
 		FROM store_orders o JOIN invoices i ON i.uuid = o.invoice LEFT JOIN customers c ON c.uuid = i.customer
 			LEFT JOIN store_coupon_redemptions r ON r.invoice = o.invoice LEFT JOIN store_coupons sc ON sc.uuid = r.coupon
 		WHERE ${where}

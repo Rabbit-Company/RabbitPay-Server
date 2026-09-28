@@ -90,22 +90,46 @@ accepting the terms. A cart with license keys also requires the customer to
 agree that delivery starts right away and that they lose the right of
 withdrawal. Both consents are recorded with a timestamp in the invoice
 metadata.
-Their billing and delivery details are saved for next time if they choose. The
-order becomes an issued invoice on the project, with the store's shipping as a
-line when it costs anything, and the customer pays it on the regular payment
-page with any enabled payment method. Physical stock is taken when the order is
-placed. Prices shown in the store include VAT for the seller's country. VAT for
-the buyer's country, OSS and reverse charge follow the same rules as invoices.
+Their billing and delivery details are saved for next time if they choose.
+Prices shown in the store include VAT for the seller's country. VAT for the
+buyer's country, OSS and reverse charge follow the same rules as invoices.
 Orders are refused while the project has no payment method, no payments or
-storage left, or a locked accounting period.
+storage left, a locked accounting period, or company details an invoice needs.
+
+## Payment and invoicing
+
+A new order is not an invoice yet. It is a draft with an order number such as
+`ORDER-482915073`, the store's shipping as a line when it costs anything, and
+the payment deadline from the store settings. The customer gets an order email
+with a link to the regular payment page, which offers every enabled payment
+method. A bank transfer uses the order number in its RF reference. Physical
+stock and license keys from a key pool are held for the order as soon as it is
+placed.
+
+The invoice is issued when the first payment settles, whether a card payment,
+a confirmed crypto payment or a bank transfer recorded under Payments. It gets
+the next invoice number, today's issue and supply date, and is verified with
+FURS when the payment method needs it. The customer then receives the invoice
+as a PDF, followed by any license keys. Invoice numbers are only used for
+orders that are paid, so abandoned orders leave no gaps and need no credit
+notes. The order keeps its order number, and both numbers are shown on the
+order page.
+
+An order that has received no payment 7 days after its payment deadline is
+canceled automatically: the stock and keys are released and a coupon use is
+returned. A payment for a canceled order cannot be recorded, so a late bank
+transfer is refunded. While an order waits for payment, it cannot be edited or
+deleted under Invoices, only canceled from the store's Orders tab.
 
 ## Orders
 
 The Orders tab lists store orders with a "paid, to ship" view.
 Moving an order to preparing, shipped (with a tracking link) or delivered can
-email the customer. Canceling an order that is not shipped cancels an unpaid
-invoice with a credit note and returns the stock. A paid order is refunded
-separately under Payments.
+email the customer. Canceling an order that is not shipped returns the stock.
+An order waiting for payment is canceled without an invoice. One whose invoice
+was issued by hand under Invoices is canceled with a credit note. A paid order
+is refunded separately under Payments. Search finds orders by order number,
+invoice number, email or name.
 
 ## Privacy
 

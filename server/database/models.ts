@@ -474,6 +474,7 @@ export type EmailKind =
 	| "credit_note"
 	| "fiscal_alert"
 	| "order_update"
+	| "order_placed"
 	| "order_processing"
 	| "order_shipped"
 	| "order_delivered"
@@ -809,6 +810,7 @@ export interface StoreOrderRow {
 	note: string | null;
 	tracking_url: string | null;
 	stock_returned: number;
+	number: string | null;
 	created: number;
 	updated: number;
 }

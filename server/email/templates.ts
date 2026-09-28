@@ -53,7 +53,7 @@ export interface ReceiptFacts {
 	paidAt: number;
 }
 
-export type InvoiceEmailKind = "invoice" | "reminder_before" | "reminder_after";
+export type InvoiceEmailKind = "invoice" | "reminder_before" | "reminder_after" | "order_placed";
 
 export interface KeyGroup {
 	name: string;
@@ -393,19 +393,23 @@ export function invoiceEmail(
 		merchant: brand.merchant,
 		reference: invoice.reference,
 		date: due,
-		amount: money(kind === "invoice" ? invoice.total : invoice.outstanding, invoice.currency, brand.language),
+		amount: money(kind === "invoice" || kind === "order_placed" ? invoice.total : invoice.outstanding, invoice.currency, brand.language),
 	};
+	const order = kind === "order_placed";
 
 	const subjectKey: Record<InvoiceEmailKind, TranslationKey> = {
 		invoice: "email.invoice.subject",
 		reminder_before: "email.reminder_before.subject",
 		reminder_after: "email.reminder_after.subject",
+		order_placed: "email.order_placed.subject",
 	};
 
 	const paragraphs =
 		kind === "invoice"
 			? [customText(custom, "intro", t("email.invoice.intro", params), params), ...(invoice.paid ? [t("email.invoice.paid")] : [])]
-			: [customText(custom, "intro", t(kind === "reminder_before" ? "email.reminder_before.intro" : "email.reminder_after.intro", params), params)];
+			: order
+				? [customText(custom, "intro", t("email.order_placed.intro", params), params)]
+				: [customText(custom, "intro", t(kind === "reminder_before" ? "email.reminder_before.intro" : "email.reminder_after.intro", params), params)];
 	if (extras.attached) paragraphs.push(t("email.invoice.attached"));
 	if (extras.eslogAttached) paragraphs.push(t("email.eslog_attached"));
 
@@ -420,14 +424,17 @@ export function invoiceEmail(
 				: null;
 
 	return render(brand, customText(custom, "subject", t(subjectKey[kind], params), params), {
-		heading: customText(custom, "heading", t("email.invoice.heading", params), params),
+		heading: customText(custom, "heading", t(order ? "email.order_placed.heading" : "email.invoice.heading", params), params),
 		preheader: invoice.paid ? undefined : `${amount} | ${t("invoice.due")}: ${due}`,
 		paragraphs,
 		summary: {
 			label: t(invoice.paid ? "invoice.total" : "invoice.outstanding"),
 			amount,
 			status,
-			facts: [{ label: t("invoice.title"), value: invoice.reference }, ...(invoice.paid ? [] : [{ label: t("invoice.due"), value: due }])],
+			facts: [
+				{ label: t(order ? "email.order_placed.number" : "invoice.title"), value: invoice.reference },
+				...(invoice.paid ? [] : [{ label: t(order ? "email.order_placed.pay_by" : "invoice.due"), value: due }]),
+			],
 		},
 		note: message ? { title: t("email.message_from", params), body: message } : null,
 		lines: { rows: lines, currency: invoice.currency, tax: invoice.tax, total: invoice.total },
@@ -446,7 +453,13 @@ export function invoiceEmail(
 			: null,
 		button: payUrl ? { label: customText(custom, "button", t("email.invoice.button"), params), url: payUrl } : null,
 		secondaryLink: extras.portalUrl ? { intro: t("email.portal.intro"), label: t("email.portal.button"), url: extras.portalUrl } : null,
-		closing: custom?.closing ? [customText(custom, "closing", "", params)] : kind === "invoice" ? [] : [t("email.reminder.ignore")],
+		closing: custom?.closing
+			? [customText(custom, "closing", "", params)]
+			: order
+				? [t("email.order_placed.closing")]
+				: kind === "invoice"
+					? []
+					: [t("email.reminder.ignore")],
 	});
 }
 

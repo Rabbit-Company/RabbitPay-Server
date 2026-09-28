@@ -11,6 +11,7 @@ const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode } = await import("../server/licensing");
 const { deliverPendingKeys } = await import("../server/key-delivery");
+const { issuePaidOrder } = await import("../server/store/order-issue");
 const { serverId } = await import("../server/server-identity");
 const { licensePrice } = await import("../server/license-pricing");
 
@@ -228,7 +229,7 @@ describe("license products", () => {
 		expect(Number(items[1].unit_price)).toBe(14500);
 
 		await deliverPendingKeys();
-		const early = await Database`SELECT uuid FROM license_keys WHERE note = ${`Store order ${placed.data.reference}`}`;
+		const early = await Database`SELECT uuid FROM license_keys WHERE note LIKE ${`Store order ${placed.data.reference}%`}`;
 		expect(early).toHaveLength(0);
 
 		const invoice = await call("GET", `${base()}/invoices/${order}`, tokens.admin);
@@ -238,10 +239,12 @@ describe("license products", () => {
 			amount: invoice.data.total_amount,
 		});
 		expect(paid.error).toBe(0);
+		const issued = await issuePaidOrder(order);
+		expect(issued).toMatch(/^[0-9]{12}$/);
 		await deliverPendingKeys();
 		await deliverPendingKeys();
 
-		const keys = await Database`SELECT * FROM license_keys WHERE note = ${`Store order ${placed.data.reference}`} ORDER BY type`;
+		const keys = await Database`SELECT * FROM license_keys WHERE note = ${`Store order ${placed.data.reference}, invoice ${issued}`} ORDER BY type`;
 		expect(keys).toHaveLength(2);
 		expect(keys[0]).toMatchObject({
 			type: "employees",
@@ -257,8 +260,10 @@ describe("license products", () => {
 
 		const delivered = await Database`SELECT secret, status FROM item_keys WHERE invoice = ${order} ORDER BY secret`;
 		expect(delivered.map((row: { status: string }) => row.status)).toEqual(["delivered", "delivered"]);
-		const email = messages.find((message) => message.to === "self-host@example.com" && message.text.includes(keys[1].code));
-		expect(email?.text).toContain(keys[0].signed_key);
+		const [email] = await Database`SELECT recipient, body_text FROM email_messages WHERE invoice = ${order} AND kind = 'keys'`;
+		expect(email.recipient).toBe("self-host@example.com");
+		expect(email.body_text).toContain(keys[1].code);
+		expect(email.body_text).toContain(keys[0].signed_key);
 
 		const target = (await call("POST", "/projects", tokens.admin, { name: "self-hosted-twin", currency: "EUR" })).data.uuid;
 		const seatsRedeemed = await call("POST", `/projects/${target}/license/redeem`, tokens.admin, { code: keys[0].signed_key });

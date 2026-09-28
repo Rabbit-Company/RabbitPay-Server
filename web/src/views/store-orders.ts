@@ -56,7 +56,7 @@ export async function storeOrdersView(uuid: string): Promise<HTMLElement> {
 									el(
 										"tr",
 										{},
-										el("td", {}, el("a", { class: "mono", href: `/projects/${uuid}/store/orders/${order.invoice}` }, order.reference)),
+										el("td", {}, el("a", { class: "mono", href: `/projects/${uuid}/store/orders/${order.invoice}` }, order.number)),
 										el("td", {}, formatDateTime(order.created)),
 										el("td", {}, el("div", {}, order.customer_name ?? order.email), order.customer_name ? el("div", { class: "muted" }, order.email) : null),
 										el("td", { class: "mono" }, formatMoney(order.total_amount, order.currency)),
@@ -189,8 +189,13 @@ function orderDetail(project: Project, initial: StoreOrder): HTMLElement {
 					"div",
 					{},
 					el("a", { class: "back-link", href: `/projects/${uuid}/store/orders` }, t("store.back_to_orders")),
-					el("h2", {}, t("store.order_title", { reference: order.reference })),
-					el("p", { class: "muted" }, formatDateTime(order.created))
+					el("h2", {}, t("store.order_title", { reference: order.number })),
+					el(
+						"p",
+						{ class: "muted" },
+						formatDateTime(order.created),
+						order.invoice_reference ? ` | ${t("shop.order_invoice", { reference: order.invoice_reference })}` : ""
+					)
 				),
 				el("div", { class: "line-actions" }, statusPill(order.payment_status), fulfillmentPill(order.fulfillment))
 			),

@@ -18,6 +18,7 @@ const { Settings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode, storageFor } = await import("../server/licensing");
+const { expireUnpaidOrders, issuePaidOrders, UNPAID_ORDER_GRACE_DAYS } = await import("../server/store/order-issue");
 
 Settings.web = { enabled: true, path: FIXTURE, landing_page: true };
 
@@ -342,7 +343,7 @@ describe("the online store module", () => {
 		expect(link.text).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout`)}`);
 	});
 
-	test("places an order that issues an invoice and takes the stock", async () => {
+	test("places an unnumbered order that takes the stock and can be paid", async () => {
 		expect((await call("POST", `/store/${slug}/checkout`, undefined, checkout())).error).toBe(1000);
 		expect((await call("POST", `/store/${slug}/checkout`, customerToken, checkout())).error).toBe(1168);
 
@@ -361,14 +362,29 @@ describe("the online store module", () => {
 		firstOrder = placed.data.invoice;
 
 		const [invoice] = await Database`SELECT * FROM invoices WHERE uuid = ${firstOrder}`;
-		expect(invoice.status).toBe("open");
-		expect(invoice.buyer_email).toBe("ana@example.com");
-		expect(invoice.issued_at).not.toBeNull();
+		expect(invoice.status).toBe("draft");
+		expect(invoice.reference).toMatch(/^ORDER-[0-9]{9}$/);
+		expect(invoice.issued_at).toBeNull();
+		expect(invoice.supply_date).toBeNull();
+		expect(placed.data.reference).toBe(invoice.reference);
 		const [product] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
 		expect(Number(product.stock)).toBe(1);
 
-		const invoiceEmail = messages.find((message) => message.to === "ana@example.com" && message.text.includes(invoice.reference));
-		expect(invoiceEmail ?? (await Database`SELECT * FROM email_messages WHERE invoice = ${firstOrder}`)[0]).toBeTruthy();
+		const [email] = await Database`SELECT kind, subject, body_text, attachment_name FROM email_messages WHERE invoice = ${firstOrder}`;
+		expect(email.kind).toBe("order_placed");
+		expect(email.subject).toContain(invoice.reference);
+		expect(email.body_text).toContain(`/pay/${firstOrder}`);
+		expect(email.attachment_name).toBeNull();
+
+		const page = await call("GET", `/public/invoices/${firstOrder}`);
+		expect(page.data).toMatchObject({ document: "order", reference: invoice.reference, status: "draft", outstanding: 36600 });
+		expect(page.data.methods.map((method: { processor: string }) => method.processor)).toContain("bank_transfer");
+		const transfer = await call("POST", `/public/invoices/${firstOrder}/pay/bank_transfer`, undefined, {});
+		expect(transfer.error).toBe(0);
+		expect(transfer.data.reference).toMatch(/^RF[0-9]{2}/);
+		expect((await call("GET", `/public/invoices/${firstOrder}/pdf`)).error).not.toBe(0);
+		expect((await call("PATCH", `${base()}/invoices/${firstOrder}`, ownerToken, { notes: "Edited" })).error).toBe(1041);
+		expect((await call("DELETE", `${base()}/invoices/${firstOrder}`, ownerToken)).error).toBe(1041);
 
 		const tooMany = await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ lines: [{ product: gpu, quantity: 2 }] }));
 		expect(tooMany.error).toBe(1162);
@@ -460,6 +476,51 @@ describe("the online store module", () => {
 		expect(Number(restored.stock)).toBe(1);
 	});
 
+	test("cancels orders that are not paid in time without using an invoice number", async () => {
+		const placed = await call("POST", `/store/${slug}/checkout`, customerToken, checkout());
+		expect(placed.status).toBe(201);
+		const [taken] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
+		expect(Number(taken.stock)).toBe(0);
+
+		expect(await expireUnpaidOrders()).toBe(0);
+		await Database`UPDATE invoices SET due_date = ${Date.now() - (UNPAID_ORDER_GRACE_DAYS + 1) * 86400000} WHERE uuid = ${placed.data.invoice}`;
+		expect(await expireUnpaidOrders()).toBe(1);
+
+		const [invoice] = await Database`SELECT status, reference, issued_at FROM invoices WHERE uuid = ${placed.data.invoice}`;
+		expect(invoice).toMatchObject({ status: "canceled", reference: placed.data.reference, issued_at: null });
+		const notes = await Database`SELECT uuid FROM credit_notes WHERE invoice = ${placed.data.invoice}`;
+		expect(notes).toHaveLength(0);
+		const [restored] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
+		expect(Number(restored.stock)).toBe(1);
+		expect((await call("POST", `/public/invoices/${placed.data.invoice}/pay/bank_transfer`, undefined, {})).error).not.toBe(0);
+	});
+
+	test("issues the invoice with the next number once the order is paid", async () => {
+		const order = firstOrder;
+		const [{ number }] = await Database`SELECT number FROM store_orders WHERE invoice = ${order}`;
+		const paid = await call("POST", `${base()}/transactions`, ownerToken, { invoice: order, processor: "bank_transfer", amount: 36600 });
+		expect(paid.error).toBe(0);
+		const [waiting] = await Database`SELECT status, paid_amount FROM invoices WHERE uuid = ${order}`;
+		expect(waiting.status).toBe("draft");
+		expect(Number(waiting.paid_amount)).toBe(36600);
+
+		await issuePaidOrders();
+		await issuePaidOrders();
+		const [invoice] = await Database`SELECT * FROM invoices WHERE uuid = ${order}`;
+		expect(invoice.status).toBe("paid");
+		expect(invoice.reference).toMatch(/^[0-9]{12}$/);
+		expect(invoice.issued_at).toBeGreaterThan(0);
+		expect(invoice.supply_date).toBe(invoice.issued_at);
+		expect(invoice.buyer_email).toBe("ana@example.com");
+
+		const [issuedEmail] = await Database`SELECT kind, attachment_name FROM email_messages WHERE invoice = ${order} AND kind = 'invoice'`;
+		expect(issuedEmail.attachment_name).not.toBeNull();
+		const view = await call("GET", `/store/${slug}/orders/${order}`, customerToken);
+		expect(view.data).toMatchObject({ number, invoice_reference: invoice.reference, payment_status: "paid" });
+		const listed = await call("GET", `${base()}/store/orders?search=${number.toLowerCase()}`, ownerToken);
+		expect(listed.data.total).toBe(1);
+	});
+
 	test("serves the storefront page with store search engine tags and keeps the admin hidden", async () => {
 		const storefront = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/asus-dual-rx-9060-xt`));
 		const html = await storefront.text();
@@ -481,7 +542,7 @@ describe("the online store module", () => {
 		expect(exported.headers.get("Content-Disposition")).toContain("my-data.json");
 		const data = (await exported.json()) as { profile: { city: string }; orders: unknown[] };
 		expect(data.profile.city).toBe("Ljubljana");
-		expect(data.orders.length).toBe(3);
+		expect(data.orders.length).toBe(4);
 
 		const deleted = await call("DELETE", "/customer/account", customerToken);
 		expect(deleted.error).toBe(0);

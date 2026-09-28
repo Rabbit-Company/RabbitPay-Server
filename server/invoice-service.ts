@@ -140,7 +140,12 @@ export async function stampIssue(
 	await saveIssuePresentation(sql, invoiceId, presentation, snapshot.issued_at);
 }
 
-export async function createInvoice(projectId: string, data: InvoiceInput): Promise<InvoiceRow> {
+export interface CreateOptions {
+	draftReference?: string;
+	holdKeys?: boolean;
+}
+
+export async function createInvoice(projectId: string, data: InvoiceInput, options: CreateOptions = {}): Promise<InvoiceRow> {
 	const totals = calculateTotals(data.items!, data.discount_amount ?? 0);
 	const currency = data.currency ?? (await projectCurrency(projectId));
 	const uuid = crypto.randomUUID();
@@ -165,7 +170,10 @@ export async function createInvoice(projectId: string, data: InvoiceInput): Prom
 		: null;
 
 	await Database.begin(async (tx) => {
-		const reference = status === "draft" ? draftReference() : await nextInvoiceNumber(tx, projectId, timestamp, data.source === "pos" ? "pos" : "invoice");
+		const reference =
+			status === "draft"
+				? (options.draftReference ?? draftReference())
+				: await nextInvoiceNumber(tx, projectId, timestamp, data.source === "pos" ? "pos" : "invoice");
 
 		await tx`
 			INSERT INTO invoices(uuid, project, customer, reference, status, currency, subtotal, discount_amount, tax_amount, total_amount,
@@ -180,7 +188,7 @@ export async function createInvoice(projectId: string, data: InvoiceInput): Prom
 
 		await replaceItems(tx, uuid, totals.items);
 		if (issue) await stampIssue(tx, uuid, issue.snapshot, data.created_by, issue.presentation);
-		if (status === "open") await reserveKeys(tx, uuid);
+		if (status === "open" || options.holdKeys) await reserveKeys(tx, uuid);
 	});
 	if (status === "open") {
 		const { archiveIssuedInvoice } = await import("./invoice-archive");

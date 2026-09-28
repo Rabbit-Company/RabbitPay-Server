@@ -8,7 +8,7 @@ import type { InvoiceItemRow, InvoiceRow, ProjectRow, StoreFulfillment, StoreOrd
 export const FULFILLMENTS: StoreFulfillment[] = ["pending", "processing", "shipped", "delivered", "canceled"];
 
 export type OrderRow = StoreOrderRow &
-	Pick<InvoiceRow, "reference" | "status" | "currency" | "total_amount" | "paid_amount" | "refunded_amount" | "credited_amount" | "due_date"> & {
+	Pick<InvoiceRow, "reference" | "status" | "issued_at" | "currency" | "total_amount" | "paid_amount" | "refunded_amount" | "credited_amount" | "due_date"> & {
 		customer_name: string | null;
 		coupon_code?: string | null;
 		coupon_discount?: number | null;
@@ -16,6 +16,10 @@ export type OrderRow = StoreOrderRow &
 
 function itemGross(item: InvoiceItemRow): number {
 	return item.discount_amount > 0 ? Math.round((item.total_price * (100 + item.tax_rate)) / 100) : item.total_price + item.tax_amount;
+}
+
+export function paymentStatusOf(status: InvoiceRow["status"]): InvoiceRow["status"] {
+	return status === "draft" ? "open" : status;
 }
 
 export function isFulfillment(value: unknown): value is StoreFulfillment {
@@ -34,10 +38,12 @@ export function presentOrder(row: OrderRow, items: InvoiceItemRow[] | null = nul
 	return {
 		invoice: row.invoice,
 		reference: row.reference,
+		number: row.number ?? row.reference,
+		invoice_reference: row.status === "draft" || row.issued_at === null ? null : row.reference,
 		email: row.email,
 		customer_name: row.customer_name,
 		fulfillment: row.fulfillment,
-		payment_status: row.status,
+		payment_status: paymentStatusOf(row.status),
 		currency: row.currency,
 		total_amount: row.total_amount,
 		outstanding: outstandingOf(row),
@@ -61,7 +67,7 @@ export function presentOrder(row: OrderRow, items: InvoiceItemRow[] | null = nul
 
 export async function findOrder(projectId: string, invoiceId: string): Promise<OrderRow | null> {
 	const [row] = (await Database`
-		SELECT o.*, i.reference, i.status, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount, i.due_date,
+		SELECT o.*, i.reference, i.status, i.issued_at, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount, i.due_date,
 			c.name AS customer_name, sc.code AS coupon_code, r.discount AS coupon_discount
 		FROM store_orders o JOIN invoices i ON i.uuid = o.invoice LEFT JOIN customers c ON c.uuid = i.customer
 			LEFT JOIN store_coupon_redemptions r ON r.invoice = o.invoice LEFT JOIN store_coupons sc ON sc.uuid = r.coupon

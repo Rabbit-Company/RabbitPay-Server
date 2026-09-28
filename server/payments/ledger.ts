@@ -2,6 +2,7 @@ import type { SQL } from "bun";
 import { safeInteger, addIntegers } from "../database/numbers";
 import { statusForPayment } from "../invoicing";
 import { deliverKeysSoon } from "../key-delivery";
+import { issueOrdersSoon } from "../store/order-issue";
 import { queueInvoiceVerification, submitFiscalSoon } from "../fiscal/documents";
 import { enqueueLater, type WebhookEvent } from "../webhooks/events";
 import type { InvoiceRow, InvoiceStatus } from "../database/models";
@@ -76,6 +77,7 @@ export async function applyBalance(sql: SQL, invoiceId: string): Promise<Invoice
 	`;
 
 	if (await queueInvoiceVerification(sql, invoiceId)) submitFiscalSoon();
+	if (invoice.status === "draft" && balance.paid_amount > 0) issueOrdersSoon();
 
 	if (balance.status !== invoice.status) {
 		if (balance.status === "paid") deliverKeysSoon();

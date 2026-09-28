@@ -39,6 +39,11 @@ export function draftReference(): string {
 	return `DRAFT-${suffix}`;
 }
 
+export function orderReference(): string {
+	const digits = [...crypto.getRandomValues(new Uint8Array(9))].map((byte) => String(byte % 10)).join("");
+	return `ORDER-${digits}`;
+}
+
 export function isDraftReference(value: string): boolean {
 	return value.startsWith("DRAFT-");
 }

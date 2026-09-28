@@ -18,6 +18,7 @@ import { isUiLanguage } from "../../../web/src/i18n/dictionary";
 import { isSlug } from "../../store/config";
 import { portalAccess } from "../../workforce/tickets";
 import { storeBySlug } from "../../store/store";
+import { paymentStatusOf } from "../../store/orders";
 import { readAddress, writeProfile, type ProfileFields } from "../../store/checkout";
 import { isCustomerType } from "../../tax";
 import type { CreditNoteRow, CustomerProfileRow, InvoiceRow, ProjectRow, StoreOrderRow } from "../../database/models";
@@ -387,10 +388,11 @@ Server.app.get("/api/v1/customer/orders", CustomerAuth.required(), async (ctx) =
 		orders: rows.map((row) => ({
 			invoice: row.invoice,
 			reference: row.reference,
+			number: row.number ?? row.reference,
 			store: storeName(row),
 			store_url: row.slug ? (row.domain ? `https://${row.domain}` : `/shop/${row.slug}`) : null,
 			fulfillment: row.fulfillment,
-			payment_status: row.status,
+			payment_status: paymentStatusOf(row.status),
 			currency: row.currency,
 			total_amount: row.total_amount,
 			outstanding: outstandingOf(row),
