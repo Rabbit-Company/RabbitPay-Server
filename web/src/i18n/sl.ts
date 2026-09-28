@@ -501,6 +501,10 @@ export const sl: UiDictionary = {
 	"count.days.two": "{count} dneva",
 	"count.days.few": "{count} dnevi",
 	"count.days.other": "{count} dni",
+	"count.employees.one": "{count} zaposleni",
+	"count.employees.two": "{count} zaposlena",
+	"count.employees.few": "{count} zaposleni",
+	"count.employees.other": "{count} zaposlenih",
 	"count.invoices.one": "{count} račun",
 	"count.invoices.two": "{count} računa",
 	"count.invoices.few": "{count} računi",
@@ -2251,6 +2255,17 @@ export const sl: UiDictionary = {
 	"license.workforce_hint":
 		"Evidenca delovnega časa s celotno zgodovino sprememb, dopusti in bolniške odsotnosti, slovenski prazniki, zahtevki, ki jih lahko spremljajo stranke, in ocena bruto plač.",
 	"license.workforce_open": "Odpri evidenco",
+	"license.grants_employees": "{employees} za {days}",
+	"license.employees": "Zaposleni",
+	"license.employees_used": "Ljudje v delovni sili",
+	"license.employees_included": "Vključeno z licenco za delovno silo",
+	"license.employees_seat_until": "Ključ za zaposlene do {date}",
+	"license.employees_hint":
+		"Šteje vsak, ki beleži delovni čas ali ima podatke o zaposlitvi, tudi lastniki. Ključi za zaposlene dodajo mesta za določeno število dni in vsak ključ poteče posebej.",
+	"license.employees_exceeded":
+		"V delovni sili je več ljudi, kot jih pokriva licenca. Evidenca, odsotnosti in zahtevki so samo za branje, dokler ne unovčite ključa za zaposlene ali odstranite ljudi.",
+	"workforce.seats_exceeded":
+		"Število ljudi v delovni sili ({used}) presega licenco ({limit}). Vse lahko še vedno berete in izvozite. Za nove vnose unovčite ključ za zaposlene ali odstranite ljudi.",
 	"workforce.tab_time": "Ure",
 	"workforce.tab_absences": "Odsotnosti",
 	"workforce.tab_report": "Mesečno poročilo",

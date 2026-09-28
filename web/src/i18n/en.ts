@@ -499,6 +499,10 @@ export const en = {
 	"count.days.two": "{count} days",
 	"count.days.few": "{count} days",
 	"count.days.other": "{count} days",
+	"count.employees.one": "{count} employee",
+	"count.employees.two": "{count} employees",
+	"count.employees.few": "{count} employees",
+	"count.employees.other": "{count} employees",
 	"count.invoices.one": "{count} invoice",
 	"count.invoices.two": "{count} invoices",
 	"count.invoices.few": "{count} invoices",
@@ -2247,6 +2251,17 @@ export const en = {
 	"license.workforce_hint":
 		"Timesheets with a full change history, vacation and sick leave, Slovenian holidays, tickets your customers can follow and gross pay estimates.",
 	"license.workforce_open": "Open timesheet",
+	"license.grants_employees": "{employees} for {days}",
+	"license.employees": "Employees",
+	"license.employees_used": "People in the workforce",
+	"license.employees_included": "Included with the workforce license",
+	"license.employees_seat_until": "Seat key until {date}",
+	"license.employees_hint":
+		"Everyone who logs working time or has an employee record counts, owners included. Employee seat keys add people for a number of days, and each key runs out on its own.",
+	"license.employees_exceeded":
+		"The workforce has more people than the license covers. Timesheets, absences and tickets are read only until you redeem an employee seat key or remove people.",
+	"workforce.seats_exceeded":
+		"The workforce has {used} people but the license covers {limit}. You can still read and export everything. Redeem an employee seat key or remove people to record new entries.",
 	"workforce.tab_time": "Time",
 	"workforce.tab_absences": "Absences",
 	"workforce.tab_report": "Monthly report",

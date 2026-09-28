@@ -119,6 +119,7 @@ export enum Error {
 	LICENSE_ISSUER_ONLY = 1240,
 	LICENSE_OTHER_SERVER = 1241,
 	SIGNED_LICENSE_REQUIRED = 1242,
+	EMPLOYEE_SEATS_EXCEEDED = 1243,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -567,6 +568,10 @@ namespace Errors {
 		1240: { message: "Only the RabbitPay license issuer can create license keys or change license limits.", httpCode: 403 },
 		1241: { message: "This license key was issued for another server. Check the Server ID you gave when buying it.", httpCode: 409 },
 		1242: { message: "This server only accepts license keys signed for its Server ID.", httpCode: 409 },
+		1243: {
+			message: "This project has more people in its workforce than its license covers. Redeem an employee seat license or remove people to continue.",
+			httpCode: 402,
+		},
 		2000: { message: "Something went wrong while trying to perform this action. Please try again later.", httpCode: 500 },
 		9999: { message: "Your do not have permission to perform this action.", httpCode: 403 },
 	};

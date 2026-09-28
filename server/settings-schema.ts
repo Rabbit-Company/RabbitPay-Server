@@ -88,6 +88,7 @@ export interface ServerSettings {
 		enabled: boolean;
 		free_transactions: number;
 		free_storage_gb: number;
+		free_employees: number;
 	};
 	payments: {
 		allow_private_wallets: boolean;
@@ -213,7 +214,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		phone: "",
 		business_only: false,
 	},
-	licensing: { enabled: true, free_transactions: 50, free_storage_gb: 1 },
+	licensing: { enabled: true, free_transactions: 50, free_storage_gb: 1, free_employees: 5 },
 	payments: { allow_private_wallets: false },
 	invoices: { overdue_interval: 300, recurring_interval: 300, document_interval: 60 },
 	fiscal: { poll_interval: 30, software_supplier_tax_number: 0, software_supplier_name: "RabbitPay" },
@@ -378,7 +379,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 	{
 		id: "licensing",
 		label: "Licensing",
-		description: "Every project gets free completed payments and document storage. License keys add payments, storage, or white labeling.",
+		description: "Every project gets free completed payments and document storage. License keys add payments, storage, employee seats or add-ons.",
 		fields: [
 			{
 				key: "licensing.enabled",
@@ -397,6 +398,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				key: "licensing.free_storage_gb",
 				label: "Included storage in GB",
 				hint: "Default document storage included with every project. Storage license keys add to it permanently.",
+				kind: "number",
+				min: 0,
+			},
+			{
+				key: "licensing.free_employees",
+				label: "Included employees",
+				hint: "People a workforce license covers without employee seat keys. Seat keys add more for a number of days.",
 				kind: "number",
 				min: 0,
 			},

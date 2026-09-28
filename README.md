@@ -152,7 +152,7 @@ need to go back.
 Self-hosted servers include the same free allowance as rabbitpay.net: every
 project gets 50 completed payments a month and 1 GB of document storage. License
 keys add payments, storage, white labeling, the online store or timesheets and
-payroll. They are sold by SIMONCA ZAJC S.P. at [rabbitpay.net](https://rabbitpay.net)
+payroll, which cover 5 people before employee seat keys are needed. They are sold by SIMONCA ZAJC S.P. at [rabbitpay.net](https://rabbitpay.net)
 or [info@rabbitpay.net](mailto:info@rabbitpay.net). Each key is signed for the
 Server ID shown under Admin, Overview and can be redeemed once. See
 [Administration](docs/administration.md#licensing) for details.

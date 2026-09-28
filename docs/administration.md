@@ -33,11 +33,27 @@ License keys add to a project:
 | White label  | Your own branding for a number of days.                                    |
 | Online store | A web store for a number of days (see [Online store](online-store.md)).    |
 | Workforce    | Timesheets, absences, tickets, employees and payroll for a number of days. |
+| Employees    | More people in the workforce for a number of days.                         |
 
 Keys with a duration start when they are redeemed, and a second key adds its days
 to whatever is left. Several keys of any type can be redeemed on one project. A
 project owner redeems keys under License in the project, and an administrator can
 apply one under Admin, Projects.
+
+A workforce license covers 5 people. Everyone who can log their own working time
+(owners, administrators, supervisors and employees) or has an employee record
+counts, while they are an active or suspended member. Pending invitations for
+those roles hold a place too. An employee seat key adds a number of people for a
+number of days. Unlike the other timed keys, seat keys do not add up in time:
+each one runs from its own redemption, and the seats of all running keys are
+added together.
+
+Inviting someone who would log time, giving a member such a role, or creating an
+employee record past the limit is refused with error `1243` (HTTP 402). If
+seats run out while more people are in the workforce, timesheets, absences,
+tickets and payroll become read only with the same error until a seat key is
+redeemed or people are removed. Removing members and employee records still
+works, and nothing is deleted.
 
 When the paid balance runs out, new open invoices, issuing drafts, terminal sales
 and recurring invoices are refused with error `1096` (HTTP 402). Drafts can still

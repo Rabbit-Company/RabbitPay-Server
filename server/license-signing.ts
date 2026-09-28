@@ -6,7 +6,7 @@ export const ISSUER_PUBLIC_KEY = "MCowBQYDK2VwAyEATQexSJApVWsQU+EimKUyHecWPi1H9H
 
 export const SIGNED_LICENSE_PREFIX = "RPAY2";
 const SIGNED_LICENSE = /^RPAY2\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/;
-const SIGNED_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce"];
+const SIGNED_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
 
 export interface SignedLicense {
 	v: 1;
@@ -16,6 +16,7 @@ export interface SignedLicense {
 	transactions: number | null;
 	duration_days: number | null;
 	storage_gb: number | null;
+	employees: number | null;
 	issued: number;
 }
 
@@ -100,9 +101,11 @@ export function readSignedLicense(value: string): SignedLicense | null {
 		const license = JSON.parse(Buffer.from(match[1], "base64url").toString("utf8")) as Partial<SignedLicense>;
 		if (license.v !== 1 || typeof license.id !== "string" || !/^[0-9a-f-]{36}$/.test(license.id)) return null;
 		if (typeof license.server !== "string" || !SIGNED_TYPES.includes(license.type as LicenseType)) return null;
+		const employees = license.employees ?? null;
 		if (!positiveOrNull(license.transactions) || !positiveOrNull(license.duration_days) || !positiveOrNull(license.storage_gb)) return null;
+		if (!positiveOrNull(employees)) return null;
 		if (typeof license.issued !== "number") return null;
-		return license as SignedLicense;
+		return { ...license, employees } as SignedLicense;
 	} catch {
 		return null;
 	}

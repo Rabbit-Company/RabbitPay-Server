@@ -3,7 +3,14 @@ import type { Dialect } from "./dialect";
 import { schemaTypes } from "./schema-types";
 import { createSchema, run } from "./schema";
 import { createStoreCouponSchema, createStoreSchema } from "./store-schema";
-import { addEmployeeWorkforceSettings, addPriorService, allowBreakEntries, createPayrollSchema, createWorkforceSchema } from "./workforce-schema";
+import {
+	addEmployeeSeats,
+	addEmployeeWorkforceSettings,
+	addPriorService,
+	allowBreakEntries,
+	createPayrollSchema,
+	createWorkforceSchema,
+} from "./workforce-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 export interface Migration {
@@ -282,6 +289,7 @@ export const MIGRATIONS: Migration[] = [
 			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN signed_key ${types.text("signed_key")}`);
 		},
 	},
+	{ version: 25, name: "employee seats", up: addEmployeeSeats },
 ];
 
 export class SchemaTooNew extends Error {

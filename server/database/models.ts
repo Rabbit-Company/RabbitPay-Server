@@ -536,7 +536,7 @@ export interface TransactionRow {
 
 export type LicenseBilling = "free" | "paid" | "unmetered";
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees";
 
 export type LicenseStatus = "available" | "redeemed" | "revoked";
 
@@ -547,6 +547,7 @@ export interface LicenseKeyRow {
 	transactions: number | null;
 	duration_days: number | null;
 	storage_gb: number | null;
+	employees: number | null;
 	status: LicenseStatus;
 	price: number | null;
 	currency: string | null;

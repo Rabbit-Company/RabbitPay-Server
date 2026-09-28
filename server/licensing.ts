@@ -5,14 +5,16 @@ import { DEFAULT_SETTINGS } from "./settings-schema";
 import { ErrorCode } from "./errors";
 import { isLicenseIssuer, looksSigned, readSignedLicense, signLicense } from "./license-signing";
 import { serverId } from "./server-identity";
+import { countedMembers, pendingTimeTrackers } from "./workforce/people";
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce"];
-export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce"];
+export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
+export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees"];
 export const MAX_LICENSE_TRANSACTIONS = 100_000_000;
 export const MAX_LICENSE_DAYS = 3650;
 export const MAX_LICENSE_STORAGE_GB = 1_000_000;
+export const MAX_LICENSE_EMPLOYEES = 1_000_000;
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -74,6 +76,10 @@ export function includedPayments(): number {
 
 export function includedStorageGb(): number {
 	return isLicenseIssuer() ? Settings.licensing.free_storage_gb : DEFAULT_SETTINGS.licensing.free_storage_gb;
+}
+
+export function includedEmployees(): number {
+	return isLicenseIssuer() ? Settings.licensing.free_employees : DEFAULT_SETTINGS.licensing.free_employees;
 }
 
 export function freeAllowance(project: Pick<ProjectRow, "free_transactions">): number {
@@ -174,11 +180,66 @@ export interface ProjectUsage {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	employees_included: number;
+	employees_licensed: number;
+	employees_used: number;
+	employees_limit: number | null;
+	employee_seats: EmployeeSeatGrant[];
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
+}
+
+export interface EmployeeSeatGrant {
+	employees: number;
+	until: number;
+}
+
+export interface EmployeeSeatUsage {
+	employees_included: number;
+	employees_licensed: number;
+	employees_used: number;
+	employees_limit: number | null;
+	employee_seats: EmployeeSeatGrant[];
+}
+
+export async function employeeSeatGrants(projectId: string, now = Date.now()): Promise<EmployeeSeatGrant[]> {
+	const keys = (await Database`
+		SELECT employees, duration_days, redeemed_at FROM license_keys
+		WHERE redeemed_project = ${projectId} AND type = 'employees' AND status = 'redeemed'
+	`) as Pick<LicenseKeyRow, "employees" | "duration_days" | "redeemed_at">[];
+	return keys
+		.map((key) => ({ employees: Number(key.employees ?? 0), until: Number(key.redeemed_at ?? 0) + Number(key.duration_days ?? 0) * DAY }))
+		.filter((grant) => grant.until > now)
+		.sort((first, second) => first.until - second.until);
+}
+
+export async function employeeSeatsFor(projectId: string, now = Date.now()): Promise<EmployeeSeatUsage> {
+	const grants = await employeeSeatGrants(projectId, now);
+	const included = includedEmployees();
+	const licensed = grants.reduce((total, grant) => total + grant.employees, 0);
+	return {
+		employees_included: included,
+		employees_licensed: licensed,
+		employees_used: (await countedMembers(projectId)).size,
+		employees_limit: licensingEnforced() ? included + licensed : null,
+		employee_seats: grants,
+	};
+}
+
+export async function employeeSeatsExceeded(projectId: string): Promise<boolean> {
+	if (!licensingEnforced()) return false;
+	const seats = await employeeSeatsFor(projectId);
+	return seats.employees_used > (seats.employees_limit ?? 0);
+}
+
+export async function hasEmployeeSeatFor(projectId: string, member: string | null): Promise<boolean> {
+	if (!licensingEnforced()) return true;
+	if (member !== null && (await countedMembers(projectId)).has(member)) return true;
+	const seats = await employeeSeatsFor(projectId);
+	return seats.employees_used + (await pendingTimeTrackers(projectId, member)) < (seats.employees_limit ?? 0);
 }
 
 export interface ProjectStorageUsage {
@@ -259,6 +320,7 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		store_until: project.store_until,
 		workforce: workforceActive(project, now),
 		workforce_until: project.workforce_until,
+		...(await employeeSeatsFor(projectId, now)),
 		...storage,
 	};
 }
@@ -308,6 +370,7 @@ export interface NewLicense {
 	transactions: number | null;
 	duration_days: number | null;
 	storage_gb: number | null;
+	employees: number | null;
 	price: number | null;
 	currency: string | null;
 	buyer_name: string | null;
@@ -338,14 +401,15 @@ export async function createLicenses(license: NewLicense, quantity: number, crea
 							transactions: license.transactions,
 							duration_days: license.duration_days,
 							storage_gb: license.storage_gb,
+							employees: license.employees,
 							issued: timestamp,
 						});
 			await tx`
-				INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, status, price, currency, buyer_name, buyer_email, note,
-					created_by, server_id, signed_key, created, updated)
+				INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, status, price, currency, buyer_name, buyer_email,
+					note, created_by, server_id, signed_key, created, updated)
 				VALUES(${uuid}, ${signed ? signedCode(uuid) : generateLicenseCode()}, ${license.type}, ${license.transactions}, ${license.duration_days},
-					${license.storage_gb}, 'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email}, ${license.note},
-					${createdBy}, ${server}, ${signed}, ${timestamp}, ${timestamp})
+					${license.storage_gb}, ${license.employees}, 'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email},
+					${license.note}, ${createdBy}, ${server}, ${signed}, ${timestamp}, ${timestamp})
 			`;
 		}
 	});
@@ -372,9 +436,9 @@ async function findRedeemable(input: string): Promise<LicenseKeyRow | ErrorCode>
 	const timestamp = Date.now();
 	try {
 		await Database`
-			INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, status, server_id, signed_key, created, updated)
+			INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, status, server_id, signed_key, created, updated)
 			VALUES(${signed.id}, ${signedCode(signed.id)}, ${signed.type}, ${signed.transactions}, ${signed.duration_days}, ${signed.storage_gb},
-				'available', ${signed.server}, ${input.trim()}, ${signed.issued}, ${timestamp})
+				${signed.employees}, 'available', ${signed.server}, ${input.trim()}, ${signed.issued}, ${timestamp})
 		`;
 	} catch {
 		void 0;
@@ -413,7 +477,7 @@ export async function redeemLicense(projectId: string, input: string, username: 
 			const [project] = (await tx`SELECT workforce_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "workforce_until">[];
 			const until = extendWhiteLabel(project.workforce_until, license.duration_days ?? 0, timestamp);
 			await tx`UPDATE projects SET workforce_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else {
+		} else if (license.type === "storage") {
 			const bytes = (license.storage_gb ?? 0) * STORAGE_GB_BYTES;
 			await tx`UPDATE projects SET paid_storage_bytes = paid_storage_bytes + ${bytes}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 		}
@@ -433,6 +497,7 @@ export function presentLicense(license: LicenseKeyRow, revealCode: boolean) {
 		transactions: license.transactions,
 		duration_days: license.duration_days,
 		storage_gb: license.storage_gb,
+		employees: license.employees,
 		status: license.status,
 		price: license.price,
 		currency: license.currency,

@@ -120,6 +120,10 @@ function licenseGate(project: Project, state: WorkforceState): HTMLElement {
 
 export function readOnlyNotice(state: WorkforceState): HTMLElement | null {
 	if (state.license.active) return null;
+	if (state.license.seats_exceeded) {
+		const counts = { used: state.license.employees_used.toLocaleString(), limit: (state.license.employees_limit ?? 0).toLocaleString() };
+		return el("div", { class: "card notice" }, el("p", {}, t("workforce.seats_exceeded", counts)));
+	}
 	return el("div", { class: "card notice" }, el("p", {}, t("workforce.read_only", { date: formatDate(state.license.until) })));
 }
 

@@ -1,8 +1,8 @@
 # Timesheets, tickets and payroll
 
-These parts of a project need a workforce license, see
-[Administration](administration.md#licensing). They are built around Slovenian
-employment rules.
+These parts of a project need a workforce license, which covers 5 people. Larger
+teams add employee seat keys, see [Administration](administration.md#licensing).
+They are built around Slovenian employment rules.
 
 ## Roles
 

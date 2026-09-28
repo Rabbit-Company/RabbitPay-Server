@@ -1211,3 +1211,66 @@ describe("the workforce module", () => {
 		expect(employee).toBeDefined();
 	});
 });
+
+describe("employee seats", () => {
+	const seatMembers: string[] = [];
+
+	test("a workforce license covers five people, counting everyone who logs time", async () => {
+		const state = (await call("GET", `${base()}/license`, tokens.owner)).data;
+		expect(state).toMatchObject({ employees_included: 5, employees_licensed: 0, employees_used: 4, employees_limit: 5, employee_seats: [] });
+		const workforce = (await call("GET", `${base()}/workforce`, tokens.owner)).data;
+		expect(workforce.license).toMatchObject({ active: true, seats_exceeded: false, employees_used: 4, employees_limit: 5 });
+	});
+
+	test("invitations and role changes past the limit are refused, other roles are not", async () => {
+		const held = await call("POST", `${base()}/members`, tokens.owner, { email: "seat-held@team.test", role: "employee" });
+		expect(held.error).toBe(0);
+		const refused = await call("POST", `${base()}/members`, tokens.owner, { email: "seat-over@team.test", role: "supervisor" });
+		expect(refused.status).toBe(402);
+		expect(refused.error).toBe(1243);
+
+		const viewer = await call("POST", `${base()}/members`, tokens.owner, { email: "seat-viewer@team.test", role: "viewer" });
+		expect(viewer.error).toBe(0);
+		expect((await call("PATCH", `${base()}/members/${viewer.data.uuid}`, tokens.owner, { role: "employee" })).error).toBe(1243);
+		expect((await call("PATCH", `${base()}/members/${held.data.uuid}`, tokens.owner, { role: "supervisor" })).error).toBe(0);
+		expect((await call("PUT", `${base()}/employees/${viewer.data.uuid}`, tokens.owner, { employment_type: "full_time" })).error).toBe(1243);
+	});
+
+	test("seat keys add people for their own number of days", async () => {
+		await Database`UPDATE accounts SET admin = 1 WHERE username = 'wf-owner'`;
+		expect((await call("POST", "/admin/licenses", tokens.owner, { type: "employees", duration_days: 30 })).error).toBe(1095);
+		expect((await call("POST", "/admin/licenses", tokens.owner, { type: "employees", employees: 2 })).error).toBe(1095);
+		expect((await call("POST", "/admin/licenses", tokens.owner, { type: "employees", employees: 0, duration_days: 30 })).error).toBe(1095);
+		const created = await call("POST", "/admin/licenses", tokens.owner, { type: "employees", employees: 2, duration_days: 30 });
+		expect(created.data[0]).toMatchObject({ type: "employees", employees: 2, duration_days: 30 });
+		await Database`UPDATE accounts SET admin = 0 WHERE username = 'wf-owner'`;
+
+		const redeemed = await call("POST", `${base()}/license/redeem`, tokens.owner, { code: created.data[0].code });
+		expect(redeemed.error).toBe(0);
+		expect(redeemed.data).toMatchObject({ employees_licensed: 2, employees_limit: 7 });
+		expect(redeemed.data.employee_seats[0].until).toBeGreaterThan(Date.now() + 29 * 86400000);
+
+		for (const name of ["wf-seat-a", "wf-seat-b"]) {
+			await account(name);
+			seatMembers.push(await member(name, "employee", name));
+		}
+		const state = (await call("GET", `${base()}/license`, tokens.owner)).data;
+		expect(state).toMatchObject({ employees_used: 6, employees_limit: 7 });
+		expect((await call("POST", `${base()}/members`, tokens.owner, { email: "seat-over@team.test", role: "supervisor" })).error).toBe(1243);
+	});
+
+	test("when seat keys run out, the workforce is read only until people are removed", async () => {
+		await Database`UPDATE license_keys SET redeemed_at = ${Date.now() - 31 * 86400000} WHERE type = 'employees' AND redeemed_project = ${project}`;
+
+		const state = (await call("GET", `${base()}/workforce`, tokens.employee)).data;
+		expect(state.license).toMatchObject({ active: false, seats_exceeded: true, employees_used: 6, employees_limit: 5 });
+		const blocked = await call("POST", `${base()}/timesheets`, tokens.owner, entry(today, "06:00", "07:00"));
+		expect(blocked.status).toBe(402);
+		expect(blocked.error).toBe(1243);
+		expect((await call("DELETE", `${base()}/employees/${seatMembers[0]}`, tokens.owner)).error).toBe(1208);
+
+		for (const uuid of seatMembers) expect((await call("DELETE", `${base()}/members/${uuid}`, tokens.owner)).error).toBe(0);
+		const restored = (await call("GET", `${base()}/workforce`, tokens.owner)).data;
+		expect(restored.license).toMatchObject({ active: true, seats_exceeded: false, employees_used: 4, employees_limit: 5 });
+	});
+});

@@ -88,7 +88,13 @@ Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permis
 		action: "license.redeemed",
 		entityType: "license_key",
 		entityId: result.uuid,
-		newValue: { type: result.type, transactions: result.transactions, duration_days: result.duration_days, storage_gb: result.storage_gb },
+		newValue: {
+			type: result.type,
+			transactions: result.transactions,
+			duration_days: result.duration_days,
+			storage_gb: result.storage_gb,
+			employees: result.employees,
+		},
 	});
 	Logger.audit(`[LICENSE] ${account.username} redeemed a ${result.type} license on ${project.uuid}`);
 

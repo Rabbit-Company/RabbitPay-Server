@@ -8,6 +8,7 @@ const MEMBER_ROLES_BEFORE = "CHECK (role IN ('owner', 'admin', 'manager', 'accou
 const MEMBER_ROLES_AFTER = "CHECK (role IN ('owner', 'admin', 'manager', 'accountant', 'developer', 'viewer', 'cashier', 'supervisor', 'employee'))";
 const LICENSE_TYPES_BEFORE = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store'))";
 const LICENSE_TYPES_AFTER = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce'))";
+const LICENSE_TYPES_WITH_SEATS = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees'))";
 const ENTRY_KINDS_BEFORE = "CHECK (kind IN ('regular', 'overtime'))";
 const ENTRY_KINDS_AFTER = "CHECK (kind IN ('regular', 'overtime', 'break'))";
 
@@ -263,6 +264,11 @@ export async function addPriorService(sql: SQL) {
 
 export async function addEmployeeWorkforceSettings(sql: SQL, dialect: Dialect) {
 	await sql.unsafe(`ALTER TABLE employees ADD COLUMN workforce_settings ${schemaTypes(dialect).text("workforce_settings")}`);
+}
+
+export async function addEmployeeSeats(sql: SQL, dialect: Dialect) {
+	await replaceCheck(sql, dialect, "license_keys", "white_label", "license_keys_type_check", LICENSE_TYPES_AFTER, LICENSE_TYPES_WITH_SEATS);
+	await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN employees INTEGER`);
 }
 
 export async function createPayrollSchema(sql: SQL, dialect: Dialect) {

@@ -38,15 +38,32 @@ export async function employeeOf(memberId: string): Promise<EmployeeRow | null> 
 	return employee ?? null;
 }
 
-export async function listPeople(projectId: string, config: WorkforceConfig): Promise<Person[]> {
+export function tracksTime(member: ProjectMemberRow): boolean {
+	return Permissions.has(member, Permission.TIMESHEET_OWN);
+}
+
+async function workforceMembers(projectId: string): Promise<{ members: ProjectMemberRow[]; byMember: Map<string, EmployeeRow> }> {
 	const members = (await Database`
 		SELECT * FROM project_members WHERE project_id = ${projectId} AND status IN ('active', 'suspended') ORDER BY created ASC
 	`) as ProjectMemberRow[];
 	const employees = (await Database`SELECT * FROM employees WHERE project = ${projectId}`) as EmployeeRow[];
 	const byMember = new Map(employees.map((employee) => [employee.member, employee]));
+	return { members: members.filter((member) => byMember.has(member.uuid) || tracksTime(member)), byMember };
+}
+
+export async function countedMembers(projectId: string): Promise<Set<string>> {
+	return new Set((await workforceMembers(projectId)).members.map((member) => member.uuid));
+}
+
+export async function pendingTimeTrackers(projectId: string, except: string | null): Promise<number> {
+	const pending = (await Database`SELECT * FROM project_members WHERE project_id = ${projectId} AND status = 'pending'`) as ProjectMemberRow[];
+	return pending.filter((member) => member.uuid !== except && tracksTime(member)).length;
+}
+
+export async function listPeople(projectId: string, config: WorkforceConfig): Promise<Person[]> {
+	const { members, byMember } = await workforceMembers(projectId);
 
 	return members
-		.filter((member) => byMember.has(member.uuid) || Permissions.has(member, Permission.TIMESHEET_OWN))
 		.map((member) => {
 			const employee = byMember.get(member.uuid) ?? null;
 			const rules = configFor(config, employee);

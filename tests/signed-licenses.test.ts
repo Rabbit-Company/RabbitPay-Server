@@ -38,6 +38,7 @@ let serverId = "";
 let localCode = "";
 let ownKey = "";
 let foreignKey = "";
+let seatKey = "";
 
 function licensedMode() {
 	delete process.env.RABBITPAY_LICENSE_SIGNING_KEY;
@@ -92,6 +93,10 @@ describe("license issuer", () => {
 		});
 		foreignKey = other.data[0].signed_key;
 
+		const seats = await call("POST", "/api/v1/admin/licenses", { token, body: { type: "employees", employees: 20, duration_days: 365, server_id: serverId } });
+		expect(seats.data[0]).toMatchObject({ type: "employees", employees: 20, duration_days: 365 });
+		seatKey = seats.data[0].signed_key;
+
 		const local = await call("POST", "/api/v1/admin/licenses", { token, body: { type: "transactions", transactions: 10 } });
 		expect(local.data[0].signed_key).toBeNull();
 		localCode = local.data[0].code;
@@ -118,18 +123,21 @@ describe("licensed server", () => {
 		Settings.licensing.enabled = false;
 		Settings.licensing.free_transactions = 1_000_000;
 		Settings.licensing.free_storage_gb = 1_000;
+		Settings.licensing.free_employees = 1_000;
 		await Database`UPDATE projects SET free_transactions = 1000000 WHERE uuid = ${project}`;
 		try {
 			const license = await call("GET", `/api/v1/projects/${project}/license`, { token });
 			expect(license.data.enforced).toBe(true);
 			expect(license.data.free_allowance).toBe(50);
 			expect(license.data.storage_included).toBe(1_000_000_000);
+			expect(license.data.employees_included).toBe(5);
 			expect(license.data.license_issuer).toBe(false);
 			expect(license.data.server_id).toBe(serverId);
 		} finally {
 			Settings.licensing.enabled = true;
 			Settings.licensing.free_transactions = 50;
 			Settings.licensing.free_storage_gb = 1;
+			Settings.licensing.free_employees = 5;
 		}
 	});
 
@@ -159,5 +167,14 @@ describe("licensed server", () => {
 		expect(redeemed.data.licenses[0].server_id).toBe(serverId);
 
 		expect((await redeem(ownKey)).error).toBe(1094);
+	});
+
+	test("redeems signed employee seats for their own number of days", async () => {
+		const redeemed = await redeem(seatKey);
+		expect(redeemed.error).toBe(0);
+		expect(redeemed.data).toMatchObject({ employees_included: 5, employees_licensed: 20, employees_limit: 25 });
+		expect(redeemed.data.employee_seats[0].employees).toBe(20);
+		expect(redeemed.data.employee_seats[0].until).toBeGreaterThan(Date.now() + 364 * 86400000);
+		expect(redeemed.data.licenses[0]).toMatchObject({ type: "employees", employees: 20, duration_days: 365 });
 	});
 });

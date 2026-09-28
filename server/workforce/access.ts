@@ -3,7 +3,7 @@ import Permissions from "../permissions";
 import Utils from "../utils";
 import { ErrorCode } from "../errors";
 import { Permission } from "../roles";
-import { workforceActive } from "../licensing";
+import { employeeSeatsExceeded, workforceActive } from "../licensing";
 import { localDate } from "../timezone";
 import { findMember } from "./people";
 import type { AppState, ProjectMemberRow, ProjectRow } from "../database/models";
@@ -15,9 +15,11 @@ export interface WorkforceAccess {
 	edit: boolean;
 }
 
-export function requireWorkforce(): Middleware<AppState> {
+export function requireWorkforce(options: { seats: boolean } = { seats: true }): Middleware<AppState> {
 	return async (ctx, next) => {
-		if (!workforceActive(Permissions.project(ctx))) return Utils.fail(ctx, ErrorCode.WORKFORCE_LICENSE_REQUIRED);
+		const project = Permissions.project(ctx);
+		if (!workforceActive(project)) return Utils.fail(ctx, ErrorCode.WORKFORCE_LICENSE_REQUIRED);
+		if (options.seats && (await employeeSeatsExceeded(project.uuid))) return Utils.fail(ctx, ErrorCode.EMPLOYEE_SEATS_EXCEEDED);
 		return await next();
 	};
 }

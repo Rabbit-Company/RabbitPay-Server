@@ -130,10 +130,14 @@ function statCard(label: string, value: string): HTMLElement {
 	return el("div", { class: "card stat" }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label));
 }
 
-export function describeLicense(license: Pick<License, "type" | "transactions" | "duration_days" | "storage_gb">): string {
+export function describeLicense(license: Pick<License, "type" | "transactions" | "duration_days" | "storage_gb" | "employees">): string {
 	if (license.type === "transactions") return `${(license.transactions ?? 0).toLocaleString()} payments`;
 	if (license.type === "storage") return `${(license.storage_gb ?? 0).toLocaleString()} GB storage`;
 	const days = license.duration_days ?? 0;
+	if (license.type === "employees") {
+		const employees = license.employees ?? 0;
+		return `${employees.toLocaleString()} ${employees === 1 ? "employee" : "employees"} for ${days} ${days === 1 ? "day" : "days"}`;
+	}
 	const name = license.type === "store" ? "Online store" : license.type === "workforce" ? "Workforce" : "White label";
 	return `${name} for ${days} ${days === 1 ? "day" : "days"}`;
 }
@@ -257,12 +261,14 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			{ value: "storage", label: "Storage" },
 			{ value: "store", label: "Online store" },
 			{ value: "workforce", label: "Workforce (timesheets, tickets, employees)" },
+			{ value: "employees", label: "Employee seats" },
 		],
 		"transactions"
 	);
 	const transactions = input("number", { min: "1", step: "1", value: "10000", required: true });
 	const days = input("number", { min: "1", max: "3650", step: "1", value: "30", required: true });
 	const storage = input("number", { min: "1", max: "1000000", step: "1", value: "10", required: true });
+	const employees = input("number", { min: "1", max: "1000000", step: "1", value: "10", required: true });
 	const quantity = input("number", { min: "1", max: "100", step: "1", value: "1", required: true });
 	const server = input("text", { placeholder: "Leave empty for a key used on this server", autocomplete: "off", maxlength: "27" });
 	const price = input("number", { min: "0", step: "0.01", placeholder: "Optional" });
@@ -273,19 +279,23 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 	const submit = el("button", { class: "button primary", type: "submit" }, "Create keys");
 
 	const transactionsField = field("Payments", transactions, "Added to the project's paid balance. They never expire.");
-	const daysField = field("Days", days, "Starts when the key is redeemed, and adds to any time left.");
+	const daysField = field("Days", days, "Starts when the key is redeemed. Add-on keys add to any time left, and each employee seat key runs on its own.");
 	const storageField = field("Storage in GB", storage, "Added permanently to the project's document storage capacity.");
+	const employeesField = field("Employees", employees, "Added to the people the workforce license covers, for the days below.");
 
 	const sync = () => {
 		const transactionsSelected = type.value === "transactions";
-		const white = type.value === "white_label" || type.value === "store" || type.value === "workforce";
+		const white = type.value === "white_label" || type.value === "store" || type.value === "workforce" || type.value === "employees";
 		const storageSelected = type.value === "storage";
+		const employeesSelected = type.value === "employees";
 		transactionsField.hidden = !transactionsSelected;
 		daysField.hidden = !white;
 		storageField.hidden = !storageSelected;
+		employeesField.hidden = !employeesSelected;
 		transactions.required = transactionsSelected;
 		days.required = white;
 		storage.required = storageSelected;
+		employees.required = employeesSelected;
 	};
 	type.addEventListener("change", sync);
 	sync();
@@ -310,8 +320,9 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 					server_id: server.value.trim() || null,
 				};
 				if (body.type === "transactions") body.transactions = Number(transactions.value);
-				else if (body.type === "white_label" || body.type === "store" || body.type === "workforce") body.duration_days = Number(days.value);
-				else body.storage_gb = Number(storage.value);
+				else if (body.type === "storage") body.storage_gb = Number(storage.value);
+				else body.duration_days = Number(days.value);
+				if (body.type === "employees") body.employees = Number(employees.value);
 
 				try {
 					const created = await AdminApi.createLicenses(body);
@@ -323,7 +334,16 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 				}
 			},
 		},
-		el("div", { class: "form-grid" }, field("Type", type), transactionsField, daysField, storageField, field("How many keys", quantity, "Up to 100 at once")),
+		el(
+			"div",
+			{ class: "form-grid" },
+			field("Type", type),
+			transactionsField,
+			employeesField,
+			daysField,
+			storageField,
+			field("How many keys", quantity, "Up to 100 at once")
+		),
 		field("For a self-hosted server", server, "The customer's Server ID from their Admin overview. The key is signed and only works on that server."),
 		el("h3", {}, "Purchase"),
 		el("div", { class: "form-grid" }, field("Price per key", price), field("Currency", currency), field("Buyer", buyerName), field("Buyer email", buyerEmail)),
@@ -1261,7 +1281,7 @@ export async function adminSettingsView(): Promise<HTMLElement> {
 							el(
 								"p",
 								{ class: "muted" },
-								`Every project gets ${Number(state.defaults["licensing.free_transactions"]).toLocaleString()} free completed payments a month and ${Number(state.defaults["licensing.free_storage_gb"]).toLocaleString()} GB of document storage. More is added with license keys that ${LICENSE_VENDOR.name} signs for this server's ID, shown on the Overview tab.`
+								`Every project gets ${Number(state.defaults["licensing.free_transactions"]).toLocaleString()} free completed payments a month and ${Number(state.defaults["licensing.free_storage_gb"]).toLocaleString()} GB of document storage, and a workforce license covers ${Number(state.defaults["licensing.free_employees"]).toLocaleString()} employees. More is added with license keys that ${LICENSE_VENDOR.name} signs for this server's ID, shown on the Overview tab.`
 							)
 						)
 					: settingsGroup(group, state, (next) => render(next))

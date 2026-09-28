@@ -517,7 +517,14 @@ export interface WorkforcePerson {
 }
 
 export interface WorkforceState {
-	license: { enforced: boolean; active: boolean; until: number | null };
+	license: {
+		enforced: boolean;
+		active: boolean;
+		until: number | null;
+		seats_exceeded: boolean;
+		employees_used: number;
+		employees_limit: number | null;
+	};
 	config: WorkforceConfig;
 	today: string;
 	me: {
@@ -952,7 +959,7 @@ export interface Branding {
 	logo: string | null;
 }
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees";
 
 export interface License {
 	uuid: string;
@@ -961,6 +968,7 @@ export interface License {
 	transactions: number | null;
 	duration_days: number | null;
 	storage_gb: number | null;
+	employees: number | null;
 	status: "available" | "redeemed" | "revoked";
 	price: number | null;
 	currency: string | null;
@@ -984,6 +992,7 @@ export interface LicenseInput {
 	transactions?: number;
 	duration_days?: number;
 	storage_gb?: number;
+	employees?: number;
 	quantity?: number;
 	price?: number | null;
 	currency?: string | null;
@@ -1013,6 +1022,11 @@ export interface ProjectLicense extends LicenseIdentity {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	employees_included: number;
+	employees_licensed: number;
+	employees_used: number;
+	employees_limit: number | null;
+	employee_seats: { employees: number; until: number }[];
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;

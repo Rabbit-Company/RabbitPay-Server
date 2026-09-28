@@ -22,6 +22,7 @@ import { BackupInProgress, backupNow, backupRunning, backupsSupported, latestBac
 import {
 	MAX_LICENSE_BATCH,
 	MAX_LICENSE_DAYS,
+	MAX_LICENSE_EMPLOYEES,
 	MAX_LICENSE_STORAGE_GB,
 	MAX_LICENSE_TRANSACTIONS,
 	createLicenses,
@@ -53,6 +54,7 @@ interface CreateLicenseBody {
 	transactions?: unknown;
 	duration_days?: unknown;
 	storage_gb?: unknown;
+	employees?: unknown;
 	quantity?: unknown;
 	price?: unknown;
 	currency?: unknown;
@@ -342,9 +344,11 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 	const transactions = data.type === "transactions" ? data.transactions : null;
 	const durationDays = TIMED_LICENSE_TYPES.includes(data.type) ? data.duration_days : null;
 	const storageGb = data.type === "storage" ? data.storage_gb : null;
+	const employees = data.type === "employees" ? data.employees : null;
 	if (data.type === "transactions" && !isWholeNumber(transactions, 1, MAX_LICENSE_TRANSACTIONS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (TIMED_LICENSE_TYPES.includes(data.type) && !isWholeNumber(durationDays, 1, MAX_LICENSE_DAYS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (data.type === "storage" && !isWholeNumber(storageGb, 1, MAX_LICENSE_STORAGE_GB)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
+	if (data.type === "employees" && !isWholeNumber(employees, 1, MAX_LICENSE_EMPLOYEES)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 
 	const purchase = readPurchase(data, null);
 	if (purchase === null) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
@@ -354,6 +358,7 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 		transactions: transactions as number | null,
 		duration_days: durationDays as number | null,
 		storage_gb: storageGb as number | null,
+		employees: employees as number | null,
 		...purchase,
 	};
 	const created = await createLicenses(license, quantity, account.username, server);
@@ -366,6 +371,7 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 			transactions: license.transactions,
 			duration_days: license.duration_days,
 			storage_gb: license.storage_gb,
+			employees: license.employees,
 			quantity,
 			server_id: server,
 			price: license.price,
@@ -536,7 +542,13 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 		action: "license.applied_by_admin",
 		entityType: "license_key",
 		entityId: result.uuid,
-		newValue: { type: result.type, transactions: result.transactions, duration_days: result.duration_days, storage_gb: result.storage_gb },
+		newValue: {
+			type: result.type,
+			transactions: result.transactions,
+			duration_days: result.duration_days,
+			storage_gb: result.storage_gb,
+			employees: result.employees,
+		},
 	});
 	Logger.audit(`[ADMIN] ${account.username} applied a ${result.type} license to ${project.uuid}`);
 

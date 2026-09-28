@@ -12,7 +12,9 @@ import { canEmail } from "../../email/mailer";
 import { queueInvitationEmail } from "../../email/messages";
 import { readSignature } from "../../member-signature";
 import { ensureSignatureAsset } from "../../signature-assets";
-import type { AccountRow, ProjectMemberRow } from "../../database/models";
+import { hasEmployeeSeatFor, workforceActive } from "../../licensing";
+import { tracksTime } from "../../workforce/people";
+import type { AccountRow, ProjectMemberRow, ProjectRow } from "../../database/models";
 
 interface InviteBody {
 	email?: string;
@@ -37,6 +39,11 @@ async function activeOwnerCount(projectId: string): Promise<number> {
 		SELECT COUNT(*) AS count FROM project_members WHERE project_id = ${projectId} AND role = 'owner' AND status = 'active'
 	`) as { count: number }[];
 	return row.count;
+}
+
+async function seatAvailable(project: ProjectRow, member: ProjectMemberRow, current: string | null): Promise<boolean> {
+	if (!workforceActive(project) || !tracksTime(member)) return true;
+	return hasEmployeeSeatFor(project.uuid, current);
 }
 
 function isValidExpiry(expiresAt: unknown): boolean {
@@ -149,6 +156,8 @@ Server.app.post("/api/v1/projects/:uuid/members", Auth.required(), Permissions.r
 			AND (LOWER(invitation_email) = ${email.toLowerCase()} ${sameAccount})
 	`) as ProjectMemberRow[];
 	if (existing.length > 0) return Utils.fail(ctx, ErrorCode.MEMBER_ALREADY_EXISTS);
+	const invited = { role, additional_permissions: null, restricted_permissions: null } as ProjectMemberRow;
+	if (!(await seatAvailable(project, invited, null))) return Utils.fail(ctx, ErrorCode.EMPLOYEE_SEATS_EXCEEDED);
 
 	const [removed] = invitee
 		? ((await Database`
@@ -254,6 +263,7 @@ Server.app.patch("/api/v1/projects/:uuid/members/:member", Auth.required(), Perm
 	if (data.expires_at !== undefined && !isValidExpiry(data.expires_at)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
 	const role = data.role ?? target.role;
+	if (!(await seatAvailable(project, { ...target, role: role as ProjectRole }, target.uuid))) return Utils.fail(ctx, ErrorCode.EMPLOYEE_SEATS_EXCEEDED);
 	const expiresAt = data.expires_at === undefined ? target.expires_at : data.expires_at;
 	const notes = data.notes === undefined ? target.notes : data.notes;
 

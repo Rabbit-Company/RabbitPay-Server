@@ -11,6 +11,7 @@ import { configFor, storedOverrides, workforceConfig } from "../../workforce/con
 import { isMonth, monthRange } from "../../workforce/calendar";
 import { findMember, listPeople, personName } from "../../workforce/people";
 import { requireWorkforce } from "../../workforce/access";
+import { hasEmployeeSeatFor } from "../../licensing";
 import { openPrivate, presentEmployee, PrivateDataUnavailable, readEmployee, sealPrivate } from "../../workforce/employees";
 import { monthReport } from "../../workforce/reports";
 import { payrollLine } from "../../workforce/payroll";
@@ -62,6 +63,7 @@ Server.app.put(`${base}/employees/:member`, Auth.required(), Permissions.require
 	const data = await body(ctx);
 	const input = data ? readEmployee(data, previous ?? null) : null;
 	if (!input) return Utils.fail(ctx, ErrorCode.INVALID_EMPLOYEE);
+	if (!previous && !(await hasEmployeeSeatFor(project.uuid, member.uuid))) return Utils.fail(ctx, ErrorCode.EMPLOYEE_SEATS_EXCEEDED);
 
 	let sealed: string | null;
 	try {
@@ -106,20 +108,26 @@ Server.app.put(`${base}/employees/:member`, Auth.required(), Permissions.require
 	return Utils.ok(ctx, presented, previous ? 200 : 201);
 });
 
-Server.app.delete(`${base}/employees/:member`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
-	const project = Permissions.project(ctx);
-	const [row] = (await Database`SELECT * FROM employees WHERE member = ${ctx.params.member} AND project = ${project.uuid}`) as EmployeeRow[];
-	if (!row) return Utils.fail(ctx, ErrorCode.EMPLOYEE_NOT_FOUND);
-	await Database`DELETE FROM employees WHERE member = ${row.member}`;
-	await Audit.record(ctx, {
-		project: project.uuid,
-		action: "employee.deleted",
-		entityType: "project_member",
-		entityId: row.member,
-		oldValue: withoutPrivate(presentEmployee(row)),
-	});
-	return Utils.ok(ctx);
-});
+Server.app.delete(
+	`${base}/employees/:member`,
+	Auth.required(),
+	Permissions.require(Permission.EMPLOYEE_EDIT),
+	requireWorkforce({ seats: false }),
+	async (ctx) => {
+		const project = Permissions.project(ctx);
+		const [row] = (await Database`SELECT * FROM employees WHERE member = ${ctx.params.member} AND project = ${project.uuid}`) as EmployeeRow[];
+		if (!row) return Utils.fail(ctx, ErrorCode.EMPLOYEE_NOT_FOUND);
+		await Database`DELETE FROM employees WHERE member = ${row.member}`;
+		await Audit.record(ctx, {
+			project: project.uuid,
+			action: "employee.deleted",
+			entityType: "project_member",
+			entityId: row.member,
+			oldValue: withoutPrivate(presentEmployee(row)),
+		});
+		return Utils.ok(ctx);
+	}
+);
 
 Server.app.get(`${base}/payroll`, Auth.required(), Permissions.require(Permission.EMPLOYEE_VIEW), async (ctx) => {
 	const project = Permissions.project(ctx);

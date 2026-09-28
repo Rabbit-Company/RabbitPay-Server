@@ -7,7 +7,7 @@ import Permissions from "../../permissions";
 import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
-import { licensingEnforced, workforceActive } from "../../licensing";
+import { employeeSeatsFor, licensingEnforced, workforceActive } from "../../licensing";
 import {
 	configFor,
 	memberConfig,
@@ -96,8 +96,17 @@ Server.app.get(`${base}/workforce`, Auth.required(), Permissions.require(Permiss
 	const config = await workforceConfig(project.uuid);
 	const employee = await employeeOf(access.self.uuid);
 	const rules = configFor(config, employee);
+	const seats = await employeeSeatsFor(project.uuid);
+	const seatsExceeded = seats.employees_limit !== null && seats.employees_used > seats.employees_limit;
 	return Utils.ok(ctx, {
-		license: { enforced: licensingEnforced(), active: workforceActive(project), until: project.workforce_until },
+		license: {
+			enforced: licensingEnforced(),
+			active: workforceActive(project) && !seatsExceeded,
+			until: project.workforce_until,
+			seats_exceeded: seatsExceeded,
+			employees_used: seats.employees_used,
+			employees_limit: seats.employees_limit,
+		},
 		config,
 		today: todayIn(project),
 		me: {
