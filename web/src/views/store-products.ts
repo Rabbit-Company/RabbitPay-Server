@@ -108,7 +108,7 @@ export async function storeProductsView(uuid: string): Promise<HTMLElement> {
 									"td",
 									{},
 									product.stock === null
-										? el("span", { class: "muted" }, product.delivers_keys ? "0" : t("store.stock_untracked"))
+										? el("span", { class: "muted" }, product.delivers_keys && !product.license ? "0" : t("store.stock_untracked"))
 										: product.stock === 0
 											? el("span", { class: "pill pill-overdue" }, t("items.out_of_stock"))
 											: el("span", { class: "mono" }, String(product.stock))
@@ -527,9 +527,11 @@ function productEditor(
 				"section",
 				{ class: "card stack" },
 				el("h2", {}, t("store.inventory")),
-				item.delivers_keys
-					? el("p", { class: "muted" }, t("store.inventory_keys", { count: item.keys_available ?? 0 }))
-					: el("label", { class: "switch" }, tracked, el("span", {}, t("store.track_stock"))),
+				item.license
+					? el("p", { class: "muted" }, t("store.inventory_license"))
+					: item.delivers_keys
+						? el("p", { class: "muted" }, t("store.inventory_keys", { count: item.keys_available ?? 0 }))
+						: el("label", { class: "switch" }, tracked, el("span", {}, t("store.track_stock"))),
 				stockFields,
 				el("label", { class: "switch" }, backorder, el("span", {}, t("store.allow_backorder"))),
 				field(t("store.restock_at"), restock, t("store.restock_hint"))

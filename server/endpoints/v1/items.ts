@@ -13,7 +13,11 @@ import { isSupplyType, isTaxCategory } from "../../tax";
 import { isUnitCode } from "../../measure-units";
 import { emptyStock, stockFor, type KeyStock } from "../../item-keys";
 import { removeStoreImages } from "../../store/images";
-import type { CatalogItemRow } from "../../database/models";
+import { defaultChoice, licensePrice, parseLicenseProduct, readLicenseProduct, type LicenseProduct } from "../../license-pricing";
+import { licenseSalesOpen } from "../../license-orders";
+import { isLicenseIssuer } from "../../license-signing";
+import type { Context } from "@rabbit-company/web";
+import type { AppState, CatalogItemRow } from "../../database/models";
 
 interface ItemBody {
 	name?: string;
@@ -25,6 +29,7 @@ interface ItemBody {
 	supply_type?: string;
 	tax_category?: string;
 	delivers_keys?: boolean;
+	license?: unknown;
 	unit?: string | null;
 	archived?: boolean;
 }
@@ -34,7 +39,8 @@ function present(item: CatalogItemRow, stock: KeyStock | undefined = undefined) 
 		...item,
 		archived: Boolean(item.archived),
 		delivers_keys: Boolean(item.delivers_keys),
-		keys: item.delivers_keys ? (stock ?? emptyStock()) : null,
+		license: parseLicenseProduct(item.license),
+		keys: item.delivers_keys && item.license === null ? (stock ?? emptyStock()) : null,
 	};
 }
 
@@ -66,6 +72,14 @@ function validateBody(data: ItemBody, creating: boolean): ErrorCode | null {
 	if (data.unit !== undefined && data.unit !== null && !isUnitCode(data.unit)) return ErrorCode.INVALID_ITEM;
 	if (data.currency !== undefined && !Validate.currency(data.currency)) return ErrorCode.INVALID_CURRENCY;
 	return null;
+}
+
+async function readLicense(ctx: Context<AppState>, data: ItemBody): Promise<LicenseProduct | null | undefined | ErrorCode> {
+	if (data.license === undefined) return undefined;
+	if (!isLicenseIssuer()) return ErrorCode.LICENSE_ISSUER_ONLY;
+	if (!Auth.account(ctx).admin || !(await licenseSalesOpen(Permissions.project(ctx).uuid))) return ErrorCode.INSUFFICIENT_PERMISSIONS;
+	if (data.license === null) return null;
+	return readLicenseProduct(data.license) ?? ErrorCode.INVALID_ITEM;
 }
 
 async function findItem(projectId: string, itemId: string): Promise<CatalogItemRow | undefined> {
@@ -121,17 +135,21 @@ Server.app.post("/api/v1/projects/:uuid/items", Auth.required(), Permissions.req
 
 	const invalid = validateBody(data, true);
 	if (invalid !== null) return Utils.fail(ctx, invalid);
+	const license = await readLicense(ctx, data);
+	if (typeof license === "number") return Utils.fail(ctx, license);
 
 	const uuid = crypto.randomUUID();
 	const timestamp = Date.now();
+	const unitPrice = license ? licensePrice(license, defaultChoice(license)) : data.unit_price!;
 
 	await Database`
 		INSERT INTO catalog_items(uuid, project, name, description, sku, unit_price, currency, tax_rate, supply_type, tax_category, delivers_keys,
-			unit, archived, created, updated)
+			license, unit, archived, created, updated)
 		VALUES(
-			${uuid}, ${project.uuid}, ${data.name!.trim()}, ${cleanText(data.description)}, ${cleanText(data.sku)}, ${data.unit_price!},
+			${uuid}, ${project.uuid}, ${data.name!.trim()}, ${cleanText(data.description)}, ${cleanText(data.sku)}, ${unitPrice},
 			${data.currency ?? project.currency}, ${data.tax_category === "exempt" ? 0 : (data.tax_rate ?? 0)}, ${data.supply_type ?? "services"},
-			${data.tax_category ?? "standard"}, ${data.delivers_keys ? 1 : 0}, ${data.unit ?? null}, ${data.archived ? 1 : 0}, ${timestamp}, ${timestamp}
+			${data.tax_category ?? "standard"}, ${data.delivers_keys || license ? 1 : 0}, ${license ? JSON.stringify(license) : null}, ${data.unit ?? null},
+			${data.archived ? 1 : 0}, ${timestamp}, ${timestamp}
 		)
 	`;
 
@@ -140,7 +158,13 @@ Server.app.post("/api/v1/projects/:uuid/items", Auth.required(), Permissions.req
 		action: "item.created",
 		entityType: "item",
 		entityId: uuid,
-		newValue: { name: data.name!.trim(), unit_price: data.unit_price, currency: data.currency ?? project.currency, delivers_keys: Boolean(data.delivers_keys) },
+		newValue: {
+			name: data.name!.trim(),
+			unit_price: unitPrice,
+			currency: data.currency ?? project.currency,
+			delivers_keys: Boolean(data.delivers_keys || license),
+			license: license ?? null,
+		},
 	});
 
 	return Utils.ok(ctx, await presentOne(project.uuid, (await findItem(project.uuid, uuid))!), 201);
@@ -243,17 +267,21 @@ Server.app.patch("/api/v1/projects/:uuid/items/:item", Auth.required(), Permissi
 
 	const invalid = validateBody(data, false);
 	if (invalid !== null) return Utils.fail(ctx, invalid);
+	const readLicenseResult = await readLicense(ctx, data);
+	if (typeof readLicenseResult === "number") return Utils.fail(ctx, readLicenseResult);
+	const license = readLicenseResult === undefined ? parseLicenseProduct(item.license) : readLicenseResult;
 
 	const merged = {
 		name: data.name === undefined ? item.name : data.name.trim(),
 		description: data.description === undefined ? item.description : cleanText(data.description),
 		sku: data.sku === undefined ? item.sku : cleanText(data.sku),
-		unit_price: data.unit_price ?? item.unit_price,
+		unit_price: license ? licensePrice(license, defaultChoice(license)) : (data.unit_price ?? item.unit_price),
 		currency: data.currency ?? item.currency,
 		tax_category: data.tax_category ?? item.tax_category,
 		tax_rate: (data.tax_category ?? item.tax_category) === "exempt" ? 0 : (data.tax_rate ?? item.tax_rate),
 		supply_type: data.supply_type ?? item.supply_type,
-		delivers_keys: data.delivers_keys === undefined ? item.delivers_keys : data.delivers_keys ? 1 : 0,
+		delivers_keys: license ? 1 : data.delivers_keys === undefined ? item.delivers_keys : data.delivers_keys ? 1 : 0,
+		license: license ? JSON.stringify(license) : null,
 		unit: data.unit === undefined ? item.unit : data.unit,
 		archived: data.archived === undefined ? item.archived : data.archived ? 1 : 0,
 	};
@@ -262,7 +290,8 @@ Server.app.patch("/api/v1/projects/:uuid/items/:item", Auth.required(), Permissi
 		UPDATE catalog_items SET
 			name = ${merged.name}, description = ${merged.description}, sku = ${merged.sku}, unit_price = ${merged.unit_price},
 			currency = ${merged.currency}, tax_rate = ${merged.tax_rate}, supply_type = ${merged.supply_type},
-			tax_category = ${merged.tax_category}, delivers_keys = ${merged.delivers_keys}, unit = ${merged.unit}, archived = ${merged.archived},
+			tax_category = ${merged.tax_category}, delivers_keys = ${merged.delivers_keys}, license = ${merged.license}, unit = ${merged.unit},
+			archived = ${merged.archived},
 			updated = ${Date.now()}
 		WHERE uuid = ${itemId}
 	`;
@@ -272,8 +301,14 @@ Server.app.patch("/api/v1/projects/:uuid/items/:item", Auth.required(), Permissi
 		action: "item.updated",
 		entityType: "item",
 		entityId: itemId,
-		oldValue: { name: item.name, unit_price: item.unit_price, currency: item.currency, archived: Boolean(item.archived) },
-		newValue: { name: merged.name, unit_price: merged.unit_price, currency: merged.currency, archived: Boolean(merged.archived) },
+		oldValue: {
+			name: item.name,
+			unit_price: item.unit_price,
+			currency: item.currency,
+			archived: Boolean(item.archived),
+			license: parseLicenseProduct(item.license),
+		},
+		newValue: { name: merged.name, unit_price: merged.unit_price, currency: merged.currency, archived: Boolean(merged.archived), license },
 	});
 
 	return Utils.ok(ctx, await presentOne(project.uuid, (await findItem(project.uuid, itemId))!));

@@ -381,6 +381,12 @@ const en = {
 	"payslip.service": "Total service",
 	"payslip.service_value": "{years} y {months} m {days} d",
 	"payslip.page": "Page {page} of {pages}",
+	"license.line_payments": "{count} payments",
+	"license.line_storage": "{count} GB",
+	"license.line_days": "{count} days",
+	"license.line_employees": "{count} employees",
+	"license.line_server": "server {id}",
+	"license.line_hosted": "for rabbitpay.net",
 };
 
 export type TranslationKey = keyof typeof en;
@@ -755,6 +761,12 @@ const sl: Record<TranslationKey, string> = {
 	"payslip.service": "Skupna delovna doba",
 	"payslip.service_value": "{years} l. {months} m. {days} d.",
 	"payslip.page": "Stran {page} od {pages}",
+	"license.line_payments": "plačil: {count}",
+	"license.line_storage": "{count} GB",
+	"license.line_days": "dni: {count}",
+	"license.line_employees": "zaposlenih: {count}",
+	"license.line_server": "strežnik {id}",
+	"license.line_hosted": "za rabbitpay.net",
 };
 
 const STRINGS: Record<Language, Record<TranslationKey, string>> = { en, sl };

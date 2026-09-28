@@ -1,3 +1,5 @@
+import type { CartLine, LicenseChoice } from "./api";
+
 export interface CartEntry {
 	product: string;
 	slug: string;
@@ -6,6 +8,7 @@ export interface CartEntry {
 	price: number;
 	currency: string;
 	quantity: number;
+	license?: LicenseChoice | null;
 }
 
 const MAX_QUANTITY = 999;
@@ -26,8 +29,24 @@ function isEntry(value: unknown): value is CartEntry {
 		Number.isSafeInteger(entry.price) &&
 		typeof entry.currency === "string" &&
 		Number.isSafeInteger(entry.quantity) &&
-		(entry.quantity as number) > 0
+		(entry.quantity as number) > 0 &&
+		(entry.license === undefined || entry.license === null || isChoice(entry.license))
 	);
+}
+
+function isChoice(value: unknown): value is LicenseChoice {
+	if (typeof value !== "object" || value === null) return false;
+	const choice = value as Record<string, unknown>;
+	return (
+		(choice.amount === null || Number.isSafeInteger(choice.amount)) &&
+		(choice.days === null || Number.isSafeInteger(choice.days)) &&
+		(choice.server_id === null || typeof choice.server_id === "string")
+	);
+}
+
+export function lineKey(line: Pick<CartLine, "product"> & { license?: LicenseChoice | null }): string {
+	const license = line.license ?? null;
+	return JSON.stringify([line.product, license?.amount ?? null, license?.days ?? null, license?.server_id ?? null]);
 }
 
 export function cartOf(store: string): CartEntry[] {
@@ -56,7 +75,7 @@ export function onCartChange(listener: () => void): () => void {
 
 export function addToCart(store: string, entry: Omit<CartEntry, "quantity">, quantity: number) {
 	const entries = cartOf(store);
-	const existing = entries.find((line) => line.product === entry.product);
+	const existing = entries.find((line) => lineKey(line) === lineKey(entry));
 	if (existing) {
 		Object.assign(existing, entry, { quantity: Math.min(existing.quantity + quantity, MAX_QUANTITY) });
 	} else {
@@ -65,17 +84,17 @@ export function addToCart(store: string, entry: Omit<CartEntry, "quantity">, qua
 	save(store, entries);
 }
 
-export function setQuantity(store: string, product: string, quantity: number) {
+export function setQuantity(store: string, key: string, quantity: number) {
 	const entries = cartOf(store)
-		.map((line) => (line.product === product ? { ...line, quantity: Math.min(Math.max(quantity, 0), MAX_QUANTITY) } : line))
+		.map((line) => (lineKey(line) === key ? { ...line, quantity: Math.min(Math.max(quantity, 0), MAX_QUANTITY) } : line))
 		.filter((line) => line.quantity > 0);
 	save(store, entries);
 }
 
-export function removeFromCart(store: string, product: string) {
+export function removeFromCart(store: string, key: string) {
 	save(
 		store,
-		cartOf(store).filter((line) => line.product !== product)
+		cartOf(store).filter((line) => lineKey(line) !== key)
 	);
 }
 
@@ -95,6 +114,6 @@ export function cartCount(store: string): number {
 	return cartOf(store).reduce((sum, line) => sum + line.quantity, 0);
 }
 
-export function cartLines(store: string) {
-	return cartOf(store).map((line) => ({ product: line.product, quantity: line.quantity }));
+export function cartLines(store: string): CartLine[] {
+	return cartOf(store).map((line) => ({ product: line.product, quantity: line.quantity, license: line.license ?? null }));
 }

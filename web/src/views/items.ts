@@ -1,5 +1,5 @@
 import { pagination, PAGE_SIZE } from "../pagination";
-import { Api, ApiError, type CatalogItem, type ItemKey, type Project } from "../api";
+import { Api, ApiError, isAdmin, type CatalogItem, type ItemKey, type Project } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
 import { formatMoney, minorUnitDigits, toMajorUnits, toMinorUnits } from "../money";
 import { confirmDialog, modal, reportError, toast } from "../ui";
@@ -11,8 +11,94 @@ import { t, tn } from "../i18n";
 import { can, Permission } from "../access";
 import { ErrorCode } from "../../../server/errors";
 import { DEFAULT_REDUCED_RATES, STANDARD_RATES } from "../../../server/tax";
+import { readLicenseProduct, usesAmount, usesDays, type LicenseProduct } from "../../../server/license-pricing";
+import type { UiKey } from "../i18n";
+
+const LICENSE_TYPES: { value: LicenseProduct["type"]; label: UiKey; rate: UiKey; amount: UiKey | null }[] = [
+	{ value: "transactions", label: "items.license_transactions", rate: "items.license_rate_payments", amount: "items.license_amount_payments" },
+	{ value: "storage", label: "items.license_storage", rate: "items.license_rate_storage", amount: "items.license_amount_storage" },
+	{ value: "white_label", label: "items.license_white_label", rate: "items.license_rate_days", amount: null },
+	{ value: "store", label: "items.license_store", rate: "items.license_rate_days", amount: null },
+	{ value: "workforce", label: "items.license_workforce", rate: "items.license_rate_days", amount: null },
+	{ value: "employees", label: "items.license_employees", rate: "items.license_rate_employees", amount: "items.license_amount_employees" },
+];
+
+function licenseSection(existing: LicenseProduct | null, currency: () => string) {
+	const type = select(
+		[{ value: "", label: t("items.license_none") }, ...LICENSE_TYPES.map((entry) => ({ value: entry.value, label: t(entry.label) }))],
+		existing?.type ?? ""
+	);
+	const money = (minor: number | null | undefined) =>
+		input("number", {
+			min: "0",
+			step: "0.01",
+			value: minor === null || minor === undefined ? "" : toMajorUnits(minor, currency()).toFixed(minorUnitDigits(currency())),
+		});
+	const whole = (value: number | null | undefined) =>
+		input("number", { min: "1", step: "1", value: value === null || value === undefined ? "" : String(value) });
+	const rate = money(existing?.rate);
+	const minimum = money(existing?.minimum ?? 0);
+	const minAmount = whole(existing?.min_amount);
+	const maxAmount = whole(existing?.max_amount);
+	const minDays = whole(existing?.min_days ?? 30);
+	const maxDays = whole(existing?.max_days ?? 3650);
+
+	const rateField = field("", rate);
+	const amountRow = el("div", { class: "form-grid" }, field("", minAmount), field(t("items.license_amount_max"), maxAmount));
+	const daysRow = el("div", { class: "form-grid" }, field(t("items.license_days_min"), minDays), field(t("items.license_days_max"), maxDays));
+	const details = el(
+		"div",
+		{ class: "stack" },
+		el("div", { class: "form-grid" }, rateField, field(t("items.license_minimum"), minimum, t("items.license_minimum_hint"))),
+		amountRow,
+		daysRow,
+		el("p", { class: "muted" }, t("items.license_hint"))
+	);
+
+	const listeners: (() => void)[] = [];
+	const sync = () => {
+		const entry = LICENSE_TYPES.find((option) => option.value === type.value);
+		details.hidden = !entry;
+		if (entry) {
+			rateField.querySelector(".field-label")!.textContent = t(entry.rate);
+			amountRow.hidden = !usesAmount(entry.value);
+			daysRow.hidden = !usesDays(entry.value);
+			if (entry.amount) amountRow.querySelector(".field-label")!.textContent = t(entry.amount);
+		}
+		for (const listener of listeners) listener();
+	};
+	type.addEventListener("change", sync);
+
+	const element = el("div", { class: "stack" }, field(t("items.license"), type, t("items.license_type_hint")), details);
+	return {
+		element,
+		active: () => type.value !== "",
+		onChange: (listener: () => void) => {
+			listeners.push(listener);
+			sync();
+		},
+		read(): LicenseProduct | null | undefined {
+			if (type.value === "") return null;
+			const kind = type.value as LicenseProduct["type"];
+			const toMinor = (field: HTMLInputElement) => toMinorUnits(Number(field.value) || 0, currency());
+			const wholeValue = (field: HTMLInputElement) => (field.value === "" ? null : Number(field.value));
+			return (
+				readLicenseProduct({
+					type: kind,
+					rate: toMinor(rate),
+					minimum: toMinor(minimum),
+					min_amount: usesAmount(kind) ? wholeValue(minAmount) : null,
+					max_amount: usesAmount(kind) ? wholeValue(maxAmount) : null,
+					min_days: usesDays(kind) ? wholeValue(minDays) : null,
+					max_days: usesDays(kind) ? wholeValue(maxDays) : null,
+				}) ?? undefined
+			);
+		},
+	};
+}
 
 function stockCell(item: CatalogItem): HTMLElement {
+	if (item.license) return el("span", { class: "muted" }, t("items.license_created_on_payment"));
 	if (!item.delivers_keys || !item.keys) return el("span", { class: "muted" }, "-");
 
 	const { available, delivered } = item.keys;
@@ -214,6 +300,15 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 		emptyText: t("currency.no_match"),
 	});
 
+	const license = isAdmin() ? licenseSection(existing?.license ?? null, () => currency.value || startCurrency) : null;
+	const priceField = field(t("items.unit_price"), price);
+	license?.onChange(() => {
+		const active = license.active();
+		priceField.hidden = active;
+		price.required = !active;
+		keysField.hidden = active;
+	});
+
 	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("items.add"));
 
 	const form = el(
@@ -223,6 +318,11 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 				event.preventDefault();
 
 				const code = currency.value || startCurrency;
+				const licensed = license?.read();
+				if (licensed === undefined && license) {
+					toast(t("items.license_invalid"), "error");
+					return;
+				}
 				const payload = {
 					name: name.value.trim(),
 					sku: sku.value.trim() || null,
@@ -232,8 +332,9 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 					tax_rate: category.value === "exempt" ? 0 : Number(taxRate.value) || 0,
 					supply_type: supplyType.value,
 					tax_category: category.value,
-					delivers_keys: deliversKeys.checked,
+					delivers_keys: deliversKeys.checked || Boolean(licensed),
 					unit: unit.value || null,
+					...(license && (licensed || existing?.license) ? { license: licensed } : {}),
 				};
 
 				submit.disabled = true;
@@ -252,13 +353,7 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 			},
 		},
 		el("div", { class: "form-grid" }, field(t("customers.name"), name, t("items.name_hint")), field(t("items.sku"), sku, t("items.sku_hint"))),
-		el(
-			"div",
-			{ class: "form-grid three" },
-			field(t("items.unit_price"), price),
-			field(t("editor.unit"), unit, t("items.unit_hint")),
-			field(t("items.currency"), currency.element)
-		),
+		el("div", { class: "form-grid three" }, priceField, field(t("editor.unit"), unit, t("items.unit_hint")), field(t("items.currency"), currency.element)),
 		el(
 			"div",
 			{ class: "form-grid three" },
@@ -268,6 +363,7 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 		),
 		field(t("payments.notes"), description),
 		keysField,
+		license?.element ?? null,
 		el("div", { class: "dialog-actions" }, submit)
 	);
 
@@ -368,7 +464,9 @@ export async function itemsView(uuid: string): Promise<HTMLElement> {
 						{ class: "actions" },
 						...(editable
 							? [
-									el("button", { class: "button ghost small", type: "button", onClick: () => keysDialog(uuid, item, () => void load()) }, t("items.keys")),
+									item.license
+										? null
+										: el("button", { class: "button ghost small", type: "button", onClick: () => keysDialog(uuid, item, () => void load()) }, t("items.keys")),
 									el(
 										"button",
 										{ class: "button ghost small", type: "button", onClick: () => void itemForm(uuid, project, item, () => void load()) },

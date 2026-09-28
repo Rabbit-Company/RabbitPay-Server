@@ -1,6 +1,7 @@
 import { formatMoneyIn } from "../../../server/formats";
-import { language } from "../i18n";
+import { language, t, tn } from "../i18n";
 import type { StoreDayHours } from "../../../server/store/config";
+import type { LicenseChoice, LicenseProduct } from "../../../server/license-pricing";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -132,4 +133,15 @@ export function weekdayName(day: number, style: "long" | "short" = "long"): stri
 export function percentOff(price: number, compare: number | null): number | null {
 	if (compare === null || compare <= price || compare === 0) return null;
 	return Math.round(((compare - price) / compare) * 100);
+}
+
+export function licenseSummary(license: LicenseChoice & { type: LicenseProduct["type"] }): string {
+	const parts = [
+		license.type === "transactions" ? t("shop.license_payments", { count: (license.amount ?? 0).toLocaleString() }) : null,
+		license.type === "storage" ? t("shop.license_storage", { count: (license.amount ?? 0).toLocaleString() }) : null,
+		license.type === "employees" ? tn("count.employees", license.amount ?? 0) : null,
+		license.days !== null ? tn("count.days", license.days) : null,
+		license.server_id ? t("shop.license_server", { id: license.server_id }) : t("shop.license_hosted"),
+	];
+	return parts.filter((part) => part !== null).join(", ");
 }

@@ -50,6 +50,7 @@ import {
 } from "../../store/checkout";
 import { findOrder, orderItems, presentOrder } from "../../store/orders";
 import { claimCoupon, couponByCode, normalizeCode, recordRedemption, unclaimCoupon, usedBy } from "../../store/coupons";
+import { recordLicenseOrder } from "../../license-orders";
 import type { AppState, InvoiceRow, StoreImageRow } from "../../database/models";
 
 const browseLimit = rateLimit({ windowMs: 60 * 1000, max: 240, message: "Too many requests. Please slow down." });
@@ -75,7 +76,7 @@ async function readJson(ctx: Context<AppState>): Promise<Record<string, unknown>
 }
 
 function publicQuote(quote: Quote) {
-	const { invoice_items: _, invoice_discount: __, ...visible } = quote;
+	const { invoice_items: _, invoice_discount: __, licenses: ___, ...visible } = quote;
 	return visible;
 }
 
@@ -379,6 +380,7 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 			${input.note}, NULL, 0, ${now}, ${now})
 	`;
 	if (coupon && quote.coupon) await recordRedemption(coupon, invoice.uuid, email, quote.discount_amount);
+	await recordLicenseOrder(invoice.uuid, store.project.uuid, quote.licenses);
 	if (input.save_profile) await writeProfile(email, profileFromCheckout(input));
 
 	if (canEmail(store.project)) {

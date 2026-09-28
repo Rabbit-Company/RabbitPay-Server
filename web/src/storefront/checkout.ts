@@ -8,9 +8,9 @@ import { navigate } from "../router";
 import { reportError, toast } from "../ui";
 import { ErrorCode } from "../../../server/errors";
 import { StoreApi, type Quote, type QuoteLine } from "./api";
-import { cartLines, clearCart, forgetProducts, removeFromCart, setQuantity } from "./cart";
+import { cartLines, clearCart, forgetProducts, lineKey, removeFromCart, setQuantity } from "./cart";
 import { icon } from "./icons";
-import { deliveryWindow, describeWindow, longDate, money } from "./format";
+import { deliveryWindow, describeWindow, licenseSummary, longDate, money } from "./format";
 import { breadcrumbs, emptyBlock, quantityStepper, storeContext, storeLayout, type StoreContext } from "./layout";
 
 function summaryRow(label: string, value: string, className = ""): HTMLElement {
@@ -56,6 +56,7 @@ function totals(ctx: StoreContext, quote: Quote, shippingKnown: boolean): HTMLEl
 }
 
 function lineIssue(line: QuoteLine): HTMLElement | null {
+	if (line.issue === "configuration") return el("span", { class: "sf-warning" }, t("shop.line_configuration"));
 	if (line.issue === "unavailable") return el("span", { class: "sf-warning" }, t("shop.line_unavailable"));
 	if (line.issue === "insufficient") return el("span", { class: "sf-warning" }, t("shop.line_insufficient", { count: line.available ?? 0 }));
 	if (line.availability === "backorder")
@@ -95,11 +96,12 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 					"div",
 					{ class: "sf-cart-info" },
 					el("a", { class: "sf-cart-name", href: ctx.link(`/p/${line.slug}`) }, line.name),
+					line.license ? el("span", { class: "sf-muted" }, licenseSummary(line.license)) : null,
 					el("span", { class: "sf-muted" }, money(line.unit_price, quote.currency)),
 					lineIssue(line)
 				),
 				quantityStepper(line.quantity, max, (value) => {
-					setQuantity(slug, line.product, value);
+					setQuantity(slug, lineKey(line), value);
 					void render().catch(reportError);
 				}),
 				el("strong", { class: "sf-cart-total" }, money(line.total, quote.currency)),
@@ -110,7 +112,7 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 						type: "button",
 						title: t("shop.remove"),
 						onClick: () => {
-							removeFromCart(slug, line.product);
+							removeFromCart(slug, lineKey(line));
 							void render().catch(reportError);
 						},
 					},
@@ -267,7 +269,13 @@ function summaryLines(quote: Quote): HTMLElement {
 					line.image ? el("img", { src: line.image, alt: "" }) : icon("box", 18),
 					el("span", { class: "sf-summary-qty" }, String(line.quantity))
 				),
-				el("span", { class: "sf-summary-name" }, line.name, lineIssue(line)),
+				el(
+					"span",
+					{ class: "sf-summary-name" },
+					line.name,
+					line.license ? el("span", { class: "sf-muted" }, ` (${licenseSummary(line.license)})`) : null,
+					lineIssue(line)
+				),
 				el("span", {}, money(line.total, quote.currency))
 			)
 		)

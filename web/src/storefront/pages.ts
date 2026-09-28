@@ -1,5 +1,7 @@
-import { el } from "../dom";
-import { t, tn } from "../i18n";
+import { el, field } from "../dom";
+import { t, tn, type UiKey } from "../i18n";
+import { reportError } from "../ui";
+import { readLicenseChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
 import { navigate, onLeave } from "../router";
 import { openLightbox } from "../lightbox";
 import { renderMarkdown } from "../../../server/markdown";
@@ -519,9 +521,65 @@ function deliveryPanel(ctx: StoreContext, product: ProductDetails): HTMLElement 
 	);
 }
 
+const AMOUNT_LABELS: Partial<Record<LicenseProduct["type"], UiKey>> = {
+	transactions: "shop.license_amount_payments",
+	storage: "shop.license_amount_storage",
+	employees: "shop.license_amount_employees",
+};
+
+function licenseOptions(
+	slug: string,
+	product: ProductDetails,
+	license: LicenseProduct,
+	onChange: (choice: LicenseChoice | null, price: number | null) => void
+) {
+	const numberInput = (min: number, max: number) =>
+		el("input", { type: "number", min: String(min), max: String(max), step: "1", value: String(min), required: true }) as HTMLInputElement;
+	const amount = license.min_amount !== null ? numberInput(license.min_amount, license.max_amount!) : null;
+	const days = license.min_days !== null ? numberInput(license.min_days, license.max_days!) : null;
+	const server = el("input", { type: "text", placeholder: "RPS-XXXXX-XXXXX-XXXXX-XXXXX", maxlength: "27", autocomplete: "off" });
+	const problem = el("p", { class: "sf-warning" });
+	problem.hidden = true;
+
+	let round = 0;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const update = async () => {
+		const current = ++round;
+		const choice = readLicenseChoice(license, {
+			amount: amount ? Number(amount.value) : null,
+			days: days ? Number(days.value) : null,
+			server_id: server.value.trim() || null,
+		});
+		problem.hidden = choice !== null;
+		problem.textContent = choice ? "" : t("shop.license_invalid");
+		onChange(choice, null);
+		if (!choice) return;
+		const quote = await StoreApi.quote(slug, { lines: [{ product: product.uuid, quantity: 1, license: choice }] });
+		if (current === round) onChange(choice, quote.lines[0]?.unit_price ?? null);
+	};
+	const schedule = () => {
+		clearTimeout(timer);
+		timer = setTimeout(() => void update().catch(reportError), 250);
+	};
+	for (const input of [amount, days, server]) input?.addEventListener("input", schedule);
+	void update().catch(reportError);
+
+	const amountLabel = AMOUNT_LABELS[license.type];
+	return el(
+		"div",
+		{ class: "sf-license-options" },
+		amount && amountLabel ? field(t(amountLabel), amount, t("shop.license_range", { min: license.min_amount!, max: license.max_amount! })) : null,
+		days ? field(t("shop.license_days"), days, t("shop.license_range", { min: license.min_days!, max: license.max_days! })) : null,
+		field(t("shop.license_server_id"), server, t("shop.license_server_hint")),
+		problem
+	);
+}
+
 export async function productView(slug: string, productSlug: string): Promise<HTMLElement> {
 	const ctx = await storeContext(slug);
 	const product = await StoreApi.product(slug, productSlug);
+	let license: LicenseChoice | null = null;
+	let price = product.price;
 	let quantity = 1;
 	const maxQuantity = product.availability === "backorder" || product.stock === null ? null : product.stock;
 	const unavailable = product.availability === "out_of_stock";
@@ -533,6 +591,7 @@ export async function productView(slug: string, productSlug: string): Promise<HT
 			type: "button",
 			disabled: unavailable,
 			onClick: () => {
+				if (product.license && !license) return;
 				addToCart(
 					slug,
 					{
@@ -540,17 +599,29 @@ export async function productView(slug: string, productSlug: string): Promise<HT
 						slug: product.slug,
 						name: product.name,
 						image: product.images[0]?.url ?? null,
-						price: product.price,
+						price,
 						currency: product.currency,
+						license,
 					},
 					quantity
 				);
-				showAdded(ctx, product, quantity);
+				showAdded(ctx, { ...product, price }, quantity);
 			},
 		},
 		icon("bag", 20),
 		unavailable ? t("shop.sold_out") : product.availability === "backorder" ? t("shop.preorder") : t("shop.add_to_cart")
 	);
+
+	const livePrice = el("div", {}, priceBlock(product, true));
+	const options = product.license
+		? licenseOptions(slug, product, product.license, (choice, next) => {
+				license = choice;
+				add.disabled = unavailable || choice === null;
+				if (next === null) return;
+				price = next;
+				livePrice.replaceChildren(priceBlock({ ...product, price: next, compare_price: null }, true));
+			})
+		: null;
 
 	const specs = product.attributes.length
 		? el(
@@ -579,11 +650,12 @@ export async function productView(slug: string, productSlug: string): Promise<HT
 				product.category ? el("a", { class: "sf-card-category", href: ctx.link(`/c/${product.category.slug}`) }, product.category.name) : null,
 				el("h1", {}, product.name),
 				product.sku ? el("span", { class: "sf-sku" }, `${t("shop.sku")} ${product.sku}`) : null,
-				priceBlock(product, true),
+				livePrice,
 				el("span", { class: "sf-muted sf-tax-note" }, product.tax_rate > 0 ? t("shop.includes_vat", { rate: product.tax_rate }) : t("shop.no_vat")),
 				product.summary ? el("p", { class: "sf-lead" }, product.summary) : null,
 				availabilityLabel(product),
 				deliveryPanel(ctx, product),
+				options,
 				el("div", { class: "sf-buy" }, unavailable ? null : quantityStepper(1, maxQuantity, (value) => (quantity = value)), add),
 				el(
 					"ul",

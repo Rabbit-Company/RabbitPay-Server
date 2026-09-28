@@ -448,7 +448,9 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 
 	const rows = (await Database`
 		SELECT c.*, sp.slug AS store_slug, sp.published, sp.featured, sp.store_category, sp.summary,
-			CASE WHEN c.delivers_keys = 1 THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available') ELSE sp.stock END AS stock,
+			CASE WHEN c.license IS NOT NULL THEN NULL
+				WHEN c.delivers_keys = 1 THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available')
+				ELSE sp.stock END AS stock,
 			CASE WHEN sp.item IS NULL THEN 0 ELSE 1 END AS has_store
 		FROM catalog_items c LEFT JOIN store_products sp ON sp.item = c.uuid
 		WHERE ${where}
@@ -469,6 +471,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 			tax_rate: row.tax_rate,
 			supply_type: row.supply_type,
 			delivers_keys: Boolean(row.delivers_keys),
+			license: row.license !== null,
 			listed: Boolean(row.has_store),
 			slug: row.store_slug,
 			published: Boolean(row.published),
@@ -513,7 +516,7 @@ async function productState(project: ProjectRow, item: CatalogItemRow) {
 	const [attributes, images, keys] = await Promise.all([
 		attributesOf([item.uuid]),
 		imagesOf([item.uuid]),
-		item.delivers_keys
+		item.delivers_keys && item.license === null
 			? (Database`SELECT COUNT(*) AS count FROM item_keys WHERE item = ${item.uuid} AND status = 'available'` as Promise<{ count: number }[]>)
 			: Promise.resolve(null),
 	]);
@@ -535,6 +538,7 @@ async function productState(project: ProjectRow, item: CatalogItemRow) {
 			tax_category: item.tax_category,
 			supply_type: item.supply_type,
 			delivers_keys: Boolean(item.delivers_keys),
+			license: item.license !== null,
 			archived: Boolean(item.archived),
 			keys_available: keys ? Number(keys[0].count) : null,
 		},

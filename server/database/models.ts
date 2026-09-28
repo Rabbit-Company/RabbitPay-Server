@@ -385,10 +385,20 @@ export interface CatalogItemRow {
 	supply_type: string;
 	tax_category: string;
 	delivers_keys: number;
+	license: string | null;
 	unit: string | null;
 	archived: number;
 	created: number;
 	updated: number;
+}
+
+export interface LicenseOrderRow {
+	invoice: string;
+	project: string;
+	server_id: string | null;
+	grants: string;
+	minted_at: number | null;
+	created: number;
 }
 
 export type ItemKeyStatus = "available" | "reserved" | "delivered";

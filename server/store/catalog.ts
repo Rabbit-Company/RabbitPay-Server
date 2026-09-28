@@ -5,6 +5,7 @@ import { currencyRates } from "../rates/forex";
 import { suggestTax, type BuyerTax, type SupplyType, type TaxCategory } from "../tax";
 import { imagesOf } from "./images";
 import { imagePath, type LoadedStore } from "./store";
+import { parseLicenseProduct } from "../license-pricing";
 import type { Availability } from "./config";
 import type { CatalogItemRow, StoreAttributeRow, StoreCategoryRow, StoreImageRow, StoreProductRow } from "../database/models";
 
@@ -56,7 +57,8 @@ export function needsShipping(item: Pick<CatalogItemRow, "supply_type" | "delive
 }
 
 function availableColumn(sql: SQL) {
-	return sql`CASE WHEN c.delivers_keys = 1
+	return sql`CASE WHEN c.license IS NOT NULL THEN NULL
+		WHEN c.delivers_keys = 1
 		THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available')
 		ELSE sp.stock END`;
 }
@@ -214,6 +216,7 @@ export function presentCard(store: LoadedStore, row: ProductRow, pricing: Pricin
 		tax_rate: tax.rate,
 		featured: Boolean(row.featured),
 		digital: Boolean(row.delivers_keys) || row.supply_type !== "goods",
+		license: parseLicenseProduct(row.license),
 		category: category ? { uuid: category.uuid, slug: category.slug, name: category.name } : null,
 		image: images[0] ? { url: imagePath(images[0]), alt: images[0].alt } : null,
 		hover_image: images[1] ? { url: imagePath(images[1]), alt: images[1].alt } : null,

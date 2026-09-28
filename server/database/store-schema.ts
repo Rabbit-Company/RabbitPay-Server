@@ -214,3 +214,21 @@ export async function createStoreCouponSchema(sql: SQL, dialect: Dialect) {
 		`CREATE INDEX IF NOT EXISTS idx_store_coupon_redemptions_coupon ON store_coupon_redemptions(coupon, email)`,
 	]);
 }
+
+export async function createLicenseProductSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await sql.unsafe(`ALTER TABLE catalog_items ADD COLUMN license ${types.text("license")}`);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS license_orders(
+					invoice ${types.text("invoice")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					server_id ${types.text("server_id")},
+					grants ${types.text("grants")} NOT NULL,
+					minted_at ${types.int64},
+					created ${types.int64} NOT NULL,
+					FOREIGN KEY (invoice) REFERENCES invoices(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE
+				)`,
+		`CREATE INDEX IF NOT EXISTS idx_license_orders_pending ON license_orders(minted_at, created)`,
+	]);
+}

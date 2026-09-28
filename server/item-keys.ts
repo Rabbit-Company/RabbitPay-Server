@@ -103,7 +103,7 @@ async function keyItemsAmong(projectId: string, itemIds: string[]): Promise<Set<
 	if (itemIds.length === 0) return new Set();
 
 	const rows = (await Database`
-		SELECT uuid FROM catalog_items WHERE project = ${projectId} AND delivers_keys = 1 AND uuid IN ${Database(itemIds)}
+		SELECT uuid FROM catalog_items WHERE project = ${projectId} AND delivers_keys = 1 AND license IS NULL AND uuid IN ${Database(itemIds)}
 	`) as { uuid: string }[];
 
 	return new Set(rows.map((row) => row.uuid));
@@ -138,7 +138,7 @@ export async function reserveKeys(sql: SQL, invoiceId: string): Promise<number> 
 	const lines = (await sql`
 		SELECT ii.uuid AS line, ii.item AS item, ii.quantity AS quantity
 		FROM invoice_items ii JOIN catalog_items c ON c.uuid = ii.item
-		WHERE ii.invoice = ${invoiceId} AND c.delivers_keys = 1
+		WHERE ii.invoice = ${invoiceId} AND c.delivers_keys = 1 AND c.license IS NULL
 		ORDER BY ii.sort_order ASC
 	`) as { line: string; item: string; quantity: number }[];
 

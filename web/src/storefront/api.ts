@@ -1,8 +1,15 @@
 import { ApiError, type StoreConfig, type StoreOrder } from "../api";
 import { clearCustomerSession, customerFetch, customerToken, type CustomerProfile } from "../customer-api";
 import type { Availability, StoreShippingOption } from "../../../server/store/config";
+import type { LicenseChoice, LicenseProduct } from "../../../server/license-pricing";
 
-export type { Availability };
+export type { Availability, LicenseChoice, LicenseProduct };
+
+export interface CartLine {
+	product: string;
+	quantity: number;
+	license: LicenseChoice | null;
+}
 
 export interface StoreCategoryNode {
 	uuid: string;
@@ -53,6 +60,7 @@ export interface ProductCard {
 	tax_rate: number;
 	featured: boolean;
 	digital: boolean;
+	license: LicenseProduct | null;
 	category: { uuid: string; slug: string; name: string } | null;
 	image: ProductImage | null;
 	hover_image: ProductImage | null;
@@ -119,7 +127,8 @@ export interface QuoteLine {
 	restock_at: number | null;
 	delivery: { min_days: number; max_days: number };
 	digital: boolean;
-	issue: "unavailable" | "insufficient" | null;
+	license: (LicenseChoice & { type: LicenseProduct["type"] }) | null;
+	issue: "unavailable" | "insufficient" | "configuration" | null;
 }
 
 export type CouponIssue = "unknown" | "disabled" | "not_started" | "expired" | "used_up" | "minimum" | "not_applicable";
@@ -157,7 +166,7 @@ export interface CheckoutAddress {
 }
 
 export interface CheckoutRequest {
-	lines: { product: string; quantity: number }[];
+	lines: CartLine[];
 	shipping: string | null;
 	customer: CheckoutAddress & { customer_type: "individual" | "business"; company: string | null; vat_number: string | null; tax_number: string | null };
 	delivery: CheckoutAddress | null;
@@ -216,7 +225,7 @@ export const StoreApi = {
 	async quote(
 		slug: string,
 		body: {
-			lines: { product: string; quantity: number }[];
+			lines: CartLine[];
 			shipping?: string | null;
 			buyer?: { country: string | null; customer_type: string; vat_number: string | null } | null;
 			coupon?: string | null;

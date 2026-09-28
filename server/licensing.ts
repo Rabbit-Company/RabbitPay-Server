@@ -6,15 +6,14 @@ import { ErrorCode } from "./errors";
 import { isLicenseIssuer, looksSigned, readSignedLicense, signLicense } from "./license-signing";
 import { serverId } from "./server-identity";
 import { countedMembers, pendingTimeTrackers } from "./workforce/people";
+import { MAX_LICENSE_DAYS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS } from "./license-pricing";
+
+export { MAX_LICENSE_DAYS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS };
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
 export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees"];
-export const MAX_LICENSE_TRANSACTIONS = 100_000_000;
-export const MAX_LICENSE_DAYS = 3650;
-export const MAX_LICENSE_STORAGE_GB = 1_000_000;
-export const MAX_LICENSE_EMPLOYEES = 1_000_000;
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -382,39 +381,53 @@ function signedCode(uuid: string): string {
 	return `RPAY2-${uuid}`;
 }
 
+export interface IssuedLicense {
+	uuid: string;
+	code: string;
+	signed_key: string | null;
+}
+
+export async function issueLicenses(
+	sql: SQL,
+	license: NewLicense,
+	quantity: number,
+	createdBy: string | null,
+	server: string | null,
+	timestamp = Date.now()
+): Promise<IssuedLicense[]> {
+	const issued: IssuedLicense[] = [];
+	for (let index = 0; index < quantity; index++) {
+		const uuid = crypto.randomUUID();
+		const signed =
+			server === null
+				? null
+				: signLicense({
+						v: 1,
+						id: uuid,
+						server,
+						type: license.type,
+						transactions: license.transactions,
+						duration_days: license.duration_days,
+						storage_gb: license.storage_gb,
+						employees: license.employees,
+						issued: timestamp,
+					});
+		const code = signed ? signedCode(uuid) : generateLicenseCode();
+		await sql`
+			INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, status, price, currency, buyer_name, buyer_email,
+				note, created_by, server_id, signed_key, created, updated)
+			VALUES(${uuid}, ${code}, ${license.type}, ${license.transactions}, ${license.duration_days}, ${license.storage_gb}, ${license.employees},
+				'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email}, ${license.note}, ${createdBy}, ${server},
+				${signed}, ${timestamp}, ${timestamp})
+		`;
+		issued.push({ uuid, code, signed_key: signed });
+	}
+	return issued;
+}
+
 export async function createLicenses(license: NewLicense, quantity: number, createdBy: string, server: string | null = null): Promise<LicenseKeyRow[]> {
-	const timestamp = Date.now();
-	const uuids: string[] = [];
-
-	await Database.begin(async (tx) => {
-		for (let index = 0; index < quantity; index++) {
-			const uuid = crypto.randomUUID();
-			uuids.push(uuid);
-			const signed =
-				server === null
-					? null
-					: signLicense({
-							v: 1,
-							id: uuid,
-							server,
-							type: license.type,
-							transactions: license.transactions,
-							duration_days: license.duration_days,
-							storage_gb: license.storage_gb,
-							employees: license.employees,
-							issued: timestamp,
-						});
-			await tx`
-				INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, status, price, currency, buyer_name, buyer_email,
-					note, created_by, server_id, signed_key, created, updated)
-				VALUES(${uuid}, ${signed ? signedCode(uuid) : generateLicenseCode()}, ${license.type}, ${license.transactions}, ${license.duration_days},
-					${license.storage_gb}, ${license.employees}, 'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email},
-					${license.note}, ${createdBy}, ${server}, ${signed}, ${timestamp}, ${timestamp})
-			`;
-		}
-	});
-
-	return (await Database`SELECT * FROM license_keys WHERE uuid IN ${Database(uuids)} ORDER BY code`) as LicenseKeyRow[];
+	const issued = await Database.begin((tx) => issueLicenses(tx, license, quantity, createdBy, server));
+	return (await Database`SELECT * FROM license_keys WHERE uuid IN ${Database(issued.map((key) => key.uuid))} ORDER BY code`) as LicenseKeyRow[];
 }
 
 async function findRedeemable(input: string): Promise<LicenseKeyRow | ErrorCode> {

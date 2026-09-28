@@ -6,6 +6,7 @@ import type { GeneratedReport, ReportState } from "../../server/report-types";
 import type { StoreConfig, StorePage } from "../../server/store/config";
 import type { InvoiceDesign } from "../../server/invoice-design";
 import type { ReferenceDocument, ReferenceDocumentColumns, ReferenceDocumentInput } from "../../server/reference-document";
+import type { LicenseProduct } from "../../server/license-pricing";
 import type { SigningCertificateSummary } from "../../server/einvoice-signing";
 import type { SecurityKeyCreationOptions, SecurityKeyRequestOptions } from "./webauthn";
 
@@ -84,6 +85,7 @@ export interface StoreListedProduct {
 	tax_rate: number;
 	supply_type: string;
 	delivers_keys: boolean;
+	license: boolean;
 	listed: boolean;
 	slug: string | null;
 	published: boolean;
@@ -117,6 +119,7 @@ export interface StoreProductDetails {
 		tax_category: string;
 		supply_type: string;
 		delivers_keys: boolean;
+		license: boolean;
 		archived: boolean;
 		keys_available: number | null;
 	};
@@ -1748,6 +1751,7 @@ export interface CatalogItem {
 	supply_type: string;
 	tax_category: string;
 	delivers_keys: boolean;
+	license: LicenseProduct | null;
 	unit: string | null;
 	keys: KeyStock | null;
 	archived: boolean;
@@ -1765,6 +1769,7 @@ export interface CatalogItemInput {
 	supply_type?: string;
 	tax_category?: string;
 	delivers_keys?: boolean;
+	license?: LicenseProduct | null;
 	unit?: string | null;
 	archived?: boolean;
 }

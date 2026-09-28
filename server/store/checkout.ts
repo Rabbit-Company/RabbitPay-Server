@@ -9,14 +9,24 @@ import { availabilityOf, grossOf, needsShipping, pricingFor, productsByItem, tax
 import { imagePath, type LoadedStore } from "./store";
 import { couponIssue, grossDiscountOf, type CouponIssue } from "./coupons";
 import type { StoreShippingOption } from "./config";
+import { t } from "../i18n";
+import { grantOf, licensePrice, parseLicenseProduct, readLicenseChoice, type LicenseChoice, type LicenseProduct } from "../license-pricing";
+import { licenseSalesOpen, type OrderedLicense } from "../license-orders";
 import type { CustomerProfileRow, CustomerRow, StoreCouponKind, StoreCouponRow } from "../database/models";
 
 export const MAX_CART_LINES = 100;
 export const MAX_CART_QUANTITY = 999;
 
+export interface LicenseInput {
+	amount: number | null;
+	days: number | null;
+	server_id: string | null;
+}
+
 export interface CartLineInput {
 	product: string;
 	quantity: number;
+	license: LicenseInput | null;
 }
 
 export interface BuyerInput {
@@ -55,7 +65,7 @@ export interface CheckoutInput {
 	coupon: string | null;
 }
 
-export type LineIssue = "unavailable" | "insufficient" | null;
+export type LineIssue = "unavailable" | "insufficient" | "configuration" | null;
 
 export interface QuotedLine {
 	product: string;
@@ -72,6 +82,7 @@ export interface QuotedLine {
 	restock_at: number | null;
 	delivery: { min_days: number; max_days: number };
 	digital: boolean;
+	license: (LicenseChoice & { type: LicenseProduct["type"] }) | null;
 	issue: LineIssue;
 }
 
@@ -94,6 +105,7 @@ export interface Quote {
 	ready: boolean;
 	invoice_items: InvoiceItemInput[];
 	invoice_discount: number;
+	licenses: OrderedLicense[];
 }
 
 type Json = Record<string, unknown>;
@@ -102,16 +114,42 @@ function isObject(value: unknown): value is Json {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readLicenseInput(value: unknown): LicenseInput | null | undefined {
+	if (value === undefined || value === null) return null;
+	if (!isObject(value)) return undefined;
+	const { amount = null, days = null, server_id = null } = value;
+	if (amount !== null && typeof amount !== "number") return undefined;
+	if (days !== null && typeof days !== "number") return undefined;
+	if (server_id !== null && (typeof server_id !== "string" || server_id.length > 64)) return undefined;
+	return { amount, days, server_id };
+}
+
 export function readCartLines(value: unknown): CartLineInput[] | null {
 	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CART_LINES) return null;
-	const merged = new Map<string, number>();
+	const merged = new Map<string, CartLineInput>();
 	for (const line of value) {
 		if (!isObject(line) || !Validate.uuid(line.product as string)) return null;
 		const quantity = line.quantity;
 		if (typeof quantity !== "number" || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > MAX_CART_QUANTITY) return null;
-		merged.set(line.product as string, Math.min((merged.get(line.product as string) ?? 0) + quantity, MAX_CART_QUANTITY));
+		const license = readLicenseInput(line.license);
+		if (license === undefined) return null;
+		const key = JSON.stringify([line.product, license?.amount, license?.days, license?.server_id]);
+		const existing = merged.get(key);
+		if (existing) existing.quantity = Math.min(existing.quantity + quantity, MAX_CART_QUANTITY);
+		else merged.set(key, { product: line.product as string, quantity, license });
 	}
-	return [...merged.entries()].map(([product, quantity]) => ({ product, quantity }));
+	return [...merged.values()];
+}
+
+function describeLicense(language: string, product: LicenseProduct, choice: LicenseChoice): string {
+	const parts = [
+		product.type === "transactions" ? t(language, "license.line_payments", { count: choice.amount ?? 0 }) : null,
+		product.type === "storage" ? t(language, "license.line_storage", { count: choice.amount ?? 0 }) : null,
+		product.type === "employees" ? t(language, "license.line_employees", { count: choice.amount ?? 0 }) : null,
+		choice.days !== null ? t(language, "license.line_days", { count: choice.days }) : null,
+		choice.server_id ? t(language, "license.line_server", { id: choice.server_id }) : t(language, "license.line_hosted"),
+	];
+	return parts.filter((part) => part !== null).join(", ");
 }
 
 function cleanText(value: unknown, max: number): string | null | undefined {
@@ -192,16 +230,30 @@ export async function quoteCart(
 
 	const quoted: QuotedLine[] = [];
 	const invoiceItems: InvoiceItemInput[] = [];
+	const licenses: OrderedLicense[] = [];
+	const licenseOpen = rows.some((row) => row.license !== null) ? await licenseSalesOpen(store.project.uuid) : false;
 	let rateMissing = false;
 
 	for (const line of found) {
 		const row = products.get(line.product)!;
-		const net = convertedPrice(row, pricing.currency, pricing.rates);
+		const license = parseLicenseProduct(row.license);
+		const choice = license ? readLicenseChoice(license, line.license) : null;
+		const basePrice = license && choice ? licensePrice(license, choice) : row.unit_price;
+		const net = convertedPrice({ ...row, unit_price: basePrice }, pricing.currency, pricing.rates);
 		if (net === null) rateMissing = true;
 		const suggestion = taxRateFor(store, row, tax);
-		const unitGross = grossOf(net ?? row.unit_price, suggestion.rate);
+		const unitGross = grossOf(net ?? basePrice, suggestion.rate);
 		const availability = availabilityOf(row, line.quantity);
-		const issue: LineIssue = availability === "out_of_stock" ? (row.available === 0 ? "unavailable" : "insufficient") : null;
+		const issue: LineIssue =
+			license && !licenseOpen
+				? "unavailable"
+				: license && !choice
+					? "configuration"
+					: availability === "out_of_stock"
+						? row.available === 0
+							? "unavailable"
+							: "insufficient"
+						: null;
 		const firstImage = images.get(row.uuid)?.[0];
 		const gross = unitGross * line.quantity;
 
@@ -223,11 +275,22 @@ export async function quoteCart(
 				max_days: row.delivery_max_days ?? store.config.delivery.max_days,
 			},
 			digital: !needsShipping(row),
+			license: license && choice ? { ...choice, type: license.type } : null,
 			issue,
 		});
 
+		if (license && choice) {
+			licenses.push({
+				...grantOf(license, choice),
+				position: invoiceItems.length,
+				quantity: line.quantity,
+				unit_price: net ?? basePrice,
+				server_id: choice.server_id,
+			});
+		}
+
 		invoiceItems.push({
-			description: row.name,
+			description: license && choice ? `${row.name} (${describeLicense(store.project.language, license, choice)})` : row.name,
 			quantity: line.quantity,
 			unit_price: Math.round((gross - taxIncluded(gross, suggestion.rate)) / line.quantity),
 			tax_rate: suggestion.rate,
@@ -297,6 +360,7 @@ export async function quoteCart(
 			quoted.length > 0 && !rateMissing && quoted.every((line) => line.issue === null) && (!requiresShipping || selected !== null) && totals.total_amount > 0,
 		invoice_items: invoiceItems,
 		invoice_discount: discount.net,
+		licenses,
 	};
 }
 
@@ -317,7 +381,7 @@ export async function takeStock(projectId: string, rows: Map<string, ProductRow>
 	return true;
 }
 
-export async function returnStock(projectId: string, lines: CartLineInput[]) {
+export async function returnStock(projectId: string, lines: Pick<CartLineInput, "product" | "quantity">[]) {
 	for (const line of lines) {
 		await Database`UPDATE store_products SET stock = stock + ${line.quantity} WHERE item = ${line.product} AND project = ${projectId} AND stock IS NOT NULL`;
 	}
@@ -358,6 +422,7 @@ export function checkoutProblem(input: CheckoutInput, quote: Quote): ErrorCode |
 	if (!input.accept_terms) return ErrorCode.CHECKOUT_TERMS_REQUIRED;
 	if (quote.withdrawal_waiver && !input.waive_withdrawal) return ErrorCode.CHECKOUT_WAIVER_REQUIRED;
 	if (quote.unknown.length > 0 || quote.lines.length === 0) return ErrorCode.INVALID_CART;
+	if (quote.lines.some((line) => line.issue === "configuration")) return ErrorCode.INVALID_CART;
 	if (quote.lines.some((line) => line.issue !== null)) return ErrorCode.STORE_OUT_OF_STOCK;
 	if (quote.requires_shipping && quote.shipping === null) return ErrorCode.INVALID_CART;
 	if (input.coupon !== null && quote.coupon_issue !== null) return quote.coupon_issue === "used_up" ? ErrorCode.COUPON_USED_UP : ErrorCode.INVALID_COUPON;

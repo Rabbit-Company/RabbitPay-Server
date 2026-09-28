@@ -553,7 +553,7 @@ export function productCard(ctx: StoreContext, product: ProductCard): HTMLElemen
 	for (const image of media.querySelectorAll("img")) image.loading = "lazy";
 
 	const quickAdd =
-		product.availability === "out_of_stock"
+		product.availability === "out_of_stock" || product.license
 			? null
 			: el(
 					"button",
@@ -592,7 +592,12 @@ export function productCard(ctx: StoreContext, product: ProductCard): HTMLElemen
 			product.category ? el("a", { class: "sf-card-category", href: ctx.link(`/c/${product.category.slug}`) }, product.category.name) : null,
 			el("a", { class: "sf-card-title", href }, product.name),
 			product.summary ? el("p", { class: "sf-card-summary" }, product.summary) : null,
-			el("div", { class: "sf-card-foot" }, el("div", {}, priceBlock(product), availabilityLabel(product)), quickAdd)
+			el(
+				"div",
+				{ class: "sf-card-foot" },
+				el("div", {}, product.license ? el("span", { class: "sf-muted" }, t("shop.price_from")) : null, priceBlock(product), availabilityLabel(product)),
+				quickAdd
+			)
 		)
 	);
 }

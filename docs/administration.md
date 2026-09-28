@@ -88,7 +88,9 @@ The issuer creates keys under Admin, License keys. Leaving "For a self-hosted
 server" empty creates a key for a project on the issuer itself, which looks like
 `RPAY-7K2QM-X4D9T-HB3WN-0PZ5R`. Entering a customer's Server ID creates a signed
 key starting with `RPAY2.` that only works on that server. Keys signed for other
-servers cannot be revoked, since the issuer cannot reach them.
+servers cannot be revoked, since the issuer cannot reach them. The issuer can
+also sell keys in its online store, where buyers choose the amounts and get the
+key once the invoice is paid, see [RabbitPay licenses](online-store.md#rabbitpay-licenses).
 
 To set up an issuer, generate the key pair once:
 

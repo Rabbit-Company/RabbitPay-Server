@@ -75,6 +75,7 @@ Server.app.post("/api/v1/projects/:uuid/items/:item/keys", Auth.required(), Perm
 
 	const item = await findKeyItem(project.uuid, itemId);
 	if (!item) return Utils.fail(ctx, ErrorCode.ITEM_NOT_FOUND);
+	if (item.license !== null) return Utils.fail(ctx, ErrorCode.INVALID_ITEM_KEYS);
 
 	let data: KeysBody;
 	try {

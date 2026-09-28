@@ -37,6 +37,43 @@ Photos are converted to WebP in the browser, stored in the document storage and
 count toward the storage allowance. Price and VAT come from the item. Items
 that sell license keys take their stock from the keys.
 
+## RabbitPay licenses
+
+The license issuer can sell its own license keys through a store. On the issuer,
+a server administrator who edits an item in a project owned by an
+administrator sees a RabbitPay license section. It turns the item into one
+license type with a rate and a minimum price, both before VAT:
+
+| Type           | Rate                     | Buyer chooses      |
+| -------------- | ------------------------ | ------------------ |
+| Payments       | Per 1,000 payments       | Payments           |
+| Storage        | Per GB                   | GB                 |
+| White label    | Per 30 days              | Days               |
+| Online store   | Per 30 days              | Days               |
+| Workforce      | Per 30 days              | Days               |
+| Employee seats | Per employee for 30 days | Employees and days |
+
+The item also sets the lowest and highest amount and number of days a buyer can
+choose. The product page asks for these values and an optional Server ID, and
+shows the price as they change. Through the API, such a cart line carries
+`license: { "amount": 20, "days": 365, "server_id": "RPS-..." }` next to
+`product` and `quantity`. Each choice is its own cart line, and the
+invoice line names what was bought, for example
+`Employee seats (20 employees, 365 days, server RPS-...)`. The server calculates
+every price again at checkout and ignores prices sent by the browser.
+
+A license product has no stock. When the invoice is paid, including a bank
+transfer recorded by hand, the keys are created and emailed with the other keys
+on the order. A key with a Server ID is signed for that server, and one without
+works on the issuer. The keys keep the order number, price and buyer, and are
+listed under Admin, License keys. Choices are saved with the order, so changing
+the item's rates later does not change orders already placed. Only the store
+creates these keys: an invoice or terminal sale of the same item does not.
+
+License products stop selling when the server is no longer the issuer or no
+owner of the project is an active administrator. A delivered key cannot be
+taken back with a credit note. Revoke an unused key under Admin, License keys.
+
 ## Categories
 
 Categories can be nested. A category page shows the products of its

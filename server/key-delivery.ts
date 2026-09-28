@@ -3,6 +3,7 @@ import { Logger } from "./logger";
 import { canEmail } from "./email/mailer";
 import { deliverSoon } from "./email/outbox";
 import { prepareKeysEmail, queueKeysEmail } from "./email/messages";
+import { issueLicenseOrder, pendingLicenseOrders } from "./license-orders";
 import type { KeyGroup } from "./email/templates";
 import type { CustomerRow, InvoiceRow, ItemKeyRow, ProjectRow } from "./database/models";
 
@@ -75,6 +76,14 @@ export async function deliverKeysFor(invoiceId: string): Promise<number> {
 let delivering: Promise<{ invoices: number; keys: number }> | null = null;
 
 async function deliverBatch(): Promise<{ invoices: number; keys: number }> {
+	for (const invoice of await pendingLicenseOrders(DELIVERY_BATCH)) {
+		try {
+			await issueLicenseOrder(invoice);
+		} catch (err) {
+			Logger.error(`[LICENSE] Could not create the license keys for invoice ${invoice}: ${err}`);
+		}
+	}
+
 	const waiting = (await Database`
 		SELECT k.invoice AS invoice FROM item_keys k JOIN invoices i ON i.uuid = k.invoice
 		WHERE k.status = 'reserved' AND i.status = 'paid'
