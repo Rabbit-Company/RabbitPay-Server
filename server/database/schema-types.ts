@@ -23,6 +23,7 @@ const ID_COLUMNS = new Set([
 	"ticket",
 	"record",
 	"run",
+	"proforma",
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
@@ -75,6 +76,11 @@ const TEXT_LENGTHS: Record<string, number> = {
 	language: 32,
 	accent_color: 32,
 	invoice_format: 30,
+	order_format: 30,
+	proforma_format: 30,
+	proforma_settlement: 16,
+	settlement: 16,
+	document_type: 16,
 	role: 32,
 	interval_unit: 16,
 	supply_type: 32,

@@ -18,7 +18,7 @@ const { Settings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode, storageFor } = await import("../server/licensing");
-const { expireUnpaidOrders, issuePaidOrders, UNPAID_ORDER_GRACE_DAYS } = await import("../server/store/order-issue");
+const { expireUnpaidOrders, issuePaidDrafts, UNPAID_ORDER_GRACE_DAYS } = await import("../server/paid-drafts");
 
 Settings.web = { enabled: true, path: FIXTURE, landing_page: true };
 
@@ -363,7 +363,7 @@ describe("the online store module", () => {
 
 		const [invoice] = await Database`SELECT * FROM invoices WHERE uuid = ${firstOrder}`;
 		expect(invoice.status).toBe("draft");
-		expect(invoice.reference).toMatch(/^ORDER-[0-9]{9}$/);
+		expect(invoice.reference).toBe(`ORDER-${String(new Date().getFullYear() % 100)}000001`);
 		expect(invoice.issued_at).toBeNull();
 		expect(invoice.supply_date).toBeNull();
 		expect(placed.data.reference).toBe(invoice.reference);
@@ -374,7 +374,7 @@ describe("the online store module", () => {
 		expect(email.kind).toBe("order_placed");
 		expect(email.subject).toContain(invoice.reference);
 		expect(email.body_text).toContain(`/pay/${firstOrder}`);
-		expect(email.attachment_name).toBeNull();
+		expect(email.attachment_name).toBe(`Order confirmation ${invoice.reference}.pdf`);
 
 		const page = await call("GET", `/public/invoices/${firstOrder}`);
 		expect(page.data).toMatchObject({ document: "order", reference: invoice.reference, status: "draft", outstanding: 36600 });
@@ -382,7 +382,9 @@ describe("the online store module", () => {
 		const transfer = await call("POST", `/public/invoices/${firstOrder}/pay/bank_transfer`, undefined, {});
 		expect(transfer.error).toBe(0);
 		expect(transfer.data.reference).toMatch(/^RF[0-9]{2}/);
-		expect((await call("GET", `/public/invoices/${firstOrder}/pdf`)).error).not.toBe(0);
+		const pdf = await Server.app.handle(new Request(`http://127.0.0.1/api/v1/public/invoices/${firstOrder}/pdf`));
+		expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
+		expect(pdf.headers.get("Content-Disposition")).toContain(`Order confirmation ${invoice.reference}.pdf`);
 		expect((await call("PATCH", `${base()}/invoices/${firstOrder}`, ownerToken, { notes: "Edited" })).error).toBe(1041);
 		expect((await call("DELETE", `${base()}/invoices/${firstOrder}`, ownerToken)).error).toBe(1041);
 
@@ -500,12 +502,7 @@ describe("the online store module", () => {
 		const [{ number }] = await Database`SELECT number FROM store_orders WHERE invoice = ${order}`;
 		const paid = await call("POST", `${base()}/transactions`, ownerToken, { invoice: order, processor: "bank_transfer", amount: 36600 });
 		expect(paid.error).toBe(0);
-		const [waiting] = await Database`SELECT status, paid_amount FROM invoices WHERE uuid = ${order}`;
-		expect(waiting.status).toBe("draft");
-		expect(Number(waiting.paid_amount)).toBe(36600);
-
-		await issuePaidOrders();
-		await issuePaidOrders();
+		expect(await issuePaidDrafts()).toBe(0);
 		const [invoice] = await Database`SELECT * FROM invoices WHERE uuid = ${order}`;
 		expect(invoice.status).toBe("paid");
 		expect(invoice.reference).toMatch(/^[0-9]{12}$/);

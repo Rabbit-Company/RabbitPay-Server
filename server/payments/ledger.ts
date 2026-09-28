@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { safeInteger, addIntegers } from "../database/numbers";
 import { statusForPayment } from "../invoicing";
 import { deliverKeysSoon } from "../key-delivery";
-import { issueOrdersSoon } from "../store/order-issue";
+import { issueDraftsSoon } from "../paid-drafts";
 import { queueInvoiceVerification, submitFiscalSoon } from "../fiscal/documents";
 import { enqueueLater, type WebhookEvent } from "../webhooks/events";
 import type { InvoiceRow, InvoiceStatus } from "../database/models";
@@ -48,7 +48,7 @@ function resolveStatus(invoice: InvoiceRow, paid: number, refunded: number, net:
 	if (paid > 0 && refunded > 0 && net <= 0) return "refunded";
 
 	const due = invoice.total_amount - invoice.credited_amount;
-	if (due <= 0) return net > 0 ? "paid" : "canceled";
+	if (due <= 0) return net > 0 || invoice.credited_amount === 0 ? "paid" : "canceled";
 
 	return statusForPayment(due, net, invoice.due_date, Date.now());
 }
@@ -77,7 +77,7 @@ export async function applyBalance(sql: SQL, invoiceId: string): Promise<Invoice
 	`;
 
 	if (await queueInvoiceVerification(sql, invoiceId)) submitFiscalSoon();
-	if (invoice.status === "draft" && balance.paid_amount > 0) issueOrdersSoon();
+	if (invoice.status === "draft" && balance.paid_amount > 0) issueDraftsSoon();
 
 	if (balance.status !== invoice.status) {
 		if (balance.status === "paid") deliverKeysSoon();

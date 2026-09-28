@@ -1,3 +1,4 @@
+import { outstandingOf } from "../../../server/invoicing";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { Api, type Invoice, type Transaction } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
@@ -24,7 +25,7 @@ function paymentStatusOptions() {
 
 export function recordPaymentDialog(projectUuid: string, invoice: Invoice, onRecorded: () => void) {
 	const digits = minorUnitDigits(invoice.currency);
-	const outstanding = Math.max(invoice.total_amount - (invoice.paid_amount - invoice.refunded_amount), 0);
+	const outstanding = outstandingOf(invoice);
 
 	const amount = input("number", { value: String(toMajorUnits(outstanding, invoice.currency)), min: "0", step: "0.01", required: true });
 	const fee = input("number", { value: "0", min: "0", step: "0.01" });

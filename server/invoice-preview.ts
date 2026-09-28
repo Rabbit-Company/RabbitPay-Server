@@ -103,6 +103,9 @@ export async function previewDocument(project: ProjectRow, design: InvoiceDesign
 
 	const payUrl = `${Utils.publicUrl()}/pay/preview`;
 	const document: InvoiceDocument = {
+		kind: "invoice",
+		proforma: null,
+		source_proforma: null,
 		seller,
 		buyer,
 		invoice: {
@@ -123,6 +126,7 @@ export async function previewDocument(project: ProjectRow, design: InvoiceDesign
 			supply_date: now,
 			paid_date: kind === "receipt" ? now : null,
 			reference_document: null,
+			advanced_amount: 0,
 		},
 		items: lines,
 		tax: taxDetails,

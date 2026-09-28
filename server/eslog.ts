@@ -64,6 +64,7 @@ export interface EslogLine {
 
 export interface EslogSource {
 	kind: "invoice" | "credit_note";
+	advance?: boolean;
 	reference: string;
 	issued: number;
 	supply_date: number | null;
@@ -113,6 +114,7 @@ export function invoiceSource(document: InvoiceDocument): EslogSource {
 
 	return {
 		kind: "invoice",
+		advance: document.kind === "advance",
 		reference: invoice.reference,
 		issued: invoice.issued,
 		supply_date: invoice.supply_date,
@@ -151,6 +153,7 @@ export function creditNoteSource(document: CreditNoteDocument, referenceDocument
 
 	return {
 		kind: "credit_note",
+		advance: false,
 		reference: note.reference,
 		issued: note.issued,
 		supply_date: null,
@@ -553,7 +556,11 @@ export function eslogDocument(source: EslogSource): { root: XmlNode; message: Xm
 			node("D_0062", clip(source.reference, 14)),
 			node("C_S009", node("D_0065", "INVOIC"), node("D_0052", "D"), node("D_0054", "01B"), node("D_0051", "UN"))
 		),
-		node("S_BGM", node("C_C002", node("D_1001", invoice ? "380" : "381")), node("C_C106", node("D_1004", clip(source.reference, 70)))),
+		node(
+			"S_BGM",
+			node("C_C002", node("D_1001", invoice ? (source.advance ? "386" : "380") : "381")),
+			node("C_C106", node("D_1004", clip(source.reference, 70)))
+		),
 		dtm("137", date(source.issued, source.timezone)),
 		source.supply_date !== null ? dtm("35", date(source.supply_date, source.timezone)) : null,
 		...noteTexts(source.notes),

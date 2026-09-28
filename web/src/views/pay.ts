@@ -213,8 +213,8 @@ function instructionCard(instruction: PaymentInstruction, invoice: PublicInvoice
 	return card;
 }
 
-function pdfLink(invoiceId: string, t: ReturnType<typeof translator>): HTMLElement {
-	const link = el("a", { class: "button ghost pay-pdf", href: PublicApi.invoicePdfUrl(invoiceId) }, t("pay.download_pdf"));
+function pdfLink(invoiceId: string, label: string): HTMLElement {
+	const link = el("a", { class: "button ghost pay-pdf", href: PublicApi.invoicePdfUrl(invoiceId) }, label);
 	link.download = "";
 	return link;
 }
@@ -239,9 +239,11 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 				(node): node is HTMLElement => node !== null
 			)
 		);
-		const settled = invoice.status === "paid";
-		const closed = invoice.status === "canceled";
 		const order = invoice.document === "order";
+		const proforma = invoice.document === "proforma";
+		const unissued = order || proforma;
+		const settled = invoice.status === "paid" || (proforma && invoice.outstanding <= 0);
+		const closed = invoice.status === "canceled";
 		const date = formatDate(invoice.due_date, invoice.date_format as DateFormat, invoice.timezone);
 
 		const summary = el(
@@ -251,9 +253,17 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 				"div",
 				{ class: "pay-head" },
 				el("div", {}, el("p", { class: "muted" }, invoice.merchant), el("h1", {}, formatMoney(invoice.outstanding || invoice.total_amount, invoice.currency))),
-				statusPill(order && invoice.status === "draft" ? "open" : invoice.status, t)
+				statusPill(unissued && invoice.status === "draft" ? (settled ? "paid" : "open") : invoice.status, t)
 			),
-			el("p", { class: "muted mono" }, order ? t("pay.order_number", { reference: invoice.reference }) : invoice.reference),
+			el(
+				"p",
+				{ class: "muted mono" },
+				order
+					? t("pay.order_number", { reference: invoice.reference })
+					: proforma
+						? t("pay.proforma_number", { reference: invoice.reference })
+						: invoice.reference
+			),
 			el(
 				"div",
 				{ class: "totals" },
@@ -278,8 +288,9 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 					el("span", { class: "mono" }, formatMoney(invoice.outstanding, invoice.currency))
 				)
 			),
-			el("p", { class: "muted" }, order ? t("pay.pay_by", { date }) : t("pay.due_on", { date })),
-			order ? el("p", { class: "muted" }, t("pay.order_note")) : pdfLink(invoiceId, t)
+			el("p", { class: "muted" }, unissued ? t("pay.pay_by", { date }) : t("pay.due_on", { date })),
+			unissued ? el("p", { class: "muted" }, t(order ? "pay.order_note" : "pay.proforma_note")) : null,
+			pdfLink(invoiceId, t(order ? "pay.download_order" : proforma ? "pay.download_proforma" : "pay.download_pdf"))
 		);
 
 		const items =

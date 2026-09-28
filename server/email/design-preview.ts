@@ -10,6 +10,13 @@ const DAY = 24 * 60 * 60 * 1000;
 
 const DEFAULT_KEYS: Record<CustomerEmailKind, Partial<Record<keyof EmailTexts, TranslationKey>>> = {
 	invoice: { subject: "email.invoice.subject", heading: "email.invoice.heading", intro: "email.invoice.intro", button: "email.invoice.button" },
+	proforma: {
+		subject: "email.proforma.subject",
+		heading: "email.proforma.heading",
+		intro: "email.proforma.intro",
+		button: "email.invoice.button",
+		closing: "email.proforma.closing",
+	},
 	reminder_before: {
 		subject: "email.reminder_before.subject",
 		heading: "email.invoice.heading",
@@ -84,11 +91,19 @@ export async function previewEmail(project: ProjectRow, design: EmailDesign, kin
 	const url = `${Utils.publicUrl()}/pay/preview`;
 	const reference = "260924000042";
 
-	if (kind === "order_placed") {
+	if (kind === "order_placed" || kind === "proforma") {
 		return invoiceEmail(
 			brand,
 			kind,
-			{ reference: "ORDER-482915073", currency: project.currency, total, tax, outstanding: total, dueDate: now + 3 * DAY, paid: false },
+			{
+				reference: kind === "proforma" ? "PR-2026-00042" : "ORDER-26000042",
+				currency: project.currency,
+				total,
+				tax,
+				outstanding: total,
+				dueDate: now + 3 * DAY,
+				paid: false,
+			},
 			lines,
 			url,
 			null,

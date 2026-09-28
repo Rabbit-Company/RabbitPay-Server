@@ -1,5 +1,15 @@
 import type { SQL } from "bun";
-import { DEFAULT_INVOICE_FORMAT, parseInvoiceFormat, periodKey, renderInvoiceNumber, type InvoiceFormat } from "./invoice-format";
+import {
+	DEFAULT_INVOICE_FORMAT,
+	DEFAULT_ORDER_FORMAT,
+	DEFAULT_PROFORMA_FORMAT,
+	parseInvoiceFormat,
+	periodKey,
+	renderInvoiceNumber,
+	type InvoiceFormat,
+} from "./invoice-format";
+
+export { DEFAULT_ORDER_FORMAT, DEFAULT_PROFORMA_FORMAT };
 import { activeFiscalFor, placeFor, type FiscalChannel, type FiscalPlace } from "./fiscal/config";
 
 const DRAFT_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -39,11 +49,6 @@ export function draftReference(): string {
 	return `DRAFT-${suffix}`;
 }
 
-export function orderReference(): string {
-	const digits = [...crypto.getRandomValues(new Uint8Array(9))].map((byte) => String(byte % 10)).join("");
-	return `ORDER-${digits}`;
-}
-
 export function isDraftReference(value: string): boolean {
 	return value.startsWith("DRAFT-");
 }
@@ -54,6 +59,71 @@ export function sequenceOf(reference: string): number | null {
 }
 
 export const CREDIT_NOTE_PREFIX = "CN";
+
+export type NumberSeries = "invoice" | "order" | "proforma";
+export const NUMBER_SERIES: NumberSeries[] = ["invoice", "proforma", "order"];
+
+const SERIES_DEFAULTS: Record<NumberSeries, string> = {
+	invoice: DEFAULT_INVOICE_FORMAT,
+	order: DEFAULT_ORDER_FORMAT,
+	proforma: DEFAULT_PROFORMA_FORMAT,
+};
+
+const SERIES_KEYS: Record<NumberSeries, string> = { invoice: "", order: "ORDER/", proforma: "PROFORMA/" };
+
+export function isNumberSeries(value: unknown): value is NumberSeries {
+	return typeof value === "string" && NUMBER_SERIES.includes(value as NumberSeries);
+}
+
+export function storedFormatOf(project: { invoice_format: string; order_format: string | null; proforma_format: string | null }, series: NumberSeries): string {
+	if (series === "order") return project.order_format ?? DEFAULT_ORDER_FORMAT;
+	if (series === "proforma") return project.proforma_format ?? DEFAULT_PROFORMA_FORMAT;
+	return project.invoice_format;
+}
+
+export function sequenceKey(series: NumberSeries, format: InvoiceFormat, timestamp: number, timezone?: string): string {
+	return `${SERIES_KEYS[series]}${periodKey(format, timestamp, timezone)}`;
+}
+
+export async function seriesFormat(sql: SQL, projectId: string, series: NumberSeries): Promise<InvoiceFormat> {
+	const [row] = (await sql`SELECT invoice_format, order_format, proforma_format FROM projects WHERE uuid = ${projectId}`) as {
+		invoice_format: string;
+		order_format: string | null;
+		proforma_format: string | null;
+	}[];
+	const parsed = parseInvoiceFormat(row ? storedFormatOf(row, series) : SERIES_DEFAULTS[series]);
+	if (parsed.ok) return parsed.format;
+	return (parseInvoiceFormat(SERIES_DEFAULTS[series]) as { ok: true; format: InvoiceFormat }).format;
+}
+
+async function documentReferenceTaken(sql: SQL, projectId: string, reference: string): Promise<boolean> {
+	const found = (await sql`
+		SELECT 1 FROM invoices WHERE project = ${projectId} AND reference = ${reference}
+		UNION ALL SELECT 1 FROM credit_notes WHERE project = ${projectId} AND reference = ${reference}
+		UNION ALL SELECT 1 FROM store_orders WHERE project = ${projectId} AND number = ${reference}
+		UNION ALL SELECT 1 FROM proformas WHERE project = ${projectId} AND reference = ${reference}
+	`) as unknown[];
+	return found.length > 0;
+}
+
+export async function nextSeriesNumber(sql: SQL, projectId: string, series: "order" | "proforma", timestamp: number): Promise<string> {
+	const format = await seriesFormat(sql, projectId, series);
+	const [project] = (await sql`SELECT timezone FROM projects WHERE uuid = ${projectId}`) as { timezone: string }[];
+	const key = sequenceKey(series, format, timestamp, project.timezone);
+
+	let sequence = await storedNextNumber(sql, projectId, key);
+	for (;;) {
+		if (sequence > format.capacity) {
+			throw new NumberingExhausted(`Numbers are exhausted for this period. The format ${format.source} holds ${format.capacity}, use more X for more.`);
+		}
+		const reference = renderInvoiceNumber(format, timestamp, sequence, project.timezone);
+		if (!(await documentReferenceTaken(sql, projectId, reference))) {
+			await setNextNumber(sql, projectId, key, sequence + 1);
+			return reference;
+		}
+		sequence++;
+	}
+}
 
 export class NumberingExhausted extends Error {}
 
@@ -101,10 +171,7 @@ async function nextFiscalNumber(sql: SQL, projectId: string, place: FiscalNumber
 }
 
 export async function projectInvoiceFormat(sql: SQL, projectId: string): Promise<InvoiceFormat> {
-	const [row] = (await sql`SELECT invoice_format FROM projects WHERE uuid = ${projectId}`) as { invoice_format: string | null }[];
-	const parsed = parseInvoiceFormat(row?.invoice_format ?? DEFAULT_INVOICE_FORMAT);
-	if (parsed.ok) return parsed.format;
-	return (parseInvoiceFormat(DEFAULT_INVOICE_FORMAT) as { ok: true; format: InvoiceFormat }).format;
+	return await seriesFormat(sql, projectId, "invoice");
 }
 
 export async function storedNextNumber(sql: SQL, projectId: string, key: string): Promise<number> {

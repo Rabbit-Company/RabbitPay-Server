@@ -123,12 +123,19 @@ export function calculateTotals(items: InvoiceItemInput[], discountAmount: numbe
 	};
 }
 
-export function outstandingOf(invoice: { total_amount: number; paid_amount: number; refunded_amount: number; credited_amount?: number }): number {
-	return Math.max(invoice.total_amount - (invoice.credited_amount ?? 0) - (invoice.paid_amount - invoice.refunded_amount), 0);
+export function outstandingOf(invoice: {
+	total_amount: number;
+	paid_amount: number;
+	refunded_amount: number;
+	credited_amount?: number;
+	advanced_amount?: number;
+}): number {
+	return Math.max(invoice.total_amount - (invoice.credited_amount ?? 0) - (invoice.advanced_amount ?? 0) - (invoice.paid_amount - invoice.refunded_amount), 0);
 }
 
 export function statusForPayment(totalAmount: number, paidAmount: number, dueDate: number, now: number): InvoiceStatus {
-	if (paidAmount >= totalAmount && totalAmount > 0) return "paid";
+	if (totalAmount <= 0) return "paid";
+	if (paidAmount >= totalAmount) return "paid";
 	if (paidAmount > 0) return "partially_paid";
 	if (dueDate < now) return "overdue";
 	return "open";

@@ -13,6 +13,7 @@ import { issueSnapshotFor } from "./invoice-snapshot";
 import { fiscalMarks } from "./fiscal/documents";
 import { referenceDocumentOf } from "./reference-document";
 import Database from "./database/database";
+import { documentKindOf, proformaFor } from "./proformas";
 import type { InvoiceRow, ProjectRow } from "./database/models";
 
 export async function invoiceBank(
@@ -38,6 +39,11 @@ export async function invoiceBank(
 
 export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, options: { archival?: boolean } = {}) {
 	const items = await loadItems(invoice.uuid);
+	const kind = await documentKindOf(invoice);
+	const proforma = kind === "proforma" ? await proformaFor(invoice.uuid) : null;
+	const sourceProforma = (
+		kind === "advance" && invoice.proforma ? await Database`SELECT reference FROM proformas WHERE invoice = ${invoice.proforma}` : []
+	)[0] as { reference: string } | undefined;
 	const snapshot = invoice.status === "draft" ? null : await issueSnapshotFor(invoice.uuid);
 	if (invoice.status !== "draft" && !snapshot) throw new Error("Issued invoice snapshot is missing");
 	const { company, seller, buyer } = await partiesFor(project, invoice, snapshot?.seller);
@@ -86,7 +92,7 @@ export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, 
 
 	const payUrl = snapshot?.settings.pay_url ?? `${Utils.publicUrl()}/pay/${invoice.uuid}`;
 	const status = issuedState?.status ?? invoice.status;
-	const payable = outstanding > 0 && status !== "canceled" && status !== "draft" && (online.card || online.crypto);
+	const payable = outstanding > 0 && status !== "canceled" && (status !== "draft" || kind === "proforma" || kind === "order") && (online.card || online.crypto);
 	const branding = snapshot
 		? {
 				white_label: snapshot.settings.branding.white_label,
@@ -96,6 +102,9 @@ export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, 
 	const design = snapshot ? withDesignDefaults(snapshot.settings.design) : invoiceDesignOf(project);
 
 	return {
+		kind,
+		proforma: proforma ? { reference: proforma.reference, settlement: proforma.settlement, issued_at: proforma.issued_at } : null,
+		source_proforma: sourceProforma?.reference ?? null,
 		seller,
 		buyer,
 		invoice: {
@@ -111,7 +120,8 @@ export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, 
 			credited_amount: issuedState?.credited_amount ?? invoice.credited_amount,
 			outstanding,
 			notes: invoice.notes,
-			issued: invoice.issued_at ?? invoice.created,
+			issued: invoice.issued_at ?? proforma?.issued_at ?? invoice.created,
+			advanced_amount: invoice.advanced_amount,
 			due_date: invoice.source === "pos" ? null : invoice.due_date,
 			supply_date: invoice.supply_date,
 			paid_date: issuedState?.paid_date ?? invoice.paid_date,

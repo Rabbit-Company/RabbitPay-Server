@@ -1,6 +1,7 @@
 import Database from "../database/database";
 import { applyBalance, type InvoiceBalance } from "./ledger";
 import { enqueueLater } from "../webhooks/events";
+import { outstandingOf } from "../invoicing";
 import type { InvoiceRow } from "../database/models";
 
 export const PAYABLE_STATUSES = ["open", "overdue", "partially_paid"];
@@ -11,8 +12,19 @@ export async function awaitsStorePayment(invoice: Pick<InvoiceRow, "uuid" | "sta
 	return order !== undefined && order.fulfillment !== "canceled";
 }
 
-export async function acceptsPayment(invoice: Pick<InvoiceRow, "uuid" | "status">): Promise<boolean> {
-	return PAYABLE_STATUSES.includes(invoice.status) || (await awaitsStorePayment(invoice));
+export async function isProformaDraft(invoice: Pick<InvoiceRow, "uuid" | "status">): Promise<boolean> {
+	if (invoice.status !== "draft") return false;
+	const [row] = (await Database`SELECT 1 AS found FROM proformas WHERE invoice = ${invoice.uuid}`) as unknown[];
+	return row !== undefined;
+}
+
+export async function awaitsPayment(invoice: InvoiceRow): Promise<boolean> {
+	if (invoice.status !== "draft" || outstandingOf(invoice) <= 0) return false;
+	return (await awaitsStorePayment(invoice)) || (await isProformaDraft(invoice));
+}
+
+export async function acceptsPayment(invoice: InvoiceRow): Promise<boolean> {
+	return PAYABLE_STATUSES.includes(invoice.status) || (await awaitsPayment(invoice));
 }
 
 export interface RecordedPayment {

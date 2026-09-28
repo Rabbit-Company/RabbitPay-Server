@@ -27,7 +27,8 @@ import { brandingOf, loadLogo } from "../../branding";
 import { invoicePdf, pdfResponse } from "../../invoice-pdf";
 import { issueSnapshotFor, snapshotLogo } from "../../invoice-snapshot";
 import { creditNoteSnapshotFor, creditNoteSnapshotLogo } from "../../credit-note-snapshot";
-import { acceptsPayment, awaitsStorePayment } from "../../payments/recorded";
+import { acceptsPayment } from "../../payments/recorded";
+import { documentKindOf } from "../../proformas";
 import type { CreditNoteRow, InvoiceItemRow, InvoiceRow, ProjectRow } from "../../database/models";
 
 const publicLimit = rateLimit({ windowMs: 60 * 1000, max: 60, message: "Too many requests. Please slow down." });
@@ -113,21 +114,23 @@ Server.app.get("/api/v1/public/invoices/:invoice", publicLimit, async (ctx) => {
 	if (!Validate.uuid(invoiceId)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);
 
 	const found = await load(invoiceId);
-	const order = found ? await awaitsStorePayment(found.invoice) : false;
-	if (!found || (found.invoice.status === "draft" && !order)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+	const kind = found ? await documentKindOf(found.invoice) : "invoice";
+	if (!found || (found.invoice.status === "draft" && kind === "invoice")) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+	const payable = await acceptsPayment(found.invoice);
 
 	const items = (await Database`
 		SELECT description, quantity, unit, unit_price, tax_rate, tax_amount, total_price FROM invoice_items WHERE invoice = ${invoiceId} ORDER BY sort_order
 	`) as InvoiceItemRow[];
 
-	const methods = found.invoice.status === "paid" || found.invoice.status === "canceled" ? [] : await availableFor(found.project.uuid);
+	const methods = payable ? await availableFor(found.project.uuid) : [];
 
 	const keys = found.invoice.status === "paid" ? await heldKeysOf(invoiceId, "delivered") : [];
 	const pending = found.invoice.status === "paid" && keys.length === 0 ? (await heldKeysOf(invoiceId, "reserved")).length > 0 : false;
 
 	return Utils.ok(ctx, {
 		reference: found.invoice.reference,
-		document: order ? "order" : "invoice",
+		document: kind,
+		payable,
 		merchant: displayNameOf(found.project),
 		status: found.invoice.status,
 		currency: found.invoice.currency,
@@ -157,7 +160,9 @@ Server.app.get("/api/v1/public/invoices/:invoice/pdf", documentLimit, async (ctx
 	if (!Validate.uuid(invoiceId)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);
 
 	const found = await load(invoiceId);
-	if (!found || found.invoice.status === "draft") return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+	if (!found || (found.invoice.status === "draft" && (await documentKindOf(found.invoice)) === "invoice")) {
+		return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+	}
 
 	return pdfResponse(await invoicePdf(found.project, found.invoice, { payLink: Boolean(found.project.email_pay_link) }));
 });

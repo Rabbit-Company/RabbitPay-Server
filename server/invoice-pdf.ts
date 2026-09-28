@@ -18,6 +18,7 @@ import { formatReference } from "./payments/reference";
 import { FURS_QR_OPTIONS } from "./furs/qr";
 import { referenceDocumentRow } from "./reference-document";
 import { quantityWithUnit } from "./measure-units";
+import { DOCUMENT_TITLES, documentDateRows, documentNote, type DocumentKind } from "./document-kind";
 import type { CreditNoteRow, InvoiceRow, ProjectRow } from "./database/models";
 
 type InvoiceDocument = Awaited<ReturnType<typeof invoiceDocument>>;
@@ -646,8 +647,8 @@ function documentFilename(title: string, reference: string, extension: string): 
 	return `${`${title} ${reference}`.replace(UNSAFE_FILENAME, "-").trim()}.${extension}`;
 }
 
-export function invoiceFilename(reference: string, language: string, extension = "pdf"): string {
-	return documentFilename(translator(language)("invoice.title"), reference, extension);
+export function invoiceFilename(reference: string, language: string, extension = "pdf", kind: DocumentKind = "invoice"): string {
+	return documentFilename(translator(language)(DOCUMENT_TITLES[kind]), reference, extension);
 }
 
 export function creditNoteFilename(reference: string, language: string, extension = "pdf"): string {
@@ -723,21 +724,13 @@ export async function renderInvoicePdf(
 	const t = translator(document.language);
 	const dateOf = (value: number) => formatDateIn(value, document.formats.date as DateFormat, document.language, document.formats.timezone);
 	const format = (amount: number) => formatMoneyIn(amount, invoice.currency, document.language);
-	const { pdf, layout, output } = await startPdf(document, `${t("invoice.title")} ${invoice.reference}`);
+	const title = t(DOCUMENT_TITLES[document.kind]);
+	const { pdf, layout, output } = await startPdf(document, `${title} ${invoice.reference}`);
 
-	const dates: [string, string][] = (
-		[
-			["invoice.issued", invoice.issued],
-			["invoice.supplied", invoice.supply_date],
-			["invoice.due", invoice.due_date],
-			["invoice.paid", invoice.paid_date],
-		] as [TranslationKey, number | null][]
-	)
-		.filter((entry): entry is [TranslationKey, number] => entry[1] !== null)
-		.map(([key, value]) => [t(key), dateOf(value)]);
+	const dates: [string, string][] = documentDateRows(document).map(([key, value]) => [t(key), dateOf(value)]);
 	const reference = referenceDocumentRow(invoice.reference_document, t, dateOf);
 
-	drawHeader(layout, t("invoice.title"), invoice.reference, await printableLogo(logo), reference ? [...dates, reference] : dates);
+	drawHeader(layout, title, invoice.reference, await printableLogo(logo), reference ? [...dates, reference] : dates);
 	drawParties(layout, document, t, sellerExtrasOf(document.seller, document.tax.vat_status, t, document.design.show));
 	drawLines(
 		layout,
@@ -767,12 +760,15 @@ export async function renderInvoicePdf(
 			...(invoice.discount_amount > 0 ? [{ label: t("invoice.discount"), value: `-${format(invoice.discount_amount)}` }] : []),
 			{ label: t("invoice.tax"), value: format(invoice.tax_amount) },
 			{ label: t("invoice.total"), value: format(invoice.total_amount), strong: true },
+			...(invoice.advanced_amount > 0 ? [{ label: t("invoice.advanced"), value: format(invoice.advanced_amount) }] : []),
 			...(invoice.paid_amount > 0 ? [{ label: t("invoice.paid"), value: format(invoice.paid_amount) }] : []),
 			...(invoice.outstanding !== invoice.total_amount ? [{ label: t("invoice.outstanding"), value: format(invoice.outstanding), strong: true }] : []),
 		],
 		format,
 		document.language
 	);
+	const note = documentNote(document, t);
+	if (note) drawSection(layout, null, note);
 	if (invoice.notes) drawSection(layout, t("invoice.notes"), invoice.notes);
 	if (document.closing_note) drawSection(layout, null, document.closing_note);
 	const issuer = await prepareIssuer(layout, document, t, document.fiscal ? ISSUER_BESIDE_FISCAL_WIDTH : ISSUER_WIDTH);
@@ -838,7 +834,7 @@ export async function renderFiscalInvoicePdf(project: ProjectRow, invoice: Invoi
 	const snapshot = await issueSnapshotFor(invoice.uuid);
 	const document = await invoiceDocument(project, invoice);
 	const data = await renderInvoicePdf(document, await snapshotLogo(invoice.uuid), { payLink: snapshot?.settings.pdf_pay_link ?? false });
-	return { name: invoiceFilename(invoice.reference, document.language), data };
+	return { name: invoiceFilename(invoice.reference, document.language, "pdf", document.kind), data };
 }
 
 export async function renderFiscalCreditNotePdf(project: ProjectRow, note: CreditNoteRow): Promise<{ name: string; data: Uint8Array }> {
@@ -857,7 +853,7 @@ export async function deliveredInvoicePdf(project: ProjectRow, invoice: InvoiceR
 		if (stored) {
 			const { issueSnapshotFor } = await import("./invoice-snapshot");
 			const language = (await issueSnapshotFor(invoice.uuid))?.settings.language ?? project.language;
-			return { name: invoiceFilename(invoice.reference, language), data: stored };
+			return { name: invoiceFilename(invoice.reference, language, "pdf", invoice.document_type), data: stored };
 		}
 		return await renderFiscalInvoicePdf(project, invoice);
 	}
@@ -887,7 +883,7 @@ export async function invoicePdf(project: ProjectRow, invoice: InvoiceRow, optio
 	const document = await invoiceDocument(project, invoice);
 	const logo = document.branding.logo ? await loadLogo(project.uuid) : null;
 	const data = await renderInvoicePdf(document, logo, options);
-	return { name: invoiceFilename(invoice.reference, document.language), data };
+	return { name: invoiceFilename(invoice.reference, document.language, "pdf", document.kind), data };
 }
 
 export async function creditNotePdf(project: ProjectRow, note: CreditNoteRow): Promise<{ name: string; data: Uint8Array }> {

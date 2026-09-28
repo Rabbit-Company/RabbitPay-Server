@@ -13,6 +13,7 @@ import "./v1/emails";
 import "./v1/hooks";
 import "./v1/invitations";
 import "./v1/invoices";
+import "./v1/proformas";
 import "./v1/item-keys";
 import "./v1/items";
 import "./v1/keys";

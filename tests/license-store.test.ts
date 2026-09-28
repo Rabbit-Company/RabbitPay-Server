@@ -11,7 +11,7 @@ const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode } = await import("../server/licensing");
 const { deliverPendingKeys } = await import("../server/key-delivery");
-const { issuePaidOrder } = await import("../server/store/order-issue");
+const { issuePaidDraft } = await import("../server/paid-drafts");
 const { serverId } = await import("../server/server-identity");
 const { licensePrice } = await import("../server/license-pricing");
 
@@ -239,7 +239,8 @@ describe("license products", () => {
 			amount: invoice.data.total_amount,
 		});
 		expect(paid.error).toBe(0);
-		const issued = await issuePaidOrder(order);
+		expect(await issuePaidDraft(order)).toBeNull();
+		const [{ reference: issued }] = await Database`SELECT reference FROM invoices WHERE uuid = ${order}`;
 		expect(issued).toMatch(/^[0-9]{12}$/);
 		await deliverPendingKeys();
 		await deliverPendingKeys();

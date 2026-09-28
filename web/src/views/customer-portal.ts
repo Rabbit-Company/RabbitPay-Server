@@ -1,5 +1,5 @@
 import { el, emptyState, field, input, saveFile, select, statusPill, table } from "../dom";
-import { CustomerApi, clearCustomerSession, customerToken, storeCustomerSession, type CustomerInvoice } from "../customer-api";
+import { CustomerApi, clearCustomerSession, customerToken, storeCustomerSession, type CustomerInvoice, type CustomerProforma } from "../customer-api";
 import { navigate, onLeave } from "../router";
 import { reportError } from "../ui";
 import { language, t } from "../i18n";
@@ -10,6 +10,7 @@ import { authBrand, authFooter, authPage } from "../auth-page";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { formatDateIn, formatMoneyIn, type DateFormat } from "../../../server/formats";
 import { creditNoteDocumentView, invoiceDocumentView, printButton } from "./print";
+import { PublicApi } from "../api";
 
 function safeReturn(value: unknown): string | null {
 	return typeof value === "string" && /^\/(?![/\\])[^\s\\]*$/.test(value) ? value : null;
@@ -146,6 +147,35 @@ function invoiceRow(invoice: CustomerInvoice): HTMLElement {
 	);
 }
 
+function proformasCard(proformas: CustomerProforma[]): HTMLElement | null {
+	if (proformas.length === 0) return null;
+	return el(
+		"div",
+		{ class: "card stack" },
+		el("h2", {}, t("portal.proformas")),
+		el("p", { class: "muted" }, t("portal.proformas_hint")),
+		table(
+			[t("invoices.column_reference"), t("portal.business"), t("invoices.valid_until"), t("portal.outstanding"), ""],
+			proformas.map((proforma) =>
+				el(
+					"tr",
+					{},
+					el("td", { class: "mono" }, proforma.reference),
+					el("td", {}, proforma.merchant),
+					el("td", {}, formatDateIn(proforma.valid_until, proforma.date_format as DateFormat, language(), proforma.timezone)),
+					el("td", { class: "numeric" }, formatMoneyIn(proforma.outstanding, proforma.currency, language())),
+					el(
+						"td",
+						{ class: "actions" },
+						el("a", { class: "button ghost small", href: PublicApi.invoicePdfUrl(proforma.uuid), target: "_blank", rel: "noopener" }, t("portal.proforma_pdf")),
+						el("a", { class: "button primary small", href: `/pay/${proforma.uuid}` }, t("portal.proforma_pay"))
+					)
+				)
+			)
+		)
+	);
+}
+
 export async function customerInvoicesView(): Promise<HTMLElement> {
 	const header = await customerHeader();
 	document.title = `${t("portal.invoices")} | RabbitPay`;
@@ -156,6 +186,7 @@ export async function customerInvoicesView(): Promise<HTMLElement> {
 		{ value: "paid", label: t("portal.paid") },
 	]);
 	const body = el("div");
+	const proformas = (await CustomerApi.proformas().catch(() => ({ proformas: [] }))).proformas;
 	const controls = pagination(() => load());
 	onLeave(() => controls.state.reset());
 	const load = async (): Promise<void> => {
@@ -193,6 +224,7 @@ export async function customerInvoicesView(): Promise<HTMLElement> {
 			"div",
 			{ class: "page stack" },
 			el("h1", {}, t("portal.invoices")),
+			proformasCard(proformas),
 			el("div", { class: "toolbar" }, field(t("portal.filter"), filter)),
 			body,
 			controls.element

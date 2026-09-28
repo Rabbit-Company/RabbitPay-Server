@@ -1,3 +1,4 @@
+import { DOCUMENT_TITLES, documentDateRows, documentNote } from "../../../server/document-kind";
 import { Api, type Company, type CreditNoteDocument, type FiscalMarks, type InvoiceDesign, type InvoiceDocument } from "../api";
 import { QRCode } from "@rabbit-company/qrcode";
 import { FURS_QR_OPTIONS } from "../../../server/furs/qr";
@@ -256,12 +257,9 @@ export function invoiceDocumentView(document_: InvoiceDocument, actions: HTMLEle
 
 	const sellerExtras = sellerExtrasOf(seller, document_.tax.vat_status, t, document_.design.show);
 
-	const dates: [string, string][] = [
-		[t("invoice.issued"), dateOf(invoice.issued)],
-		...(invoice.supply_date ? [[t("invoice.supplied"), dateOf(invoice.supply_date)] as [string, string]] : []),
-		...(invoice.due_date !== null ? [[t("invoice.due"), dateOf(invoice.due_date)] as [string, string]] : []),
-		...(invoice.paid_date ? [[t("invoice.paid"), dateOf(invoice.paid_date)] as [string, string]] : []),
-	];
+	const title = t(DOCUMENT_TITLES[document_.kind]);
+	const note = documentNote(document_, t);
+	const dates: [string, string][] = documentDateRows(document_).map(([key, value]) => [t(key), dateOf(value)]);
 	const reference = referenceDocumentRow(invoice.reference_document, t, dateOf);
 	if (reference) dates.push(reference);
 
@@ -312,11 +310,12 @@ export function invoiceDocumentView(document_: InvoiceDocument, actions: HTMLEle
 		...(invoice.discount_amount > 0 ? [{ label: t("invoice.discount"), value: `-${format(invoice.discount_amount)}` }] : []),
 		{ label: t("invoice.tax"), value: format(invoice.tax_amount) },
 		{ label: t("invoice.total"), value: format(invoice.total_amount), strong: true },
+		...(invoice.advanced_amount > 0 ? [{ label: t("invoice.advanced"), value: format(invoice.advanced_amount) }] : []),
 		...(invoice.paid_amount > 0 ? [{ label: t("invoice.paid"), value: format(invoice.paid_amount) }] : []),
 		...(invoice.outstanding !== invoice.total_amount ? [{ label: t("invoice.outstanding"), value: format(invoice.outstanding), strong: true }] : []),
 	]);
 
-	document.title = isDraftReference(invoice.reference) ? `Invoice draft ${seller.name}` : `Invoice ${invoice.reference}`;
+	document.title = isDraftReference(invoice.reference) ? `${title} | ${seller.name}` : `${title} ${invoice.reference}`;
 
 	const codes = [
 		bank?.qr ? qrBlock(bank.qr, shortQrCaption(bank.qr.format, language), 4) : null,
@@ -366,10 +365,11 @@ export function invoiceDocumentView(document_: InvoiceDocument, actions: HTMLEle
 		document_.design,
 		actions,
 		warning,
-		header(document_.design, t("invoice.title"), invoice.reference, brandLogo(document_.branding, seller.name, "doc-logo"), dates),
+		header(document_.design, title, invoice.reference, brandLogo(document_.branding, seller.name, "doc-logo"), dates),
 		parties(document_, t, sellerExtras),
 		items,
 		el("div", { class: "doc-summary" }, sortedGroups.length > 0 ? taxTable(t, sortedGroups, format, language) : el("div", {}), totals),
+		closingNote(note),
 		invoice.notes ? el("div", { class: "doc-notes" }, el("h3", { class: "doc-label" }, t("invoice.notes")), el("p", {}, invoice.notes)) : null,
 		closingNote(document_.closing_note),
 		payment,

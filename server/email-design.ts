@@ -2,6 +2,7 @@ import { isAccentColor } from "./colors";
 
 export const CUSTOMER_EMAIL_KINDS = [
 	"invoice",
+	"proforma",
 	"reminder_before",
 	"reminder_after",
 	"receipt",
@@ -30,6 +31,7 @@ export interface EmailDesign {
 
 export const EMAIL_PLACEHOLDERS: Record<CustomerEmailKind, readonly string[]> = {
 	invoice: ["merchant", "reference", "amount", "date"],
+	proforma: ["merchant", "reference", "amount", "date"],
 	reminder_before: ["merchant", "reference", "amount", "date"],
 	reminder_after: ["merchant", "reference", "amount", "date"],
 	receipt: ["merchant", "reference", "amount", "date"],
@@ -43,6 +45,7 @@ export const EMAIL_PLACEHOLDERS: Record<CustomerEmailKind, readonly string[]> = 
 
 export const EMAIL_FIELDS: Record<CustomerEmailKind, readonly EmailTextField[]> = {
 	invoice: ["subject", "heading", "intro", "button", "closing"],
+	proforma: ["subject", "heading", "intro", "button", "closing"],
 	reminder_before: ["subject", "heading", "intro", "button", "closing"],
 	reminder_after: ["subject", "heading", "intro", "button", "closing"],
 	receipt: ["subject", "heading", "intro", "button", "closing"],

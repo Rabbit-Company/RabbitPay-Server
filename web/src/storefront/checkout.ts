@@ -1,4 +1,4 @@
-import { ApiError, type StoreOrder } from "../api";
+import { ApiError, PublicApi, type StoreOrder } from "../api";
 import { CustomerApi, clearCustomerSession, customerToken, type CustomerOrder, type CustomerProfile } from "../customer-api";
 import { customerForm, addressForm, type CustomerForm } from "../customer-forms";
 import { privacyActions, profileEditor } from "../views/customer-profile";
@@ -562,6 +562,14 @@ export async function orderView(slug: string, invoice: string): Promise<HTMLElem
 					el("h1", {}, payable ? t("shop.order_received") : t("shop.order_thanks")),
 					el("p", {}, t("shop.order_reference", { reference: order.number })),
 					order.invoice_reference ? el("p", { class: "sf-muted" }, t("shop.order_invoice", { reference: order.invoice_reference })) : null,
+					order.payment_status === "canceled"
+						? null
+						: el(
+								"a",
+								{ class: "sf-link", href: PublicApi.invoicePdfUrl(order.invoice), target: "_blank", rel: "noopener" },
+								icon("download", 16),
+								order.invoice_reference ? t("shop.download_invoice") : t("shop.download_confirmation")
+							),
 					payable ? el("p", { class: "sf-muted" }, t("shop.order_pay_by", { date: longDate(order.due_date) })) : null,
 					pay
 				);

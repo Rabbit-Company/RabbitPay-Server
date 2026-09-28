@@ -39,7 +39,7 @@ async function generate(project: ProjectRow, invoice: InvoiceRow, row: InvoiceDo
 		UPDATE invoice_documents SET status = 'ready', byte_size = ${data.byteLength}, sha256 = ${checksum}, attempts = ${row.attempts + 1},
 			last_error = NULL, next_attempt_at = NULL, updated = ${timestamp} WHERE invoice = ${invoice.uuid}
 	`;
-	return { name: invoiceFilename(invoice.reference, snapshot.settings.language), data };
+	return { name: invoiceFilename(invoice.reference, snapshot.settings.language, "pdf", invoice.document_type), data };
 }
 
 async function loadOrGenerate(project: ProjectRow, invoice: InvoiceRow): Promise<{ name: string; data: Uint8Array }> {
@@ -51,7 +51,7 @@ async function loadOrGenerate(project: ProjectRow, invoice: InvoiceRow): Promise
 		try {
 			const data = await documentStorage().get(row.storage_key);
 			if (data.byteLength !== row.byte_size || hash(data) !== row.sha256) throw new Error("Stored invoice failed its integrity check");
-			return { name: invoiceFilename(invoice.reference, snapshot.settings.language), data };
+			return { name: invoiceFilename(invoice.reference, snapshot.settings.language, "pdf", invoice.document_type), data };
 		} catch (err) {
 			const timestamp = Date.now();
 			const storageKey = `invoices/${invoice.project}/${invoice.uuid}/${crypto.randomUUID()}.pdf`;

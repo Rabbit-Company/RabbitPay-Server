@@ -86,6 +86,19 @@ export interface CustomerOrder {
 	created: number;
 }
 
+export interface CustomerProforma {
+	uuid: string;
+	reference: string;
+	merchant: string;
+	currency: string;
+	total_amount: number;
+	outstanding: number;
+	issued: number;
+	valid_until: number;
+	date_format: string;
+	timezone: string;
+}
+
 export interface CustomerInvoice {
 	uuid: string;
 	reference: string;
@@ -164,6 +177,9 @@ export const CustomerApi = {
 	},
 	logout() {
 		return request<void>("/auth/logout", {});
+	},
+	proformas() {
+		return request<{ proformas: CustomerProforma[] }>("/proformas");
 	},
 	invoices(status: string, offset: number, limit: number) {
 		const query = new URLSearchParams({ offset: String(offset), limit: String(limit) });

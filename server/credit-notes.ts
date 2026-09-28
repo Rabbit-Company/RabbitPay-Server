@@ -1,4 +1,5 @@
 import type { SQL } from "bun";
+import { refreshAdvancedAmount } from "./proformas";
 import { safeInteger } from "./database/numbers";
 import Database from "./database/database";
 import { ErrorCode } from "./errors";
@@ -143,6 +144,7 @@ export async function issueCreditNote(sql: SQL, invoice: InvoiceRow, planned: Pl
 	}
 
 	await sql`UPDATE invoices SET credited_amount = credited_amount + ${total}, updated = ${issuedAt} WHERE uuid = ${invoice.uuid}`;
+	if (invoice.proforma) await refreshAdvancedAmount(sql, invoice.proforma);
 	await applyBalance(sql, invoice.uuid);
 
 	const [created] = (await sql`SELECT * FROM credit_notes WHERE uuid = ${uuid}`) as CreditNoteRow[];

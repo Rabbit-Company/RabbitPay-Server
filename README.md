@@ -14,7 +14,9 @@ needs nothing else.
 
 ### Invoicing
 
-Invoices and credit notes with sequential numbering, PDF archive,
+Invoices and credit notes with sequential numbering, pro forma invoices
+(predračun) that become invoices or advance invoices when paid, number formats
+of your own for invoices, pro forma invoices and store orders, PDF archive,
 email delivery with reminders before and after the due date, recurring invoices
 and a customer portal where buyers see and pay what they owe. Documents in
 English and Slovenian, with your own design and branding on a white label

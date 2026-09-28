@@ -1,11 +1,11 @@
 import { Logger } from "../logger";
 import { deliverPendingKeys } from "../key-delivery";
-import { expireUnpaidOrders, issuePaidOrders } from "../store/order-issue";
+import { expireUnpaidOrders, issuePaidDrafts } from "../paid-drafts";
 
 namespace TaskKeys {
 	export async function run() {
 		try {
-			await issuePaidOrders();
+			await issuePaidDrafts();
 			await expireUnpaidOrders();
 		} catch (err) {
 			Logger.error(`[STORE] Order cycle failed: ${err}`);

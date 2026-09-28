@@ -11,6 +11,7 @@ import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { ProcessorType } from "../../payments/types";
 import { acceptsPayment, recordPayment } from "../../payments/recorded";
+import { issuePaidDraft } from "../../paid-drafts";
 import { FISCAL_PROCESSORS, fiscalBlocked } from "../../fiscal/config";
 import { fiscalDocumentFor } from "../../fiscal/documents";
 import { applyBalance, balanceFor, refundableAmount, REFUND_TYPES, SETTLED_PAYMENT_STATUSES, SETTLED_REFUND_STATUSES } from "../../payments/ledger";
@@ -185,6 +186,13 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 		newValue: { invoice: invoice.reference, amount: data.amount, currency: invoice.currency, processor: data.processor, status },
 	});
 	Logger.audit(`[PAYMENTS] ${account.username} recorded ${data.amount} ${invoice.currency} on ${invoice.reference}`);
+	if (invoice.status === "draft" && status !== "pending") {
+		try {
+			await issuePaidDraft(invoice.uuid);
+		} catch (err) {
+			Logger.error(`[PAYMENTS] ${invoice.reference} was paid but could not be issued yet, it is retried: ${err instanceof Error ? err.message : err}`);
+		}
+	}
 
 	const transaction = await loadTransaction(project.uuid, uuid);
 	return Utils.ok(ctx, { ...present(transaction!), invoice_balance: balance }, 201);

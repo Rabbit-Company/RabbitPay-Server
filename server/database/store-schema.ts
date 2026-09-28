@@ -237,3 +237,30 @@ export async function addStoreOrderNumbers(sql: SQL, dialect: Dialect) {
 	await sql.unsafe(`ALTER TABLE store_orders ADD COLUMN number ${schemaTypes(dialect).text("number")}`);
 	await sql`UPDATE store_orders SET number = (SELECT reference FROM invoices WHERE invoices.uuid = store_orders.invoice)`;
 }
+
+export async function createProformaSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await sql.unsafe(`ALTER TABLE projects ADD COLUMN order_format ${types.text("order_format")}`);
+	await sql.unsafe(`ALTER TABLE projects ADD COLUMN proforma_format ${types.text("proforma_format")}`);
+	await sql.unsafe(`ALTER TABLE projects ADD COLUMN proforma_settlement ${types.text("proforma_settlement")} NOT NULL DEFAULT 'invoice'`);
+	await sql.unsafe(`ALTER TABLE invoices ADD COLUMN document_type ${types.text("document_type")} NOT NULL DEFAULT 'invoice'`);
+	await sql.unsafe(`ALTER TABLE invoices ADD COLUMN proforma ${types.text("proforma")}`);
+	await sql.unsafe(`ALTER TABLE invoices ADD COLUMN advanced_amount ${types.int64} NOT NULL DEFAULT 0`);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS proformas(
+					invoice ${types.text("invoice")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					reference ${types.text("reference")} NOT NULL,
+					settlement ${types.text("settlement")} NOT NULL,
+					issued_at ${types.int64} NOT NULL,
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					FOREIGN KEY (invoice) REFERENCES invoices(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					UNIQUE(project, reference),
+					CHECK (settlement IN ('invoice', 'advance'))
+				)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_proforma ON invoices(proforma)`,
+		`CREATE INDEX IF NOT EXISTS idx_store_orders_number ON store_orders(project, number)`,
+	]);
+}

@@ -6,7 +6,7 @@ An invoice number must be sequential, not merely unique. EU Directive 2006/112/E
 Article 226(2) says so and the Slovenian ZDDV-1 repeats it, so numbers are drawn
 from a per project series rather than generated at random.
 
-Each project picks its own format under Settings, Invoice numbers:
+Each project picks its own format under Settings, Document numbers:
 
 | Code          | Becomes                                     |
 | ------------- | ------------------------------------------- |
@@ -15,8 +15,10 @@ Each project picks its own format under Settings, Invoice numbers:
 | `DD`          | the day, 01 to 31                           |
 | `X`           | one digit of the counter, `XXX` gives `001` |
 
-Anything else (letters, digits, `/ - . _ #`) is printed as written. The default
-is `YYMMDDXXXXXX`, so `260916000001` is the first invoice of 16 September 2026.
+Anything else (letters, digits, `/ - . _ #`) is printed as written. Text in
+double quotes is printed as written too, which is how the letters Y, M, D and X
+get into a number: `"ORDER"-YYXXXXXX` gives `ORDER-26000001`. The default is
+`YYMMDDXXXXXX`, so `260916000001` is the first invoice of 16 September 2026.
 `XXX/YY` gives `001/26`, and `INV-YYYY-XXXX` gives `INV-2026-0001`.
 
 The smallest date part decides when the counter starts again at 1: every day with
@@ -40,6 +42,21 @@ curl -X PUT localhost:8085/api/v1/projects/$PROJECT/invoice-numbering \
 without saving it. An invalid format or next number returns `1106` with the
 reason.
 
+Three series use the same formats and each has its own counter:
+
+| Series              | `series`   | Default            | Example          |
+| ------------------- | ---------- | ------------------ | ---------------- |
+| Invoices            | `invoice`  | `YYMMDDXXXXXX`     | `260916000001`   |
+| Pro forma invoices  | `proforma` | `PR-YYYY-XXXXX`    | `PR-2026-00001`  |
+| Online store orders | `order`    | `"ORDER"-YYXXXXXX` | `ORDER-26000001` |
+
+Pass `series` to both calls to read or change the other two. A format that
+could produce the same number as another series, or as credit notes, is
+refused with `1106`, so an order or pro forma number can never take the place
+of an invoice number. The answer also says with `bank_reference` whether the
+numbers are short enough for an RF payment reference, which bank transfers
+use when they can.
+
 A number is taken when the invoice is issued, not when a draft is made. A
 draft carries a placeholder such as `DRAFT-8KQ2LM4P` and takes its real number the
 moment it is opened, so deleting a draft leaves no gap in the series. When a
@@ -55,6 +72,48 @@ reinterpret existing accounting dates. Each project counts separately, and the
 counter lives in `invoice_sequences`, read and advanced inside the same
 transaction that writes the invoice, so two invoices issued at the same moment
 cannot take the same number.
+
+## Pro forma invoices
+
+A pro forma invoice (predračun) asks the customer to pay before you invoice.
+Create one from the New invoice page, or turn a draft into one with Create pro
+forma invoice. It gets the next number from the pro forma series, and its PDF is
+titled Pro forma invoice, shows Valid until instead of a due date, and says that
+it is not an invoice. It carries the bank details with a UPN or EPC QR code and
+an RF reference built from its number, and a link to the payment page where the
+customer can pay online. Email it from the invoice page: the PDF is attached and
+the email has its own design under Settings, Emails. Customers also see open pro
+forma invoices in the customer portal.
+
+A pro forma invoice is not an invoice. Its number is not reported to FURS, it is
+not in the VAT records, reports or e-SLOG exports, and it can be edited until the
+first payment. It cannot be deleted, only canceled, so its number stays taken.
+Issue invoice now turns it into an invoice without waiting for a payment.
+
+What happens when it is paid is chosen per pro forma invoice, with a default
+under Settings, Document numbers, and can be changed until the first payment:
+
+- **Issue the invoice right away.** The first settled payment issues the pro
+  forma invoice as an invoice with the next invoice number, the payment date as
+  supply date, and FURS verification when the payment needs it. The customer
+  receives the invoice. Use this when the goods or service are delivered on
+  payment.
+- **Issue an advance invoice for every payment.** Each settled payment becomes a
+  račun za predplačilo for exactly the amount received, split over the VAT rates
+  of the pro forma invoice. The payment moves to the advance invoice, which is
+  verified with FURS when needed, exported to e-SLOG as a prepayment invoice
+  (document type 386), and emailed to the customer. The pro forma invoice shows
+  what was paid in advance and stays payable for the rest. When you deliver,
+  Issue final invoice turns it into the final invoice: every advance invoice is
+  deducted as a negative line per VAT rate, so the final invoice charges only
+  what is left, often nothing. Crediting an advance invoice lowers what the pro
+  forma invoice counts as paid, and a pro forma invoice with advance invoices
+  cannot be canceled until they are credited.
+
+Recording a payment by hand issues the invoice or advance invoice straight
+away. Card, PayPal and crypto payments do so within moments of settling, and a
+document that cannot be issued yet, for example because company details are
+missing, is retried in the background.
 
 ## Supply date
 

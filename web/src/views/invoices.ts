@@ -9,6 +9,7 @@ import {
 	type Invoice,
 	type InvoiceCredits,
 	type InvoiceKeys,
+	type ProformaSettlement,
 	type Project,
 	type Transaction,
 } from "../api";
@@ -39,10 +40,26 @@ function statusFilterOptions() {
 const PAGE_SIZE = 50;
 const UNPAID_STATUSES = ["open", "overdue", "partially_paid"];
 
+const DOCUMENT_VALUES: { value: NonNullable<Invoice["document"]>; label: UiKey }[] = [
+	{ value: "proforma", label: "invoices.filter_proforma" },
+	{ value: "order", label: "invoices.filter_order" },
+	{ value: "advance", label: "invoices.filter_advance" },
+];
+
+function documentFilterOptions() {
+	return [{ value: "", label: t("invoices.all_documents") }, ...DOCUMENT_VALUES.map((entry) => ({ value: entry.value, label: t(entry.label) }))];
+}
+
 export interface InvoiceFilter {
+	document?: NonNullable<Invoice["document"]>;
 	status?: string;
 	customer?: string;
 	reference?: string;
+}
+
+function documentTag(invoice: Invoice): HTMLElement | null {
+	const entry = DOCUMENT_VALUES.find((option) => option.value === invoice.document);
+	return entry ? el("div", { class: "muted" }, t(`invoices.kind_${entry.value}` as UiKey)) : null;
 }
 
 function customerCell(uuid: string, invoice: Invoice): HTMLElement {
@@ -52,15 +69,15 @@ function customerCell(uuid: string, invoice: Invoice): HTMLElement {
 }
 
 function invoiceRow(uuid: string, invoice: Invoice, dateFormat: DateFormat, timezone: string, withCustomer: boolean): HTMLElement {
-	const outstanding = UNPAID_STATUSES.includes(invoice.status) ? outstandingOf(invoice) : 0;
+	const outstanding = UNPAID_STATUSES.includes(invoice.status) || awaitingPayment(invoice) ? outstandingOf(invoice) : 0;
 	const pastDue = outstanding > 0 && invoice.due_date < Date.now();
 
 	return el(
 		"tr",
 		{},
-		el("td", {}, el("a", { class: "mono", href: `/projects/${uuid}/invoices/${invoice.uuid}` }, invoice.reference)),
+		el("td", {}, el("a", { class: "mono", href: `/projects/${uuid}/invoices/${invoice.uuid}` }, invoice.reference), documentTag(invoice)),
 		withCustomer ? customerCell(uuid, invoice) : null,
-		el("td", {}, statusPill(invoice.status)),
+		el("td", {}, statusOf(invoice)),
 		el("td", { class: "mono" }, formatMoney(invoice.total_amount, invoice.currency)),
 		el("td", { class: "mono" }, formatMoney(invoice.paid_amount - invoice.refunded_amount, invoice.currency)),
 		el("td", { class: "mono" }, outstanding > 0 ? formatMoney(outstanding, invoice.currency) : "-"),
@@ -142,6 +159,7 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 	const body = el("div", {});
 	const referenceSearch = searchFilter(params.get("reference") ?? "", t("invoices.search_reference"), () => void load());
 	const statusFilter = select(statusFilterOptions(), params.get("status") ?? "");
+	const documentFilter = select(documentFilterOptions(), params.get("document") ?? "");
 	const customers = await customerFilter(uuid, params.get("customer"));
 
 	const customerLink = el("a", { class: "button ghost" }, t("invoices.customer_overview"));
@@ -151,7 +169,12 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 	let round = 0;
 
 	const syncControls = () => {
-		rememberFilters(`/projects/${uuid}/invoices`, { reference: referenceSearch.value.trim(), status: statusFilter.value, customer: customers.value });
+		rememberFilters(`/projects/${uuid}/invoices`, {
+			reference: referenceSearch.value.trim(),
+			status: statusFilter.value,
+			document: documentFilter.value,
+			customer: customers.value,
+		});
 		customerLink.hidden = !customers.value;
 		customerLink.setAttribute("href", `/projects/${uuid}/customers/${customers.value}`);
 		newInvoice.setAttribute("href", `/projects/${uuid}/invoices/new${customers.value ? `?customer=${customers.value}` : ""}`);
@@ -161,11 +184,12 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 		syncControls();
 		const current = ++round;
 		const filter: InvoiceFilter = {
+			document: (documentFilter.value || undefined) as InvoiceFilter["document"],
 			status: statusFilter.value || undefined,
 			customer: customers.value || undefined,
 			reference: referenceSearch.value.trim() || undefined,
 		};
-		const filtered = Boolean(filter.status || filter.customer || filter.reference);
+		const filtered = Boolean(filter.status || filter.document || filter.customer || filter.reference);
 		const empty = emptyState(
 			filtered ? t("invoices.none_match") : t("invoices.empty"),
 			filtered || !creates ? undefined : el("a", { class: "button primary", href: `/projects/${uuid}/invoices/new` }, t("invoices.create_first"))
@@ -180,13 +204,14 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 	};
 
 	statusFilter.addEventListener("change", () => void load());
+	documentFilter.addEventListener("change", () => void load());
 	customers.onChange(() => void load());
 	void load();
 
 	const content = el(
 		"div",
 		{ class: "stack" },
-		el("div", { class: "toolbar" }, referenceSearch, statusFilter, customers.combo.element, customers.clear, customerLink, newInvoice),
+		el("div", { class: "toolbar" }, referenceSearch, documentFilter, statusFilter, customers.combo.element, customers.clear, customerLink, newInvoice),
 		body
 	);
 
@@ -197,33 +222,82 @@ export async function newInvoiceView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const requestedCustomer = new URLSearchParams(window.location.search).get("customer");
 	const preselected = requestedCustomer ? await Api.customer(uuid, requestedCustomer).catch(() => null) : null;
+	return await invoiceFormView(uuid, project, null, preselected);
+}
 
+export async function editInvoiceView(uuid: string, invoiceId: string): Promise<HTMLElement> {
+	const project = await loadProject(uuid);
+	const invoice = await Api.invoice(uuid, invoiceId);
+	if (invoice.status !== "draft" || invoice.paid_amount > 0 || (invoice.advanced_amount ?? 0) > 0 || invoice.document === "order") {
+		navigate(`/projects/${uuid}/invoices/${invoiceId}`, true);
+		return el("div");
+	}
+	const customer = invoice.customer ? await Api.customer(uuid, invoice.customer).catch(() => null) : null;
+	return await invoiceFormView(uuid, project, invoice, customer);
+}
+
+async function invoiceFormView(uuid: string, project: Project, existing: Invoice | null, customer: Customer | null): Promise<HTMLElement> {
+	const proforma = existing?.document === "proforma";
 	const editor = await invoiceEditor(uuid, project, {
-		initial: preselected ? { customer: preselected, currency: project.currency, discount: 0, notes: null, items: [] } : undefined,
+		initial:
+			existing || customer
+				? {
+						customer,
+						currency: existing?.currency ?? project.currency,
+						discount: existing?.discount_amount ?? 0,
+						notes: existing?.notes ?? null,
+						items: (existing?.items ?? []).map((item) => ({
+							description: item.description,
+							quantity: item.quantity,
+							unit_price: item.unit_price,
+							tax_rate: item.tax_rate,
+							item: item.item ?? null,
+							tax_treatment: item.tax_treatment ?? null,
+							unit: item.unit ?? null,
+						})),
+					}
+				: undefined,
 	});
 
-	const dueDate = input("date", { value: toDateInput(Date.now() + 14 * 24 * 60 * 60 * 1000, project.timezone), required: true });
-	const supplyDate = input("date", { value: "" });
-	const reference = referenceDocumentFields(null, project.timezone);
-	const submit = el("button", { class: "button primary", type: "submit" }, t("invoices.create_draft"));
+	const dueDate = input("date", {
+		value: toDateInput(existing?.due_date ?? Date.now() + 14 * 24 * 60 * 60 * 1000, project.timezone),
+		required: true,
+	});
+	const supplyDate = input("date", { value: existing?.supply_date ? toDateInput(existing.supply_date, project.timezone) : "" });
+	const reference = referenceDocumentFields(existing, project.timezone);
+	const settlement = select(
+		[
+			{ value: "invoice", label: t("settings.settlement_invoice") },
+			{ value: "advance", label: t("settings.settlement_advance") },
+		],
+		project.proforma_settlement
+	);
+	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("invoices.create_draft"));
+	const back = existing ? `/projects/${uuid}/invoices/${existing.uuid}` : `/projects/${uuid}/invoices`;
 
-	const save = async (openImmediately: boolean) => {
+	const save = async (action: "draft" | "issue" | "proforma") => {
 		const values = editor.values();
 		if (!values) return;
 
 		submit.disabled = true;
+		const body = {
+			...values,
+			...reference.values(),
+			due_date: fromDateInput(dueDate.value, project.timezone),
+			supply_date: supplyDate.value ? dayStartFromDateInput(supplyDate.value, project.timezone) : null,
+		};
 
 		try {
-			const invoice = await Api.createInvoice(uuid, {
-				...values,
-				...reference.values(),
-				due_date: fromDateInput(dueDate.value, project.timezone),
-				supply_date: supplyDate.value ? dayStartFromDateInput(supplyDate.value, project.timezone) : null,
-			});
-
-			if (openImmediately) await Api.openInvoice(uuid, invoice.uuid);
-
-			toast(openImmediately ? t("invoices.issued") : t("invoices.draft_created"), "success");
+			if (existing) {
+				await Api.updateInvoice(uuid, existing.uuid, body);
+				toast(t("invoices.draft_saved"), "success");
+				navigate(back);
+				return;
+			}
+			const invoice = await Api.createInvoice(uuid, body);
+			if (action === "issue") await Api.openInvoice(uuid, invoice.uuid);
+			if (action === "proforma") await Api.createProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
+			toast(action === "issue" ? t("invoices.issued") : action === "proforma" ? t("invoices.proforma_created") : t("invoices.draft_created"), "success");
 			navigate(`/projects/${uuid}/invoices/${invoice.uuid}`);
 		} catch (error) {
 			reportError(error);
@@ -237,18 +311,18 @@ export async function newInvoiceView(uuid: string): Promise<HTMLElement> {
 			class: "stack",
 			onSubmit: (event) => {
 				event.preventDefault();
-				void save(false);
+				void save("draft");
 			},
 		},
 		el(
 			"div",
 			{ class: "card" },
-			el("h2", {}, t("customer.details")),
+			el("h2", {}, existing ? t("invoices.edit_title", { reference: existing.reference }) : t("customer.details")),
 			el("div", { class: "form-grid" }, editor.customerField, editor.currencyField),
 			el(
 				"div",
 				{ class: "form-grid" },
-				field(t("invoices.due_date"), dueDate),
+				field(proforma ? t("invoices.valid_until") : t("invoices.due_date"), dueDate, proforma ? t("invoices.valid_until_hint") : undefined),
 				field(t("invoices.supply_date"), supplyDate, t("invoices.supply_date_hint")),
 				editor.discountField
 			),
@@ -259,20 +333,31 @@ export async function newInvoiceView(uuid: string): Promise<HTMLElement> {
 				el("p", { class: "muted" }, t("invoices.reference_hint")),
 				reference.element
 			),
+			existing
+				? null
+				: el(
+						"details",
+						{ class: "form-more" },
+						el("summary", {}, t("invoices.proforma_options")),
+						el("p", { class: "muted" }, t("invoices.proforma_options_hint")),
+						field(t("settings.proforma_settlement"), settlement)
+					),
 			editor.notesField
 		),
 		editor.itemsCard,
 		el(
 			"div",
 			{ class: "form-actions" },
-			el("a", { class: "button ghost", href: `/projects/${uuid}/invoices` }, t("ui.cancel")),
+			el("a", { class: "button ghost", href: back }, t("ui.cancel")),
 			submit,
-			el("button", { class: "button secondary", type: "button", onClick: () => void save(true) }, t("invoices.create_and_issue"))
+			existing ? null : el("button", { class: "button secondary", type: "button", onClick: () => void save("proforma") }, t("invoices.create_proforma")),
+			existing ? null : el("button", { class: "button secondary", type: "button", onClick: () => void save("issue") }, t("invoices.create_and_issue"))
 		)
 	);
 	form.dataset.pageAutofocus = "";
 
-	return projectLayout(project, el("div", { class: "stack" }, el("a", { class: "back-link", href: `/projects/${uuid}/invoices` }, t("nav.invoices")), form));
+	const backLink = el("a", { class: "back-link", href: back }, existing ? existing.reference : t("nav.invoices"));
+	return projectLayout(project, el("div", { class: "stack" }, backLink, form));
 }
 
 function emailKindLabel(kind: EmailMessage["kind"]): string {
@@ -303,13 +388,18 @@ const EMAIL_STATUS_PILLS: Record<EmailMessage["status"], string> = {
 function emailDialog(uuid: string, project: Project, invoice: Invoice, customer: Customer | null, reminder: boolean, onSent: () => void) {
 	const to = input("email", { value: customer?.email ?? "", required: true, placeholder: "customer@example.com" });
 	const message = el("textarea", { rows: "4", maxlength: "2000", placeholder: t("invoices.email_message_placeholder") });
+	const proforma = invoice.status === "draft" && invoice.document === "proforma";
 	const attach = input("checkbox");
-	attach.checked = project.email_attach_invoice;
+	attach.checked = proforma || project.email_attach_invoice;
 	const attachEslog = input("checkbox");
-	attachEslog.checked = !reminder && project.email_attach_eslog;
+	attachEslog.checked = !reminder && !proforma && project.email_attach_eslog;
 	const payLink = input("checkbox");
-	payLink.checked = project.email_pay_link;
-	const submit = el("button", { class: "button primary", type: "submit" }, reminder ? t("invoices.send_reminder") : t("invoices.send_invoice"));
+	payLink.checked = proforma || project.email_pay_link;
+	const submit = el(
+		"button",
+		{ class: "button primary", type: "submit" },
+		reminder ? t("invoices.send_reminder") : proforma ? t("invoices.send_proforma") : t("invoices.send_invoice")
+	);
 
 	const form = el(
 		"form",
@@ -344,7 +434,7 @@ function emailDialog(uuid: string, project: Project, invoice: Invoice, customer:
 		field(t("invoices.email_to"), to),
 		field(t("invoices.email_message"), message),
 		el("label", { class: "switch" }, attach, el("span", {}, t("invoices.email_attach_pdf"))),
-		el("label", { class: "switch" }, attachEslog, el("span", {}, t("invoices.email_attach_eslog"))),
+		proforma ? null : el("label", { class: "switch" }, attachEslog, el("span", {}, t("invoices.email_attach_eslog"))),
 		el("label", { class: "switch" }, payLink, el("span", {}, t("invoices.email_include_link"))),
 		el("div", { class: "dialog-actions" }, submit)
 	);
@@ -438,7 +528,122 @@ function keysCard(uuid: string, invoice: Invoice, keys: InvoiceKeys | null, proj
 }
 
 function canEmail(project: Project, invoice: Invoice): boolean {
-	return project.email_enabled && can(project, Permission.INVOICE_SEND) && !["draft", "canceled"].includes(invoice.status);
+	if (!project.email_enabled || !can(project, Permission.INVOICE_SEND) || invoice.status === "canceled") return false;
+	return invoice.status !== "draft" || invoice.document === "proforma";
+}
+
+function awaitingPayment(invoice: Invoice): boolean {
+	return invoice.status === "draft" && (invoice.document === "proforma" || invoice.document === "order");
+}
+
+function documentPill(invoice: Invoice): HTMLElement | null {
+	const labels: Partial<Record<NonNullable<Invoice["document"]>, UiKey>> = {
+		proforma: "invoices.kind_proforma",
+		order: "invoices.kind_order",
+		advance: "invoices.kind_advance",
+	};
+	const label = invoice.document ? labels[invoice.document] : undefined;
+	return label ? el("span", { class: "pill pill-pending" }, t(label)) : null;
+}
+
+function statusOf(invoice: Invoice): HTMLElement {
+	return awaitingPayment(invoice) ? el("span", { class: "pill pill-open" }, t("invoices.awaiting_payment")) : statusPill(invoice.status);
+}
+
+function proformaDialog(uuid: string, project: Project, invoice: Invoice, onCreated: () => void) {
+	const settlement = select(
+		[
+			{ value: "invoice", label: t("settings.settlement_invoice") },
+			{ value: "advance", label: t("settings.settlement_advance") },
+		],
+		invoice.proforma?.settlement ?? project.proforma_settlement
+	);
+	const creating = !invoice.proforma;
+	const submit = el("button", { class: "button primary", type: "submit" }, creating ? t("invoices.create_proforma") : t("ui.save"));
+	const form = el(
+		"form",
+		{
+			class: "stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					if (creating) await Api.createProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
+					else await Api.updateProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
+					dialog.close();
+					toast(creating ? t("invoices.proforma_created") : t("invoices.settlement_changed"), "success");
+					onCreated();
+				} catch (error) {
+					reportError(error);
+					submit.disabled = false;
+				}
+			},
+		},
+		el("p", { class: "muted" }, creating ? t("invoices.proforma_dialog_hint") : t("invoices.settlement_dialog_hint")),
+		field(t("settings.proforma_settlement"), settlement, t("invoices.settlement_explained")),
+		el("div", { class: "dialog-actions" }, submit)
+	);
+	const dialog = modal(creating ? t("invoices.create_proforma") : t("invoices.change_settlement"), form);
+}
+
+function advancesCard(uuid: string, invoice: Invoice, project: Project): HTMLElement | null {
+	const advances = invoice.advances ?? [];
+	if (advances.length === 0) return null;
+	return el(
+		"div",
+		{ class: "card" },
+		el("h3", {}, t("invoices.advances_title")),
+		el("p", { class: "muted" }, t(invoice.status === "draft" ? "invoices.advances_hint" : "invoices.advances_deducted")),
+		table(
+			[t("invoices.column_reference"), t("invoices.column_issued"), t("editor.total")],
+			advances.map((advance) =>
+				el(
+					"tr",
+					{},
+					el("td", {}, el("a", { class: "mono", href: `/projects/${uuid}/invoices/${advance.uuid}` }, advance.reference)),
+					el("td", {}, advance.issued_at ? formatDate(advance.issued_at, project.date_format as DateFormat, project.timezone) : "-"),
+					el(
+						"td",
+						{ class: "mono" },
+						formatMoney(advance.total_amount - advance.credited_amount, invoice.currency),
+						advance.credited_amount > 0 ? el("div", { class: "muted" }, t("invoices.advance_credited")) : null
+					)
+				)
+			)
+		)
+	);
+}
+
+function originText(uuid: string, invoice: Invoice): HTMLElement | null {
+	if (invoice.document === "advance" && invoice.source_proforma) {
+		return el(
+			"p",
+			{ class: "muted" },
+			`${t("invoices.advance_for")} `,
+			el("a", { class: "mono", href: `/projects/${uuid}/invoices/${invoice.source_proforma.uuid}` }, invoice.source_proforma.reference),
+			"."
+		);
+	}
+	if (invoice.proforma && invoice.status !== "draft") {
+		return el("p", { class: "muted" }, t("invoices.from_proforma", { reference: invoice.proforma.reference }));
+	}
+	if (invoice.proforma) {
+		return el(
+			"p",
+			{ class: "muted" },
+			t(invoice.proforma.settlement === "advance" ? "invoices.proforma_settles_advance" : "invoices.proforma_settles_invoice")
+		);
+	}
+	if (invoice.order_number) {
+		return el(
+			"p",
+			{ class: "muted" },
+			`${t("invoices.from_order")} `,
+			el("a", { class: "mono", href: `/projects/${uuid}/store/orders/${invoice.uuid}` }, invoice.order_number),
+			"."
+		);
+	}
+	return null;
 }
 
 function taxRateDialog(uuid: string, invoice: Invoice, reporting: string, onSaved: () => void) {
@@ -874,7 +1079,10 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 		const invoice = await Api.invoice(uuid, invoiceId);
 		const customer = invoice.customer ? await Api.customer(uuid, invoice.customer).catch(() => null) : null;
 		const payments = await Api.transactions(uuid, { invoice: invoiceId, limit: HISTORY_PAGE_SIZE }).catch(() => null);
-		const emails = invoice.status === "draft" ? null : await Api.invoiceEmails(uuid, invoiceId).catch(() => null);
+		const unissued = awaitingPayment(invoice);
+		const proforma = invoice.status === "draft" && invoice.document === "proforma";
+		const plainDraft = invoice.status === "draft" && !unissued && invoice.document_type !== "advance";
+		const emails = invoice.status === "draft" && !proforma ? null : await Api.invoiceEmails(uuid, invoiceId).catch(() => null);
 		const credits = invoice.status === "draft" ? null : await Api.invoiceCredits(uuid, invoiceId).catch(() => null);
 		const keys = invoice.status === "draft" ? null : await Api.invoiceKeys(uuid, invoiceId).catch(() => null);
 		const eslogVersions =
@@ -938,13 +1146,16 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 			)
 		);
 
-		const payable = ["open", "overdue", "partially_paid"].includes(invoice.status);
+		const payable = ["open", "overdue", "partially_paid"].includes(invoice.status) || (unissued && outstandingOf(invoice) > 0);
 		const payLink = `${window.location.origin}/pay/${invoice.uuid}`;
 
 		const sendLinks: MenuLink[] = [];
 		if (canEmail(project, invoice)) {
-			sendLinks.push({ label: t("invoices.email_invoice"), onSelect: () => emailDialog(uuid, project, invoice, customer, false, () => void render()) });
-			if (payable) {
+			sendLinks.push({
+				label: proforma ? t("invoices.email_proforma") : t("invoices.email_invoice"),
+				onSelect: () => emailDialog(uuid, project, invoice, customer, false, () => void render()),
+			});
+			if (payable && !unissued) {
 				sendLinks.push({ label: t("invoices.send_reminder"), onSelect: () => emailDialog(uuid, project, invoice, customer, true, () => void render()) });
 			}
 		}
@@ -973,8 +1184,44 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 			documentLinks.push({ label: t("invoices.download_eslog"), onSelect: () => void downloadFile(() => Api.invoiceEslog(uuid, invoice.uuid)) });
 		}
 
+		const workflowLinks: MenuLink[] = [];
+		const editable = (plainDraft || proforma) && invoice.paid_amount === 0 && (invoice.advanced_amount ?? 0) === 0;
+		if (editable && can(project, Permission.INVOICE_EDIT)) {
+			workflowLinks.push({ label: t("ui.edit"), href: `/projects/${uuid}/invoices/${invoice.uuid}/edit` });
+		}
+		if (plainDraft && can(project, Permission.INVOICE_SEND)) {
+			workflowLinks.push({ label: t("invoices.create_proforma"), onSelect: () => proformaDialog(uuid, project, invoice, () => void render()) });
+		}
+		if (proforma && editable && can(project, Permission.INVOICE_EDIT)) {
+			workflowLinks.push({ label: t("invoices.change_settlement"), onSelect: () => proformaDialog(uuid, project, invoice, () => void render()) });
+		}
+		if (proforma && can(project, Permission.INVOICE_SEND)) {
+			const final = (invoice.advanced_amount ?? 0) > 0;
+			workflowLinks.push({
+				label: final ? t("invoices.issue_final") : t("invoices.issue_now"),
+				onSelect: async () => {
+					const confirmed = await confirmDialog({
+						title: final ? t("invoices.issue_final") : t("invoices.issue_now"),
+						body: final ? t("invoices.issue_final_body") : t("invoices.issue_now_body", { reference: invoice.reference }),
+						confirmLabel: t("invoices.issue"),
+					});
+					if (!confirmed) return;
+					try {
+						await Api.openInvoice(uuid, invoiceId);
+						toast(t("invoices.issued"), "success");
+						void render();
+					} catch (error) {
+						reportError(error);
+					}
+				},
+			});
+		}
+		if (invoice.document === "order" && invoice.status === "draft") {
+			workflowLinks.push({ label: t("invoices.manage_order"), href: `/projects/${uuid}/store/orders/${invoice.uuid}` });
+		}
+
 		const dangerLinks: MenuLink[] = [];
-		if (invoice.status === "draft" && can(project, Permission.INVOICE_DELETE)) {
+		if (plainDraft && can(project, Permission.INVOICE_DELETE)) {
 			dangerLinks.push({
 				label: t("invoices.delete_draft"),
 				danger: true,
@@ -997,7 +1244,8 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 				},
 			});
 		}
-		if (payable && can(project, Permission.INVOICE_EDIT)) {
+		const cancelable = (payable && !unissued) || (proforma && (invoice.advanced_amount ?? 0) === 0);
+		if (cancelable && can(project, Permission.INVOICE_EDIT)) {
 			dangerLinks.push({
 				label: t("invoices.cancel_title"),
 				danger: true,
@@ -1022,7 +1270,25 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 		}
 
 		let primaryAction: HTMLElement | null = null;
-		if (invoice.status === "draft" && can(project, Permission.INVOICE_SEND)) {
+		if (proforma && outstandingOf(invoice) <= 0 && can(project, Permission.INVOICE_SEND)) {
+			primaryAction = el(
+				"button",
+				{
+					class: "button primary",
+					type: "button",
+					onClick: async () => {
+						try {
+							await Api.openInvoice(uuid, invoiceId);
+							toast(t("invoices.issued"), "success");
+							void render();
+						} catch (error) {
+							reportError(error);
+						}
+					},
+				},
+				t("invoices.issue_final")
+			);
+		} else if (plainDraft && can(project, Permission.INVOICE_SEND)) {
 			primaryAction = el(
 				"button",
 				{
@@ -1052,7 +1318,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 			primaryAction,
 			actionMenu(t("invoices.menu_send"), [sendLinks, payLinks]),
 			actionMenu(t("invoices.menu_documents"), [documentLinks]),
-			actionMenu(t("invoices.menu_more"), [dangerLinks]),
+			actionMenu(t("invoices.menu_more"), [workflowLinks, dangerLinks]),
 		].filter((action): action is HTMLElement => action !== null);
 
 		const children: (HTMLElement | null)[] = [
@@ -1067,15 +1333,20 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 					el(
 						"p",
 						{ class: "muted" },
-						t("invoices.head_dates", {
-							issued: invoice.issued_at
-								? t("invoices.head_issued", { date: formatDate(invoice.issued_at, project.date_format as DateFormat, project.timezone) })
-								: t("invoices.head_created", { date: formatDate(invoice.created, project.date_format as DateFormat, project.timezone) }),
-							due: formatDate(invoice.due_date, project.date_format as DateFormat, project.timezone),
-						})
+						proforma && invoice.proforma
+							? t("invoices.head_proforma", {
+									issued: formatDate(invoice.proforma.issued_at, project.date_format as DateFormat, project.timezone),
+									valid: formatDate(invoice.due_date, project.date_format as DateFormat, project.timezone),
+								})
+							: t("invoices.head_dates", {
+									issued: invoice.issued_at
+										? t("invoices.head_issued", { date: formatDate(invoice.issued_at, project.date_format as DateFormat, project.timezone) })
+										: t("invoices.head_created", { date: formatDate(invoice.created, project.date_format as DateFormat, project.timezone) }),
+									due: formatDate(invoice.due_date, project.date_format as DateFormat, project.timezone),
+								})
 					)
 				),
-				el("span", { class: `pill pill-${invoice.status}` }, statusLabel(invoice.status))
+				el("div", { class: "line-actions" }, documentPill(invoice), statusOf(invoice))
 			),
 			actions.length > 0 ? el("div", { class: "toolbar invoice-actions" }, ...actions) : null,
 			el(
@@ -1110,6 +1381,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 								: null
 						)
 					: null,
+				originText(uuid, invoice),
 				invoice.recurring
 					? el(
 							"p",
@@ -1169,7 +1441,15 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 								el("span", { class: "mono" }, `-${formatMoney(invoice.credited_amount, invoice.currency)}`)
 							)
 						: null,
-					invoice.refunded_amount > 0 || invoice.credited_amount > 0
+					(invoice.advanced_amount ?? 0) > 0
+						? el(
+								"div",
+								{ class: "totals-row" },
+								el("span", {}, t("invoices.advanced_label")),
+								el("span", { class: "mono" }, `-${formatMoney(invoice.advanced_amount ?? 0, invoice.currency)}`)
+							)
+						: null,
+					invoice.refunded_amount > 0 || invoice.credited_amount > 0 || (invoice.advanced_amount ?? 0) > 0
 						? el(
 								"div",
 								{ class: "totals-row" },
@@ -1195,6 +1475,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 						)
 					)
 				: null,
+			advancesCard(uuid, invoice, project),
 			keysCard(uuid, invoice, keys, project, () => void render()),
 			creditNotesCard(uuid, project, invoice, customer, credits, () => void render()),
 			eslogVersionsCard(uuid, project, invoice, eslogVersions),

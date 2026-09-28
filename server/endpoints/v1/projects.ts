@@ -1,4 +1,6 @@
 import { Server } from "../../server";
+import { storedFormatOf } from "../../invoice-numbers";
+import { isProformaSettlement } from "../../proformas";
 import Database from "../../database/database";
 import Auth from "../../auth";
 import Audit from "../../audit";
@@ -19,7 +21,7 @@ import { canEmail } from "../../email/mailer";
 import { storeActive, whiteLabelActive, workforceActive } from "../../licensing";
 import { MAX_DAYS_AFTER, MAX_DAYS_BEFORE, isReminderDays } from "../../email/reminders";
 import { isTimezone } from "../../timezone";
-import type { ProjectMemberRow, ProjectRow } from "../../database/models";
+import type { ProformaSettlement, ProjectMemberRow, ProjectRow } from "../../database/models";
 
 interface CreateProjectBody {
 	name?: string;
@@ -50,6 +52,7 @@ interface UpdateProjectBody {
 	email_pay_link?: boolean;
 	email_portal_link?: boolean;
 	invoice_issuer_details?: boolean;
+	proforma_settlement?: unknown;
 }
 
 function withoutSecrets(project: ProjectRow, role: ProjectRole) {
@@ -89,6 +92,9 @@ function withoutSecrets(project: ProjectRow, role: ProjectRole) {
 		email_pay_link: Boolean(project.email_pay_link),
 		email_portal_link: Boolean(project.email_portal_link),
 		invoice_format: project.invoice_format,
+		order_format: storedFormatOf(project, "order"),
+		proforma_format: storedFormatOf(project, "proforma"),
+		proforma_settlement: project.proforma_settlement,
 		invoice_issuer_details: Boolean(project.invoice_issuer_details),
 		status: project.status,
 		created: project.created,
@@ -243,7 +249,8 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 		data.email_attach_eslog === undefined &&
 		data.email_pay_link === undefined &&
 		data.email_portal_link === undefined &&
-		data.invoice_issuer_details === undefined;
+		data.invoice_issuer_details === undefined &&
+		data.proforma_settlement === undefined;
 
 	if (nothingGiven) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
@@ -290,6 +297,7 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 	if (data.invoice_issuer_details !== undefined && typeof data.invoice_issuer_details !== "boolean") {
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
+	if (data.proforma_settlement !== undefined && !isProformaSettlement(data.proforma_settlement)) return Utils.fail(ctx, ErrorCode.INVALID_PROFORMA);
 
 	if (data.name !== undefined && !Validate.project(data.name)) return Utils.fail(ctx, ErrorCode.INVALID_PROJECT_NAME);
 	if (data.currency !== undefined && !Validate.currency(data.currency)) return Utils.fail(ctx, ErrorCode.INVALID_CURRENCY);
@@ -328,6 +336,7 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 	const payLink = data.email_pay_link === undefined ? project.email_pay_link : data.email_pay_link ? 1 : 0;
 	const portalLink = data.email_portal_link === undefined ? project.email_portal_link : data.email_portal_link ? 1 : 0;
 	const issuerDetails = data.invoice_issuer_details === undefined ? project.invoice_issuer_details : data.invoice_issuer_details ? 1 : 0;
+	const settlement = (data.proforma_settlement as ProformaSettlement | undefined) ?? project.proforma_settlement;
 	const accentColor = data.accent_color === undefined ? project.accent_color : data.accent_color === null ? null : data.accent_color.toLowerCase();
 
 	await Database`
@@ -337,7 +346,7 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 			vat_exemption_note = ${exemptionNote}, pos_custom_amounts = ${posCustomAmounts},
 			email_reminders = ${emailReminders}, reminder_days_before = ${daysBefore}, reminder_days_after = ${daysAfter},
 			email_attach_invoice = ${attachInvoice}, email_attach_eslog = ${attachEslog}, email_pay_link = ${payLink}, email_portal_link = ${portalLink},
-			invoice_issuer_details = ${issuerDetails}, updated = ${Date.now()}
+			invoice_issuer_details = ${issuerDetails}, proforma_settlement = ${settlement}, updated = ${Date.now()}
 		WHERE uuid = ${project.uuid}
 	`;
 
@@ -362,6 +371,7 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 			email_pay_link: Boolean(project.email_pay_link),
 			email_portal_link: Boolean(project.email_portal_link),
 			invoice_issuer_details: Boolean(project.invoice_issuer_details),
+			proforma_settlement: project.proforma_settlement,
 		},
 		newValue: {
 			name: updated.name,
@@ -377,6 +387,7 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 			email_pay_link: Boolean(updated.email_pay_link),
 			email_portal_link: Boolean(updated.email_portal_link),
 			invoice_issuer_details: Boolean(updated.invoice_issuer_details),
+			proforma_settlement: updated.proforma_settlement,
 		},
 	});
 

@@ -6,6 +6,7 @@ import { addressLines, companyFor, displayNameOf } from "../company";
 import { loadItems } from "../invoice-service";
 import { invoiceBank } from "../invoice-document";
 import { archivedInvoiceAttachment } from "../invoice-archive";
+import { invoicePdf } from "../invoice-pdf";
 import { archivedCreditNoteAttachment } from "../credit-note-archive";
 import { archivedEslog, isEslogFailure, type EslogSubject } from "../eslog-archive";
 import { creditNoteItems } from "../credit-notes";
@@ -135,7 +136,11 @@ export async function queueInvoiceEmail(project: ProjectRow, invoice: InvoiceRow
 		options.attachEslog,
 		options.kind === "invoice" && Boolean(project.email_attach_eslog)
 	);
-	const attachment = attachInvoice ? await archivedInvoiceAttachment(project, invoice) : null;
+	const attachment = !attachInvoice
+		? null
+		: invoice.status === "draft"
+			? await invoicePdf(project, invoice, { payLink })
+			: await archivedInvoiceAttachment(project, invoice);
 	const content = invoiceEmail(
 		brand,
 		options.kind,

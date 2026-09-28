@@ -1,5 +1,5 @@
 import { pagination, PAGE_SIZE } from "../pagination";
-import { Api, type Company, type Project } from "../api";
+import { Api, type Company, type NumberSeries, type ProformaSettlement, type Project } from "../api";
 import { el, field, input, select, table } from "../dom";
 import { navigate } from "../router";
 import { confirmDialog, modal, reportError, secretReveal, toast } from "../ui";
@@ -8,7 +8,7 @@ import { processorsSection } from "./processors";
 import { currencyLabel, currencyOptions, currencyRates } from "../currencies";
 import { DATE_FORMATS, TIME_FORMATS, formatDate, formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
 import { LANGUAGES, t as documentWord, type Language } from "../../../server/i18n";
-import { statusLabel, t } from "../i18n";
+import { statusLabel, t, type UiKey } from "../i18n";
 import { vatStatusHint, vatStatusOptions } from "../options";
 import { ACCENT_PRESETS, BRAND_BLUE } from "../../../server/colors";
 import { applyAccent } from "../theme";
@@ -16,7 +16,15 @@ import { countryCodeFor, countryOptions } from "../countries";
 import { defaultExemptionNote, defaultTaxCurrency, isEuCountry, splitVatNumber } from "../../../server/tax";
 import { staticCombobox } from "../combobox";
 import { can, Permission } from "../access";
-import { DEFAULT_INVOICE_FORMAT, describeInvoiceFormat, parseInvoiceFormat, renderInvoiceNumber } from "../../../server/invoice-format";
+import {
+	DEFAULT_INVOICE_FORMAT,
+	DEFAULT_ORDER_FORMAT,
+	DEFAULT_PROFORMA_FORMAT,
+	describeInvoiceFormat,
+	parseInvoiceFormat,
+	renderInvoiceNumber,
+} from "../../../server/invoice-format";
+import { creditorReference } from "../../../server/payments/reference";
 import { fiscalSection } from "./fiscal";
 import { signingSection } from "./einvoice";
 import { invoiceDesignSection } from "./invoice-design";
@@ -224,24 +232,77 @@ function invoiceSection(uuid: string, project: Project): HTMLElement {
 	);
 }
 
-function formatExamples() {
+const SERIES_DEFAULTS: Record<NumberSeries, string> = {
+	invoice: DEFAULT_INVOICE_FORMAT,
+	proforma: DEFAULT_PROFORMA_FORMAT,
+	order: DEFAULT_ORDER_FORMAT,
+};
+
+const SERIES_DOCUMENTS: Record<NumberSeries, string> = { invoice: "invoices", proforma: "pro forma invoices", order: "orders" };
+
+const SERIES_NEXT: Record<NumberSeries, UiKey> = {
+	invoice: "settings.next_invoice_will_be",
+	proforma: "settings.next_proforma_will_be",
+	order: "settings.next_order_will_be",
+};
+
+function formatExamples(series: NumberSeries) {
+	if (series === "proforma") {
+		return [
+			{ format: DEFAULT_PROFORMA_FORMAT, note: t("settings.example_proforma_default") },
+			{ format: "PR-XXXXXX", note: t("settings.example_restarts_never") },
+			{ format: "PR/XXX/YY", note: t("settings.example_restarts_yearly") },
+		];
+	}
+	if (series === "order") {
+		return [
+			{ format: DEFAULT_ORDER_FORMAT, note: t("settings.example_order_default") },
+			{ format: "#YYXXXXXX", note: t("settings.example_restarts_yearly") },
+			{ format: "NAR-XXXXXXX", note: t("settings.example_restarts_never") },
+		];
+	}
 	return [
 		{ format: "YYMMDDXXXXXX", note: t("settings.example_default") },
 		{ format: "XXX/YY", note: t("settings.example_yearly") },
 		{ format: "YYYY-XXXX", note: t("settings.example_year_prefix") },
-		{ format: "INV-YYMM-XXXX", note: t("settings.example_monthly") },
+		{ format: '"INV"-YYMM-XXXX', note: t("settings.example_monthly") },
 		{ format: "XXXXXX", note: t("settings.example_never") },
 	];
 }
 
-async function numberingSection(uuid: string, project: Project): Promise<HTMLElement> {
+function settlementSection(uuid: string, project: Project): HTMLElement {
 	const editable = can(project, Permission.PROJECT_EDIT);
-	let saved = await Api.invoiceNumbering(uuid);
+	const choice = select(
+		[
+			{ value: "invoice", label: t("settings.settlement_invoice") },
+			{ value: "advance", label: t("settings.settlement_advance") },
+		],
+		project.proforma_settlement
+	);
+	choice.disabled = !editable;
+	choice.addEventListener("change", async () => {
+		try {
+			await Api.updateProject(uuid, { proforma_settlement: choice.value as ProformaSettlement });
+			project.proforma_settlement = choice.value as ProformaSettlement;
+			invalidateProject(uuid);
+			toast(t("settings.settlement_saved"), "success");
+		} catch (error) {
+			choice.value = project.proforma_settlement;
+			reportError(error);
+		}
+	});
+	return field(t("settings.proforma_settlement"), choice, t("settings.proforma_settlement_hint"));
+}
+
+async function numberingSection(uuid: string, project: Project, series: NumberSeries): Promise<HTMLElement> {
+	const editable = can(project, Permission.PROJECT_EDIT);
+	let saved = await Api.invoiceNumbering(uuid, undefined, series);
 
 	const format = input("text", { value: saved.format, maxlength: "30", autocomplete: "off" });
 	const next = input("number", { min: "1", step: "1", value: String(saved.next_number), required: true });
 	const preview = el("p", {});
 	const capacity = el("p", { class: "muted" });
+	const bankWarning = el("p", { class: "muted" }, t("settings.no_bank_reference"));
 	const save = el("button", { class: "button primary", type: "submit" }, t("settings.save_numbering"));
 	let requested = 0;
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -259,7 +320,7 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 		const sequence = Number(next.value);
 		const validNext = Number.isInteger(sequence) && sequence >= 1 && sequence <= parsed.format.capacity;
 		next.max = String(parsed.format.capacity);
-		capacity.textContent = describeInvoiceFormat(parsed.format);
+		capacity.textContent = describeInvoiceFormat(parsed.format, SERIES_DOCUMENTS[series]);
 		capacity.hidden = false;
 
 		if (!validNext) {
@@ -269,12 +330,10 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 			return;
 		}
 
+		const sample = renderInvoiceNumber(parsed.format, Date.now(), sequence, project.timezone);
 		preview.className = "";
-		preview.replaceChildren(
-			`${t("settings.next_invoice_will_be")} `,
-			el("strong", { class: "mono" }, renderInvoiceNumber(parsed.format, Date.now(), sequence, project.timezone)),
-			"."
-		);
+		preview.replaceChildren(`${t(SERIES_NEXT[series])} `, el("strong", { class: "mono" }, sample), ".");
+		bankWarning.hidden = creditorReference(sample) !== null;
 		save.disabled = !editable;
 	};
 
@@ -285,7 +344,7 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 		timer = setTimeout(async () => {
 			const request = ++requested;
 			try {
-				const state = await Api.invoiceNumbering(uuid, parsed.format.source);
+				const state = await Api.invoiceNumbering(uuid, parsed.format.source, series);
 				if (request !== requested) return;
 				next.value = String(state.next_number);
 				refresh();
@@ -308,7 +367,7 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 	const examples = el(
 		"ul",
 		{ class: "format-examples" },
-		...formatExamples().map((example) =>
+		...formatExamples(series).map((example) =>
 			el(
 				"li",
 				{},
@@ -339,7 +398,7 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 				event.preventDefault();
 				save.disabled = true;
 				try {
-					saved = await Api.saveInvoiceNumbering(uuid, { format: format.value, next_number: Number(next.value) });
+					saved = await Api.saveInvoiceNumbering(uuid, { series, format: format.value, next_number: Number(next.value) });
 					format.value = saved.format;
 					next.value = String(saved.next_number);
 					invalidateProject(uuid);
@@ -351,18 +410,18 @@ async function numberingSection(uuid: string, project: Project): Promise<HTMLEle
 				}
 			},
 		},
-		el("p", { class: "muted" }, t("settings.numbering_intro")),
 		el(
 			"div",
 			{ class: "form-grid" },
-			field(t("settings.format"), format, t("settings.format_hint", { format: DEFAULT_INVOICE_FORMAT })),
+			field(t("settings.format"), format, t("settings.format_hint", { format: SERIES_DEFAULTS[series] })),
 			field(t("settings.next_number"), next, t("settings.next_number_hint"))
 		),
 		preview,
+		bankWarning,
 		capacity,
 		el("p", { class: "muted" }, t("settings.examples")),
 		examples,
-		el("p", { class: "muted" }, t("settings.credit_note_numbers")),
+		series === "invoice" ? el("p", { class: "muted" }, t("settings.credit_note_numbers")) : null,
 		editable ? el("div", { class: "form-actions" }, save) : el("p", { class: "muted" }, t("settings.owners_only"))
 	);
 }
@@ -877,7 +936,23 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 				),
 				el("div", { class: "card", id: "invoice-design" }, el("h2", {}, t("design.title")), await invoiceDesignSection(uuid, project)),
 				el("div", { class: "card", id: "email-design" }, el("h2", {}, t("emails.title")), await emailDesignSection(uuid, project)),
-				el("div", { class: "card" }, el("h2", {}, t("settings.invoice_numbers")), await numberingSection(uuid, project)),
+				el(
+					"div",
+					{ class: "card stack", id: "numbering" },
+					el("h2", {}, t("settings.document_numbers")),
+					el("p", { class: "muted" }, t("settings.numbering_intro")),
+					el("h3", {}, t("settings.invoice_numbers")),
+					await numberingSection(uuid, project, "invoice"),
+					el("div", { class: "divider" }),
+					el("h3", {}, t("settings.proforma_numbers")),
+					el("p", { class: "muted" }, t("settings.proforma_intro")),
+					settlementSection(uuid, project),
+					await numberingSection(uuid, project, "proforma"),
+					el("div", { class: "divider" }),
+					el("h3", {}, t("settings.order_numbers")),
+					el("p", { class: "muted" }, t("settings.order_intro")),
+					await numberingSection(uuid, project, "order")
+				),
 				el("div", { class: "card" }, el("h2", {}, t("settings.tax")), el("p", { class: "muted" }, t("settings.tax_intro")), await taxSection(uuid, project)),
 				project.tax_country === "SI"
 					? el("div", { class: "card", id: "fiscal" }, el("h2", {}, t("fiscal.title")), el("p", { class: "muted" }, t("fiscal.intro")), fiscalSection(uuid))

@@ -12,6 +12,7 @@ import { loadInvoice } from "../../invoice-service";
 import { canEmail } from "../../email/mailer";
 import { emailCount, findEmail, presentEmail, queueInvitationEmail, queueInvoiceEmail } from "../../email/messages";
 import { eslogFailure } from "../../eslog-archive";
+import { isProformaDraft } from "../../payments/recorded";
 import type { CustomerRow, EmailMessageRow, ProjectMemberRow } from "../../database/models";
 
 interface InvoiceEmailBody {
@@ -36,7 +37,8 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/email", Auth.required(
 
 	const invoice = await loadInvoice(project.uuid, invoiceId);
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (invoice.status === "draft") return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_STATUS);
+	const proforma = await isProformaDraft(invoice);
+	if (invoice.status === "draft" && !proforma) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_STATUS);
 	if (invoice.status === "canceled") return Utils.fail(ctx, ErrorCode.INVOICE_ALREADY_CANCELED);
 
 	let data: InvoiceEmailBody;
@@ -61,12 +63,12 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/email", Auth.required(
 	if (!Validate.email(recipient)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
 
 	const reminder = data.reminder === true;
-	if (reminder && !["open", "overdue", "partially_paid"].includes(invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
-	if ((await emailCount(invoice.uuid, ["invoice", "reminder_before", "reminder_after"])) >= MAX_EMAILS_PER_INVOICE) {
+	if (reminder && (proforma || !["open", "overdue", "partially_paid"].includes(invoice.status))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_PAYABLE);
+	if ((await emailCount(invoice.uuid, ["invoice", "proforma", "reminder_before", "reminder_after"])) >= MAX_EMAILS_PER_INVOICE) {
 		return Utils.fail(ctx, ErrorCode.EMAIL_LIMIT_REACHED);
 	}
 
-	const kind = !reminder ? "invoice" : invoice.due_date > Date.now() ? "reminder_before" : "reminder_after";
+	const kind = proforma ? "proforma" : !reminder ? "invoice" : invoice.due_date > Date.now() ? "reminder_before" : "reminder_after";
 	let uuid: string;
 	try {
 		uuid = await queueInvoiceEmail(project, invoice, {
@@ -74,8 +76,8 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/email", Auth.required(
 			kind,
 			message: data.message?.trim() || null,
 			sentBy: account.username,
-			attachInvoice: data.attach_invoice,
-			attachEslog: data.attach_eslog,
+			attachInvoice: proforma ? (data.attach_invoice ?? true) : data.attach_invoice,
+			attachEslog: proforma ? false : data.attach_eslog,
 			payLink: data.pay_link,
 		});
 	} catch (error) {

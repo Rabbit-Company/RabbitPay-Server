@@ -164,6 +164,35 @@ Server.app.get("/api/v1/customer/invoices", CustomerAuth.required(), async (ctx)
 	});
 });
 
+Server.app.get("/api/v1/customer/proformas", CustomerAuth.required(), async (ctx) => {
+	const email = CustomerAuth.email(ctx);
+	const rows = (await Database`
+		SELECT i.*, pf.issued_at AS proforma_issued, p.name AS project_name, p.display_name AS merchant, p.date_format, p.timezone
+		FROM proformas pf
+		JOIN invoices i ON i.uuid = pf.invoice
+		JOIN customers c ON c.uuid = i.customer
+		JOIN projects p ON p.uuid = i.project
+		WHERE LOWER(c.email) = ${email} AND i.status = 'draft' AND p.status != 'deleted'
+		ORDER BY pf.issued_at DESC, i.uuid ASC LIMIT 100
+	`) as (InvoiceRow & { proforma_issued: number; merchant: string | null; project_name: string; date_format: string; timezone: string })[];
+	return Utils.ok(ctx, {
+		proformas: rows
+			.filter((row) => outstandingOf(row) > 0)
+			.map((row) => ({
+				uuid: row.uuid,
+				reference: row.reference,
+				merchant: displayNameOf({ name: row.project_name, display_name: row.merchant }),
+				currency: row.currency,
+				total_amount: row.total_amount,
+				outstanding: outstandingOf(row),
+				issued: Number(row.proforma_issued),
+				valid_until: row.due_date,
+				date_format: row.date_format,
+				timezone: row.timezone,
+			})),
+	});
+});
+
 Server.app.get("/api/v1/customer/invoices/:invoice", CustomerAuth.required(), async (ctx) => {
 	const uuid = ctx.params["invoice"];
 	if (!Validate.uuid(uuid)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);

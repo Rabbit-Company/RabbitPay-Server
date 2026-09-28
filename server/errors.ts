@@ -120,6 +120,8 @@ export enum Error {
 	LICENSE_OTHER_SERVER = 1241,
 	SIGNED_LICENSE_REQUIRED = 1242,
 	EMPLOYEE_SEATS_EXCEEDED = 1243,
+	INVALID_PROFORMA = 1244,
+	PROFORMA_HAS_ADVANCES = 1245,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -568,6 +570,11 @@ namespace Errors {
 		1240: { message: "Only the RabbitPay license issuer can create license keys or change license limits.", httpCode: 403 },
 		1241: { message: "This license key was issued for another server. Check the Server ID you gave when buying it.", httpCode: 409 },
 		1242: { message: "This server only accepts license keys signed for its Server ID.", httpCode: 409 },
+		1244: { message: "Choose how a paid pro forma invoice is settled: with the invoice itself or with advance invoices.", httpCode: 400 },
+		1245: {
+			message: "This pro forma invoice has advance invoices. Issue the final invoice, or cancel the advance invoices with credit notes first.",
+			httpCode: 409,
+		},
 		1243: {
 			message: "This project has more people in its workforce than its license covers. Redeem an employee seat license or remove people to continue.",
 			httpCode: 402,

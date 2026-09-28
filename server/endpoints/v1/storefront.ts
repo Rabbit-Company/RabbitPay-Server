@@ -14,7 +14,7 @@ import { accountingPeriodLocked } from "../../accounting-periods";
 import { createInvoice } from "../../invoice-service";
 import { InvoiceDataIncomplete, prepareInvoiceIssue } from "../../invoice-validation";
 import { calculateTotals } from "../../invoicing";
-import { orderReference } from "../../invoice-numbers";
+import { nextSeriesNumber } from "../../invoice-numbers";
 import { OutOfStock, stockShortage } from "../../item-keys";
 import { canEmail } from "../../email/mailer";
 import { queueInvoiceEmail } from "../../email/messages";
@@ -345,7 +345,7 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 	}
 
 	const now = Date.now();
-	const number = orderReference();
+	const number = await Database.begin((tx) => nextSeriesNumber(tx, store.project.uuid, "order", now));
 	let invoice: InvoiceRow;
 	try {
 		const customer = await upsertCustomer(store.project.uuid, email, input.customer);
@@ -405,7 +405,7 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 				kind: "order_placed",
 				message: null,
 				sentBy: null,
-				attachInvoice: false,
+				attachInvoice: true,
 				attachEslog: false,
 				payLink: true,
 			});

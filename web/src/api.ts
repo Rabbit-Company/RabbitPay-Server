@@ -921,6 +921,9 @@ export interface Project {
 	reminder_days_before: number;
 	reminder_days_after: number;
 	invoice_format: string;
+	order_format: string;
+	proforma_format: string;
+	proforma_settlement: ProformaSettlement;
 	invoice_issuer_details: boolean;
 	permissions?: string[];
 	status: string;
@@ -950,6 +953,8 @@ export interface Company {
 }
 
 export interface InvoiceNumbering {
+	series: NumberSeries;
+	bank_reference: boolean;
 	format: string;
 	period: "day" | "month" | "year" | "never";
 	digits: number;
@@ -1160,6 +1165,9 @@ export interface BankInstruction {
 }
 
 export interface InvoiceDocument {
+	kind: DocumentKind;
+	proforma: { reference: string; settlement: ProformaSettlement; issued_at: number } | null;
+	source_proforma: string | null;
 	seller: Company & { name: string };
 	buyer: {
 		name: string | null;
@@ -1184,6 +1192,7 @@ export interface InvoiceDocument {
 		total_amount: number;
 		paid_amount: number;
 		refunded_amount: number;
+		advanced_amount: number;
 		outstanding: number;
 		notes: string | null;
 		issued: number;
@@ -1307,7 +1316,18 @@ export interface Invoice extends ReferenceDocumentColumns {
 	source?: "invoice" | "pos";
 	created_by?: string | null;
 	recurring?: string | null;
+	document_type?: "invoice" | "advance";
+	advanced_amount?: number;
+	document?: DocumentKind;
+	proforma?: { reference: string; settlement: ProformaSettlement; issued_at: number } | null;
+	order_number?: string | null;
+	advances?: { uuid: string; reference: string; total_amount: number; credited_amount: number; issued_at: number | null }[];
+	source_proforma?: { uuid: string; reference: string } | null;
 }
+
+export type DocumentKind = "invoice" | "advance" | "proforma" | "order";
+export type ProformaSettlement = "invoice" | "advance";
+export type NumberSeries = "invoice" | "proforma" | "order";
 
 export type RecurringStatus = "active" | "paused" | "completed" | "canceled";
 export type IntervalUnit = "week" | "month" | "year";
@@ -1628,7 +1648,8 @@ export interface ProcessorState {
 
 export interface PublicInvoice {
 	reference: string;
-	document: "invoice" | "order";
+	document: DocumentKind;
+	payable: boolean;
 	merchant: string;
 	status: string;
 	currency: string;
@@ -2095,6 +2116,7 @@ export const Api = {
 	updateProject(
 		uuid: string,
 		changes: {
+			proforma_settlement?: ProformaSettlement;
 			name?: string;
 			display_name?: string | null;
 			webhook_url?: string | null;
@@ -2349,9 +2371,10 @@ export const Api = {
 		return request<GeneratedReport<ItemSalesReport>>("POST", `/projects/${uuid}/items/stats${suffix}`);
 	},
 
-	invoices(uuid: string, options: { status?: string; customer?: string; reference?: string; limit?: number; offset?: number } = {}) {
+	invoices(uuid: string, options: { status?: string; document?: DocumentKind; customer?: string; reference?: string; limit?: number; offset?: number } = {}) {
 		const query = new URLSearchParams();
 		if (options.status) query.set("status", options.status);
+		if (options.document) query.set("document", options.document);
 		if (options.customer) query.set("customer", options.customer);
 		if (options.reference) query.set("reference", options.reference);
 		if (options.limit) query.set("limit", String(options.limit));
@@ -2419,6 +2442,14 @@ export const Api = {
 		return request<Invoice>("POST", `/projects/${uuid}/invoices/${invoice}/open`);
 	},
 
+	createProforma(uuid: string, invoice: string, settlement?: ProformaSettlement) {
+		return request<Invoice>("POST", `/projects/${uuid}/invoices/${invoice}/proforma`, settlement ? { settlement } : {});
+	},
+
+	updateProforma(uuid: string, invoice: string, settlement: ProformaSettlement) {
+		return request<Invoice>("PATCH", `/projects/${uuid}/invoices/${invoice}/proforma`, { settlement });
+	},
+
 	cancelInvoice(uuid: string, invoice: string, reason?: string) {
 		return request<Invoice>("POST", `/projects/${uuid}/invoices/${invoice}/cancel`, reason ? { reason } : {});
 	},
@@ -2473,12 +2504,13 @@ export const Api = {
 		return request<Transaction>("POST", `/projects/${uuid}/transactions/${transaction}/refund`, body);
 	},
 
-	invoiceNumbering(uuid: string, format?: string) {
-		const suffix = format === undefined ? "" : `?format=${encodeURIComponent(format)}`;
-		return request<InvoiceNumbering>("GET", `/projects/${uuid}/invoice-numbering${suffix}`);
+	invoiceNumbering(uuid: string, format?: string, series: NumberSeries = "invoice") {
+		const query = new URLSearchParams({ series });
+		if (format !== undefined) query.set("format", format);
+		return request<InvoiceNumbering>("GET", `/projects/${uuid}/invoice-numbering?${query}`);
 	},
 
-	saveInvoiceNumbering(uuid: string, body: { format: string; next_number?: number }) {
+	saveInvoiceNumbering(uuid: string, body: { series?: NumberSeries; format: string; next_number?: number }) {
 		return request<InvoiceNumbering>("PUT", `/projects/${uuid}/invoice-numbering`, body);
 	},
 

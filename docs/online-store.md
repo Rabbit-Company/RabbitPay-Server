@@ -98,11 +98,12 @@ storage left, a locked accounting period, or company details an invoice needs.
 
 ## Payment and invoicing
 
-A new order is not an invoice yet. It is a draft with an order number such as
-`ORDER-482915073`, the store's shipping as a line when it costs anything, and
-the payment deadline from the store settings. The customer gets an order email
-with a link to the regular payment page, which offers every enabled payment
-method. A bank transfer uses the order number in its RF reference. Physical
+A new order is not an invoice yet. It is a draft with an order number from the
+order series under Settings, Document numbers, `ORDER-26000001` by default, the
+store's shipping as a line when it costs anything, and the payment deadline from
+the store settings. The customer gets an order email with an order confirmation
+PDF and a link to the regular payment page, which offers every enabled payment
+method. The confirmation can be downloaded again from the order page. A bank transfer uses the order number in its RF reference. Physical
 stock and license keys from a key pool are held for the order as soon as it is
 placed.
 

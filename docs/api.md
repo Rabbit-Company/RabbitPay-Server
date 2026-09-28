@@ -173,15 +173,17 @@ else returns error `1174`.
 
 ## Invoices
 
-| Method   | Path                                              | Permission       |
-| -------- | ------------------------------------------------- | ---------------- |
-| `GET`    | `/api/v1/projects/:uuid/invoices`                 | `invoice.view`   |
-| `POST`   | `/api/v1/projects/:uuid/invoices`                 | `invoice.create` |
-| `GET`    | `/api/v1/projects/:uuid/invoices/:invoice`        | `invoice.view`   |
-| `PATCH`  | `/api/v1/projects/:uuid/invoices/:invoice`        | `invoice.edit`   |
-| `POST`   | `/api/v1/projects/:uuid/invoices/:invoice/open`   | `invoice.send`   |
-| `POST`   | `/api/v1/projects/:uuid/invoices/:invoice/cancel` | `invoice.edit`   |
-| `DELETE` | `/api/v1/projects/:uuid/invoices/:invoice`        | `invoice.delete` |
+| Method   | Path                                                | Permission       |
+| -------- | --------------------------------------------------- | ---------------- |
+| `GET`    | `/api/v1/projects/:uuid/invoices`                   | `invoice.view`   |
+| `POST`   | `/api/v1/projects/:uuid/invoices`                   | `invoice.create` |
+| `GET`    | `/api/v1/projects/:uuid/invoices/:invoice`          | `invoice.view`   |
+| `PATCH`  | `/api/v1/projects/:uuid/invoices/:invoice`          | `invoice.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/invoices/:invoice/open`     | `invoice.send`   |
+| `POST`   | `/api/v1/projects/:uuid/invoices/:invoice/cancel`   | `invoice.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/invoices/:invoice/proforma` | `invoice.send`   |
+| `PATCH`  | `/api/v1/projects/:uuid/invoices/:invoice/proforma` | `invoice.edit`   |
+| `DELETE` | `/api/v1/projects/:uuid/invoices/:invoice`          | `invoice.delete` |
 
 ```bash
 curl -X POST localhost:8085/api/v1/projects/$UUID/invoices \
@@ -196,6 +198,15 @@ curl -X POST localhost:8085/api/v1/projects/$UUID/invoices \
         ]
       }'
 ```
+
+`POST .../proforma` turns a draft into a pro forma invoice with the next number
+from the pro forma series. The body may set `settlement` to `invoice` or
+`advance`, otherwise the project default applies, and `PATCH .../proforma`
+changes it until the first payment. The list takes `document=proforma`,
+`order` or `advance`, and every invoice carries `document`, `proforma`,
+`order_number`, `advances` and `source_proforma` so an integration can follow a
+pro forma invoice to its advance and final invoices. See
+[Pro forma invoices](invoices.md#pro-forma-invoices).
 
 Amounts are integers in the currency's smallest unit, so `10000` is 100.00
 EUR. Fractional or negative amounts are rejected. `quantity` may be fractional,

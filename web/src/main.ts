@@ -23,7 +23,7 @@ import { customerView } from "./views/customer";
 import { itemsView } from "./views/items";
 import { expensesView } from "./views/expenses";
 import { statisticsView } from "./views/statistics";
-import { invoicesView, invoiceView, newInvoiceView } from "./views/invoices";
+import { editInvoiceView, invoicesView, invoiceView, newInvoiceView } from "./views/invoices";
 import { transactionsView } from "./views/transactions";
 import { membersView } from "./views/members";
 import { settingsView } from "./views/settings";
@@ -292,6 +292,10 @@ define(
 define(
 	"/projects/:uuid/invoices/:invoice",
 	projectRoute([Permission.INVOICE_VIEW], (params) => invoiceView(params.uuid, params.invoice))
+);
+define(
+	"/projects/:uuid/invoices/:invoice/edit",
+	projectRoute([Permission.INVOICE_EDIT], (params) => editInvoiceView(params.uuid, params.invoice))
 );
 define(
 	"/projects/:uuid/invoices/:invoice/print",

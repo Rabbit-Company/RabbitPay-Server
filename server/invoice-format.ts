@@ -1,4 +1,6 @@
 export const DEFAULT_INVOICE_FORMAT = "YYMMDDXXXXXX";
+export const DEFAULT_ORDER_FORMAT = '"ORDER"-YYXXXXXX';
+export const DEFAULT_PROFORMA_FORMAT = "PR-YYYY-XXXXX";
 export const MAX_FORMAT_LENGTH = 30;
 export const MAX_SEQUENCE_DIGITS = 9;
 
@@ -18,6 +20,7 @@ export type ParsedInvoiceFormat = { ok: true; format: InvoiceFormat } | { ok: fa
 
 const LITERAL = /^[A-Z0-9/\-._#]$/;
 const CODES = new Set(["Y", "M", "D", "X"]);
+const QUOTE = '"';
 
 function fail(error: string): ParsedInvoiceFormat {
 	return { ok: false, error };
@@ -32,19 +35,32 @@ export function parseInvoiceFormat(input: unknown): ParsedInvoiceFormat {
 
 	const tokens: Token[] = [];
 	const seen = new Set<string>();
+	const addLiteral = (text: string) => {
+		const previous = tokens[tokens.length - 1];
+		if (previous?.kind === "literal") previous.text += text;
+		else tokens.push({ kind: "literal", text });
+	};
 
 	for (let index = 0; index < source.length; ) {
 		const character = source[index];
+		if (character === QUOTE) {
+			const close = source.indexOf(QUOTE, index + 1);
+			if (close === -1) return fail("Close the quoted text with a second quote.");
+			const text = source.slice(index + 1, close);
+			if (text === "") return fail("Put some text between the quotes.");
+			const invalid = [...text].find((letter) => !LITERAL.test(letter));
+			if (invalid) return fail(`"${invalid}" cannot be used. Use letters, digits and / - . _ #`);
+			addLiteral(text);
+			index = close + 1;
+			continue;
+		}
 		let end = index;
 		while (end < source.length && source[end] === character) end++;
 		const run = end - index;
 
 		if (!CODES.has(character)) {
 			if (!LITERAL.test(character)) return fail(`"${character}" cannot be used. Around the codes, use letters, digits and / - . _ #`);
-			const previous = tokens[tokens.length - 1];
-			const text = character.repeat(run);
-			if (previous?.kind === "literal") previous.text += text;
-			else tokens.push({ kind: "literal", text });
+			addLiteral(character.repeat(run));
 			index = end;
 			continue;
 		}
@@ -68,8 +84,10 @@ export function parseInvoiceFormat(input: unknown): ParsedInvoiceFormat {
 		index = end;
 	}
 
+	const first = tokens[0];
+	if (first?.kind === "literal" && first.text.startsWith("DRAFT")) return fail("A format cannot start with DRAFT, drafts use that.");
 	const sequence = tokens.find((token) => token.kind === "sequence");
-	if (!sequence) return fail("Add X where the invoice number goes, one X per digit.");
+	if (!sequence) return fail("Add X where the running number goes, one X per digit.");
 	if (seen.has("D") && !seen.has("M")) return fail("A format with the day (DD) also needs the month (MM), or numbers would repeat.");
 	if (seen.has("M") && !seen.has("Y")) return fail("A format with the month (MM) also needs the year (YY or YYYY), or numbers would repeat.");
 
@@ -133,8 +151,31 @@ const PERIOD_WORDS: Record<NumberingPeriod, { every: string; restart: string }> 
 	never: { every: "in total", restart: "Numbering never starts again, it keeps counting up." },
 };
 
-export function describeInvoiceFormat(format: InvoiceFormat): string {
+export function describeInvoiceFormat(format: InvoiceFormat, documents = "invoices"): string {
 	const words = PERIOD_WORDS[format.period];
-	return `Up to ${format.capacity.toLocaleString("en")} invoices ${words.every}. ${words.restart}`;
+	return `Up to ${format.capacity.toLocaleString("en")} ${documents} ${words.every}. ${words.restart}`;
 }
 import { zonedParts } from "./timezone";
+
+const DIGIT = "\u0000";
+
+function positionsOf(format: InvoiceFormat): string[] {
+	return format.tokens.flatMap((token) => {
+		if (token.kind === "literal") return [...token.text];
+		const width = token.kind === "year" ? token.digits : token.kind === "sequence" ? token.digits : 2;
+		return Array.from({ length: width }, () => DIGIT);
+	});
+}
+
+export function formatsCanCollide(first: InvoiceFormat, second: InvoiceFormat): boolean {
+	const a = positionsOf(first);
+	const b = positionsOf(second);
+	if (a.length !== b.length) return false;
+	return a.every((left, index) => {
+		const right = b[index];
+		if (left === DIGIT && right === DIGIT) return true;
+		if (left === DIGIT) return /[0-9]/.test(right);
+		if (right === DIGIT) return /[0-9]/.test(left);
+		return left === right;
+	});
+}

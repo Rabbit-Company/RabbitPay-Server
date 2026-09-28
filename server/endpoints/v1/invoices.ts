@@ -9,32 +9,20 @@ import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
-import { calculateTotals, isCancelable, isEditable, statusForPayment, type InvoiceItemInput } from "../../invoicing";
-import { nextInvoiceNumber } from "../../invoice-numbers";
-import { archiveIssuedInvoice } from "../../invoice-archive";
-import {
-	createInvoice,
-	loadInvoice,
-	loadItems,
-	present,
-	replaceItems,
-	stampIssue,
-	validateCatalogLinks,
-	validateInvoiceInput,
-	validateItems,
-} from "../../invoice-service";
+import { calculateTotals, isCancelable, isEditable, type InvoiceItemInput } from "../../invoicing";
+import { createInvoice, loadInvoice, loadItems, present, replaceItems, validateCatalogLinks, validateInvoiceInput, validateItems } from "../../invoice-service";
 import { reportingCurrency } from "../../tax-reporting";
-import { InvoiceDataIncomplete, invoiceDataErrorResponse, prepareInvoiceIssue } from "../../invoice-validation";
-import { OutOfStock, reserveKeys, stockShortage } from "../../item-keys";
+import { InvoiceDataIncomplete, invoiceDataErrorResponse } from "../../invoice-validation";
+import { OutOfStock, stockShortage } from "../../item-keys";
 import { cancelInvoice } from "../../invoice-cancel";
 import { t } from "../../i18n";
-import { enqueueLater } from "../../webhooks/events";
 import { hasCapacity, hasStorageCapacity } from "../../licensing";
 import type { CustomerRow, InvoiceRow } from "../../database/models";
 import { accountingPeriodLocked } from "../../accounting-periods";
 import { fiscalDocumentFor } from "../../fiscal/documents";
 import { resolveReferenceDocument, type ReferenceDocumentInput } from "../../reference-document";
-import { awaitsStorePayment } from "../../payments/recorded";
+import { awaitsStorePayment, isProformaDraft } from "../../payments/recorded";
+import { documentDetails, issueDraft } from "../../proformas";
 
 interface CreateInvoiceBody extends ReferenceDocumentInput {
 	customer?: string | null;
@@ -68,6 +56,7 @@ Server.app.get("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.r
 	const status = query.get("status");
 	const customer = query.get("customer");
 	const reference = query.get("reference")?.trim() || null;
+	const document = query.get("document");
 
 	if (status !== null && !Validate.shortText(status, 32)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_STATUS);
 	if (customer !== null && !Validate.uuid(customer)) return Utils.fail(ctx, ErrorCode.INVALID_CUSTOMER_ID);
@@ -76,16 +65,29 @@ Server.app.get("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.r
 	const statusFilter = status === null ? Database`` : Database`AND i.status = ${status}`;
 	const customerFilter = customer === null ? Database`` : Database`AND i.customer = ${customer}`;
 	const referenceFilter = reference === null ? Database`` : Database`AND LOWER(i.reference) LIKE ${`%${reference.toLowerCase()}%`}`;
+	const documentFilter =
+		document === "proforma"
+			? Database`AND i.status = 'draft' AND EXISTS (SELECT 1 FROM proformas p WHERE p.invoice = i.uuid)`
+			: document === "order"
+				? Database`AND i.status = 'draft' AND EXISTS (SELECT 1 FROM store_orders o WHERE o.invoice = i.uuid)`
+				: document === "advance"
+					? Database`AND i.document_type = 'advance'`
+					: Database``;
 
 	const invoices = (await Database`
-		SELECT i.*, c.name AS customer_name, c.email AS customer_email
+		SELECT i.*, c.name AS customer_name, c.email AS customer_email,
+			CASE
+				WHEN i.status = 'draft' AND EXISTS (SELECT 1 FROM proformas p WHERE p.invoice = i.uuid) THEN 'proforma'
+				WHEN i.status = 'draft' AND EXISTS (SELECT 1 FROM store_orders o WHERE o.invoice = i.uuid) THEN 'order'
+				ELSE i.document_type
+			END AS document
 		FROM invoices i LEFT JOIN customers c ON c.uuid = i.customer
-		WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter}
+		WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter} ${documentFilter}
 		ORDER BY i.created DESC, i.uuid ASC LIMIT ${limit} OFFSET ${offset}
 	`) as (InvoiceRow & { customer_name: string | null; customer_email: string | null })[];
 
 	const [counted] = (await Database`
-		SELECT COUNT(*) AS count FROM invoices i WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter}
+		SELECT COUNT(*) AS count FROM invoices i WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter} ${documentFilter}
 	`) as { count: number }[];
 
 	const totals = (await Database`
@@ -94,7 +96,7 @@ Server.app.get("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.r
 				CASE WHEN i.status IN ('open', 'overdue', 'partially_paid') AND i.total_amount - i.credited_amount - i.paid_amount + i.refunded_amount > 0
 				THEN i.total_amount - i.credited_amount - i.paid_amount + i.refunded_amount ELSE 0 END
 			), 0) AS outstanding_amount
-		FROM invoices i WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter}
+		FROM invoices i WHERE i.project = ${project.uuid} ${statusFilter} ${customerFilter} ${referenceFilter} ${documentFilter}
 		GROUP BY i.currency ORDER BY i.currency
 	`) as { currency: string; count: number; total_amount: number; paid_amount: number; outstanding_amount: number }[];
 
@@ -154,7 +156,7 @@ Server.app.get("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Perm
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
 
 	const fiscal = await fiscalDocumentFor({ invoice: invoiceId });
-	return Utils.ok(ctx, { ...present(invoice, await loadItems(invoiceId)), fiscal_status: fiscal?.status ?? null });
+	return Utils.ok(ctx, { ...present(invoice, await loadItems(invoiceId)), ...(await documentDetails(invoice)), fiscal_status: fiscal?.status ?? null });
 });
 
 Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Permissions.require(Permission.INVOICE_EDIT), async (ctx) => {
@@ -165,7 +167,10 @@ Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Pe
 
 	const invoice = await loadInvoice(project.uuid, invoiceId);
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice)) || invoice.document_type === "advance") {
+		return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	}
+	if (invoice.paid_amount > 0 || invoice.advanced_amount > 0) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
 
 	let data: UpdateInvoiceBody;
 	try {
@@ -322,31 +327,16 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/open", Auth.required()
 	const short = await stockShortage(project.uuid, items);
 	if (short !== null) return Utils.fail(ctx, short);
 
-	const issuedAt = Date.now();
-	const supplyDate = invoice.supply_date ?? issuedAt;
-	const status = statusForPayment(invoice.total_amount, invoice.paid_amount, invoice.due_date, issuedAt);
-	let issue;
+	let reference: string | null;
 	try {
-		issue = await prepareInvoiceIssue(project, { ...invoice, supply_date: supplyDate }, items, issuedAt);
+		reference = await issueDraft(project, invoice, { issuedBy: Auth.account(ctx).username });
 	} catch (err) {
 		if (err instanceof InvoiceDataIncomplete) return invoiceDataErrorResponse(ctx, err);
-		throw err;
-	}
-
-	let reference = invoice.reference;
-
-	try {
-		await Database.begin(async (tx) => {
-			reference = await nextInvoiceNumber(tx, project.uuid, issuedAt, invoice.source === "pos" ? "pos" : "invoice");
-			await tx`UPDATE invoices SET status = ${status}, reference = ${reference}, supply_date = ${supplyDate}, updated = ${issuedAt} WHERE uuid = ${invoiceId}`;
-			await stampIssue(tx as typeof Database, invoiceId, issue.snapshot, Auth.account(ctx).username, issue.presentation);
-			await reserveKeys(tx, invoiceId);
-		});
-	} catch (err) {
 		if (err instanceof OutOfStock) return Utils.fail(ctx, ErrorCode.OUT_OF_STOCK);
 		throw err;
 	}
-	await archiveIssuedInvoice(project.uuid, invoiceId);
+	if (reference === null) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_STATUS);
+	const issued = (await loadInvoice(project.uuid, invoiceId))!;
 
 	await Audit.record(ctx, {
 		project: project.uuid,
@@ -354,21 +344,11 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/open", Auth.required()
 		entityType: "invoice",
 		entityId: invoiceId,
 		oldValue: { status: invoice.status, reference: invoice.reference },
-		newValue: { status, reference },
+		newValue: { status: issued.status, reference },
 	});
 	Logger.audit(`[INVOICES] Issued ${reference} on ${project.uuid}`);
 
-	enqueueLater(project.uuid, "invoice.issued", {
-		invoice: invoice.uuid,
-		reference,
-		status,
-		currency: invoice.currency,
-		total_amount: invoice.total_amount,
-		due_date: invoice.due_date,
-	});
-
-	const updated = await loadInvoice(project.uuid, invoiceId);
-	return Utils.ok(ctx, present(updated!, await loadItems(invoiceId)));
+	return Utils.ok(ctx, { ...present(issued, await loadItems(invoiceId)), ...(await documentDetails(issued)) });
 });
 
 Server.app.put("/api/v1/projects/:uuid/invoices/:invoice/tax-rate", Auth.required(), Permissions.require(Permission.INVOICE_EDIT), async (ctx) => {
@@ -425,6 +405,7 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/cancel", Auth.required
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
 	if (invoice.status === "canceled") return Utils.fail(ctx, ErrorCode.INVOICE_ALREADY_CANCELED);
 	if (!isCancelable(invoice.status)) return Utils.fail(ctx, ErrorCode.INVOICE_ALREADY_PAID);
+	if (invoice.status === "draft" && invoice.advanced_amount > 0) return Utils.fail(ctx, ErrorCode.PROFORMA_HAS_ADVANCES);
 
 	let data: { reason?: string | null } = {};
 	try {
@@ -461,7 +442,9 @@ Server.app.delete("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), P
 
 	const invoice = await loadInvoice(project.uuid, invoiceId);
 	if (!invoice) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
-	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice))) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	if (!isEditable(invoice.status) || (await awaitsStorePayment(invoice)) || (await isProformaDraft(invoice)) || invoice.paid_amount > 0) {
+		return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	}
 
 	await Database`DELETE FROM invoices WHERE uuid = ${invoiceId}`;
 

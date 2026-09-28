@@ -89,6 +89,9 @@ export interface ProjectRow {
 	logo_updated: number | null;
 	email_server: string | null;
 	invoice_format: string;
+	order_format: string | null;
+	proforma_format: string | null;
+	proforma_settlement: ProformaSettlement;
 	invoice_issuer_details: number;
 	invoice_design: string | null;
 	email_design: string | null;
@@ -250,6 +253,9 @@ export interface InvoiceRow {
 	customer: string | null;
 	reference: string;
 	status: InvoiceStatus;
+	document_type: InvoiceDocumentType;
+	proforma: string | null;
+	advanced_amount: number;
 	currency: string;
 	subtotal: number;
 	discount_amount: number;
@@ -401,6 +407,20 @@ export interface LicenseOrderRow {
 	created: number;
 }
 
+export type ProformaSettlement = "invoice" | "advance";
+
+export type InvoiceDocumentType = "invoice" | "advance";
+
+export interface ProformaRow {
+	invoice: string;
+	project: string;
+	reference: string;
+	settlement: ProformaSettlement;
+	issued_at: number;
+	created: number;
+	updated: number;
+}
+
 export type ItemKeyStatus = "available" | "reserved" | "delivered";
 
 export interface ItemKeyRow {
@@ -475,6 +495,7 @@ export type EmailKind =
 	| "fiscal_alert"
 	| "order_update"
 	| "order_placed"
+	| "proforma"
 	| "order_processing"
 	| "order_shipped"
 	| "order_delivered"
