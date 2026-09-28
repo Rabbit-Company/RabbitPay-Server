@@ -1,0 +1,502 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { prepareTest } from "./environment";
+
+await prepareTest();
+
+const FIXTURE = `${import.meta.dir}/.store-web-fixture`;
+mkdirSync(FIXTURE, { recursive: true });
+writeFileSync(
+	`${FIXTURE}/index.html`,
+	'<!doctype html><html lang="en"><head><meta name="robots" content="noindex, nofollow" /><title>RabbitPay</title></head><body></body></html>'
+);
+
+const { Server } = await import("../server/server");
+const { default: Database, initialize } = await import("../server/database/database");
+const { default: Cache } = await import("../server/cache");
+const { Settings } = await import("../server/settings");
+const { setTransport } = await import("../server/email/mailer");
+const { default: Auth } = await import("../server/auth");
+const { generateLicenseCode, storageFor } = await import("../server/licensing");
+
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true };
+
+interface Result {
+	status: number;
+	error: number;
+	info: string;
+	data: any;
+}
+
+async function call(method: string, path: string, token?: string, body?: unknown): Promise<Result> {
+	const headers: Record<string, string> = {};
+	if (token) headers.Authorization = `Bearer ${token}`;
+	if (body !== undefined) headers["Content-Type"] = "application/json";
+	const response = await Server.app.handle(
+		new Request(`http://127.0.0.1/api/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+	);
+	return { status: response.status, ...((await response.json()) as Omit<Result, "status">) };
+}
+
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64").toString("base64");
+
+const messages: { to: string; text: string; subject: string; from?: unknown }[] = [];
+let ownerToken = "";
+let project = "";
+let otherProject = "";
+let gpu = "";
+let giftCard = "";
+let parentCategory = "";
+let childCategory = "";
+let customerToken = "";
+let firstOrder = "";
+const slug = "pixel-parts";
+
+const base = () => `/projects/${project}`;
+
+async function redeemStore(projectId: string, days = 30) {
+	const code = generateLicenseCode();
+	const now = Date.now();
+	await Database`
+		INSERT INTO license_keys(uuid, code, type, duration_days, status, created, updated)
+		VALUES(${crypto.randomUUID()}, ${code}, 'store', ${days}, 'available', ${now}, ${now})
+	`;
+	return await call("POST", `/projects/${projectId}/license/redeem`, ownerToken, { code });
+}
+
+async function customerLogin(email: string): Promise<string> {
+	const request = await call("POST", "/customer/auth/request", undefined, { email, store: slug, return: `/shop/${slug}/checkout` });
+	expect(request.error).toBe(0);
+	const token = messages.at(-1)!.text.match(/#token=([A-Za-z0-9]{128})/)![1];
+	const verified = await call("POST", "/customer/auth/verify", undefined, { token });
+	expect(verified.error).toBe(0);
+	return verified.data.token;
+}
+
+const address = {
+	name: "Ana Novak",
+	phone: "+386 40 123 456",
+	address_line1: "Slovenska cesta 1",
+	address_line2: null,
+	postal_code: "1000",
+	city: "Ljubljana",
+	state: null,
+	country: "SI",
+};
+
+function checkout(overrides: Record<string, unknown> = {}) {
+	return {
+		lines: [{ product: gpu, quantity: 1 }],
+		shipping: null,
+		customer: { ...address, customer_type: "individual", company: null, vat_number: null, tax_number: null },
+		delivery: null,
+		note: "Please ring twice",
+		accept_terms: true,
+		save_profile: true,
+		...overrides,
+	};
+}
+
+beforeAll(async () => {
+	await Cache.initialize();
+	await initialize();
+	await Server.configure();
+	Settings.email.enabled = true;
+	setTransport({
+		sendMail: async (message: (typeof messages)[number]) => {
+			messages.push(message);
+			return { messageId: "store-test" };
+		},
+	} as never);
+
+	const now = Date.now();
+	await Database`INSERT INTO accounts(username, email, password, created, updated, accessed) VALUES('store-owner', 'owner@pixel.test', 'unused', ${now}, ${now}, ${now})`;
+	ownerToken = (await Auth.createSession("store-owner", ""))!;
+	project = (await call("POST", "/projects", ownerToken, { name: "pixel-parts", currency: "EUR" })).data.uuid;
+	otherProject = (await call("POST", "/projects", ownerToken, { name: "other-shop", currency: "EUR" })).data.uuid;
+	await call("PATCH", `/projects/${project}`, ownerToken, { display_name: "Pixel Parts" });
+
+	gpu = (
+		await call("POST", `${base()}/items`, ownerToken, {
+			name: "Asus Dual Radeon RX 9060 XT",
+			sku: "RX9060XT",
+			unit_price: 30000,
+			currency: "EUR",
+			tax_rate: 22,
+			supply_type: "goods",
+		})
+	).data.uuid;
+	giftCard = (await call("POST", `${base()}/items`, ownerToken, { name: "Gift card", unit_price: 5000, currency: "EUR", tax_rate: 0, supply_type: "services" }))
+		.data.uuid;
+});
+
+afterAll(async () => {
+	await Database.close();
+	rmSync(FIXTURE, { recursive: true, force: true });
+});
+
+describe("the online store module", () => {
+	test("is locked until an online store license is redeemed", async () => {
+		const state = await call("GET", `${base()}/store`, ownerToken);
+		expect(state.error).toBe(0);
+		expect(state.data.license.active).toBe(false);
+		expect(state.data.exists).toBe(false);
+		expect(state.data.slug).toBe("pixel-parts");
+
+		const blocked = await call("PUT", `${base()}/store`, ownerToken, { slug, domain: null, enabled: true, config: state.data.config });
+		expect(blocked.status).toBe(402);
+		expect(blocked.error).toBe(1150);
+
+		const redeemed = await redeemStore(project);
+		expect(redeemed.error).toBe(0);
+		expect(redeemed.data.store).toBe(true);
+		expect(redeemed.data.store_until).toBeGreaterThan(Date.now() + 29 * 86400000);
+	});
+
+	test("saves the store settings and rejects invalid or taken addresses", async () => {
+		const state = await call("GET", `${base()}/store`, ownerToken);
+		const config = {
+			...state.data.config,
+			announcement: "Free shipping over 100 EUR",
+			socials: [
+				{ network: "discord", url: "https://discord.gg/pixelparts" },
+				{ network: "instagram", url: "https://instagram.com/pixelparts" },
+			],
+			location: { ...state.data.config.location, enabled: true, name: "Showroom", address: "Slovenska cesta 1\n1000 Ljubljana" },
+			shipping: [
+				{ id: "post", name: "Pošta", price: 499, free_from: 10000, min_days: 1, max_days: 2, pickup: false },
+				{ id: "pickup", name: "Pickup", price: 0, free_from: null, min_days: 0, max_days: 1, pickup: true },
+			],
+		};
+
+		const invalid = await call("PUT", `${base()}/store`, ownerToken, { slug: "Bad Slug", domain: null, enabled: true, config });
+		expect(invalid.error).toBe(1151);
+		const badSocial = await call("PUT", `${base()}/store`, ownerToken, {
+			slug,
+			domain: null,
+			enabled: true,
+			config: { ...config, socials: [{ network: "discord", url: "javascript:alert(1)" }] },
+		});
+		expect(badSocial.error).toBe(1151);
+		const missingPrivacy = await call("PUT", `${base()}/store`, ownerToken, {
+			slug,
+			domain: null,
+			enabled: true,
+			config: { ...config, pages: config.pages.filter((page: { slug: string }) => page.slug !== "privacy") },
+		});
+		expect(missingPrivacy.error).toBe(1151);
+
+		const saved = await call("PUT", `${base()}/store`, ownerToken, { slug, domain: "shop.pixel.test", enabled: true, config });
+		expect(saved.error).toBe(0);
+		expect(saved.data.exists).toBe(true);
+		expect(saved.data.config.socials).toHaveLength(2);
+		expect(saved.data.domain).toBe("shop.pixel.test");
+
+		await redeemStore(otherProject);
+		const otherState = await call("GET", `/projects/${otherProject}/store`, ownerToken);
+		const taken = await call("PUT", `/projects/${otherProject}/store`, ownerToken, { slug, domain: null, enabled: true, config: otherState.data.config });
+		expect(taken.error).toBe(1152);
+		const domainTaken = await call("PUT", `/projects/${otherProject}/store`, ownerToken, {
+			slug: "other-shop",
+			domain: "shop.pixel.test",
+			enabled: true,
+			config: otherState.data.config,
+		});
+		expect(domainTaken.error).toBe(1165);
+	});
+
+	test("organizes products into nested categories", async () => {
+		const parent = await call("POST", `${base()}/store/categories`, ownerToken, { name: "Grafične kartice" });
+		expect(parent.status).toBe(201);
+		expect(parent.data.slug).toBe("graficne-kartice");
+		parentCategory = parent.data.uuid;
+		const child = await call("POST", `${base()}/store/categories`, ownerToken, { name: "AMD", parent: parentCategory });
+		childCategory = child.data.uuid;
+
+		const cycle = await call("PATCH", `${base()}/store/categories/${parentCategory}`, ownerToken, { parent: childCategory });
+		expect(cycle.error).toBe(1154);
+		const duplicate = await call("POST", `${base()}/store/categories`, ownerToken, { name: "AMD again", slug: "amd" });
+		expect(duplicate.error).toBe(1152);
+	});
+
+	test("lists catalog items with a Markdown description, filter attributes, stock and photos", async () => {
+		const listed = await call("PUT", `${base()}/store/products/${gpu}`, ownerToken, {
+			slug: "asus-dual-rx-9060-xt",
+			published: true,
+			featured: true,
+			category: childCategory,
+			summary: "16 GB for 1440p gaming",
+			description: "## Highlights\n- **Quiet** cooler\n\n<script>alert(1)</script>",
+			compare_price: 39900,
+			stock: 2,
+			allow_backorder: false,
+			delivery_min_days: 1,
+			delivery_max_days: 3,
+			restock_at: null,
+			sort_order: 0,
+			attributes: [
+				{ name: "Proizvajalec", value: "Asus" },
+				{ name: "Grafična kartica", value: "Radeon RX 9060 XT" },
+			],
+		});
+		expect(listed.error).toBe(0);
+		expect(listed.data.attributes).toHaveLength(2);
+		expect(listed.data.stock).toBe(2);
+
+		const invalid = await call("PUT", `${base()}/store/products/${giftCard}`, ownerToken, { ...listed.data, slug: "asus-dual-rx-9060-xt", attributes: [] });
+		expect(invalid.error).toBe(1152);
+
+		const gift = await call("PUT", `${base()}/store/products/${giftCard}`, ownerToken, {
+			...listed.data,
+			slug: "gift-card",
+			category: parentCategory,
+			featured: false,
+			compare_price: null,
+			stock: null,
+			attributes: [{ name: "Proizvajalec", value: "Pixel Parts" }],
+		});
+		expect(gift.error).toBe(0);
+
+		const image = await call("POST", `${base()}/store/products/${gpu}/images`, ownerToken, { data: PNG, alt: "Front" });
+		expect(image.status).toBe(201);
+		const notImage = await call("POST", `${base()}/store/products/${gpu}/images`, ownerToken, {
+			data: Buffer.from("hello world, not an image").toString("base64"),
+		});
+		expect(notImage.error).toBe(1158);
+
+		const served = await Server.app.handle(new Request(`http://127.0.0.1${image.data.url}`));
+		expect(served.headers.get("Content-Type")).toBe("image/png");
+		expect(served.headers.get("Cache-Control")).toContain("immutable");
+		expect((await storageFor(project)).storage_used).toBeGreaterThan(0);
+	});
+
+	test("shows the storefront with categories, facets and attribute filters", async () => {
+		const store = await call("GET", `/store/${slug}`);
+		expect(store.error).toBe(0);
+		expect(store.data.config.name).toBe("Pixel Parts");
+		expect(store.data.categories.find((category: { slug: string }) => category.slug === "graficne-kartice").count).toBe(2);
+		expect(store.data.product_count).toBe(2);
+
+		const all = await call("GET", `/store/${slug}/products?facets=1`);
+		expect(all.data.total).toBe(2);
+		const maker = all.data.facets.find((facet: { name: string }) => facet.name === "Proizvajalec");
+		expect(maker.values.map((value: { value: string }) => value.value)).toEqual(["Asus", "Pixel Parts"]);
+
+		const asus = await call("GET", `/store/${slug}/products?f=${encodeURIComponent("Proizvajalec=Asus")}`);
+		expect(asus.data.products.map((product: { slug: string }) => product.slug)).toEqual(["asus-dual-rx-9060-xt"]);
+		const none = await call("GET", `/store/${slug}/products?f=${encodeURIComponent("Proizvajalec=MSI")}`);
+		expect(none.data.total).toBe(0);
+		const either = await call("GET", `/store/${slug}/products?f=${encodeURIComponent("Proizvajalec=MSI")}&f=${encodeURIComponent("Proizvajalec=Asus")}`);
+		expect(either.data.total).toBe(1);
+
+		const parent = await call("GET", `/store/${slug}/products?category=graficne-kartice`);
+		expect(parent.data.total).toBe(2);
+		expect(parent.data.category.children).toEqual([{ slug: "amd", name: "AMD" }]);
+		const child = await call("GET", `/store/${slug}/products?category=amd`);
+		expect(child.data.total).toBe(1);
+		expect(child.data.category.trail.map((entry: { slug: string }) => entry.slug)).toEqual(["graficne-kartice", "amd"]);
+
+		const search = await call("GET", `/store/${slug}/products?q=radeon`);
+		expect(search.data.total).toBe(1);
+
+		const product = await call("GET", `/store/${slug}/products/asus-dual-rx-9060-xt`);
+		expect(product.data.price).toBe(36600);
+		expect(product.data.compare_price).toBe(39900);
+		expect(product.data.availability).toBe("low_stock");
+		expect(product.data.images).toHaveLength(1);
+		expect(product.data.attributes).toEqual([
+			{ name: "Proizvajalec", value: "Asus" },
+			{ name: "Grafična kartica", value: "Radeon RX 9060 XT" },
+		]);
+		expect(product.data.description).toContain("<script>");
+	});
+
+	test("prices a cart with shipping and flags lines that exceed the stock", async () => {
+		const small = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: gpu, quantity: 1 }] });
+		expect(small.data.items_total).toBe(36600);
+		expect(small.data.requires_shipping).toBe(true);
+		expect(small.data.shipping.id).toBe("post");
+		expect(small.data.shipping_amount).toBe(0);
+		expect(small.data.total).toBe(36600);
+		expect(small.data.ready).toBe(true);
+		expect(small.data.invoice_items).toBeUndefined();
+
+		const gift = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: giftCard, quantity: 1 }] });
+		expect(gift.data.requires_shipping).toBe(false);
+		expect(gift.data.shipping_amount).toBe(0);
+
+		const tooMany = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: gpu, quantity: 3 }] });
+		expect(tooMany.data.lines[0].issue).toBe("insufficient");
+		expect(tooMany.data.ready).toBe(false);
+
+		const unknown = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: crypto.randomUUID(), quantity: 1 }] });
+		expect(unknown.data.unknown).toHaveLength(1);
+		expect((await call("POST", `/store/${slug}/quote`, undefined, { lines: [] })).error).toBe(1161);
+	});
+
+	test("sends a store branded sign in link that returns to the checkout", async () => {
+		customerToken = await customerLogin("ana@example.com");
+		const link = messages.at(-1)!;
+		expect(link.subject).toContain("Pixel Parts");
+		expect(link.text).toContain("https://shop.pixel.test/customer/login#token=");
+		expect(link.text).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout`)}`);
+	});
+
+	test("places an order that issues an invoice and takes the stock", async () => {
+		expect((await call("POST", `/store/${slug}/checkout`, undefined, checkout())).error).toBe(1000);
+		expect((await call("POST", `/store/${slug}/checkout`, customerToken, checkout())).error).toBe(1168);
+
+		const bank = await call("PUT", `${base()}/processors/bank_transfer`, ownerToken, {
+			enabled: true,
+			config: { iban: "SI56 1910 0000 0123 438", account_holder: "Pixel Parts d.o.o." },
+		});
+		expect(bank.error).toBe(0);
+
+		expect((await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ accept_terms: false }))).error).toBe(1167);
+		expect((await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ customer: { customer_type: "individual" } }))).error).toBe(1166);
+
+		const placed = await call("POST", `/store/${slug}/checkout`, customerToken, checkout());
+		expect(placed.status).toBe(201);
+		expect(placed.data.total_amount).toBe(36600);
+		firstOrder = placed.data.invoice;
+
+		const [invoice] = await Database`SELECT * FROM invoices WHERE uuid = ${firstOrder}`;
+		expect(invoice.status).toBe("open");
+		expect(invoice.buyer_email).toBe("ana@example.com");
+		expect(invoice.issued_at).not.toBeNull();
+		const [product] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
+		expect(Number(product.stock)).toBe(1);
+
+		const invoiceEmail = messages.find((message) => message.to === "ana@example.com" && message.text.includes(invoice.reference));
+		expect(invoiceEmail ?? (await Database`SELECT * FROM email_messages WHERE invoice = ${firstOrder}`)[0]).toBeTruthy();
+
+		const tooMany = await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ lines: [{ product: gpu, quantity: 2 }] }));
+		expect(tooMany.error).toBe(1162);
+	});
+
+	test("requires waiving the right of withdrawal before selling digital content", async () => {
+		const key = (
+			await call("POST", `${base()}/items`, ownerToken, { name: "Game key", unit_price: 1000, currency: "EUR", tax_rate: 22, supply_type: "services" })
+		).data.uuid;
+		expect((await call("POST", `${base()}/items/${key}/keys`, ownerToken, { keys: "AAAA-1111\nBBBB-2222" })).error).toBe(0);
+		const listed = await call("PUT", `${base()}/store/products/${key}`, ownerToken, {
+			slug: "game-key",
+			published: true,
+			featured: false,
+			category: null,
+			summary: null,
+			description: null,
+			compare_price: null,
+			stock: null,
+			allow_backorder: false,
+			delivery_min_days: null,
+			delivery_max_days: null,
+			restock_at: null,
+			sort_order: 0,
+			attributes: [],
+		});
+		expect(listed.error).toBe(0);
+
+		const quote = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: key, quantity: 1 }] });
+		expect(quote.data.withdrawal_waiver).toBe(true);
+		const refused = await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ lines: [{ product: key, quantity: 1 }] }));
+		expect(refused.error).toBe(1169);
+
+		const placed = await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ lines: [{ product: key, quantity: 1 }], waive_withdrawal: true }));
+		expect(placed.status).toBe(201);
+		const [invoice] = await Database`SELECT metadata FROM invoices WHERE uuid = ${placed.data.invoice}`;
+		const metadata = JSON.parse(invoice.metadata);
+		expect(metadata.withdrawal_waived_at).toBeGreaterThan(0);
+		expect(metadata.terms_accepted_at).toBe(metadata.withdrawal_waived_at);
+		await call("POST", `${base()}/store/orders/${placed.data.invoice}/cancel`, ownerToken, {});
+		await call("DELETE", `${base()}/store/products/${key}`, ownerToken);
+	});
+
+	test("remembers the customer's details and lists their orders", async () => {
+		const profile = await call("GET", "/customer/profile", customerToken);
+		expect(profile.data.saved).toBe(true);
+		expect(profile.data.city).toBe("Ljubljana");
+
+		const orders = await call("GET", "/customer/orders", customerToken);
+		expect(orders.data.orders).toHaveLength(2);
+		const first = orders.data.orders.find((order: { invoice: string }) => order.invoice === firstOrder);
+		expect(first.store).toBe("Pixel Parts");
+		expect(first.fulfillment).toBe("pending");
+
+		const order = await call("GET", `/store/${slug}/orders/${firstOrder}`, customerToken);
+		expect(order.data.note).toBe("Please ring twice");
+		expect(order.data.shipping_address.city).toBe("Ljubljana");
+
+		const stranger = await customerLogin("someone@example.com");
+		expect((await call("GET", `/store/${slug}/orders/${firstOrder}`, stranger)).error).toBe(1163);
+	});
+
+	test("lets the merchant ship an order and cancel one that was not paid", async () => {
+		const orders = await call("GET", `${base()}/store/orders?payment=unpaid`, ownerToken);
+		expect(orders.data.total).toBe(1);
+
+		const invalid = await call("PATCH", `${base()}/store/orders/${firstOrder}`, ownerToken, { fulfillment: "shipped", tracking_url: "not a url" });
+		expect(invalid.error).toBe(1164);
+		const shipped = await call("PATCH", `${base()}/store/orders/${firstOrder}`, ownerToken, {
+			fulfillment: "shipped",
+			tracking_url: "https://tracking.posta.si/RR123456789SI",
+		});
+		expect(shipped.data.fulfillment).toBe("shipped");
+		const [update] = await Database`SELECT subject, body_text FROM email_messages WHERE invoice = ${firstOrder} AND kind = 'order_shipped'`;
+		expect(update.body_text).toContain("https://tracking.posta.si/RR123456789SI");
+		expect((await call("POST", `${base()}/store/orders/${firstOrder}/cancel`, ownerToken, {})).error).toBe(1164);
+
+		const second = await call("POST", `/store/${slug}/checkout`, customerToken, checkout());
+		expect(second.status).toBe(201);
+		const [emptied] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
+		expect(Number(emptied.stock)).toBe(0);
+		const soldOut = await call("GET", `/store/${slug}/products/asus-dual-rx-9060-xt`);
+		expect(soldOut.data.availability).toBe("out_of_stock");
+
+		const canceled = await call("POST", `${base()}/store/orders/${second.data.invoice}/cancel`, ownerToken, { reason: "Customer asked" });
+		expect(canceled.data.fulfillment).toBe("canceled");
+		expect(canceled.data.payment_status).toBe("canceled");
+		const [restored] = await Database`SELECT stock FROM store_products WHERE item = ${gpu}`;
+		expect(Number(restored.stock)).toBe(1);
+	});
+
+	test("serves the storefront page with store search engine tags and keeps the admin hidden", async () => {
+		const storefront = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/asus-dual-rx-9060-xt`));
+		const html = await storefront.text();
+		expect(html).toContain("<title>Pixel Parts</title>");
+		expect(html).toContain('content="index, follow"');
+		expect(html).toContain('name="rabbitpay-store" content="pixel-parts" data-domain="0"');
+
+		const domain = await Server.app.handle(new Request("http://127.0.0.1/", { headers: { host: "shop.pixel.test" } }));
+		expect(await domain.text()).toContain('data-domain="1"');
+
+		const admin = await Server.app.handle(new Request("http://127.0.0.1/projects"));
+		const adminHtml = await admin.text();
+		expect(adminHtml).toContain('content="noindex, nofollow"');
+		expect(adminHtml).not.toContain("rabbitpay-store");
+	});
+
+	test("exports and deletes the customer's data on request", async () => {
+		const exported = await Server.app.handle(new Request("http://127.0.0.1/api/v1/customer/export", { headers: { Authorization: `Bearer ${customerToken}` } }));
+		expect(exported.headers.get("Content-Disposition")).toContain("my-data.json");
+		const data = (await exported.json()) as { profile: { city: string }; orders: unknown[] };
+		expect(data.profile.city).toBe("Ljubljana");
+		expect(data.orders.length).toBe(3);
+
+		const deleted = await call("DELETE", "/customer/account", customerToken);
+		expect(deleted.error).toBe(0);
+		expect(await Database`SELECT * FROM customer_profiles WHERE email = 'ana@example.com'`).toHaveLength(0);
+		expect(await Database`SELECT * FROM customer_accounts WHERE email = 'ana@example.com'`).toHaveLength(0);
+		expect((await Database`SELECT * FROM invoices WHERE uuid = ${firstOrder}`).length).toBe(1);
+		expect((await call("GET", "/customer/profile", customerToken)).error).not.toBe(0);
+	});
+
+	test("closes the storefront when the store is switched off or the license ends", async () => {
+		await Database`UPDATE projects SET store_until = ${Date.now() - 1000} WHERE uuid = ${project}`;
+		const expired = await call("GET", `/store/${slug}`);
+		expect(expired.error).toBe(1153);
+		const products = await call("GET", `${base()}/store/products`, ownerToken);
+		expect(products.error).toBe(0);
+		expect((await call("PUT", `${base()}/store/products/${gpu}`, ownerToken, {})).error).toBe(1150);
+	});
+});

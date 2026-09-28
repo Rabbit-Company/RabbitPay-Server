@@ -1,0 +1,1187 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema id="REK_O_Analytical_1"
+           targetNamespace="http://edavki.durs.si/Documents/Schemas/REK_O_Analytical_1.xsd"
+           elementFormDefault="qualified"
+           xmlns="http://edavki.durs.si/Documents/Schemas/REK_O_Analytical_1.xsd"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="AnalyticalData">
+    <xs:annotation>
+      <xs:documentation>Individualni del REK obrazca</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="AnalyticalDataItem" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>Individualni del REK obrazca</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+
+              <!--PODATKI O PREJEMNIKU DOHODKA-->
+
+              <xs:element name="A001" minOccurs="0" type="xs:int">
+                <xs:annotation>
+                  <xs:documentation>Davčna številka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A002" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Identifikacijska številka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A003" minOccurs="1" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Ime</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A003a" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Priimek</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A004" minOccurs="1">
+                <xs:annotation>
+                  <xs:documentation>Oznaka za rezidentstvo</xs:documentation>
+                </xs:annotation>
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:maxLength value="1"/>
+                    <xs:enumeration value="R">
+                      <xs:annotation>
+                        <xs:documentation>Rezident</xs:documentation>
+                      </xs:annotation>
+                    </xs:enumeration>
+                    <xs:enumeration value="N">
+                      <xs:annotation>
+                        <xs:documentation>Nerezident</xs:documentation>
+                      </xs:annotation>
+                    </xs:enumeration>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="A004a" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Država rezidenstva</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A004b" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Naslov nerezidenta - ulica</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A004c" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Naslov nerezidenta - kraj</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A004d" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Naslov nerezidenta - država</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A011" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Napotitev na delo v tujino (2. odst. 144. čl. ZPIZ-2)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A011a" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Napotitev na čezmejno opravljanje dela (45. a čl. ZDoh-2)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A011b" minOccurs="0" type="xs:date">
+                <xs:annotation>
+                  <xs:documentation>Datum prve napotitve</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A011c" minOccurs="0" type="xs:int">
+                <xs:annotation>
+                  <xs:documentation>Zaporedna št. meseca</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A012" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Napotitev na delo v tujino - javni uslužbenec</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A014" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Invalid nad predpisano kvoto</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A017" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Dopolnjena starost 60 let (156. čl. ZPIZ-2)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A020" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Pogodba za določen čas (39. čl. ZUTD-A)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A021" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Pogodba za nedoločen čas (39. čl. ZUTD-A)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A024" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Ni zavarovanec po 15. ali 20. čl. ZZVZZ</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A025" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Uporaba zakonodaje druge države za plačilo prispevkov</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A025a" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec po 18. čl. ZPIZ-2</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A026" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Vajenec - izbira letnika</xs:documentation>
+                </xs:annotation>
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:maxLength value="1"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="A027" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Vajenec po 36. in 37. čl. Zvaj</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_01" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - januar</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_02" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - februar</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_03" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - marec</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_04" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - april</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_05" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - maj</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_06" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - junij</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_07" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - julij</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_08" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - avgust</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_09" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - september</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_10" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - oktober</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_11" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - november</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A028_12" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Zavarovanec za obvezni zdravstveni prispevek - december</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A029" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Ni zavarovanec po 54. členu ZDosk-1</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A031" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Delavec inovativnega zagonskega podjetja (45.b čl. ZDoh-2)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A032" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Novi rezident (113.a čl. ZDoh-2)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A032a" minOccurs="0" type="xs:date">
+                <xs:annotation>
+                  <xs:documentation>Datum prvega nastopa dela v RS</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A033" minOccurs="0" type="xs:int">
+                <xs:annotation>
+                  <xs:documentation>Število dopolnjenih let članstva v lastniški zadrugi delavcev</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--PODATKI O NEPREMIČNINAH-->
+
+              <xs:element name="RealEstate" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Podatki o nepremičnininah</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="A030KO" minOccurs="0" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Katastrska občina</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A030PS" minOccurs="0" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Številka parcele</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A030SS" minOccurs="0" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Številka stavbe</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A030Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <!--BRUTO DOHODEK IN DAVČNA OSNOVA-->
+
+              <xs:element name="IncomeTax" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Bruto dohodek in davčna osnova</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="A051" minOccurs="1" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Dohodninska vrsta dohodka</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A052" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Dohodek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A052a" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Dohodek, ki se všteva v davčno osnovo</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A053" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Normirani stroški/odhodki</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="A052b" minOccurs="0" type="xs:boolean">
+                <xs:annotation>
+                  <xs:documentation>Dohodek, od katerega se ne odtegne davčni odtegljaj</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A054" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Bruto dohodek in davčna osnova</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="A054a" minOccurs="1" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Oznaka dohodka (polja B), ki se všteva v davčno osnovo</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A054z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek dohodka, ki se všteva v davčno osnovo</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <!--OSNOVA ZA OBRAČUN IN PLAČILO PRISPEVKOV-->
+
+              <xs:element name="Contribution" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Osnova za obračun in plačilo prispevkov</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="A061" minOccurs="1" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Vrsta osnove za prispevke</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A062" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Osnova za prispevke - Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="A062a" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Osnova za prispevke - Ure</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <!--PRISPEVKI ZA SOCIALNO VARNOST DELOJEMALCA-->
+
+              <xs:element name="A071O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za pokojninsko in invalidsko zavarovanje - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A071P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za pokojninsko in invalidsko zavarovanje - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A072O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zdravstveno zavarovanje - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A072P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zdravstveno zavarovanje - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A072aO" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Obvezni zdravstveni prispevek - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A072aP" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Obvezni zdravstveni prispevek - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A072bO" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za dolgotrajno oskrbo - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A072bP" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za dolgotrajno oskrbo - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A073O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za starševsko varstvo - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A073P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za starševsko varstvo - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A074O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za primer brezposelnosti - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A074P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za primer brezposelnosti - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A075O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Skupaj obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A075P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Skupaj za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--PRISPEVKI ZA SOCIALNO VARNOST DELODAJALCA-->
+
+              <xs:element name="A081O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za pokojninsko in invalidsko zavarovanje - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A081P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za pokojninsko in invalidsko zavarovanje - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A082O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zdravstveno zavarovanje - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A082P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zdravstveno zavarovanje - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A082aO" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za dolgotrajno oskrbo - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A082aP" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za dolgotrajno oskrbo - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A083O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za starševsko varstvo - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A083P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za starševsko varstvo - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A084O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za primer brezposelnosti - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A084P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za primer brezposelnosti - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A085O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Poškodbe pri delu - Obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A085P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Poškodbe pri delu - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="A086O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Skupaj obračunani</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A086P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Skupaj za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--PRISPEVKI ZA ZAVAROVALNO DOBO, KI SE ŠTEJEJO S POVEČANJEM-->
+
+              <xs:element name="A101P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zavarovalno dobo s povečanjem - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--UVELJAVLJANJE UGODNOSTI IZ MEDNARODNIH POGODB-->
+
+              <xs:element name="D11" type="xs:boolean" minOccurs="0" default="false">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje ugodnosti iz mednarodnih pogodb</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="D11S" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje ugodnosti iz mednarodnih pogodb - Stopnja</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="D11N" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje ugodnosti iz mednarodnih pogodb - Številka odločbe/potrdila</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="D12" type="xs:boolean" minOccurs="0" default="false">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje znižane stopnje</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="D12S" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje znižane stopnje - Stopnja</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="D12N" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Uveljavljanje znižane stopnje - Številka odločbe/potrdila</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--DAVČNI ODTEGLJAJ-->
+
+              <xs:element name="A090" type="xs:boolean" minOccurs="0" default="false">
+                <xs:annotation>
+                  <xs:documentation>Davčni odtegljaj - Drugi delodajalec</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A091" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Davčni odtegljaj - Davčni odtegljaj</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A092" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Davčni odtegljaj - Odbitek davka plačanega v tujini</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A092a" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Zmanjšanje davčnega odtegljaja po 113.a člena ZDoh-2</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A093" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Davčni odtegljaj - Skupaj za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--DODATNI PODATKI - DOHODKI IZ DELOVNEGA RAZMERJA-->
+
+              <xs:element name="B04" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov do uredbe vlade - prehrana</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B05" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov do uredbe vlade - prevoz - znesek</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B05a" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračila stroškov prevoza ob začetku in koncu napotitve</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov prehrane do uredbe vlade - službene poti</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06a" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov prevoza do uredbe vlade - službene poti</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06b" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov za prenočišče do uredbe vlade - službene poti</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06c" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov prehrane - napotitev na delo v tujino do 30 oz. 90 dni</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06ch" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov prehrane - napotitev na delo v tujino nad 30 oz. 90 dni</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06d" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov prevoza v zvezi z napotitvijo na delo v tujino</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B06e" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov za prenočišče v zvezi z napotitvijo na delo v tujino</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B07" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov do uredbe vlade - terenski dodatek</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B08" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povračilo stroškov do uredbe vlade - nadomestilo za ločeno življenje</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B09" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Odpravnina zaradi odpovedi pogodbe o zaposlitvi</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B09a" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Odpravnina zaradi prenehanja pogodbe o zaposlitvi za določen čas</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B010" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Odpravnina ob upokojitvi</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B011" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Jubilejna nagrada</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B012" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Solidarnostna pomoč</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B013" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Premija prostovoljnega dodatnega zavarovanja</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B018" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Nagrada vajenca</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B019" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Nagrada za obvezno prakso</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B020" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Izvzem iz davčne osnove po 45.a čl. ZDoh-2</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B021" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Izvzem iz davčne osnove - pokojninska renta</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B022" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Izvzem iz davčne osnove - pomorščaki</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B023" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Odmene – napoteni javni uslužbenci</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B024" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Nadomestilo za uporabo lastnega orodja, naprav in predmetov</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B025" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Nadomestilo za uporabo lastnih sredstev pri delu na domu</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--PODATKI O BONITETAH-->
+
+              <xs:element name="Boniteta014" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - uporaba osebnega vozila</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="B014" type="Decimal_14_2" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014a" type="xs:string" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>VIN številka osebnega vozila</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014V" type="Decimal_14_2" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>NV ob pridobitvi</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014L" type="xs:int" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>Leto uporabe</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014G" type="xs:boolean" minOccurs="0" >
+                      <xs:annotation>
+                        <xs:documentation>Delodajalec zagotavlja gorivo</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014K" type="xs:boolean" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>Privatne poti več kot 500 km</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="B014E" type="xs:boolean" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>Električni avto</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="B015" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - nastanitev</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B016" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - zavarovalne premije</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B016a" minOccurs="0" type="Decimal_14_2">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - opcijsko nagrajevanje po 6.odst. 43.čl. ZDoh-2</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B016b" minOccurs="0" type="Decimal_14_2">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - zavarovalne premije za skupinsko zavarovanje</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="B017" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Boniteta - drugo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--POKOJNINSKE OSNOVE ZA OSEBO V DELOVNEM RAZMERJU-->
+
+              <xs:element name="M00" type="xs:int" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Povezovalna davčna številka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="M01" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Plača in nadomestila plače</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M01U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M01Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M01OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M01DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M02" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Nadomestilo plače (3. alineja 1.odst. 32. čl. ZPIZ-2)</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M02U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M02Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M02L" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Leto osnove</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M02OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M02DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M03" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Plača - nadure</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M03U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M03Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M03OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M03DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M04" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Plača - dopolnilno delo (147. čl. ZDR-1)</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M04U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M04Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M04OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M04DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M05" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Povračila stroškov in drugih dohodkov</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M05Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M05OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M05DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M07" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Neplačana odsotnost</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M07U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M07Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M07OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M07DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M08" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Razlika do najnižje osnove za plačilo prispevkov</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M08Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M08OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M08DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M09" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Prispevek za zavarovalno dobo s povečanjem</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M09SD" minOccurs="0" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Šifra dobe</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M09TP" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Tip povečanja</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M09U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M09Z" minOccurs="0" type="Decimal_14_2">
+                      <xs:annotation>
+                        <xs:documentation>Znesek</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M09OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M09DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <xs:element name="M10" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>Sezonsko delo</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="M10SD" minOccurs="0" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>Šifra dobe</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M10U" minOccurs="0" type="xs:int">
+                      <xs:annotation>
+                        <xs:documentation>Število ur</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M10OD" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje od</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="M10DO" minOccurs="0" type="xs:date">
+                      <xs:annotation>
+                        <xs:documentation>Obdobje do</xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <!--DRUGE DAVČNE OBVEZNOSTI-->
+
+              <xs:element name="N01O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Posebni davek na določene prejemke - Osnova</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="N01P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Posebni davek na določene prejemke - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <xs:element name="N02O" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Dajatev od začasnega in občasnega dela upokojencev - Osnova</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="N02P" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Dajatev od začasnega in občasnega dela upokojencev - Za plačilo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!--DODATNI PODATKI O PLAČI-->
+
+              <xs:element name="S01" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>10-mestna matična št. (dela) posl. subj., v katerem prejemnik dohodka opravlja delo</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S02" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Šifra kolektivne pogodbe, ki velja za zaposlitev prejemnika dohodka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S03" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Osnovna plača</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S04" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Del plače za delovno uspešnost</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S05" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Dodatki</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S06" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Plačilo za poslovno uspešnost (brez zneska zajetega v vrsto doh. 1151)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S07" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Nadomestila plače, ki bremenijo delodajalca</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S08" type="Decimal_14_2" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Neto plača, izplačana v breme delodajalca (brez zneska zajetega v vrsto doh. 1151)</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="S09" type="xs:int" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>Št. opravljenih in neopravljenih ur (vklj. s št. nadur), izplačanih v breme delodajalca</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <xs:element name="DeleteAnalyticalDataItems" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>Izbris vseh analitičnih zapisov za zaposlenega pri delnem popravku dokumenta.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="A001" minOccurs="0" type="xs:int">
+                <xs:annotation>
+                  <xs:documentation>Davčna številka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="A002" minOccurs="0" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>Identifikacijska številka</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:simpleType name="Decimal_14_2">
+    <xs:restriction base="xs:decimal">
+      <xs:pattern value="[-+]?\d{1,14}(\.\d{1,2})?" />
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

@@ -1,0 +1,10 @@
+.git
+.env
+data
+node_modules
+web/dist
+rabbitpay-server
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+tests

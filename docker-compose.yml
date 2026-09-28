@@ -1,0 +1,15 @@
+services:
+  rabbitpay:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    environment:
+      RABBITPAY_DB: sqlite://./data/rabbitpay.sqlite
+      DOCUMENT_STORAGE: local
+      DOCUMENT_LOCAL_PATH: ./data/invoices
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./data:/app/data

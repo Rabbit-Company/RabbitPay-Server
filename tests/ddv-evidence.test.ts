@@ -1,0 +1,186 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { unlinkSync } from "node:fs";
+import { prepareTest } from "./environment";
+import { endOfLocalDate, startOfLocalDate } from "../server/timezone";
+
+await prepareTest(`sqlite://${import.meta.dir}/.ddv-evidence.sqlite`);
+
+const { Server } = await import("../server/server");
+const { default: Database, initialize } = await import("../server/database/database");
+const { default: Cache } = await import("../server/cache");
+
+await Server.configure();
+
+const password = new Bun.CryptoHasher("blake2b512").update("ddv-owner").digest("hex");
+const timezone = "Europe/Ljubljana";
+const january = { from: startOfLocalDate("2026-01-01", timezone), to: endOfLocalDate("2026-01-31", timezone) };
+let token = "";
+let project = "";
+let expense = "";
+
+async function call(method: string, path: string, body?: unknown): Promise<any> {
+	const response = await Server.app.handle(
+		new Request(`http://localhost${path}`, {
+			method,
+			headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+			body: body === undefined ? undefined : JSON.stringify(body),
+		})
+	);
+	const type = response.headers.get("Content-Type") ?? "";
+	if (!type.includes("application/json")) return { status: response.status, response };
+	return { status: response.status, ...((await response.json()) as { error: number; data: any }) };
+}
+
+function query(options: Record<string, unknown>): string {
+	const values = new URLSearchParams();
+	for (const [key, value] of Object.entries(options)) if (value !== null) values.set(key, String(value));
+	return values.toString();
+}
+
+beforeAll(async () => {
+	await Cache.initialize();
+	await initialize();
+	await call("POST", "/api/v1/auth/register", { username: "ddv-owner", email: "ddv@example.com", password });
+	token = (await call("POST", "/api/v1/auth/login", { username: "ddv-owner", password })).data.token;
+	project = (await call("POST", "/api/v1/projects", { name: "ddv-evidence", currency: "EUR" })).data.uuid;
+	const base = `/api/v1/projects/${project}`;
+	await call("PATCH", base, { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
+	await call("PUT", `${base}/company`, {
+		legal_name: "DDV Test d.o.o.",
+		address_line1: "Dunajska cesta 1",
+		postal_code: "1000",
+		city: "Ljubljana",
+		country: "SI",
+		tax_number: "12345678",
+		vat_number: "SI12345678",
+	});
+	const invoice = (
+		await call("POST", `${base}/invoices`, {
+			currency: "EUR",
+			due_date: Date.UTC(2026, 0, 31),
+			supply_date: Date.UTC(2026, 0, 10),
+			items: [{ description: "Consulting", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }],
+		})
+	).data;
+	await call("POST", `${base}/invoices/${invoice.uuid}/open`);
+	await Database`UPDATE invoices SET issued_at = ${Date.UTC(2026, 0, 10)} WHERE uuid = ${invoice.uuid}`;
+	const created = await call("POST", `${base}/expenses`, {
+		description: "Office supplies",
+		supplier: "Supplier d.o.o.",
+		supplier_tax_number: "SI87654321",
+		supplier_country: "SI",
+		invoice_number: "DOB-2026-1",
+		category: "Office",
+		currency: "EUR",
+		total_amount: 12200,
+		tax_amount: 2200,
+		deductible_tax_amount: 2200,
+		expense_date: Date.UTC(2026, 0, 12),
+		issue_date: Date.UTC(2026, 0, 11),
+		receipt_date: Date.UTC(2026, 0, 12),
+		supply_date: Date.UTC(2026, 0, 11),
+		vat_treatment: "domestic",
+		asset_type: "expense",
+		vat_handling: "1",
+		self_assessment_period: null,
+		self_assessment_tax: null,
+		vat_lines: [{ rate: 22, tax_base: 10000, tax_amount: 2200, deductible_tax_amount: 2200 }],
+		paid_at: null,
+		notes: null,
+	});
+	expect(created.status).toBe(201);
+	expense = created.data.uuid;
+});
+
+afterAll(async () => {
+	await Database.close();
+	for (const suffix of ["", "-wal", "-shm"]) {
+		try {
+			unlinkSync(`${import.meta.dir}/.ddv-evidence.sqlite${suffix}`);
+		} catch {
+			void 0;
+		}
+	}
+});
+
+describe("official FURS DDV evidence", () => {
+	test("accepts complete calendar months and quarters only", async () => {
+		const base = `/api/v1/projects/${project}/reports/ddv-evidence`;
+		const flags = { refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const month = await call("GET", `${base}?${query({ ...january, ...flags })}`);
+		expect(month.status).toBe(200);
+		const quarter = await call(
+			"GET",
+			`${base}?${query({ from: startOfLocalDate("2026-01-01", timezone), to: endOfLocalDate("2026-03-31", timezone), ...flags })}`
+		);
+		expect(quarter.status).toBe(200);
+		const extraDay = await call(
+			"GET",
+			`${base}?${query({ from: startOfLocalDate("2026-09-01", timezone), to: endOfLocalDate("2026-10-01", timezone), ...flags })}`
+		);
+		expect(extraDay.status).toBe(400);
+		expect(extraDay.error).toBe(1125);
+		const shiftedQuarter = await call(
+			"GET",
+			`${base}?${query({ from: startOfLocalDate("2026-02-01", timezone), to: endOfLocalDate("2026-04-30", timezone), ...flags })}`
+		);
+		expect(shiftedQuarter.status).toBe(400);
+		expect(shiftedQuarter.error).toBe(1125);
+	});
+
+	test("blocks export until the original supplier invoice is attached", async () => {
+		const base = `/api/v1/projects/${project}/reports/ddv-evidence`;
+		const options = { ...january, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const preview = await call("GET", `${base}?${query(options)}`);
+		expect(preview.data.errors.map((entry: any) => entry.code)).toContain("missing_attachment");
+		const blocked = await call("POST", `${base}/exports`, options);
+		expect(blocked.status).toBe(409);
+	});
+
+	test("builds invoice-level KIR and KPR records and reconciles them", async () => {
+		const base = `/api/v1/projects/${project}`;
+		const uploaded = await call("PUT", `${base}/expenses/${expense}/attachment`, {
+			name: "supplier-invoice.pdf",
+			type: "application/pdf",
+			data: Buffer.from("%PDF-1.7\ninvoice").toString("base64"),
+		});
+		expect(uploaded.status).toBe(200);
+		const options = { ...january, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const preview = await call("GET", `${base}/reports/ddv-evidence?${query(options)}`);
+		expect(preview.data.errors).toEqual([]);
+		expect(preview.data.reconciliation.balanced).toBe(true);
+		const kir = preview.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR;
+		const kpr = preview.data.evidence.DDV_KIR_KPR.Lista_KPR.KPR;
+		expect(kir).toHaveLength(1);
+		expect(kir[0]).toMatchObject({ ZAPST: 1, OBDOBJE: "0101", P7: 100, P14: 22, OBRAVNAVA: "1" });
+		expect(kpr).toHaveLength(1);
+		expect(kpr[0]).toMatchObject({ ZAPST: 1, OBDOBJE: "0101", P3: "DOB-2026-1", P7: "SI", P7DS: "87654321", P8: 100, P18: 22, OBRAVNAVA: "1" });
+	});
+
+	test("stores each correction as an immutable downloadable revision", async () => {
+		const base = `/api/v1/projects/${project}/reports/ddv-evidence`;
+		const options = { ...january, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const first = await call("POST", `${base}/exports`, options);
+		const second = await call("POST", `${base}/exports`, options);
+		expect(first.data.export.revision).toBe(1);
+		expect(second.data.export.revision).toBe(2);
+		const history = await call("GET", `${base}/exports`);
+		expect(history.data.map((row: any) => row.revision)).toEqual([2, 1]);
+		const downloaded = await call("GET", `${base}/exports/${second.data.export.uuid}`);
+		const bytes = new Uint8Array(await downloaded.response.arrayBuffer());
+		expect(downloaded.response.headers.get("Content-Type")).toBe("application/zip");
+		expect(new DataView(bytes.buffer).getUint32(0, true)).toBe(0x04034b50);
+		expect(new TextDecoder().decode(bytes)).toContain('"DDV_KIR_KPR"');
+		const locks = await call("GET", `${base}/locks`);
+		expect(locks.data).toHaveLength(1);
+		expect(locks.data[0].active).toBe(true);
+		const blocked = await call("PATCH", `/api/v1/projects/${project}/expenses/${expense}`, { notes: "late change" });
+		expect(blocked.error).toBe(1128);
+		const invalidUnlock = await call("POST", `${base}/locks/${locks.data[0].uuid}/unlock`, { reason: "x" });
+		expect(invalidUnlock.error).toBe(1130);
+		const unlocked = await call("POST", `${base}/locks/${locks.data[0].uuid}/unlock`, { reason: "Supplier correction received" });
+		expect(unlocked.data.active).toBe(false);
+		const [audit] = (await Database`SELECT COUNT(*) AS count FROM audit_log WHERE action = 'accounting_period.unlocked'`) as { count: number }[];
+		expect(Number(audit.count)).toBe(1);
+	});
+});

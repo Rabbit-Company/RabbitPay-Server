@@ -1,0 +1,59 @@
+{
+	"name": "rabbitpay-server",
+	"version": "1.0.0",
+	"description": "Self-hosted payment processor",
+	"module": "index.ts",
+	"type": "module",
+	"scripts": {
+		"start": "bun run server/index.ts",
+		"watch": "bun --watch server/index.ts",
+		"test": "bun test --isolate",
+		"backup:decrypt": "bun run server/storage-cli.ts decrypt-backup",
+		"documents:encrypt": "bun run server/storage-cli.ts encrypt-documents",
+		"logs:export": "bun run server/storage-cli.ts export-access-logs",
+		"license:keygen": "bun run server/license-cli.ts keygen",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
+		"build:web": "bun build web/index.html --outdir web/dist --minify --public-path=/ && cp web/embed.js web/dist/embed.js",
+		"watch:web": "bun build web/index.html --outdir web/dist --public-path=/ --watch",
+		"build": "bun build server/index.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Rabbit-Company/RabbitPay-Server.git"
+	},
+	"keywords": [
+		"rabbit",
+		"pay",
+		"payment",
+		"processor"
+	],
+	"author": "Rabbit Company",
+	"license": "Elastic-2.0",
+	"bugs": {
+		"url": "https://github.com/Rabbit-Company/RabbitPay-Server/issues"
+	},
+	"homepage": "https://github.com/Rabbit-Company/RabbitPay-Server#readme",
+	"devDependencies": {
+		"@types/bun": "^1.4.2",
+		"@types/nodemailer": "^8.0.2",
+		"@types/pdfkit": "^0.17.6"
+	},
+	"peerDependencies": {
+		"typescript": "latest"
+	},
+	"dependencies": {
+		"@rabbit-company/blake2b": "^2.1.0",
+		"@rabbit-company/logger": "^5.6.1",
+		"@rabbit-company/openmetrics-client": "^2.0.1",
+		"@rabbit-company/qrcode": "^1.2.0",
+		"@rabbit-company/totp": "^1.0.1",
+		"@rabbit-company/web": "^0.20.0",
+		"@rabbit-company/web-middleware": "^0.20.0",
+		"bip32": "^5.0.1",
+		"bitcoinjs-lib": "^7.0.2",
+		"ethereumjs-wallet": "^1.0.2",
+		"nodemailer": "^10.0.10",
+		"pdfkit": "^0.20.2",
+		"tiny-secp256k1": "^2.2.4"
+	}
+}
