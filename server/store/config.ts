@@ -322,9 +322,22 @@ export interface StoreSeller {
 	country: string | null;
 }
 
+type StoreLanguage = (typeof STORE_LANGUAGES)[number];
+
+interface DefaultTexts {
+	subtitle: string;
+	cta: string;
+	shipping: string;
+}
+
+const DEFAULT_TEXTS: Record<StoreLanguage, DefaultTexts> = {
+	en: { subtitle: "Discover what we have in store.", cta: "Shop now", shipping: "Standard delivery" },
+	sl: { subtitle: "Odkrijte našo ponudbo.", cta: "Nakupuj", shipping: "Standardna dostava" },
+};
+
 export function defaultStoreConfig(seller: StoreSeller): StoreConfig {
 	const language = seller.language === "sl" ? "sl" : "en";
-	const sl = language === "sl";
+	const texts = DEFAULT_TEXTS[language];
 	const weekday: StoreDayHours = { closed: false, open: "09:00", close: "17:00" };
 	const weekend: StoreDayHours = { closed: true, open: "09:00", close: "13:00" };
 	return {
@@ -335,8 +348,8 @@ export function defaultStoreConfig(seller: StoreSeller): StoreConfig {
 		announcement: null,
 		hero: {
 			title: seller.name,
-			subtitle: sl ? "Odkrijte našo ponudbo." : "Discover what we have in store.",
-			cta_label: sl ? "Nakupuj" : "Shop now",
+			subtitle: texts.subtitle,
+			cta_label: texts.cta,
 			cta_link: null,
 		},
 		theme: {
@@ -359,12 +372,42 @@ export function defaultStoreConfig(seller: StoreSeller): StoreConfig {
 			hours: [weekday, weekday, weekday, weekday, weekday, weekend, weekend],
 		},
 		socials: [],
-		shipping: [{ id: "standard", name: sl ? "Standardna dostava" : "Standard delivery", price: 0, free_from: null, min_days: 2, max_days: 4, pickup: false }],
+		shipping: [{ id: "standard", name: texts.shipping, price: 0, free_from: null, min_days: 2, max_days: 4, pickup: false }],
 		delivery: { min_days: 1, max_days: 3, business_days: true, cutoff_hour: 14 },
 		checkout: { payment_days: 3, business_customers: true, order_notes: true },
 		pages: legalPages(seller, seller.name, language),
 		footer_text: null,
 		indexable: true,
+	};
+}
+
+function undated(content: string): string {
+	return content.replace(/^(?:Valid from|Velja od) .*$/gm, "").trim();
+}
+
+export function localizeDefaults(config: StoreConfig, seller: StoreSeller, now = new Date()): StoreConfig {
+	const others = STORE_LANGUAGES.filter((language) => language !== config.language);
+	const target = DEFAULT_TEXTS[config.language];
+	const swap = (value: string | null, pick: (texts: DefaultTexts) => string) =>
+		value !== null && others.some((language) => pick(DEFAULT_TEXTS[language]) === value) ? pick(target) : value;
+
+	const templates = legalPages(seller, config.name, config.language, now);
+	const foreign = others.flatMap((language) => legalPages(seller, config.name, language, now));
+
+	return {
+		...config,
+		hero: { ...config.hero, subtitle: swap(config.hero.subtitle, (texts) => texts.subtitle), cta_label: swap(config.hero.cta_label, (texts) => texts.cta) },
+		shipping: config.shipping.map((option) => ({ ...option, name: swap(option.name, (texts) => texts.shipping) ?? option.name })),
+		pages: config.pages.map((page) => {
+			const template = templates.find((entry) => entry.slug === page.slug);
+			const matches = foreign.filter((entry) => entry.slug === page.slug);
+			if (!template || matches.length === 0) return page;
+			return {
+				...page,
+				title: matches.some((entry) => entry.title === page.title) ? template.title : page.title,
+				content: matches.some((entry) => undated(entry.content) === undated(page.content)) ? template.content : page.content,
+			};
+		}),
 	};
 }
 

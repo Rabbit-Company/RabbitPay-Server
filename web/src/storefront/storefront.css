@@ -2297,6 +2297,28 @@ body.sf-locked {
 	height: 18px;
 }
 
+.sf-language {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	color: var(--muted);
+	cursor: pointer;
+}
+.sf .sf-language-select {
+	width: auto;
+	padding: 0.3rem 0.5rem;
+	border: 1px solid var(--sf-line);
+	border-radius: calc(var(--sf-radius) * 0.6);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 0.83rem;
+	cursor: pointer;
+}
+.sf-drawer .sf-language {
+	padding: 0.5rem;
+}
+
 .sf-notice {
 	position: fixed;
 	left: 1rem;

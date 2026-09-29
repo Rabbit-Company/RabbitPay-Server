@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { markdownText, renderMarkdown, safeUrl } from "../server/markdown";
-import { defaultStoreConfig, isDomain, readStoreConfig, slugify, type StoreSeller } from "../server/store/config";
+import { defaultStoreConfig, isDomain, localizeDefaults, readStoreConfig, slugify, type StoreSeller } from "../server/store/config";
 import { numericClient } from "../server/database/client";
 import { MIGRATIONS, migrate } from "../server/database/migrations";
 
@@ -106,6 +106,37 @@ describe("store settings", () => {
 		expect(english[2].content).toContain("I/We (\\*) hereby give notice");
 		const foreign = defaultStoreConfig({ ...seller, language: "en", country: "AT" }).pages;
 		expect(foreign[0].content).not.toContain("Slovenska različica");
+	});
+
+	test("translates untouched default texts into the store language", () => {
+		const english = defaultStoreConfig({ ...seller, language: "en" });
+		const localized = localizeDefaults({ ...english, language: "sl" }, seller, new Date(Date.UTC(2027, 0, 5)));
+		expect(localized.hero.subtitle).toBe("Odkrijte našo ponudbo.");
+		expect(localized.hero.cta_label).toBe("Nakupuj");
+		expect(localized.shipping[0].name).toBe("Standardna dostava");
+		expect(localized.pages.map((page) => page.title)).toEqual(["Politika zasebnosti", "Splošni pogoji poslovanja", "Odstop od pogodbe"]);
+		expect(localized.pages[1].content).toContain("Naročilo z obveznostjo plačila");
+		expect(localized.pages[1].content).not.toContain("Order with obligation to pay");
+		expect(localized.pages[0].content).toContain("Velja od 5. januar 2027.");
+	});
+
+	test("keeps texts the merchant wrote when translating defaults", () => {
+		const english = defaultStoreConfig({ ...seller, language: "en" });
+		const custom = {
+			...english,
+			language: "sl" as const,
+			hero: { ...english.hero, subtitle: "Graphics cards at fair prices", cta_label: null },
+			shipping: [{ ...english.shipping[0], name: "Pošta Slovenije" }],
+			pages: english.pages.map((page, index) => (index === 0 ? { ...page, title: "Zasebnost", content: `${page.content}\n\nExtra clause.` } : page)),
+		};
+		const localized = localizeDefaults(custom, seller);
+		expect(localized.hero.subtitle).toBe("Graphics cards at fair prices");
+		expect(localized.hero.cta_label).toBeNull();
+		expect(localized.shipping[0].name).toBe("Pošta Slovenije");
+		expect(localized.pages[0].title).toBe("Zasebnost");
+		expect(localized.pages[0].content).toContain("Extra clause.");
+		expect(localized.pages[1].title).toBe("Splošni pogoji poslovanja");
+		expect(localizeDefaults(defaultStoreConfig(seller), seller)).toEqual(defaultStoreConfig(seller));
 	});
 
 	test("rejects unsafe or inconsistent settings", () => {

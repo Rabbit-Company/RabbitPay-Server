@@ -1,7 +1,8 @@
 import { accentTextFor } from "../../../server/colors";
+import { ApiError } from "../api";
 import { el } from "../dom";
-import { forceLanguage, t } from "../i18n";
-import { navigate, onLeave } from "../router";
+import { errorText, forceLanguage, isUiLanguage, language, processorLabel, t, UI_LANGUAGES, type UiLanguage } from "../i18n";
+import { navigate, onLeave, render } from "../router";
 import { applyTheme } from "../theme";
 import { logo } from "../logo";
 import { StoreApi, type ProductCard, type StoreCategoryNode, type Storefront } from "./api";
@@ -12,6 +13,29 @@ import { money, openState, percentOff, weekdayName } from "./format";
 
 const CACHE_MS = 60 * 1000;
 const NOTICE_KEY = "rabbitpay.store.notice";
+
+function languageKey(slug: string): string {
+	return `rabbitpay.store.${slug}.language`;
+}
+
+function visitorLanguage(slug: string): UiLanguage | null {
+	try {
+		const stored = localStorage.getItem(languageKey(slug));
+		return isUiLanguage(stored) ? stored : null;
+	} catch {
+		return null;
+	}
+}
+
+function chooseLanguage(slug: string, next: UiLanguage) {
+	try {
+		localStorage.setItem(languageKey(slug), next);
+	} catch {
+		void 0;
+	}
+	forceLanguage(next);
+	void render();
+}
 
 const FONTS: Record<string, string> = {
 	system: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
@@ -41,6 +65,7 @@ export async function storeContext(slug: string): Promise<StoreContext> {
 	const cached = cache.get(slug);
 	const store = cached && Date.now() - cached.loaded < CACHE_MS ? cached.store : await StoreApi.store(slug);
 	cache.set(slug, { store, loaded: Date.now() });
+	forceLanguage(visitorLanguage(slug) ?? store.config.language);
 	const base = domainStore() === slug ? "" : `/shop/${slug}`;
 	return {
 		store,
@@ -59,7 +84,6 @@ function applyStoreTheme(store: Storefront) {
 	else root.dataset.theme = theme.mode;
 	root.style.setProperty("--accent", theme.accent);
 	root.style.setProperty("--accent-text", accentTextFor(theme.accent));
-	forceLanguage(store.config.language);
 
 	let custom = document.getElementById("sf-custom-css");
 	if (theme.custom_css.trim()) {
@@ -211,7 +235,9 @@ function drawer(ctx: StoreContext): { open: () => void; element: HTMLElement } {
 		el("a", { class: "sf-drawer-link", href: ctx.link("/account") }, icon("user", 18), t("shop.account")),
 		...ctx.store.config.pages
 			.filter((page) => page.footer)
-			.map((page) => el("a", { class: "sf-drawer-link", href: ctx.link(`/page/${page.slug}`) }, page.title))
+			.map((page) => el("a", { class: "sf-drawer-link", href: ctx.link(`/page/${page.slug}`) }, page.title)),
+		el("div", { class: "sf-divider" }),
+		languagePicker(ctx)
 	);
 	return {
 		element: overlay,
@@ -221,6 +247,24 @@ function drawer(ctx: StoreContext): { open: () => void; element: HTMLElement } {
 			panel.querySelector("input")?.focus();
 		},
 	};
+}
+
+function languagePicker(ctx: StoreContext): HTMLElement {
+	const current = language();
+	const picker = el(
+		"select",
+		{ class: "sf-language-select" },
+		...UI_LANGUAGES.map((option) => {
+			const entry = el("option", { value: option.value }, option.label);
+			entry.selected = option.value === current;
+			return entry;
+		})
+	);
+	picker.setAttribute("aria-label", t("app.language"));
+	picker.addEventListener("change", () => {
+		if (isUiLanguage(picker.value) && picker.value !== current) chooseLanguage(ctx.store.slug, picker.value);
+	});
+	return el("label", { class: "sf-language", title: t("app.language") }, icon("globe", 16), picker);
 }
 
 function header(ctx: StoreContext): HTMLElement[] {
@@ -320,12 +364,10 @@ function footer(ctx: StoreContext): HTMLElement {
 				{ class: "sf-socials" },
 				...config.socials.map((social) => {
 					const href = social.network === "email" ? `mailto:${social.url}` : social.url;
-					const anchor = el(
-						"a",
-						{ class: "sf-social", href, target: "_blank", rel: "noopener noreferrer me", title: SOCIAL_LABELS[social.network] },
-						socialIcon(social.network, 20)
-					);
-					anchor.setAttribute("aria-label", SOCIAL_LABELS[social.network]);
+					const label =
+						social.network === "email" ? t("shop.social_email") : social.network === "website" ? t("shop.social_website") : SOCIAL_LABELS[social.network];
+					const anchor = el("a", { class: "sf-social", href, target: "_blank", rel: "noopener noreferrer me", title: label }, socialIcon(social.network, 20));
+					anchor.setAttribute("aria-label", label);
 					return anchor;
 				})
 			)
@@ -382,8 +424,9 @@ function footer(ctx: StoreContext): HTMLElement {
 			"div",
 			{ class: "sf-container sf-footer-bottom" },
 			el("span", {}, legal.join(" | ")),
+			languagePicker(ctx),
 			store.payment_methods.length
-				? el("div", { class: "sf-methods" }, ...store.payment_methods.map((method) => el("span", { class: "sf-method" }, method.label)))
+				? el("div", { class: "sf-methods" }, ...store.payment_methods.map((method) => el("span", { class: "sf-method" }, processorLabel(method.processor))))
 				: null,
 			store.branding.white_label
 				? null
@@ -639,7 +682,7 @@ export function markdownBlock(html: string): HTMLElement {
 }
 
 export function storeError(error: unknown): HTMLElement {
-	const message = error instanceof Error ? error.message : t("ui.load_failed");
+	const message = error instanceof ApiError ? errorText(error.code, error.message) : error instanceof Error ? error.message : t("ui.load_failed");
 	return el(
 		"div",
 		{ class: "sf-closed-store" },

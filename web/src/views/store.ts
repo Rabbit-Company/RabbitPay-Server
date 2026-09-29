@@ -1,7 +1,7 @@
 import { Api, type Project, type StoreConfig, type StoreState } from "../api";
 import { el, field, input, select } from "../dom";
 import { t, type UiKey } from "../i18n";
-import { currentPath } from "../router";
+import { currentPath, render } from "../router";
 import { confirmDialog, reportError, toast } from "../ui";
 import { can, Permission } from "../access";
 import { formatDate, formatMoney, toMajorUnits, toMinorUnits } from "../money";
@@ -347,6 +347,15 @@ function hoursEditor(hours: StoreDayHours[]) {
 	return { element: el("div", { class: "hours-editor" }, ...rows.map((row) => row.element)), read: () => rows.map((row) => row.read()) };
 }
 
+function localizedTexts(config: StoreConfig): string {
+	return JSON.stringify([
+		config.hero.subtitle,
+		config.hero.cta_label,
+		config.shipping.map((option) => option.name),
+		config.pages.map((page) => [page.title, page.content.trim()]),
+	]);
+}
+
 function settingsForm(project: Project, state: StoreState): HTMLElement {
 	const uuid = project.uuid;
 	const config = state.config;
@@ -497,14 +506,16 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 				event.preventDefault();
 				submit.disabled = true;
 				try {
+					const submitted = read();
 					const saved = await Api.saveStore(uuid, {
 						slug: slug.value.trim(),
 						domain: text(domain.value.toLowerCase()),
 						enabled: enabled.input.checked,
-						config: read(),
+						config: submitted,
 					});
 					toast(state.exists ? t("store.saved") : t("store.created"), "success");
 					Object.assign(state, saved);
+					if (localizedTexts(saved.config) !== localizedTexts(submitted)) void render();
 				} catch (error) {
 					reportError(error);
 				} finally {

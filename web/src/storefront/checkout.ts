@@ -3,7 +3,7 @@ import { CustomerApi, clearCustomerSession, customerToken, type CustomerOrder, t
 import { customerForm, addressForm, type CustomerForm } from "../customer-forms";
 import { privacyActions, profileEditor } from "../views/customer-profile";
 import { el, field } from "../dom";
-import { statusLabel, t, tn, type UiKey } from "../i18n";
+import { processorLabel, statusLabel, t, tn, type UiKey } from "../i18n";
 import { navigate } from "../router";
 import { reportError, toast } from "../ui";
 import { ErrorCode } from "../../../server/errors";
@@ -134,7 +134,11 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 					t("shop.checkout")
 				),
 				ctx.store.payment_methods.length
-					? el("div", { class: "sf-methods" }, ...ctx.store.payment_methods.map((method) => el("span", { class: "sf-method" }, method.label)))
+					? el(
+							"div",
+							{ class: "sf-methods" },
+							...ctx.store.payment_methods.map((method) => el("span", { class: "sf-method" }, processorLabel(method.processor)))
+						)
 					: null
 			)
 		);

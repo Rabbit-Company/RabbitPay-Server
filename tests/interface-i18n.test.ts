@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { en } from "../web/src/i18n/en";
 import { sl } from "../web/src/i18n/sl";
+import Errors from "../server/errors";
 import {
 	DEFAULT_UI_LANGUAGE,
 	UI_LANGUAGES,
@@ -115,5 +116,11 @@ describe("the interface dictionaries", () => {
 
 	test("holds one dictionary per offered language", () => {
 		for (const language of UI_LANGUAGES) expect(Object.keys(DICTIONARIES[language.value]).length).toBe(KEYS.length);
+	});
+
+	test("translates only error codes the server can return", () => {
+		const codes = KEYS.filter((key) => key.startsWith("error.")).map((key) => Number(key.slice("error.".length)));
+		expect(codes.length).toBeGreaterThan(10);
+		for (const code of codes) expect(Errors.get(code), `error.${code}`).toBeDefined();
 	});
 });

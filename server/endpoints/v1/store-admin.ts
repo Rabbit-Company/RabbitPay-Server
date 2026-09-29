@@ -17,8 +17,8 @@ import { orderUpdateEmail } from "../../email/templates";
 import { deliverSoon, queueEmail } from "../../email/outbox";
 import { MAX_MARKDOWN_LENGTH } from "../../markdown";
 import { legalPages } from "../../store/legal";
-import { isDomain, isSlug, isWebUrl, readStoreConfig, slugify } from "../../store/config";
-import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, settingsFor } from "../../store/store";
+import { isDomain, isSlug, isWebUrl, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
+import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, sellerFor, settingsFor } from "../../store/store";
 import { imagesOf, MAX_PRODUCT_IMAGES, readStoreImage, removeStoreImages, STORE_IMAGE_BODY_LIMIT, storeImage } from "../../store/images";
 import { attributesOf, categoriesOf, descendantsOf } from "../../store/catalog";
 import { cancelOrder, findOrder, isFulfillment, orderItems, presentOrder, type OrderRow } from "../../store/orders";
@@ -121,7 +121,7 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 
 	const previous = await settingsFor(project.uuid);
 	const now = Date.now();
-	const stored = JSON.stringify(config);
+	const stored = JSON.stringify(localizeDefaults(config, await sellerFor(project)));
 	try {
 		if (previous) {
 			await Database`

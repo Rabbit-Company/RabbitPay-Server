@@ -1,6 +1,6 @@
 import { el, clear } from "./dom";
 import { ApiError } from "./api";
-import { t } from "./i18n";
+import { errorText, t } from "./i18n";
 import { icon } from "./storefront/icons";
 
 let toastHost: HTMLElement | null = null;
@@ -86,7 +86,7 @@ export function toast(message: string, variant: "success" | "error" | "info" = "
 
 export function reportError(error: unknown) {
 	if (error instanceof ApiError) {
-		toast(error.message, "error");
+		toast(errorText(error.code, error.message), "error");
 		return;
 	}
 	toast(t("ui.error_generic"), "error");

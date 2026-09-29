@@ -80,6 +80,11 @@ export function has(key: string): key is UiKey {
 	return hasKey(key);
 }
 
+export function errorText(code: number, fallback: string): string {
+	const key = `error.${code}`;
+	return has(key) ? t(key) : fallback;
+}
+
 export function statusLabel(status: string): string {
 	const key = `status.${status}`;
 	return has(key) ? t(key) : status.replace(/_/g, " ");

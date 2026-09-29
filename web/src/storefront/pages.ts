@@ -1,5 +1,5 @@
 import { el, field } from "../dom";
-import { t, tn, type UiKey } from "../i18n";
+import { processorLabel, t, tn, type UiKey } from "../i18n";
 import { reportError } from "../ui";
 import { readLicenseChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
 import { navigate, onLeave } from "../router";
@@ -105,7 +105,7 @@ function perks(ctx: StoreContext): HTMLElement {
 			title: t("shop.perk_secure"),
 			body: methods.length
 				? methods
-						.map((method) => method.label)
+						.map((method) => processorLabel(method.processor))
 						.slice(0, 4)
 						.join(", ")
 				: t("shop.perk_secure_body"),
