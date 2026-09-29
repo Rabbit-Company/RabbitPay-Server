@@ -1,5 +1,6 @@
 import type { Context } from "@rabbit-company/web";
 import { bodyLimit } from "@rabbit-company/web-middleware/body-limit";
+import { rateLimit } from "@rabbit-company/web-middleware/rate-limit";
 import { Server } from "../../server";
 import Database from "../../database/database";
 import Auth from "../../auth";
@@ -8,6 +9,7 @@ import Permissions from "../../permissions";
 import Utils from "../../utils";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
+import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { hasStorageCapacity, licensingEnforced, storeActive } from "../../licensing";
 import { canEmail } from "../../email/mailer";
@@ -17,8 +19,9 @@ import { orderUpdateEmail } from "../../email/templates";
 import { deliverSoon, queueEmail } from "../../email/outbox";
 import { MAX_MARKDOWN_LENGTH } from "../../markdown";
 import { legalPages } from "../../store/legal";
-import { isDomain, isSlug, isWebUrl, legalLanguage, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
-import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, sellerFor, settingsFor, storeUrl } from "../../store/store";
+import { checkDomain, connectDomain, DomainProvisioningFailed, domainOf, domainsAvailable, domainState, removeDomain } from "../../store/domains";
+import { isSlug, isWebUrl, legalLanguage, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
+import { brandImages, draftFor, forgetDomains, imagePath, sellerFor, settingsFor, storeUrl } from "../../store/store";
 import { imagesOf, MAX_PRODUCT_IMAGES, readStoreImage, removeStoreImages, STORE_IMAGE_BODY_LIMIT, storeImage } from "../../store/images";
 import { attributesOf, categoriesOf, descendantsOf } from "../../store/catalog";
 import { cancelOrder, findOrder, isFulfillment, orderItems, presentOrder, type OrderRow } from "../../store/orders";
@@ -120,24 +123,12 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 
 	const config = readStoreConfig(data.config);
 	const slug = data.slug;
-	const domain =
-		data.domain === null || data.domain === undefined || data.domain === ""
-			? null
-			: typeof data.domain === "string"
-				? data.domain.trim().toLowerCase()
-				: undefined;
-	if (!config || !isSlug(slug, 60) || domain === undefined || typeof data.enabled !== "boolean") return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
-	if (domain !== null && (!isDomain(domain) || domain === normalizeHost(new URL(Utils.publicUrl()).host)))
-		return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
+	if (!config || !isSlug(slug, 60) || typeof data.enabled !== "boolean") return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
 
 	if (!(await storeLanguages(project.uuid)).some((language) => language.code === config.language)) return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
 
 	const [slugOwner] = (await Database`SELECT project FROM store_settings WHERE slug = ${slug} AND project != ${project.uuid}`) as { project: string }[];
 	if (slugOwner) return Utils.fail(ctx, ErrorCode.STORE_SLUG_TAKEN);
-	if (domain !== null) {
-		const [domainOwner] = (await Database`SELECT project FROM store_settings WHERE domain = ${domain} AND project != ${project.uuid}`) as { project: string }[];
-		if (domainOwner) return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_TAKEN);
-	}
 
 	const previous = await settingsFor(project.uuid);
 	const now = Date.now();
@@ -145,13 +136,13 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 	try {
 		if (previous) {
 			await Database`
-				UPDATE store_settings SET slug = ${slug}, domain = ${domain}, enabled = ${data.enabled ? 1 : 0}, config = ${stored}, updated = ${now}
+				UPDATE store_settings SET slug = ${slug}, enabled = ${data.enabled ? 1 : 0}, config = ${stored}, updated = ${now}
 				WHERE project = ${project.uuid}
 			`;
 		} else {
 			await Database`
 				INSERT INTO store_settings(project, slug, domain, enabled, config, created, updated)
-				VALUES(${project.uuid}, ${slug}, ${domain}, ${data.enabled ? 1 : 0}, ${stored}, ${now}, ${now})
+				VALUES(${project.uuid}, ${slug}, NULL, ${data.enabled ? 1 : 0}, ${stored}, ${now}, ${now})
 			`;
 		}
 	} catch {
@@ -164,11 +155,85 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 		action: previous ? "store.updated" : "store.created",
 		entityType: "store",
 		entityId: project.uuid,
-		oldValue: previous ? { slug: previous.slug, domain: previous.domain, enabled: Boolean(previous.enabled) } : undefined,
-		newValue: { slug, domain, enabled: data.enabled },
+		oldValue: previous ? { slug: previous.slug, enabled: Boolean(previous.enabled) } : undefined,
+		newValue: { slug, enabled: data.enabled },
 	});
 
 	return Utils.ok(ctx, await storeState(project));
+});
+
+const domainLimit = rateLimit({ windowMs: 60 * 1000, max: 20, message: "Too many domain checks. Please wait a minute." });
+
+Server.app.get(`${base}/domain`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
+	return Utils.ok(ctx, await domainState(Permissions.project(ctx).uuid));
+});
+
+Server.app.post(`${base}/domain`, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), domainLimit, async (ctx) => {
+	const project = Permissions.project(ctx);
+	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.STORE_LICENSE_REQUIRED);
+	if (!(await settingsFor(project.uuid))) return Utils.fail(ctx, ErrorCode.STORE_NOT_FOUND);
+	const data = await readJson(ctx);
+
+	let connected: Awaited<ReturnType<typeof connectDomain>>;
+	try {
+		connected = await connectDomain(project.uuid, data?.hostname);
+	} catch (error) {
+		if (!(error instanceof DomainProvisioningFailed)) throw error;
+		Logger.warn(`[DOMAINS] Connecting a domain for ${project.uuid} failed: ${error.message}`);
+		return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_PROVISIONING_FAILED);
+	}
+	if (connected === "unavailable") return Utils.fail(ctx, ErrorCode.STORE_DOMAINS_UNAVAILABLE);
+	if (connected === "invalid") return Utils.fail(ctx, ErrorCode.INVALID_STORE_DOMAIN);
+	if (connected === "exists") return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_EXISTS);
+	if (connected === "taken") return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_TAKEN);
+
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "store.domain_connected",
+		entityType: "store",
+		entityId: project.uuid,
+		newValue: { hostname: connected.hostname, provider: connected.provider },
+	});
+	return Utils.ok(ctx, await domainState(project.uuid));
+});
+
+Server.app.post(`${base}/domain/check`, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), domainLimit, async (ctx) => {
+	const project = Permissions.project(ctx);
+	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.STORE_LICENSE_REQUIRED);
+	if (!domainsAvailable()) return Utils.fail(ctx, ErrorCode.STORE_DOMAINS_UNAVAILABLE);
+	const domain = await domainOf(project.uuid);
+	if (!domain) return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_NOT_FOUND);
+	const checked = await checkDomain(domain);
+	if (checked.status === "active" && domain.status !== "active") {
+		await Audit.record(ctx, {
+			project: project.uuid,
+			action: "store.domain_activated",
+			entityType: "store",
+			entityId: project.uuid,
+			newValue: { hostname: checked.hostname },
+		});
+	}
+	return Utils.ok(ctx, await domainState(project.uuid));
+});
+
+Server.app.delete(`${base}/domain`, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const domain = await domainOf(project.uuid);
+	if (!domain) return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_NOT_FOUND);
+	try {
+		await removeDomain(domain);
+	} catch (error) {
+		if (!(error instanceof DomainProvisioningFailed)) throw error;
+		return Utils.fail(ctx, ErrorCode.STORE_DOMAIN_PROVISIONING_FAILED);
+	}
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "store.domain_removed",
+		entityType: "store",
+		entityId: project.uuid,
+		oldValue: { hostname: domain.hostname },
+	});
+	return Utils.ok(ctx, await domainState(project.uuid));
 });
 
 async function languagesState(project: ProjectRow) {

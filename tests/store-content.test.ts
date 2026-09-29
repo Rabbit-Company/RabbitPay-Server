@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { markdownText, renderMarkdown, safeUrl } from "../server/markdown";
-import { defaultStoreConfig, isDomain, localizeDefaults, readStoreConfig, slugify, type StoreSeller } from "../server/store/config";
+import { defaultStoreConfig, localizeDefaults, readStoreConfig, slugify, type StoreSeller } from "../server/store/config";
 import { numericClient } from "../server/database/client";
 import { MIGRATIONS, migrate } from "../server/database/migrations";
 
@@ -153,13 +153,9 @@ describe("store settings", () => {
 		expect(readStoreConfig({ ...config, theme: { ...config.theme, custom_css: "x".repeat(20_001) } })).toBeNull();
 	});
 
-	test("makes web addresses from names and checks custom domains", () => {
+	test("makes web addresses from names", () => {
 		expect(slugify("Grafične kartice & RX 9060 XT")).toBe("graficne-kartice-rx-9060-xt");
 		expect(slugify("!!!")).toBe("item");
-		expect(isDomain("shop.example.com")).toBe(true);
-		expect(isDomain("localhost")).toBe(false);
-		expect(isDomain("Shop.Example.com")).toBe(false);
-		expect(isDomain("shop..example.com")).toBe(false);
 	});
 });
 

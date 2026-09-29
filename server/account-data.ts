@@ -1,4 +1,5 @@
 import Database from "./database/database";
+import { releaseProjectDomain } from "./store/domains";
 import TwoFactor from "./two-factor";
 import type { AccountRow } from "./database/models";
 
@@ -53,6 +54,7 @@ export async function deleteAccount(username: string, plan: DeletionPlan): Promi
 		await tx`UPDATE audit_log SET ip_address = NULL, user_agent = NULL WHERE account = ${username}`;
 		await tx`DELETE FROM accounts WHERE username = ${username}`;
 	});
+	for (const project of plan.closing) await releaseProjectDomain(project.uuid);
 }
 
 export async function exportAccount(account: AccountRow) {

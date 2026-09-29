@@ -1,4 +1,4 @@
-import { Api, type Project, type StoreConfig, type StoreState } from "../api";
+import { Api, type Project, type StoreConfig, type StoreDomainState, type StoreState } from "../api";
 import { el, field, input, select } from "../dom";
 import { t, type UiKey } from "../i18n";
 import { currentPath, render } from "../router";
@@ -399,7 +399,6 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 	const description = el("textarea", { rows: "2", maxlength: "500", placeholder: t("store.description_placeholder") });
 	description.value = config.description ?? "";
 	const slug = input("text", { value: state.slug, required: true, maxlength: "60" });
-	const domain = input("text", { value: state.domain ?? "", maxlength: "253", placeholder: "shop.example.com" });
 	const language = select(
 		state.languages.map((entry) => ({ value: entry.code, label: entry.name })),
 		config.language
@@ -537,7 +536,6 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 					const submitted = read();
 					const saved = await Api.saveStore(uuid, {
 						slug: slug.value.trim(),
-						domain: text(domain.value.toLowerCase()),
 						enabled: enabled.input.checked,
 						config: submitted,
 					});
@@ -558,7 +556,7 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 			el("div", { class: "form-grid" }, field(t("store.name"), name), field(t("store.language"), language, t("store.language_hint"))),
 			field(t("store.tagline"), tagline),
 			field(t("store.description"), description, t("store.description_hint")),
-			el("div", { class: "form-grid" }, field(t("store.slug"), slug, t("store.slug_hint")), field(t("store.domain"), domain, t("store.domain_hint"))),
+			el("div", { class: "form-grid" }, field(t("store.slug"), slug, t("store.slug_hint"))),
 			el("p", { class: "muted" }, t("store.address_label"), " ", address),
 			field(t("store.announcement"), announcement),
 			indexable.element
@@ -620,6 +618,173 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 	return form;
 }
 
+const DOMAIN_PILLS: Record<NonNullable<StoreDomainState["domain"]>["status"], string> = {
+	pending: "pending",
+	provisioning: "pending",
+	error: "overdue",
+	active: "active",
+};
+
+async function copyValue(value: string) {
+	try {
+		await navigator.clipboard.writeText(value);
+		toast(t("ui.copied"), "success");
+	} catch {
+		toast(t("ui.copy_failed"), "error");
+	}
+}
+
+function domainRecords(domain: NonNullable<StoreDomainState["domain"]>): HTMLElement {
+	return el(
+		"div",
+		{ class: "table-wrap" },
+		el(
+			"table",
+			{ class: "domain-records" },
+			el(
+				"thead",
+				{},
+				el("tr", {}, el("th", {}, t("store.domain_type")), el("th", {}, t("store.domain_name")), el("th", {}, t("store.domain_value")), el("th", {}))
+			),
+			el(
+				"tbody",
+				{},
+				...domain.records.map((record) =>
+					el(
+						"tr",
+						{},
+						el("td", {}, record.type),
+						el("td", { class: "mono" }, record.name),
+						el("td", { class: "mono" }, record.value),
+						el("td", {}, el("button", { class: "button ghost small", type: "button", onClick: () => void copyValue(record.value) }, t("ui.copy")))
+					)
+				)
+			)
+		)
+	);
+}
+
+function domainCard(project: Project, state: StoreState): HTMLElement {
+	const card = el("div", { class: "card stack" });
+	const editable = can(project, Permission.PROJECT_EDIT) && (state.license.active || !state.license.enforced);
+
+	const show = (current: StoreDomainState) => {
+		const heading = el("div", {}, el("h2", {}, t("store.domain")), el("p", { class: "muted" }, t("store.domain_hint")));
+		const domain = current.domain;
+		if (!domain) {
+			if (!current.available) return card.replaceChildren(heading, el("p", { class: "muted" }, t("store.domain_unavailable")));
+			const hostname = input("text", { required: true, maxlength: "253", placeholder: "shop.example.com", autocomplete: "off" });
+			const connect = el("button", { class: "button primary", type: "submit", disabled: !editable }, t("store.domain_connect"));
+			const form = el(
+				"form",
+				{
+					class: "domain-connect",
+					onSubmit: async (event) => {
+						event.preventDefault();
+						connect.disabled = true;
+						try {
+							show(await Api.connectStoreDomain(project.uuid, hostname.value.trim()));
+						} catch (error) {
+							reportError(error);
+							connect.disabled = !editable;
+						}
+					},
+				},
+				hostname,
+				connect
+			);
+			return card.replaceChildren(heading, form);
+		}
+
+		const remove = el(
+			"button",
+			{
+				class: "button ghost danger",
+				type: "button",
+				disabled: !can(project, Permission.PROJECT_EDIT),
+				onClick: async () => {
+					const confirmed = await confirmDialog({
+						title: t("store.domain_remove_title", { domain: domain.hostname }),
+						body: t("store.domain_remove_body", { domain: domain.hostname }),
+						confirmLabel: t("store.domain_remove"),
+						destructive: true,
+					});
+					if (!confirmed) return;
+					try {
+						show(await Api.removeStoreDomain(project.uuid));
+						state.domain = null;
+						state.domain_url = null;
+					} catch (error) {
+						reportError(error);
+					}
+				},
+			},
+			t("store.domain_remove")
+		);
+		const title = el(
+			"div",
+			{ class: "domain-title" },
+			domain.status === "active"
+				? el("a", { class: "mono", href: `https://${domain.hostname}`, target: "_blank", rel: "noopener" }, domain.hostname)
+				: el("strong", { class: "mono" }, domain.hostname),
+			el("span", { class: `pill pill-${DOMAIN_PILLS[domain.status]}` }, t(`store.domain_status_${domain.status}`))
+		);
+
+		if (domain.status === "active") {
+			return card.replaceChildren(
+				heading,
+				title,
+				el("p", {}, t("store.domain_active", { domain: domain.hostname })),
+				el("div", { class: "form-actions start" }, remove)
+			);
+		}
+
+		const check = el(
+			"button",
+			{
+				class: "button primary",
+				type: "button",
+				disabled: !editable,
+				onClick: async () => {
+					check.disabled = true;
+					try {
+						const checked = await Api.checkStoreDomain(project.uuid);
+						const active = checked.domain?.status === "active";
+						toast(t(active ? "store.domain_checked_active" : "store.domain_checked_waiting"), active ? "success" : "info");
+						if (active) {
+							state.domain = checked.domain!.hostname;
+							state.domain_url = `https://${checked.domain!.hostname}`;
+						}
+						show(checked);
+					} catch (error) {
+						reportError(error);
+						check.disabled = !editable;
+					}
+				},
+			},
+			t("store.domain_check")
+		);
+		card.replaceChildren(
+			heading,
+			title,
+			...(domain.status === "error" ? [el("p", { class: "warn-text" }, t("store.domain_error_hint"))] : []),
+			el("p", {}, t("store.domain_records")),
+			domainRecords(domain),
+			el("p", { class: "muted" }, t("store.domain_apex", { target: current.target })),
+			el("div", { class: "form-actions start" }, check, remove)
+		);
+	};
+
+	card.append(el("p", { class: "muted" }, t("ui.loading")));
+	Api.storeDomain(project.uuid)
+		.then(show)
+		.catch((error) => {
+			card.replaceChildren(el("p", { class: "muted" }, t("ui.load_failed")));
+			reportError(error);
+		});
+	return card;
+}
+
 function overviewCard(project: Project, state: StoreState): HTMLElement {
 	const stat = (value: string, label: string) =>
 		el("div", { class: "card stat" }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label));
@@ -658,5 +823,7 @@ function overviewCard(project: Project, state: StoreState): HTMLElement {
 }
 
 export async function storeSettingsView(uuid: string): Promise<HTMLElement> {
-	return storeSection(uuid, (project, state) => el("div", { class: "stack" }, overviewCard(project, state), settingsForm(project, state)));
+	return storeSection(uuid, (project, state) =>
+		el("div", { class: "stack" }, overviewCard(project, state), state.exists ? domainCard(project, state) : null, settingsForm(project, state))
+	);
 }

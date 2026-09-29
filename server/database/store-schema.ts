@@ -311,3 +311,29 @@ export async function createStoreLanguageSchema(sql: SQL, dialect: Dialect) {
 export async function addStoreProductNames(sql: SQL, dialect: Dialect) {
 	await sql.unsafe(`ALTER TABLE store_products ADD COLUMN name ${schemaTypes(dialect).text("store_name")}`);
 }
+
+export async function createStoreDomainSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS store_domains(
+					project ${types.text("project")} PRIMARY KEY,
+					hostname ${types.text("domain")} NOT NULL UNIQUE,
+					provider ${types.text("processor")} NOT NULL,
+					status ${types.text("status")} NOT NULL,
+					provider_hostname_id ${types.text("reference")},
+					gateway_site_id ${types.text("reference")},
+					verification_records ${types.text("verification_records")} NOT NULL,
+					last_error ${types.text("last_error")},
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					activated ${types.int64},
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					CHECK (provider IN ('manual', 'burrowgate', 'cloudflare')),
+					CHECK (status IN ('pending', 'provisioning', 'active', 'error'))
+				)`,
+	]);
+	await sql`
+		INSERT INTO store_domains(project, hostname, provider, status, verification_records, created, updated, activated)
+		SELECT project, domain, 'manual', 'active', '[]', updated, updated, updated FROM store_settings WHERE domain IS NOT NULL
+	`;
+}

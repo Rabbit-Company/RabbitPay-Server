@@ -6,6 +6,8 @@ export type RegistrationMode = "open" | "invite" | "closed";
 
 export type VatStatus = "not_registered" | "registered";
 
+export type DomainProvider = "disabled" | "manual" | "burrowgate" | "cloudflare";
+
 export type ProxyPreset = "direct" | "nginx" | "burrowgate" | "cloudflare" | "aws" | "gcp" | "azure" | "vercel" | "development";
 
 interface CacheScope {
@@ -33,6 +35,17 @@ export interface ServerSettings {
 		path: string;
 		landing_page: boolean;
 		license_store_url: string;
+	};
+	domains: {
+		provider: DomainProvider;
+		target: string;
+		cloudflare_api_token: string;
+		cloudflare_zone_id: string;
+		burrowgate_url: string;
+		burrowgate_admin_token: string;
+		burrowgate_site_id: string;
+		burrowgate_origin: string;
+		acme_email: string;
 	};
 	cache: {
 		local: CacheScope;
@@ -181,6 +194,17 @@ export interface ServerSettings {
 export const DEFAULT_SETTINGS: ServerSettings = {
 	server: { hostname: "0.0.0.0", port: 8085, proxy: "direct", trusted_proxies: "", burrowgate_secret: "", public_url: "http://localhost:8085" },
 	web: { enabled: true, path: "./web/dist", landing_page: true, license_store_url: "" },
+	domains: {
+		provider: "manual",
+		target: "",
+		cloudflare_api_token: "",
+		cloudflare_zone_id: "",
+		burrowgate_url: "",
+		burrowgate_admin_token: "",
+		burrowgate_site_id: "",
+		burrowgate_origin: "",
+		acme_email: "",
+	},
 	cache: {
 		local: { adapter: "memory", redis: { url: "redis://localhost/", options: { connectionTimeout: 500 } }, file: { path: "./data/cache/local" } },
 		external: { adapter: "memory", redis: { url: "redis://localhost/", options: { connectionTimeout: 2000 } }, file: { path: "./data/cache/external" } },
@@ -392,6 +416,59 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				kind: "text",
 				url: true,
 			},
+		],
+	},
+	{
+		id: "domains",
+		label: "Store domains",
+		description:
+			"How online stores connect their own domain. Every mode first checks a TXT record that proves the merchant owns the domain. Automatic modes then create the routing and HTTPS certificate for it.",
+		fields: [
+			{
+				key: "domains.provider",
+				label: "Provisioning",
+				kind: "choice",
+				choices: [
+					{ value: "manual", label: "Manual. RabbitPay checks DNS, you configure the proxy and certificate" },
+					{ value: "burrowgate", label: "BurrowGate. Creates a site and a Let's Encrypt certificate for each domain" },
+					{ value: "cloudflare", label: "Cloudflare for SaaS in front of BurrowGate" },
+					{ value: "disabled", label: "Disabled" },
+				],
+			},
+			{
+				key: "domains.target",
+				label: "DNS target",
+				hint: "Hostname merchants point their CNAME record at, such as customers.example.com. Empty uses the host of the public URL.",
+				kind: "text",
+			},
+			{
+				key: "domains.cloudflare_api_token",
+				label: "Cloudflare API token",
+				hint: "Zone token with SSL and Certificates Edit on the SaaS zone",
+				kind: "secret",
+			},
+			{ key: "domains.cloudflare_zone_id", label: "Cloudflare zone id", kind: "text" },
+			{ key: "domains.burrowgate_url", label: "BurrowGate URL", hint: "Address of the BurrowGate admin API", kind: "text", url: true },
+			{
+				key: "domains.burrowgate_admin_token",
+				label: "BurrowGate admin token",
+				hint: "Needs permission to list, create and remove sites and manage their certificates",
+				kind: "secret",
+			},
+			{
+				key: "domains.burrowgate_site_id",
+				label: "BurrowGate site id",
+				hint: "The site that serves RabbitPay. Its private origin is reused for every store domain.",
+				kind: "text",
+			},
+			{
+				key: "domains.burrowgate_origin",
+				label: "Private origin",
+				hint: "Fallback origin, such as http://127.0.0.1:8085, when the site above cannot be read. Never the public URL.",
+				kind: "text",
+				url: true,
+			},
+			{ key: "domains.acme_email", label: "Let's Encrypt email", kind: "text" },
 		],
 	},
 	{

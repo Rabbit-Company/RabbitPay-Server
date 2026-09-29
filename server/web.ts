@@ -148,6 +148,9 @@ async function storefrontShell(html: string, url: URL, host: string | null): Pro
 		const store = await storeBySlug(request.slug);
 		if (store === null && !request.domain) return { body: applicationHtml(html, url.pathname), status: 404 };
 		if (store === null) return { body: storefrontHtml(html, request, null), status: 200 };
+		if (!request.domain && store.settings.domain !== null) {
+			return { body: "", status: 302, redirect: `https://${store.settings.domain}${request.path}${url.search}` };
+		}
 		const location = await storeLocation(store, request.path, url.searchParams, storeRoot(request.slug, request.domain));
 		if ("redirect" in location) return { body: "", status: 301, redirect: location.redirect };
 		const meta = await storePageMeta(store, location.path, location.language);

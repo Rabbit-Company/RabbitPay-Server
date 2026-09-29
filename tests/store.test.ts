@@ -19,6 +19,7 @@ const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode, storageFor } = await import("../server/licensing");
 const { expireUnpaidOrders, issuePaidDrafts, UNPAID_ORDER_GRACE_DAYS } = await import("../server/paid-drafts");
+const { forgetDomains } = await import("../server/store/store");
 
 Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
 
@@ -63,6 +64,13 @@ async function redeemStore(projectId: string, days = 30) {
 		VALUES(${crypto.randomUUID()}, ${code}, 'store', ${days}, 'available', ${now}, ${now})
 	`;
 	return await call("POST", `/projects/${projectId}/license/redeem`, ownerToken, { code });
+}
+
+async function activateDomain(projectId: string) {
+	await Database`UPDATE store_domains SET status = 'active', activated = ${Date.now()} WHERE project = ${projectId}`;
+	const [row] = await Database`SELECT hostname FROM store_domains WHERE project = ${projectId}`;
+	await Database`UPDATE store_settings SET domain = ${row.hostname} WHERE project = ${projectId}`;
+	forgetDomains();
 }
 
 async function customerLogin(email: string): Promise<string> {
@@ -187,23 +195,27 @@ describe("the online store module", () => {
 		});
 		expect(missingPrivacy.error).toBe(1151);
 
-		const saved = await call("PUT", `${base()}/store`, ownerToken, { slug, domain: "shop.pixel.test", enabled: true, config });
+		const saved = await call("PUT", `${base()}/store`, ownerToken, { slug, domain: "ignored.pixel.test", enabled: true, config });
 		expect(saved.error).toBe(0);
 		expect(saved.data.exists).toBe(true);
 		expect(saved.data.config.socials).toHaveLength(2);
-		expect(saved.data.domain).toBe("shop.pixel.test");
+		expect(saved.data.domain).toBeNull();
+
+		const connected = await call("POST", `${base()}/store/domain`, ownerToken, { hostname: "Shop.Pixel.test." });
+		expect(connected.error).toBe(0);
+		expect(connected.data.domain).toMatchObject({ hostname: "shop.pixel.test", status: "pending" });
+		expect((await call("GET", `${base()}/store`, ownerToken)).data.domain).toBeNull();
+		await activateDomain(project);
+		expect((await call("GET", `${base()}/store`, ownerToken)).data.domain).toBe("shop.pixel.test");
 
 		await redeemStore(otherProject);
 		const otherState = await call("GET", `/projects/${otherProject}/store`, ownerToken);
 		const taken = await call("PUT", `/projects/${otherProject}/store`, ownerToken, { slug, domain: null, enabled: true, config: otherState.data.config });
 		expect(taken.error).toBe(1152);
-		const domainTaken = await call("PUT", `/projects/${otherProject}/store`, ownerToken, {
-			slug: "other-shop",
-			domain: "shop.pixel.test",
-			enabled: true,
-			config: otherState.data.config,
-		});
-		expect(domainTaken.error).toBe(1165);
+		expect(
+			(await call("PUT", `/projects/${otherProject}/store`, ownerToken, { slug: "other-shop", enabled: true, config: otherState.data.config })).error
+		).toBe(0);
+		expect((await call("POST", `/projects/${otherProject}/store/domain`, ownerToken, { hostname: "shop.pixel.test" })).error).toBe(1165);
 	});
 
 	test("organizes products into nested categories", async () => {
@@ -618,12 +630,17 @@ describe("the online store module", () => {
 	});
 
 	test("serves the storefront page with store search engine tags and keeps the admin hidden", async () => {
-		const storefront = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/asus-dual-rx-9060-xt`));
+		const page = async (path: string) => await Server.app.handle(new Request(`http://127.0.0.1${path}`, { headers: { host: "shop.pixel.test" } }));
+		const moved = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/asus-dual-rx-9060-xt?ref=mail`));
+		expect(moved.status).toBe(302);
+		expect(moved.headers.get("location")).toBe("https://shop.pixel.test/p/asus-dual-rx-9060-xt?ref=mail");
+
+		const storefront = await page("/p/asus-dual-rx-9060-xt");
 		const html = await storefront.text();
 		expect(storefront.status).toBe(200);
 		expect(html).toMatch(/<title>[^<]+ \| Pixel Parts<\/title>/);
 		expect(html).toContain('content="index, follow"');
-		expect(html).toContain('name="rabbitpay-store" content="pixel-parts" data-domain="0"');
+		expect(html).toContain('name="rabbitpay-store" content="pixel-parts" data-domain="1"');
 		expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/p/asus-dual-rx-9060-xt" />');
 		expect(html).toContain('<meta property="og:type" content="product" />');
 		expect(html).toContain('<meta property="og:image" content="http://127.0.0.1:8099/api/v1/public/store-images/');
@@ -636,21 +653,20 @@ describe("the online store module", () => {
 		expect(structured.offers.price).toMatch(/^\d+\.\d{2}$/);
 		expect(structured.offers.availability).toMatch(/^https:\/\/schema\.org\//);
 
-		const category = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?sort=price_asc`))).text();
+		const category = await (await page("/c/amd?sort=price_asc")).text();
 		expect(category).toContain("<title>AMD | Pixel Parts</title>");
 		expect(category).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd" />');
 
-		const missing = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/no-such-product`));
+		const missing = await page("/p/no-such-product");
 		expect(missing.status).toBe(404);
 		expect(await missing.text()).toContain('content="noindex, nofollow"');
 		expect((await Server.app.handle(new Request("http://127.0.0.1/shop/no-such-store"))).status).toBe(404);
 
-		const cart = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/cart`))).text();
+		const cart = await (await page("/cart")).text();
 		expect(cart).toContain('content="noindex, nofollow"');
 		expect(cart).not.toContain("canonical");
 
-		const domain = await Server.app.handle(new Request("http://127.0.0.1/", { headers: { host: "shop.pixel.test" } }));
-		const domainHtml = await domain.text();
+		const domainHtml = await (await page("/")).text();
 		expect(domainHtml).toContain('data-domain="1"');
 		expect(domainHtml).toContain('<link rel="canonical" href="https://shop.pixel.test/" />');
 
@@ -661,47 +677,58 @@ describe("the online store module", () => {
 	});
 
 	test("links every language version of a storefront page", async () => {
-		const page = async (path: string, host?: string) =>
-			await Server.app.handle(new Request(`http://127.0.0.1${path}`, host ? { headers: { host } } : undefined));
+		const page = async (path: string, host = "shop.pixel.test") => await Server.app.handle(new Request(`http://127.0.0.1${path}`, { headers: { host } }));
 		const fallback = (await call("GET", `/store/${slug}`)).data.config.language;
 		expect((await call("PUT", `${base()}/store/languages/pay`, ownerToken, { name: "Pay", enabled: true, strings: {} })).error).toBe(1246);
 		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, { name: "Italiano", enabled: true, strings: {} })).error).toBe(0);
 		try {
-			const html = await (await page(`/shop/${slug}/it/c/amd`)).text();
+			const html = await (await page("/it/c/amd")).text();
 			expect(html).toContain('<html lang="it">');
 			expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/it/c/amd" />');
 			expect(html).toContain(`<link rel="alternate" hreflang="${fallback}" href="https://shop.pixel.test/c/amd" />`);
 			expect(html).toContain('<link rel="alternate" hreflang="it" href="https://shop.pixel.test/it/c/amd" />');
 			expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.pixel.test/c/amd" />');
 
-			const home = await (await page("/it", "shop.pixel.test")).text();
+			const home = await (await page("/it")).text();
 			expect(home).toContain('<html lang="it">');
 			expect(home).toContain('<link rel="canonical" href="https://shop.pixel.test/it" />');
 			expect(home).toContain('data-domain="1"');
 
 			const redirects: [string, string][] = [
-				[`/shop/${slug}/c/amd?lang=it&sort=name`, `/shop/${slug}/it/c/amd?sort=name`],
-				[`/shop/${slug}/${fallback}/c/amd`, `/shop/${slug}/c/amd`],
-				[`/shop/${slug}/de/p/asus-dual-rx-9060-xt`, `/shop/${slug}/p/asus-dual-rx-9060-xt`],
-				[`/shop/${slug}/it/cart?lang=it`, `/shop/${slug}/it/cart`],
-				[`/shop/${slug}?lang=${fallback}`, `/shop/${slug}`],
+				["/c/amd?lang=it&sort=name", "/it/c/amd?sort=name"],
+				[`/${fallback}/c/amd`, "/c/amd"],
+				["/de/p/asus-dual-rx-9060-xt", "/p/asus-dual-rx-9060-xt"],
+				["/it/cart?lang=it", "/it/cart"],
+				[`/?lang=${fallback}`, "/"],
+				["/?lang=it", "/it"],
 			];
 			for (const [from, to] of redirects) {
 				const response = await page(from);
 				expect(response.status).toBe(301);
 				expect(response.headers.get("location")).toBe(to);
 			}
-			const domainRedirect = await page("/?lang=it", "shop.pixel.test");
-			expect(domainRedirect.headers.get("location")).toBe("/it");
 
-			const payment = await page("/pay/2f1c5f0c-2b1a-4f1e-9d7a-9a6b1f0c4d3e", "shop.pixel.test");
+			const payment = await page("/pay/2f1c5f0c-2b1a-4f1e-9d7a-9a6b1f0c4d3e");
 			expect(payment.status).toBe(200);
 			expect(await payment.text()).toContain('content="noindex, nofollow"');
 
-			const sitemap = await (await page("/sitemap.xml", "shop.pixel.test")).text();
+			const sitemap = await (await page("/sitemap.xml")).text();
 			expect(sitemap).toContain("<loc>https://shop.pixel.test/it/c/amd</loc>");
 			expect(sitemap).toContain("<loc>https://shop.pixel.test/it</loc>");
 			expect(sitemap).toContain('<xhtml:link rel="alternate" hreflang="it" href="https://shop.pixel.test/it/p/asus-dual-rx-9060-xt"/>');
+
+			await Database`UPDATE store_settings SET domain = NULL WHERE project = ${project}`;
+			forgetDomains();
+			try {
+				const own = await (await page(`/shop/${slug}/it/c/amd`, "127.0.0.1")).text();
+				expect(own).toContain(`<link rel="canonical" href="http://127.0.0.1:8099/shop/${slug}/it/c/amd" />`);
+				expect(own).toContain('data-domain="0"');
+				const moved = await page(`/shop/${slug}/c/amd?lang=it`, "127.0.0.1");
+				expect(moved.status).toBe(301);
+				expect(moved.headers.get("location")).toBe(`/shop/${slug}/it/c/amd`);
+			} finally {
+				await activateDomain(project);
+			}
 		} finally {
 			expect((await call("DELETE", `${base()}/store/languages/it`, ownerToken)).error).toBe(0);
 		}

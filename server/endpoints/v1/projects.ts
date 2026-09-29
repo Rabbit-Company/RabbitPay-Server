@@ -2,6 +2,7 @@ import { Server } from "../../server";
 import { storedFormatOf } from "../../invoice-numbers";
 import { isProformaSettlement } from "../../proformas";
 import Database from "../../database/database";
+import { releaseProjectDomain } from "../../store/domains";
 import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
@@ -399,6 +400,7 @@ Server.app.delete("/api/v1/projects/:uuid", Auth.required(), Permissions.require
 	const account = Auth.account(ctx);
 
 	await Database`UPDATE projects SET status = 'deleted', updated = ${Date.now()} WHERE uuid = ${project.uuid}`;
+	await releaseProjectDomain(project.uuid);
 
 	await Audit.record(ctx, {
 		project: project.uuid,

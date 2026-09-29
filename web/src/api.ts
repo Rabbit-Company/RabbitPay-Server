@@ -37,6 +37,18 @@ export interface StoreState {
 	stats: { products: number; published: number; orders: number; to_ship: number };
 }
 
+export interface StoreDomainState {
+	available: boolean;
+	target: string;
+	domain: {
+		hostname: string;
+		status: "pending" | "provisioning" | "active" | "error";
+		records: { type: "TXT" | "CNAME"; name: string; value: string }[];
+		created: number;
+		activated: number | null;
+	} | null;
+}
+
 export interface StoreLanguage {
 	code: string;
 	name: string;
@@ -2638,8 +2650,24 @@ export const Api = {
 		return request<StoreLanguages>("DELETE", `/projects/${uuid}/store/languages/${encodeURIComponent(code)}`);
 	},
 
-	saveStore(uuid: string, body: { slug: string; domain: string | null; enabled: boolean; config: StoreConfig }) {
+	saveStore(uuid: string, body: { slug: string; enabled: boolean; config: StoreConfig }) {
 		return request<StoreState>("PUT", `/projects/${uuid}/store`, body);
+	},
+
+	storeDomain(uuid: string) {
+		return request<StoreDomainState>("GET", `/projects/${uuid}/store/domain`);
+	},
+
+	connectStoreDomain(uuid: string, hostname: string) {
+		return request<StoreDomainState>("POST", `/projects/${uuid}/store/domain`, { hostname });
+	},
+
+	checkStoreDomain(uuid: string) {
+		return request<StoreDomainState>("POST", `/projects/${uuid}/store/domain/check`, {});
+	},
+
+	removeStoreDomain(uuid: string) {
+		return request<StoreDomainState>("DELETE", `/projects/${uuid}/store/domain`);
 	},
 
 	uploadStoreImage(uuid: string, kind: "logo" | "hero", data: string) {

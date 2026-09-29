@@ -234,6 +234,44 @@ Two settings are easy to get wrong:
   memory adapter everyone is signed out when the server restarts. The file and
   Redis adapters keep sessions across restarts.
 
+### Store domains
+
+Online stores can connect their own domain from Store settings. The settings
+group Store domains decides how. Every mode first asks the merchant to add a
+TXT record that proves they own the domain, and a store only answers on its
+domain once the domain is active. After that, the store's `/shop/<slug>`
+address redirects to the domain. RabbitPay rechecks waiting domains every five
+minutes for two weeks, and the merchant can also check on demand.
+
+- Manual is the default. RabbitPay checks the TXT record and that the domain
+  points at the DNS target, either with a CNAME or with A and AAAA records that
+  match the target. Apex domains therefore work with A records. You configure
+  the reverse proxy and HTTPS certificate for each domain yourself.
+- BurrowGate creates a site in your gateway for each domain, reusing the private
+  origin of the BurrowGate site that serves RabbitPay, and issues a Let's
+  Encrypt certificate for it. Set the BurrowGate URL, an admin token that can
+  list, create and remove sites and manage their certificates, and the site id
+  of your RabbitPay site. The new sites are signed with the same origin signing
+  secret as the main site, so RabbitPay keeps rejecting requests that bypass
+  BurrowGate. Point the DNS target at the gateway and keep HTTP open for ACME
+  validation.
+- Cloudflare for SaaS in front of BurrowGate is the hosted setup. RabbitPay
+  creates a Cloudflare custom hostname and shows the merchant the TXT records
+  Cloudflare asks for. Once Cloudflare validates them, RabbitPay creates the
+  BurrowGate site and certificate as above. Before enabling it, create a
+  proxied fallback origin in the SaaS zone that resolves to BurrowGate, select
+  it as the Cloudflare for SaaS fallback origin, and create the proxied DNS
+  target record pointing at it. The Cloudflare token only needs the zone-level
+  SSL and Certificates Edit permission on that zone. Use Full (strict) mode
+  once BurrowGate has issued the certificates.
+- Disabled hides custom domains. Domains that are already active keep working.
+
+The private origin setting is a fallback for when the RabbitPay site cannot be
+read from BurrowGate. It must be an address BurrowGate reaches directly, such
+as `http://127.0.0.1:8085`, and never the public URL, which would loop back
+through the gateway. Deleting a project removes its Cloudflare hostname and
+BurrowGate site.
+
 ### Email
 
 Invoices, payment reminders, terminal receipts, license keys and team invitations

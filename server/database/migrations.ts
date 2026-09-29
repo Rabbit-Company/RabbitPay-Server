@@ -8,6 +8,7 @@ import {
 	createLicenseProductSchema,
 	createProformaSchema,
 	createStoreCouponSchema,
+	createStoreDomainSchema,
 	createStoreLanguageSchema,
 	createStoreSchema,
 } from "./store-schema";
@@ -303,6 +304,7 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 28, name: "pro forma and advance invoices", up: createProformaSchema },
 	{ version: 29, name: "store languages", up: createStoreLanguageSchema },
 	{ version: 30, name: "store product names", up: addStoreProductNames },
+	{ version: 31, name: "store domains", up: createStoreDomainSchema },
 ];
 
 export class SchemaTooNew extends Error {

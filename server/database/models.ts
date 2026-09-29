@@ -792,6 +792,23 @@ export interface StoreSettingsRow {
 	updated: number;
 }
 
+export type StoreDomainProvider = "manual" | "burrowgate" | "cloudflare";
+export type StoreDomainStatus = "pending" | "provisioning" | "active" | "error";
+
+export interface StoreDomainRow {
+	project: string;
+	hostname: string;
+	provider: StoreDomainProvider;
+	status: StoreDomainStatus;
+	provider_hostname_id: string | null;
+	gateway_site_id: string | null;
+	verification_records: string;
+	last_error: string | null;
+	created: number;
+	updated: number;
+	activated: number | null;
+}
+
 export interface StoreCategoryRow {
 	uuid: string;
 	project: string;

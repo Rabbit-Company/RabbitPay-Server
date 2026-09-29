@@ -160,15 +160,6 @@ export function slugify(value: string, max = 80): string {
 	return slug || "item";
 }
 
-export function isDomain(value: unknown): value is string {
-	return (
-		typeof value === "string" &&
-		value.length <= 253 &&
-		/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(value) &&
-		!value.endsWith(".localhost")
-	);
-}
-
 function readSocial(value: unknown): StoreSocial | undefined {
 	if (!isObject(value)) return undefined;
 	const network = oneOf(value.network, SOCIAL_NETWORKS);

@@ -110,6 +110,27 @@ describe("schema migrations", () => {
 		await sql.close();
 	});
 
+	test("store domains saved before verification stay active", async () => {
+		const sql = memory();
+		const domains = MIGRATIONS.findIndex((migration) => migration.name === "store domains");
+		await migrate(sql, "sqlite", MIGRATIONS.slice(0, domains));
+		await sql`INSERT INTO accounts(username, email, password, created, updated, accessed) VALUES('ana', 'ana@example.com', 'x', 1, 1, 1)`;
+		for (const [uuid, name] of [
+			["p", "shop"],
+			["q", "other"],
+		]) {
+			await sql`INSERT INTO projects(uuid, name, apikey, apikey2, currency, created, updated, created_by) VALUES(${uuid}, ${name}, ${`${uuid}1`}, ${`${uuid}2`}, 'EUR', 1, 1, 'ana')`;
+		}
+		await sql`INSERT INTO store_settings(project, slug, domain, enabled, config, created, updated) VALUES('p', 'shop', 'shop.example.com', 1, '{}', 1, 7)`;
+		await sql`INSERT INTO store_settings(project, slug, domain, enabled, config, created, updated) VALUES('q', 'other', NULL, 1, '{}', 1, 1)`;
+
+		await migrate(sql, "sqlite");
+
+		const rows = (await sql`SELECT project, hostname, provider, status, activated FROM store_domains`) as Record<string, unknown>[];
+		expect([...rows]).toEqual([{ project: "p", hostname: "shop.example.com", provider: "manual", status: "active", activated: 7 }]);
+		await sql.close();
+	});
+
 	test("versions must be consecutive", () => {
 		expect(() => validateMigrations([{ version: 2, name: "skipped", up: async () => {} }])).toThrow();
 		expect(() => validateMigrations(MIGRATIONS)).not.toThrow();
