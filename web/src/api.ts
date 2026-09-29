@@ -32,8 +32,35 @@ export interface StoreState {
 	domain_url: string | null;
 	config: StoreConfig;
 	templates: StorePage[];
+	languages: { code: string; name: string; builtin: boolean }[];
 	images: { logo: string | null; hero: string | null };
 	stats: { products: number; published: number; orders: number; to_ship: number };
+}
+
+export interface StoreLanguage {
+	code: string;
+	name: string;
+	builtin: boolean;
+	enabled: boolean;
+	strings: Record<string, string>;
+	content: Record<string, string>;
+	updated: number | null;
+}
+
+export interface ProductText {
+	name: string | null;
+	summary: string | null;
+	description: string | null;
+}
+
+export interface CategoryText {
+	name: string | null;
+	description: string | null;
+}
+
+export interface StoreLanguages {
+	default: string;
+	languages: StoreLanguage[];
 }
 
 export interface StoreCategory {
@@ -44,6 +71,7 @@ export interface StoreCategory {
 	parent: string | null;
 	sort_order: number;
 	products: number;
+	translations: Record<string, CategoryText>;
 }
 
 export type StoreCouponKind = "percent" | "amount" | "free_shipping";
@@ -74,6 +102,7 @@ export interface StoreCategoryInput {
 	description?: string | null;
 	parent?: string | null;
 	sort_order?: number;
+	translations?: Record<string, CategoryText>;
 }
 
 export interface StoreListedProduct {
@@ -139,6 +168,7 @@ export interface StoreProductDetails {
 	sort_order: number;
 	attributes: StoreAttribute[];
 	images: StoreImage[];
+	translations: Record<string, ProductText>;
 }
 
 export type StoreProductInput = Omit<StoreProductDetails, "item" | "listed" | "images">;
@@ -2588,6 +2618,22 @@ export const Api = {
 
 	store(uuid: string) {
 		return request<StoreState>("GET", `/projects/${uuid}/store`);
+	},
+
+	storeLanguages(uuid: string) {
+		return request<StoreLanguages>("GET", `/projects/${uuid}/store/languages`);
+	},
+
+	saveStoreLanguage(
+		uuid: string,
+		code: string,
+		body: { name: string | null; enabled: boolean; strings: Record<string, string>; content?: Record<string, string> }
+	) {
+		return request<StoreLanguages>("PUT", `/projects/${uuid}/store/languages/${encodeURIComponent(code)}`, body);
+	},
+
+	removeStoreLanguage(uuid: string, code: string) {
+		return request<StoreLanguages>("DELETE", `/projects/${uuid}/store/languages/${encodeURIComponent(code)}`);
 	},
 
 	saveStore(uuid: string, body: { slug: string; domain: string | null; enabled: boolean; config: StoreConfig }) {

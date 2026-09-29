@@ -1,11 +1,11 @@
 import { accentTextFor } from "../../../server/colors";
 import { ApiError } from "../api";
 import { el } from "../dom";
-import { errorText, forceLanguage, isUiLanguage, language, processorLabel, t, UI_LANGUAGES, type UiLanguage } from "../i18n";
+import { errorText, isUiLanguage, locale, processorLabel, t, useStoreTexts } from "../i18n";
 import { navigate, onLeave, render } from "../router";
 import { applyTheme } from "../theme";
 import { logo } from "../logo";
-import { StoreApi, type ProductCard, type StoreCategoryNode, type Storefront } from "./api";
+import { StoreApi, useShopperLanguage, type ProductCard, type StoreCategoryNode, type Storefront } from "./api";
 import { addToCart, cartCount, onCartChange } from "./cart";
 import { icon, socialIcon, SOCIAL_LABELS } from "./icons";
 import { zoomableImages } from "../lightbox";
@@ -18,22 +18,22 @@ function languageKey(slug: string): string {
 	return `rabbitpay.store.${slug}.language`;
 }
 
-function visitorLanguage(slug: string): UiLanguage | null {
+function visitorLanguage(slug: string): string | null {
+	const requested = new URLSearchParams(window.location.search).get("lang");
 	try {
-		const stored = localStorage.getItem(languageKey(slug));
-		return isUiLanguage(stored) ? stored : null;
+		if (requested) localStorage.setItem(languageKey(slug), requested);
+		return requested ?? localStorage.getItem(languageKey(slug));
 	} catch {
-		return null;
+		return requested;
 	}
 }
 
-function chooseLanguage(slug: string, next: UiLanguage) {
+function chooseLanguage(slug: string, next: string) {
 	try {
 		localStorage.setItem(languageKey(slug), next);
 	} catch {
 		void 0;
 	}
-	forceLanguage(next);
 	void render();
 }
 
@@ -62,17 +62,22 @@ export function domainStore(): string | null {
 }
 
 export async function storeContext(slug: string): Promise<StoreContext> {
-	const cached = cache.get(slug);
-	const store = cached && Date.now() - cached.loaded < CACHE_MS ? cached.store : await StoreApi.store(slug);
-	cache.set(slug, { store, loaded: Date.now() });
-	forceLanguage(visitorLanguage(slug) ?? store.config.language);
-	const base = domainStore() === slug ? "" : `/shop/${slug}`;
+	const wanted = visitorLanguage(slug);
+	const key = `${slug}:${wanted ?? ""}`;
+	const cached = cache.get(key);
+	const store = cached && Date.now() - cached.loaded < CACHE_MS ? cached.store : await StoreApi.store(slug, wanted);
+	cache.set(key, { store, loaded: Date.now() });
+	const code = store.language.code;
+	const base = isUiLanguage(code) ? code : isUiLanguage(store.config.language) ? store.config.language : "en";
+	useStoreTexts({ code, base, strings: store.language.strings });
+	useShopperLanguage(code === store.config.language ? null : code);
+	const prefix = domainStore() === slug ? "" : `/shop/${slug}`;
 	return {
 		store,
-		base,
+		base: prefix,
 		link(path = "/") {
-			if (path === "/") return base || "/";
-			return `${base}${path}`;
+			if (path === "/") return prefix || "/";
+			return `${prefix}${path}`;
 		},
 	};
 }
@@ -108,7 +113,7 @@ function resetStoreTheme() {
 	document.getElementById("sf-custom-css")?.remove();
 	document.documentElement.style.removeProperty("--accent");
 	document.documentElement.style.removeProperty("--accent-text");
-	forceLanguage(null);
+	useStoreTexts(null);
 	applyTheme();
 }
 
@@ -199,6 +204,7 @@ function categoryNav(ctx: StoreContext): HTMLElement {
 }
 
 function drawer(ctx: StoreContext): { open: () => void; element: HTMLElement } {
+	const picker = languagePicker(ctx);
 	const panel = el("div", { class: "sf-drawer" });
 	const overlay = el("div", { class: "sf-drawer-overlay" }, panel);
 	overlay.hidden = true;
@@ -236,8 +242,7 @@ function drawer(ctx: StoreContext): { open: () => void; element: HTMLElement } {
 		...ctx.store.config.pages
 			.filter((page) => page.footer)
 			.map((page) => el("a", { class: "sf-drawer-link", href: ctx.link(`/page/${page.slug}`) }, page.title)),
-		el("div", { class: "sf-divider" }),
-		languagePicker(ctx)
+		...(picker ? [el("div", { class: "sf-divider" }), picker] : [])
 	);
 	return {
 		element: overlay,
@@ -249,20 +254,23 @@ function drawer(ctx: StoreContext): { open: () => void; element: HTMLElement } {
 	};
 }
 
-function languagePicker(ctx: StoreContext): HTMLElement {
-	const current = language();
+function languagePicker(ctx: StoreContext): HTMLElement | null {
+	const { languages } = ctx.store;
+	if (languages.length < 2) return null;
+	const current = locale();
 	const picker = el(
 		"select",
 		{ class: "sf-language-select" },
-		...UI_LANGUAGES.map((option) => {
-			const entry = el("option", { value: option.value }, option.label);
-			entry.selected = option.value === current;
+		...languages.map((option) => {
+			const entry = el("option", { value: option.code }, option.name);
+			entry.lang = option.code;
+			entry.selected = option.code === current;
 			return entry;
 		})
 	);
 	picker.setAttribute("aria-label", t("app.language"));
 	picker.addEventListener("change", () => {
-		if (isUiLanguage(picker.value) && picker.value !== current) chooseLanguage(ctx.store.slug, picker.value);
+		if (picker.value !== current) chooseLanguage(ctx.store.slug, picker.value);
 	});
 	return el("label", { class: "sf-language", title: t("app.language") }, icon("globe", 16), picker);
 }

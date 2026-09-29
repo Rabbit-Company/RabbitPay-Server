@@ -42,6 +42,7 @@ import { storeSettingsView } from "./views/store";
 import { storeCategoriesView, storeProductsView, storeProductView } from "./views/store-products";
 import { storeOrdersView, storeOrderView } from "./views/store-orders";
 import { storeCouponsView } from "./views/store-coupons";
+import { storeTranslationView, storeTranslationsView } from "./views/store-translations";
 import { categoryView, homeView, pageView, productView, searchView } from "./storefront/pages";
 import { accountView as shopAccountView, cartView, checkoutView, orderView } from "./storefront/checkout";
 import { domainStore, storeError } from "./storefront/layout";
@@ -360,6 +361,14 @@ define(
 define(
 	"/projects/:uuid/store/coupons",
 	projectRoute([Permission.ITEM_VIEW], (params) => storeCouponsView(params.uuid))
+);
+define(
+	"/projects/:uuid/store/translations",
+	projectRoute([Permission.PROJECT_VIEW], (params) => storeTranslationsView(params.uuid))
+);
+define(
+	"/projects/:uuid/store/translations/:language",
+	projectRoute([Permission.PROJECT_VIEW], (params) => storeTranslationView(params.uuid, params.language))
 );
 define(
 	"/projects/:uuid/store/orders",

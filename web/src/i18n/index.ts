@@ -1,5 +1,6 @@
 import {
 	DEFAULT_UI_LANGUAGE,
+	fill,
 	hasKey,
 	isUiLanguage,
 	preferredLanguage,
@@ -45,15 +46,42 @@ function fromBrowser(): UiLanguage {
 let current: UiLanguage | null = null;
 let forced: UiLanguage | null = null;
 
+export interface StoreTexts {
+	code: string;
+	base: UiLanguage;
+	strings: Record<string, string>;
+}
+
+let storeTexts: StoreTexts | null = null;
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+function pluralCategory(code: string, count: number): string {
+	let rules = pluralRules.get(code);
+	if (!rules) {
+		try {
+			rules = new Intl.PluralRules(code);
+		} catch {
+			rules = new Intl.PluralRules(DEFAULT_UI_LANGUAGE);
+		}
+		pluralRules.set(code, rules);
+	}
+	return rules.select(count);
+}
+
 export function language(): UiLanguage {
 	if (forced !== null) return forced;
 	if (current === null) current = saved() ?? fromBrowser();
 	return current;
 }
 
-export function forceLanguage(next: UiLanguage | null) {
-	forced = next;
-	if (typeof document !== "undefined") document.documentElement.lang = language();
+export function useStoreTexts(next: StoreTexts | null) {
+	storeTexts = next;
+	forced = next?.base ?? null;
+	if (typeof document !== "undefined") document.documentElement.lang = locale();
+}
+
+export function locale(): string {
+	return storeTexts?.code ?? language();
 }
 
 export function setLanguage(next: UiLanguage) {
@@ -69,11 +97,13 @@ export function setLanguage(next: UiLanguage) {
 }
 
 export function t(key: UiKey, params?: Record<string, string | number>): string {
-	return translate(language(), key, params);
+	const custom = storeTexts?.strings[key];
+	return custom === undefined ? translate(language(), key, params) : fill(custom, params);
 }
 
 export function tn(base: PluralBase, count: number, params?: Record<string, string | number>): string {
-	return translateCount(language(), base, count, params);
+	const custom = storeTexts?.strings[`${base}.${pluralCategory(storeTexts.code, count)}`];
+	return custom === undefined ? translateCount(language(), base, count, params) : fill(custom, { count, ...params });
 }
 
 export function has(key: string): key is UiKey {

@@ -264,3 +264,46 @@ export async function createProformaSchema(sql: SQL, dialect: Dialect) {
 		`CREATE INDEX IF NOT EXISTS idx_store_orders_number ON store_orders(project, number)`,
 	]);
 }
+
+export async function createStoreLanguageSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS store_languages(
+					project ${types.text("project")} NOT NULL,
+					language ${types.text("language")} NOT NULL,
+					name ${types.text("name")} NOT NULL,
+					enabled ${types.flag} NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+					strings ${types.text("strings")} NOT NULL,
+					content ${types.text("content")} NOT NULL,
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					PRIMARY KEY (project, language),
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE
+				)`,
+		`CREATE TABLE IF NOT EXISTS store_product_translations(
+					item ${types.text("item")} NOT NULL,
+					language ${types.text("language")} NOT NULL,
+					project ${types.text("project")} NOT NULL,
+					name ${types.text("name")},
+					summary ${types.text("summary")},
+					description ${types.text("description")},
+					updated ${types.int64} NOT NULL,
+					PRIMARY KEY (item, language),
+					FOREIGN KEY (item) REFERENCES catalog_items(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE
+				)`,
+		`CREATE INDEX IF NOT EXISTS idx_store_product_translations_language ON store_product_translations(project, language)`,
+		`CREATE TABLE IF NOT EXISTS store_category_translations(
+					store_category ${types.text("store_category")} NOT NULL,
+					language ${types.text("language")} NOT NULL,
+					project ${types.text("project")} NOT NULL,
+					name ${types.text("name")},
+					description ${types.text("description")},
+					updated ${types.int64} NOT NULL,
+					PRIMARY KEY (store_category, language),
+					FOREIGN KEY (store_category) REFERENCES store_categories(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE
+				)`,
+		`CREATE INDEX IF NOT EXISTS idx_store_category_translations_language ON store_category_translations(project, language)`,
+	]);
+}

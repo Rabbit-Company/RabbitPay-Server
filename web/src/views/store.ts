@@ -31,6 +31,7 @@ const STORE_TABS: { suffix: string; label: UiKey; permission: Permission }[] = [
 	{ suffix: "/products", label: "store.tab_products", permission: Permission.ITEM_VIEW },
 	{ suffix: "/categories", label: "store.tab_categories", permission: Permission.ITEM_VIEW },
 	{ suffix: "/coupons", label: "store.tab_coupons", permission: Permission.ITEM_VIEW },
+	{ suffix: "/translations", label: "store.tab_translations", permission: Permission.PROJECT_VIEW },
 	{ suffix: "/orders", label: "store.tab_orders", permission: Permission.INVOICE_VIEW },
 ];
 
@@ -60,6 +61,36 @@ export function storeTabs(project: Project, state: StoreState): HTMLElement {
 			? el("a", { class: "button ghost small", href: state.domain_url ?? state.url, target: "_blank", rel: "noopener" }, t("store.open_store"))
 			: null
 	);
+}
+
+export function contentLanguages(state: StoreState): StoreState["languages"] {
+	return state.languages.filter((language) => language.code !== state.config.language);
+}
+
+export function languagePanels(state: StoreState, main: HTMLElement, panelFor: (code: string) => HTMLElement): HTMLElement {
+	const others = contentLanguages(state);
+	if (others.length === 0) return main;
+	const defaultName = state.languages.find((language) => language.code === state.config.language)?.name ?? state.config.language;
+	const entries = [
+		{ label: `${defaultName} (${t("store.translations_default")})`, panel: main },
+		...others.map((language) => ({ label: language.name, panel: panelFor(language.code) })),
+	];
+	const buttons = entries.map((entry, index) => {
+		const button = el("button", { class: "subtab", type: "button", onClick: () => show(index) }, entry.label);
+		button.setAttribute("role", "tab");
+		return button;
+	});
+	const show = (index: number) =>
+		entries.forEach((entry, position) => {
+			entry.panel.hidden = position !== index;
+			buttons[position]!.classList.toggle("active", position === index);
+			buttons[position]!.setAttribute("aria-selected", String(position === index));
+		});
+	show(0);
+	const tabs = el("div", { class: "subtabs language-tabs" }, ...buttons);
+	tabs.setAttribute("role", "tablist");
+	tabs.setAttribute("aria-label", t("store.content_language"));
+	return el("div", { class: "stack" }, tabs, ...entries.map((entry) => entry.panel));
 }
 
 function licenseGate(project: Project, state: StoreState): HTMLElement {
@@ -370,10 +401,7 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 	const slug = input("text", { value: state.slug, required: true, maxlength: "60" });
 	const domain = input("text", { value: state.domain ?? "", maxlength: "253", placeholder: "shop.example.com" });
 	const language = select(
-		[
-			{ value: "en", label: "English" },
-			{ value: "sl", label: "Slovenščina" },
-		],
+		state.languages.map((entry) => ({ value: entry.code, label: entry.name })),
 		config.language
 	);
 	const announcement = input("text", { value: config.announcement ?? "", maxlength: "200", placeholder: t("store.announcement_placeholder") });

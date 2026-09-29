@@ -28,6 +28,17 @@ export const STORE_MODES = ["auto", "light", "dark"] as const;
 export const STORE_HERO_STYLES = ["gradient", "image", "split", "minimal"] as const;
 export const STORE_CARD_STYLES = ["elevated", "outlined", "flat"] as const;
 export const STORE_LANGUAGES = ["en", "sl"] as const;
+
+const LANGUAGE_CODE = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?$/;
+
+export function isLanguageCode(value: unknown): value is string {
+	if (typeof value !== "string" || !LANGUAGE_CODE.test(value)) return false;
+	try {
+		return Intl.getCanonicalLocales(value)[0] === value;
+	} catch {
+		return false;
+	}
+}
 export const STORE_COLUMNS = [2, 3, 4] as const;
 
 export const MAX_SOCIALS = 16;
@@ -83,7 +94,7 @@ export interface StoreConfig {
 	name: string;
 	tagline: string | null;
 	description: string | null;
-	language: (typeof STORE_LANGUAGES)[number];
+	language: string;
 	announcement: string | null;
 	hero: { title: string | null; subtitle: string | null; cta_label: string | null; cta_link: string | null };
 	theme: StoreTheme;
@@ -230,7 +241,7 @@ export function readStoreConfig(value: unknown): StoreConfig | null {
 	const name = required(value.name, 120);
 	const tagline = text(value.tagline, 200);
 	const description = text(value.description, 500);
-	const language = oneOf(value.language, STORE_LANGUAGES);
+	const language = isLanguageCode(value.language) ? value.language : undefined;
 	const announcement = text(value.announcement, 200);
 	const footerText = text(value.footer_text, 1000);
 	if (!name || tagline === undefined || description === undefined || !language || announcement === undefined || footerText === undefined) return null;
@@ -385,13 +396,23 @@ function undated(content: string): string {
 	return content.replace(/^(?:Valid from|Velja od) .*$/gm, "").trim();
 }
 
+function isStoreLanguage(value: string): value is StoreLanguage {
+	return (STORE_LANGUAGES as readonly string[]).includes(value);
+}
+
+export function legalLanguage(language: string): StoreLanguage {
+	return language === "sl" ? "sl" : "en";
+}
+
 export function localizeDefaults(config: StoreConfig, seller: StoreSeller, now = new Date()): StoreConfig {
-	const others = STORE_LANGUAGES.filter((language) => language !== config.language);
-	const target = DEFAULT_TEXTS[config.language];
+	if (!isStoreLanguage(config.language)) return config;
+	const current = config.language;
+	const others = STORE_LANGUAGES.filter((language) => language !== current);
+	const target = DEFAULT_TEXTS[current];
 	const swap = (value: string | null, pick: (texts: DefaultTexts) => string) =>
 		value !== null && others.some((language) => pick(DEFAULT_TEXTS[language]) === value) ? pick(target) : value;
 
-	const templates = legalPages(seller, config.name, config.language, now);
+	const templates = legalPages(seller, config.name, current, now);
 	const foreign = others.flatMap((language) => legalPages(seller, config.name, language, now));
 
 	return {

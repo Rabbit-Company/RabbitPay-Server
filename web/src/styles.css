@@ -3204,6 +3204,54 @@ select:not([multiple]) {
 	margin: 0.5rem 0 0;
 	font-size: 0.95rem;
 }
+
+.translation-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+	gap: 0.4rem 1.25rem;
+	align-items: start;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border);
+}
+.translation-source {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.translation-source .mono {
+	font-size: 0.75rem;
+}
+.translation-target {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+.translation-target .invalid {
+	border-color: var(--danger);
+}
+.translation-target .field-error {
+	font-size: 0.8rem;
+	color: var(--danger);
+}
+.translation-save {
+	position: sticky;
+	bottom: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 1rem;
+	padding: 0.75rem 0;
+	background: var(--bg);
+	border-top: 1px solid var(--border);
+}
+
+@media (max-width: 720px) {
+	.translation-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
 .store-card .field {
 	margin-bottom: 0;
 }
@@ -4667,4 +4715,30 @@ fieldset.stack-tight {
 
 .license-key-text {
 	word-break: break-all;
+}
+
+.language-tabs {
+	align-self: flex-start;
+	max-width: 100%;
+}
+.language-tabs .subtab {
+	border: 0;
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
+}
+.language-tabs .subtab.active {
+	background: var(--surface);
+}
+.translation-original {
+	max-height: 320px;
+	overflow: auto;
+	margin: 0.4rem 0 0;
+	white-space: pre-wrap;
+	font: inherit;
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+.pill.pill-sentence {
+	text-transform: none;
 }

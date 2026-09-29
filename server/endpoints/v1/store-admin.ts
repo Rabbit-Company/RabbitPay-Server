@@ -17,12 +17,33 @@ import { orderUpdateEmail } from "../../email/templates";
 import { deliverSoon, queueEmail } from "../../email/outbox";
 import { MAX_MARKDOWN_LENGTH } from "../../markdown";
 import { legalPages } from "../../store/legal";
-import { isDomain, isSlug, isWebUrl, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
+import { isDomain, isSlug, isWebUrl, legalLanguage, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
 import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, sellerFor, settingsFor } from "../../store/store";
 import { imagesOf, MAX_PRODUCT_IMAGES, readStoreImage, removeStoreImages, STORE_IMAGE_BODY_LIMIT, storeImage } from "../../store/images";
 import { attributesOf, categoriesOf, descendantsOf } from "../../store/catalog";
 import { cancelOrder, findOrder, isFulfillment, orderItems, presentOrder, type OrderRow } from "../../store/orders";
 import { presentCoupon, readCoupon } from "../../store/coupons";
+import {
+	builtinName,
+	isBuiltinLanguage,
+	isLanguageCode,
+	MAX_STORE_LANGUAGES,
+	readContent,
+	readLanguageName,
+	readStrings,
+	removeStoreLanguage,
+	saveStoreLanguage,
+	storeLanguages,
+} from "../../store/languages";
+import {
+	categoryTranslationsOf,
+	productTranslationsOf,
+	readCategoryTranslations,
+	readProductTranslations,
+	writeCategoryTranslations,
+	writeProductTranslations,
+	type CategoryText,
+} from "../../store/translations";
 import type {
 	AppState,
 	CatalogItemRow,
@@ -78,7 +99,8 @@ async function storeState(project: ProjectRow) {
 		url: storeUrl({ slug, domain: null }),
 		domain_url: domain ? storeUrl({ slug, domain }) : null,
 		config: draft.config,
-		templates: legalPages(draft.seller, draft.config.name, draft.config.language),
+		templates: legalPages(draft.seller, draft.config.name, legalLanguage(draft.config.language)),
+		languages: (await storeLanguages(project.uuid)).map((language) => ({ code: language.code, name: language.name, builtin: language.builtin })),
 		images: await brandImages(project.uuid),
 		stats: {
 			products: Number(counts.products),
@@ -111,6 +133,8 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 	if (!config || !isSlug(slug, 60) || domain === undefined || typeof data.enabled !== "boolean") return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
 	if (domain !== null && (!isDomain(domain) || domain === normalizeHost(new URL(Utils.publicUrl()).host)))
 		return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
+
+	if (!(await storeLanguages(project.uuid)).some((language) => language.code === config.language)) return Utils.fail(ctx, ErrorCode.INVALID_STORE_SETTINGS);
 
 	const [slugOwner] = (await Database`SELECT project FROM store_settings WHERE slug = ${slug} AND project != ${project.uuid}`) as { project: string }[];
 	if (slugOwner) return Utils.fail(ctx, ErrorCode.STORE_SLUG_TAKEN);
@@ -149,6 +173,65 @@ Server.app.put(base, Auth.required(), Permissions.require(Permission.PROJECT_EDI
 	});
 
 	return Utils.ok(ctx, await storeState(project));
+});
+
+async function languagesState(project: ProjectRow) {
+	const draft = await draftFor(project);
+	return { default: draft.config.language, languages: await storeLanguages(project.uuid) };
+}
+
+Server.app.get(`${base}/languages`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
+	return Utils.ok(ctx, await languagesState(Permissions.project(ctx)));
+});
+
+Server.app.put(`${base}/languages/:language`, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.STORE_LICENSE_REQUIRED);
+
+	const code = ctx.params["language"];
+	const data = await readJson(ctx);
+	if (!isLanguageCode(code) || !data || typeof data.enabled !== "boolean") return Utils.fail(ctx, ErrorCode.INVALID_STORE_LANGUAGE);
+	const strings = readStrings(data.strings);
+	const builtin = isBuiltinLanguage(code);
+	const name = builtin ? builtinName(code) : readLanguageName(data.name);
+	if (!strings || !name) return Utils.fail(ctx, ErrorCode.INVALID_STORE_LANGUAGE);
+
+	const languages = await storeLanguages(project.uuid);
+	const existing = languages.find((language) => language.code === code);
+	if (!existing && languages.length >= MAX_STORE_LANGUAGES) return Utils.fail(ctx, ErrorCode.STORE_LANGUAGE_LIMIT);
+	const content = data.content === undefined ? (existing?.content ?? {}) : readContent(data.content);
+	if (!content) return Utils.fail(ctx, ErrorCode.INVALID_STORE_LANGUAGE);
+
+	await saveStoreLanguage(project.uuid, code, { name, enabled: data.enabled, strings, content });
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "store.language_saved",
+		entityType: "store",
+		entityId: project.uuid,
+		newValue: { language: code, name, enabled: data.enabled, strings: Object.keys(strings).length, content: Object.keys(content).length },
+	});
+	return Utils.ok(ctx, await languagesState(project));
+});
+
+Server.app.delete(`${base}/languages/:language`, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.STORE_LICENSE_REQUIRED);
+
+	const code = ctx.params["language"];
+	const languages = await storeLanguages(project.uuid);
+	const language = languages.find((entry) => entry.code === code);
+	if (!language || language.builtin) return Utils.fail(ctx, ErrorCode.STORE_LANGUAGE_NOT_FOUND);
+	if ((await draftFor(project)).config.language === code) return Utils.fail(ctx, ErrorCode.STORE_LANGUAGE_IN_USE);
+
+	await removeStoreLanguage(project.uuid, language.code);
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "store.language_removed",
+		entityType: "store",
+		entityId: project.uuid,
+		oldValue: { language: language.code, name: language.name },
+	});
+	return Utils.ok(ctx, await languagesState(project));
 });
 
 function readImageKind(value: string | undefined): Exclude<StoreImageKind, "product"> | null {
@@ -223,7 +306,7 @@ async function categoryCounts(projectId: string): Promise<Map<string, number>> {
 	return new Map(rows.map((row) => [row.category, Number(row.count)]));
 }
 
-function presentCategory(category: StoreCategoryRow, counts: Map<string, number>) {
+function presentCategory(category: StoreCategoryRow, counts: Map<string, number>, translations: Record<string, CategoryText> = {}) {
 	return {
 		uuid: category.uuid,
 		name: category.name,
@@ -232,15 +315,24 @@ function presentCategory(category: StoreCategoryRow, counts: Map<string, number>
 		parent: category.parent_category,
 		sort_order: category.sort_order,
 		products: counts.get(category.uuid) ?? 0,
+		translations,
 	};
+}
+
+async function languageCodes(projectId: string): Promise<string[]> {
+	return (await storeLanguages(projectId)).map((language) => language.code);
 }
 
 Server.app.get(`${base}/categories`, Auth.required(), Permissions.require(Permission.ITEM_VIEW), async (ctx) => {
 	const project = Permissions.project(ctx);
-	const [categories, counts] = await Promise.all([categoriesOf(project.uuid), categoryCounts(project.uuid)]);
+	const [categories, counts, translations] = await Promise.all([
+		categoriesOf(project.uuid),
+		categoryCounts(project.uuid),
+		categoryTranslationsOf(project.uuid),
+	]);
 	return Utils.ok(
 		ctx,
-		categories.map((category) => presentCategory(category, counts))
+		categories.map((category) => presentCategory(category, counts, translations.get(category.uuid)))
 	);
 });
 
@@ -250,7 +342,8 @@ async function saveCategory(ctx: Context<AppState>, existing: StoreCategoryRow |
 
 	const data = await readJson(ctx);
 	const input = data ? readCategory(data, existing) : null;
-	if (!input) return Utils.fail(ctx, ErrorCode.INVALID_STORE_CATEGORY);
+	const translations = data ? readCategoryTranslations(data.translations, await languageCodes(project.uuid)) : null;
+	if (!input || translations === null) return Utils.fail(ctx, ErrorCode.INVALID_STORE_CATEGORY);
 
 	const all = await categoriesOf(project.uuid);
 	if (input.parent !== null) {
@@ -261,18 +354,21 @@ async function saveCategory(ctx: Context<AppState>, existing: StoreCategoryRow |
 
 	const now = Date.now();
 	const uuid = existing?.uuid ?? crypto.randomUUID();
-	if (existing) {
-		await Database`
-			UPDATE store_categories SET name = ${input.name}, slug = ${input.slug}, description = ${input.description}, parent_category = ${input.parent},
-				sort_order = ${input.sort_order}, updated = ${now}
-			WHERE uuid = ${uuid}
-		`;
-	} else {
-		await Database`
-			INSERT INTO store_categories(uuid, project, parent_category, slug, name, description, sort_order, created, updated)
-			VALUES(${uuid}, ${project.uuid}, ${input.parent}, ${input.slug}, ${input.name}, ${input.description}, ${input.sort_order}, ${now}, ${now})
-		`;
-	}
+	await Database.begin(async (tx) => {
+		if (existing) {
+			await tx`
+				UPDATE store_categories SET name = ${input.name}, slug = ${input.slug}, description = ${input.description}, parent_category = ${input.parent},
+					sort_order = ${input.sort_order}, updated = ${now}
+				WHERE uuid = ${uuid}
+			`;
+		} else {
+			await tx`
+				INSERT INTO store_categories(uuid, project, parent_category, slug, name, description, sort_order, created, updated)
+				VALUES(${uuid}, ${project.uuid}, ${input.parent}, ${input.slug}, ${input.name}, ${input.description}, ${input.sort_order}, ${now}, ${now})
+			`;
+		}
+		if (translations !== undefined) await writeCategoryTranslations(tx, project.uuid, uuid, translations, now);
+	});
 	await Audit.record(ctx, {
 		project: project.uuid,
 		action: existing ? "store.category_updated" : "store.category_created",
@@ -282,7 +378,8 @@ async function saveCategory(ctx: Context<AppState>, existing: StoreCategoryRow |
 	});
 
 	const [saved] = (await Database`SELECT * FROM store_categories WHERE uuid = ${uuid}`) as StoreCategoryRow[];
-	return Utils.ok(ctx, presentCategory(saved, await categoryCounts(project.uuid)), existing ? 200 : 201);
+	const stored = await categoryTranslationsOf(project.uuid);
+	return Utils.ok(ctx, presentCategory(saved, await categoryCounts(project.uuid), stored.get(uuid)), existing ? 200 : 201);
 }
 
 async function findCategory(ctx: Context<AppState>): Promise<StoreCategoryRow | null> {
@@ -513,9 +610,10 @@ async function findItem(ctx: Context<AppState>): Promise<CatalogItemRow | null> 
 
 async function productState(project: ProjectRow, item: CatalogItemRow) {
 	const [product] = (await Database`SELECT * FROM store_products WHERE item = ${item.uuid}`) as StoreProductRow[];
-	const [attributes, images, keys] = await Promise.all([
+	const [attributes, images, translations, keys] = await Promise.all([
 		attributesOf([item.uuid]),
 		imagesOf([item.uuid]),
+		productTranslationsOf(item.uuid),
 		item.delivers_keys && item.license === null
 			? (Database`SELECT COUNT(*) AS count FROM item_keys WHERE item = ${item.uuid} AND status = 'available'` as Promise<{ count: number }[]>)
 			: Promise.resolve(null),
@@ -558,6 +656,7 @@ async function productState(project: ProjectRow, item: CatalogItemRow) {
 		sort_order: product?.sort_order ?? 0,
 		attributes: (attributes.get(item.uuid) ?? []).map((row) => ({ name: row.attribute, value: row.attribute_value })),
 		images: (images.get(item.uuid) ?? []).map((row) => ({ uuid: row.uuid, url: imagePath(row), alt: row.alt, byte_size: Number(row.byte_size) })),
+		translations,
 	};
 }
 
@@ -644,7 +743,8 @@ Server.app.put(`${base}/products/:item`, Auth.required(), Permissions.require(Pe
 
 	const data = await readJson(ctx);
 	const input = data ? readProduct(data) : null;
-	if (!input) return Utils.fail(ctx, ErrorCode.INVALID_STORE_PRODUCT);
+	const translations = data ? readProductTranslations(data.translations, await languageCodes(project.uuid)) : null;
+	if (!input || translations === null) return Utils.fail(ctx, ErrorCode.INVALID_STORE_PRODUCT);
 	if (input.category !== null) {
 		const [category] = (await Database`SELECT uuid FROM store_categories WHERE uuid = ${input.category} AND project = ${project.uuid}`) as { uuid: string }[];
 		if (!category) return Utils.fail(ctx, ErrorCode.STORE_CATEGORY_NOT_FOUND);
@@ -682,6 +782,7 @@ Server.app.put(`${base}/products/:item`, Auth.required(), Permissions.require(Pe
 				VALUES(${crypto.randomUUID()}, ${project.uuid}, ${item.uuid}, ${attribute.name}, ${attribute.value}, ${index})
 			`;
 		}
+		if (translations !== undefined) await writeProductTranslations(tx, project.uuid, item.uuid, translations, now);
 	});
 
 	await Audit.record(ctx, {

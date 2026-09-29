@@ -57,7 +57,7 @@ Server.app.post("/api/v1/customer/auth/request", loginLimit, async (ctx) => {
 	});
 	if (!accepted) return Utils.fail(ctx, ErrorCode.RATE_LIMITED);
 	const store = isSlug(data.store, 100) ? await storeBySlug(data.store) : null;
-	const language = isUiLanguage(data.language) ? data.language : store ? store.config.language : "en";
+	const language = isUiLanguage(data.language) ? data.language : store && isUiLanguage(store.config.language) ? store.config.language : "en";
 	const origin = store?.settings.domain ? `https://${store.settings.domain}` : Utils.publicUrl();
 	const returnTo = isReturnPath(data.return) ? `&return=${encodeURIComponent(data.return)}` : "";
 	const url = `${origin}/customer/login#token=${token}${returnTo}`;

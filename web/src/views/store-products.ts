@@ -1,4 +1,15 @@
-import { Api, ApiError, type Project, type StoreAttribute, type StoreCategory, type StoreImage, type StoreProductDetails, type StoreState } from "../api";
+import {
+	Api,
+	ApiError,
+	type CategoryText,
+	type ProductText,
+	type Project,
+	type StoreAttribute,
+	type StoreCategory,
+	type StoreImage,
+	type StoreProductDetails,
+	type StoreState,
+} from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
 import { t } from "../i18n";
 import { navigate } from "../router";
@@ -9,7 +20,7 @@ import { pagination, PAGE_SIZE } from "../pagination";
 import { convertToWebp, ImageTooLargeError, ImageUnreadableError, toBase64 } from "../image";
 import { renderMarkdown } from "../../../server/markdown";
 import { slugify } from "../../../server/store/config";
-import { MAX_STORE_IMAGE_BYTES, storeSection } from "./store";
+import { contentLanguages, languagePanels, MAX_STORE_IMAGE_BYTES, storeSection } from "./store";
 import { icon } from "../storefront/icons";
 
 const MAX_IMAGES = 12;
@@ -355,6 +366,56 @@ function imageManager(uuid: string, item: string, images: StoreImage[], editable
 	);
 }
 
+function markdownField(value: string, placeholder: string): { textarea: HTMLTextAreaElement; element: HTMLElement } {
+	const textarea = el("textarea", { rows: "14", maxlength: "50000", placeholder });
+	textarea.value = value;
+	const preview = el("div", { class: "markdown-preview sf-prose" });
+	const sync = () => (preview.innerHTML = renderMarkdown(textarea.value) || `<p class="muted">${t("store.preview_empty")}</p>`);
+	textarea.addEventListener("input", sync);
+	sync();
+	return { textarea, element: el("div", { class: "markdown-split" }, textarea, preview) };
+}
+
+function nullable(value: string): string | null {
+	return value.trim() === "" ? null : value.trim();
+}
+
+function productTranslations(state: StoreState, details: StoreProductDetails) {
+	const readers = new Map<string, () => ProductText>();
+	const panelFor = (code: string) => {
+		const text = details.translations[code];
+		const name = input("text", { maxlength: "200", value: text?.name ?? "", placeholder: details.item.name });
+		const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: details.summary ?? t("store.summary_placeholder") });
+		summary.value = text?.summary ?? "";
+		const description = markdownField(
+			text?.description ?? "",
+			details.description ? t("store.translation_fallback") : t("store.description_markdown_placeholder")
+		);
+		readers.set(code, () => ({ name: nullable(name.value), summary: nullable(summary.value), description: nullable(description.textarea.value) }));
+		const panel = el(
+			"div",
+			{ class: "stack" },
+			el("p", { class: "muted" }, t("store.translation_hint")),
+			field(t("store.product_name"), name),
+			field(t("store.summary"), summary),
+			el("div", { class: "field" }, el("span", { class: "field-label" }, t("store.product_description")), description.element)
+		);
+		panel.lang = code;
+		return panel;
+	};
+	return {
+		panelFor,
+		read: (): Record<string, ProductText> => {
+			const result: Record<string, ProductText> = { ...details.translations };
+			for (const language of contentLanguages(state)) {
+				const reader = readers.get(language.code);
+				if (reader) result[language.code] = reader();
+			}
+			return result;
+		},
+	};
+}
+
 function productEditor(
 	project: Project,
 	state: StoreState,
@@ -375,12 +436,9 @@ function productEditor(
 	const category = select(categoryOptions(categories, t("store.no_category")), details.category ?? "");
 	const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: t("store.summary_placeholder") });
 	summary.value = details.summary ?? "";
-	const description = el("textarea", { rows: "14", maxlength: "50000", placeholder: t("store.description_markdown_placeholder") });
-	description.value = details.description ?? "";
-	const preview = el("div", { class: "markdown-preview sf-prose" });
-	const syncPreview = () => (preview.innerHTML = renderMarkdown(description.value) || `<p class="muted">${t("store.preview_empty")}</p>`);
-	description.addEventListener("input", syncPreview);
-	syncPreview();
+	const descriptionField = markdownField(details.description ?? "", t("store.description_markdown_placeholder"));
+	const description = descriptionField.textarea;
+	const translations = productTranslations(state, details);
 
 	const compare = input("number", {
 		min: "0",
@@ -467,6 +525,7 @@ function productEditor(
 						restock_at: restock.value ? dayStartFromDateInput(restock.value) : null,
 						sort_order: Math.round(Number(sortOrder.value) || 0),
 						attributes: attributes.read(),
+						translations: translations.read(),
 					});
 					toast(t("store.product_saved"), "success");
 					if (!details.listed) navigate(`/projects/${uuid}/store/products/${item.uuid}`, true);
@@ -484,13 +543,21 @@ function productEditor(
 				"section",
 				{ class: "card stack" },
 				el("h2", {}, t("store.product_content")),
-				field(t("store.summary"), summary, t("store.summary_hint")),
-				el(
-					"div",
-					{ class: "field" },
-					el("span", { class: "field-label" }, t("store.product_description")),
-					el("div", { class: "markdown-split" }, description, preview),
-					el("span", { class: "field-hint" }, t("store.markdown_hint"))
+				languagePanels(
+					state,
+					el(
+						"div",
+						{ class: "stack" },
+						field(t("store.summary"), summary, t("store.summary_hint")),
+						el(
+							"div",
+							{ class: "field" },
+							el("span", { class: "field-label" }, t("store.product_description")),
+							descriptionField.element,
+							el("span", { class: "field-hint" }, t("store.markdown_hint"))
+						)
+					),
+					translations.panelFor
 				)
 			),
 			el(
@@ -575,7 +642,7 @@ export async function storeProductView(uuid: string, itemId: string): Promise<HT
 	});
 }
 
-function categoryForm(uuid: string, categories: StoreCategory[], existing: StoreCategory | null, onSaved: () => void) {
+function categoryForm(uuid: string, state: StoreState, categories: StoreCategory[], existing: StoreCategory | null, onSaved: () => void) {
 	const name = input("text", { value: existing?.name ?? "", required: true, maxlength: "120" });
 	const slug = input("text", { value: existing?.slug ?? "", maxlength: "80", placeholder: t("store.slug_auto") });
 	let touched = Boolean(existing);
@@ -588,6 +655,28 @@ function categoryForm(uuid: string, categories: StoreCategory[], existing: Store
 	description.value = existing?.description ?? "";
 	const order = input("number", { step: "1", value: String(existing?.sort_order ?? 0) });
 	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("store.add_category"));
+	const readers = new Map<string, () => CategoryText>();
+	const translationPanel = (code: string) => {
+		const text = existing?.translations[code];
+		const translatedName = input("text", { maxlength: "120", value: text?.name ?? "", placeholder: existing?.name ?? "" });
+		const translatedDescription = el("textarea", { rows: "3", maxlength: "2000", placeholder: existing?.description ?? "" });
+		translatedDescription.value = text?.description ?? "";
+		readers.set(code, () => ({ name: nullable(translatedName.value), description: nullable(translatedDescription.value) }));
+		const panel = el(
+			"div",
+			{ class: "stack" },
+			el("p", { class: "muted" }, t("store.translation_hint")),
+			field(t("store.category_name"), translatedName),
+			field(t("store.category_description"), translatedDescription, t("forms.optional"))
+		);
+		panel.lang = code;
+		return panel;
+	};
+	const readTranslations = (): Record<string, CategoryText> => {
+		const result: Record<string, CategoryText> = { ...(existing?.translations ?? {}) };
+		for (const [code, read] of readers) result[code] = read();
+		return result;
+	};
 
 	const form = el(
 		"form",
@@ -601,6 +690,7 @@ function categoryForm(uuid: string, categories: StoreCategory[], existing: Store
 					parent: parent.value || null,
 					description: description.value.trim() || null,
 					sort_order: Math.round(Number(order.value) || 0),
+					translations: readTranslations(),
 				};
 				try {
 					if (existing) await Api.updateStoreCategory(uuid, existing.uuid, body);
@@ -614,9 +704,17 @@ function categoryForm(uuid: string, categories: StoreCategory[], existing: Store
 				}
 			},
 		},
-		el("div", { class: "form-grid" }, field(t("store.category_name"), name), field(t("store.product_slug"), slug)),
-		el("div", { class: "form-grid" }, field(t("store.parent_category"), parent), field(t("store.sort_order"), order)),
-		field(t("store.category_description"), description, t("forms.optional")),
+		languagePanels(
+			state,
+			el(
+				"div",
+				{ class: "stack" },
+				el("div", { class: "form-grid" }, field(t("store.category_name"), name), field(t("store.product_slug"), slug)),
+				el("div", { class: "form-grid" }, field(t("store.parent_category"), parent), field(t("store.sort_order"), order)),
+				field(t("store.category_description"), description, t("forms.optional"))
+			),
+			translationPanel
+		),
 		el("div", { class: "dialog-actions" }, submit)
 	);
 	const dialog = modal(existing ? t("store.edit_category") : t("store.new_category"), form);
@@ -624,7 +722,7 @@ function categoryForm(uuid: string, categories: StoreCategory[], existing: Store
 }
 
 export async function storeCategoriesView(uuid: string): Promise<HTMLElement> {
-	return storeSection(uuid, async (project) => {
+	return storeSection(uuid, async (project, state) => {
 		const body = el("div");
 		const editable = can(project, Permission.ITEM_EDIT);
 		let categories: StoreCategory[] = [];
@@ -638,7 +736,7 @@ export async function storeCategoriesView(uuid: string): Promise<HTMLElement> {
 						editable
 							? el(
 									"button",
-									{ class: "button primary", type: "button", onClick: () => categoryForm(uuid, categories, null, () => void load()) },
+									{ class: "button primary", type: "button", onClick: () => categoryForm(uuid, state, categories, null, () => void load()) },
 									t("store.add_category")
 								)
 							: undefined
@@ -682,7 +780,7 @@ export async function storeCategoriesView(uuid: string): Promise<HTMLElement> {
 								editable
 									? el(
 											"button",
-											{ class: "button ghost small", type: "button", onClick: () => categoryForm(uuid, categories, category, () => void load()) },
+											{ class: "button ghost small", type: "button", onClick: () => categoryForm(uuid, state, categories, category, () => void load()) },
 											t("ui.edit")
 										)
 									: null,
@@ -736,7 +834,7 @@ export async function storeCategoriesView(uuid: string): Promise<HTMLElement> {
 						el("span"),
 						el(
 							"button",
-							{ class: "button primary", type: "button", onClick: () => categoryForm(uuid, categories, null, () => void load()) },
+							{ class: "button primary", type: "button", onClick: () => categoryForm(uuid, state, categories, null, () => void load()) },
 							t("store.new_category")
 						)
 					)

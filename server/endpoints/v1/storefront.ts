@@ -29,6 +29,7 @@ import {
 	listProducts,
 	presentCards,
 	productBySlug,
+	translatedRow,
 	productsByItem,
 	PRODUCT_SORTS,
 	type ProductSort,
@@ -52,6 +53,8 @@ import {
 import { findOrder, orderItems, presentOrder } from "../../store/orders";
 import { claimCoupon, couponByCode, normalizeCode, recordRedemption, unclaimCoupon, usedBy } from "../../store/coupons";
 import { recordLicenseOrder } from "../../license-orders";
+import { contentLanguage, localizeConfig, offeredLanguages, storeLanguages, type StoreLanguage } from "../../store/languages";
+import { productTexts, translatedCategories } from "../../store/translations";
 import type { AppState, InvoiceRow, StoreImageRow } from "../../database/models";
 
 const browseLimit = rateLimit({ windowMs: 60 * 1000, max: 240, message: "Too many requests. Please slow down." });
@@ -81,11 +84,30 @@ function publicQuote(quote: Quote) {
 	return visible;
 }
 
+async function shopperLanguage(ctx: Context<AppState>, store: LoadedStore): Promise<StoreLanguage | null> {
+	return await contentLanguage(store.project.uuid, store.config.language, ctx.query().get("lang"));
+}
+
+async function translatedQuote(quote: ReturnType<typeof publicQuote>, language: StoreLanguage | null) {
+	if (!language) return quote;
+	const texts = await productTexts(
+		quote.lines.map((line) => line.product),
+		language.code
+	);
+	const shipping = <T extends { id: string; name: string }>(option: T): T => ({ ...option, name: language.content[`shipping.${option.id}`] ?? option.name });
+	return {
+		...quote,
+		lines: quote.lines.map((line) => ({ ...line, name: texts.get(line.product)?.name ?? line.name })),
+		shipping_options: quote.shipping_options.map(shipping),
+		shipping: quote.shipping ? shipping(quote.shipping) : null,
+	};
+}
+
 Server.app.get("/api/v1/store/:slug", browseLimit, async (ctx) => {
 	const store = await openStore(ctx);
 	if (!store) return Utils.fail(ctx, ErrorCode.STORE_NOT_FOUND);
 
-	const [categories, counts, images, methods] = await Promise.all([
+	const [categories, counts, images, methods, languages] = await Promise.all([
 		categoriesOf(store.project.uuid),
 		Database`
 			SELECT sp.store_category AS category, COUNT(*) AS count FROM store_products sp JOIN catalog_items c ON c.uuid = sp.item
@@ -93,7 +115,13 @@ Server.app.get("/api/v1/store/:slug", browseLimit, async (ctx) => {
 		` as Promise<{ category: string | null; count: number }[]>,
 		brandImages(store.project.uuid),
 		availableFor(store.project.uuid),
+		storeLanguages(store.project.uuid),
 	]);
+	const offered = offeredLanguages(languages, store.config.language);
+	const requested = ctx.query().get("lang");
+	const active = offered.find((language) => language.code === requested) ?? offered[0];
+	const translated = active && active.code !== store.config.language ? active : null;
+	const shown = await translatedCategories(store.project.uuid, categories, translated?.code ?? null);
 	const direct = new Map(counts.map((row) => [row.category, Number(row.count)]));
 
 	ctx.header("Cache-Control", "no-cache");
@@ -102,7 +130,9 @@ Server.app.get("/api/v1/store/:slug", browseLimit, async (ctx) => {
 		domain: store.settings.domain,
 		currency: store.project.currency,
 		timezone: store.project.timezone,
-		config: store.config,
+		config: translated ? localizeConfig(store.config, translated.content) : store.config,
+		languages: offered.map((language) => ({ code: language.code, name: language.name })),
+		language: { code: active?.code ?? store.config.language, strings: active?.strings ?? {} },
 		logo: images.logo,
 		hero: images.hero,
 		branding: brandingOf(store.project),
@@ -116,7 +146,7 @@ Server.app.get("/api/v1/store/:slug", browseLimit, async (ctx) => {
 			registration_number: store.seller.registration_number,
 		},
 		payment_methods: methods.map((method) => ({ processor: method.processor, label: method.label, kind: method.kind })),
-		categories: categories.map((category) => ({
+		categories: shown.map((category) => ({
 			uuid: category.uuid,
 			slug: category.slug,
 			name: category.name,
@@ -157,7 +187,8 @@ Server.app.get("/api/v1/store/:slug/products", browseLimit, async (ctx) => {
 	const filters = readFilters(params);
 	if (filters === null) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
-	const all = await categoriesOf(store.project.uuid);
+	const language = (await shopperLanguage(ctx, store))?.code ?? null;
+	const all = await translatedCategories(store.project.uuid, await categoriesOf(store.project.uuid), language);
 	const categorySlug = params.get("category");
 	const category = categorySlug ? all.find((entry) => entry.slug === categorySlug) : undefined;
 	if (categorySlug && !category) return Utils.fail(ctx, ErrorCode.STORE_CATEGORY_NOT_FOUND);
@@ -172,6 +203,7 @@ Server.app.get("/api/v1/store/:slug/products", browseLimit, async (ctx) => {
 		sort,
 		limit,
 		offset,
+		language,
 	};
 	const [listed, facets] = await Promise.all([
 		listProducts(store.project.uuid, query),
@@ -185,7 +217,7 @@ Server.app.get("/api/v1/store/:slug/products", browseLimit, async (ctx) => {
 	}
 
 	return Utils.ok(ctx, {
-		products: await presentCards(store, listed.rows),
+		products: await presentCards(store, listed.rows, language),
 		total: listed.total,
 		limit,
 		offset,
@@ -209,14 +241,16 @@ Server.app.get("/api/v1/store/:slug/products/:product", browseLimit, async (ctx)
 
 	const slug = ctx.params["product"];
 	if (!isSlug(slug, 100)) return Utils.fail(ctx, ErrorCode.STORE_PRODUCT_NOT_FOUND);
-	const row = await productBySlug(store.project.uuid, slug);
-	if (!row) return Utils.fail(ctx, ErrorCode.STORE_PRODUCT_NOT_FOUND);
+	const found = await productBySlug(store.project.uuid, slug);
+	if (!found) return Utils.fail(ctx, ErrorCode.STORE_PRODUCT_NOT_FOUND);
+	const language = (await shopperLanguage(ctx, store))?.code ?? null;
+	const row = translatedRow(found, (await productTexts([found.uuid], language)).get(found.uuid));
 
 	const [[card], images, attributes, categories] = await Promise.all([
-		presentCards(store, [row]),
+		presentCards(store, [found], language),
 		imagesOf([row.uuid]),
 		attributesOf([row.uuid]),
-		categoriesOf(store.project.uuid),
+		categoriesOf(store.project.uuid).then((list) => translatedCategories(store.project.uuid, list, language)),
 	]);
 
 	const trail = [];
@@ -240,6 +274,7 @@ Server.app.get("/api/v1/store/:slug/products/:product", browseLimit, async (ctx)
 					sort: "featured",
 					limit: 5,
 					offset: 0,
+					language,
 				})
 			).rows.filter((entry) => entry.uuid !== row.uuid)
 		: [];
@@ -250,7 +285,7 @@ Server.app.get("/api/v1/store/:slug/products/:product", browseLimit, async (ctx)
 		images: (images.get(row.uuid) ?? []).map((image: StoreImageRow) => ({ uuid: image.uuid, url: imagePath(image), alt: image.alt })),
 		attributes: (attributes.get(row.uuid) ?? []).map((attribute) => ({ name: attribute.attribute, value: attribute.attribute_value })),
 		trail,
-		related: await presentCards(store, related.slice(0, 4)),
+		related: await presentCards(store, related.slice(0, 4), language),
 	});
 });
 
@@ -271,7 +306,8 @@ Server.app.post("/api/v1/store/:slug/quote", cartLimit, async (ctx) => {
 	const coupon = code ? await couponByCode(store.project.uuid, code) : null;
 
 	const quote = await quoteCart(store, lines, shipping, buyer ? { country, customer_type: type, vat_number: vat } : null, coupon);
-	return Utils.ok(ctx, { ...publicQuote(quote), coupon_issue: code && !coupon ? "unknown" : quote.coupon_issue });
+	const visible = await translatedQuote(publicQuote(quote), await shopperLanguage(ctx, store));
+	return Utils.ok(ctx, { ...visible, coupon_issue: code && !coupon ? "unknown" : quote.coupon_issue });
 });
 
 function readCheckout(data: Record<string, unknown>, store: LoadedStore): CheckoutInput | null {

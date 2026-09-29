@@ -1,20 +1,20 @@
 import { COUNTRY_CODES } from "../../server/countries";
 import type { ComboOption } from "./combobox";
-import { language } from "./i18n";
+import { locale } from "./i18n";
 
 const cached = new Map<string, ComboOption[]>();
 const names = new Map<string, Intl.DisplayNames | null>();
 
 function regionNames(): Intl.DisplayNames | null {
-	const locale = language();
-	if (!names.has(locale)) {
+	const code = locale();
+	if (!names.has(code)) {
 		try {
-			names.set(locale, new Intl.DisplayNames(locale, { type: "region" }));
+			names.set(code, new Intl.DisplayNames(code, { type: "region" }));
 		} catch {
-			names.set(locale, null);
+			names.set(code, null);
 		}
 	}
-	return names.get(locale) ?? null;
+	return names.get(code) ?? null;
 }
 
 export function countryName(code: string): string {
@@ -42,11 +42,11 @@ export function countryCodeFor(value: string | null | undefined): string {
 }
 
 export function countryOptions(): ComboOption[] {
-	const locale = language();
-	let options = cached.get(locale);
+	const code = locale();
+	let options = cached.get(code);
 	if (!options) {
-		options = COUNTRY_CODES.map((code) => ({ value: code, label: countryName(code), hint: code })).sort((a, b) => a.label.localeCompare(b.label, locale));
-		cached.set(locale, options);
+		options = COUNTRY_CODES.map((entry) => ({ value: entry, label: countryName(entry), hint: entry })).sort((a, b) => a.label.localeCompare(b.label, code));
+		cached.set(code, options);
 	}
 	return options;
 }

@@ -8,8 +8,8 @@ web store. Open the project and choose Store.
 The store gets a web address such as `/shop/pixel-parts` and can
 also answer on a custom domain. Point the domain's DNS at this server, serve it
 over HTTPS through your reverse proxy, and enter it under Custom domain. The
-same page sets the name, tagline, search engine description, language (`en` or
-`sl`), announcement bar, logo, hero image and text, accent color, color scheme,
+same page sets the name, tagline, search engine description, default language,
+announcement bar, logo, hero image and text, accent color, color scheme,
 font, corners, card style, products per row and optional custom CSS. Fonts are
 system fonts, so the storefront loads nothing from other servers. Contact
 details, social links (Discord, Instagram, Facebook, X, YouTube, TikTok and
@@ -24,6 +24,41 @@ with an English store also gets the Slovenian text on each page, since
 consumers in Slovenia must be served in Slovenian. Saved stores keep their own
 text. Replace with the current template in the page editor brings in the
 latest version. Fill in the company details before creating the store.
+
+## Translations
+
+English and Slovenian are built in. The Translations tab lists the store's
+languages and lets you add any other one by its code, such as `it`, `de` or
+`pt-BR`, up to 10 languages in total. Each language can be shown in the store or
+kept hidden while you translate it. Shoppers see the default language first and
+switch between the shown ones in the footer or the mobile menu. The choice is
+remembered in their browser, and a link ending in `?lang=it` opens the store in
+that language.
+
+Edit texts covers every text the storefront shows, from buttons and checkout
+labels to statuses, counts and error messages. In English and Slovenian you can
+replace any built-in text with your own wording, and only that language changes.
+In an added language every text you leave empty appears in the default
+language, or in English when the default is itself an added language. Counted
+texts ask for the plural forms of the language, and a text must keep
+placeholders such as `{count}`. Dates, prices and country names follow the
+shopper's language. Sign in emails use the shopper's language when it is
+English or Slovenian.
+
+Your own content is translated where you write it. The product editor and the
+category dialog show a tab for each extra language with the name, summary and
+description, and the language's page under Translations has a Your store
+content section for the texts from Settings: tagline, description, announcement,
+hero, location, shipping options, footer text and pages. Any field left empty
+shows the default language text. Store search also finds products by their
+translated name and summary. Orders, invoices and order emails keep the default
+language text, and specifications stay as written because shoppers filter by
+them. Deleting a language deletes its product and category translations too.
+
+When you switch the default between English and Slovenian, saving the settings
+replaces the texts a new store starts with (hero subtitle, button label, standard
+shipping name and the legal page templates) with the other language's version,
+as long as you have not edited them.
 
 ## Products
 

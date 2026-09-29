@@ -26,6 +26,8 @@ export interface Storefront {
 	currency: string;
 	timezone: string;
 	config: StoreConfig;
+	languages: { code: string; name: string }[];
+	language: { code: string; strings: Record<string, string> };
 	logo: string | null;
 	hero: string | null;
 	branding: { white_label: boolean; logo: string | null };
@@ -193,8 +195,19 @@ async function read<T>(response: Response): Promise<T> {
 	return result.data;
 }
 
+let shopperLanguage: string | null = null;
+
+export function useShopperLanguage(code: string | null) {
+	shopperLanguage = code;
+}
+
 function path(slug: string, rest = ""): string {
 	return `/store/${encodeURIComponent(slug)}${rest}`;
+}
+
+function translated(slug: string, rest: string): string {
+	if (shopperLanguage === null) return path(slug, rest);
+	return path(slug, `${rest}${rest.includes("?") ? "&" : "?"}lang=${encodeURIComponent(shopperLanguage)}`);
 }
 
 function productQuery(query: ProductQuery): string {
@@ -213,14 +226,14 @@ function productQuery(query: ProductQuery): string {
 }
 
 export const StoreApi = {
-	async store(slug: string) {
-		return await read<Storefront>(await customerFetch(path(slug)));
+	async store(slug: string, language: string | null = null) {
+		return await read<Storefront>(await customerFetch(path(slug, language ? `?lang=${encodeURIComponent(language)}` : "")));
 	},
 	async products(slug: string, query: ProductQuery) {
-		return await read<ProductPage>(await customerFetch(path(slug, `/products${productQuery(query)}`)));
+		return await read<ProductPage>(await customerFetch(translated(slug, `/products${productQuery(query)}`)));
 	},
 	async product(slug: string, product: string) {
-		return await read<ProductDetails>(await customerFetch(path(slug, `/products/${encodeURIComponent(product)}`)));
+		return await read<ProductDetails>(await customerFetch(translated(slug, `/products/${encodeURIComponent(product)}`)));
 	},
 	async quote(
 		slug: string,
@@ -231,7 +244,7 @@ export const StoreApi = {
 			coupon?: string | null;
 		}
 	) {
-		return await read<Quote>(await customerFetch(path(slug, "/quote"), body));
+		return await read<Quote>(await customerFetch(translated(slug, "/quote"), body));
 	},
 	async checkout(slug: string, body: CheckoutRequest) {
 		return await read<{ invoice: string; reference: string; total_amount: number; currency: string }>(await customerFetch(path(slug, "/checkout"), body));

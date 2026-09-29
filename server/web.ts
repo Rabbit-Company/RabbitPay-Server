@@ -5,6 +5,7 @@ import Utils from "./utils";
 import Database from "./database/database";
 import { escapeHtml, markdownText } from "./markdown";
 import { normalizeHost, slugForHost } from "./store/store";
+import { isLanguageCode } from "./store/config";
 import { includedPayments, includedStorageGb, licensingEnforced } from "./licensing";
 
 const IMMUTABLE_ASSET = /-[a-z0-9]{8,}\.(js|css|woff2?|ttf|png|svg|jpg|jpeg|webp|ico)$/i;
@@ -65,7 +66,7 @@ async function storeMeta(slug: string): Promise<StoreMeta | null> {
 			slug: row.slug,
 			name: typeof config.name === "string" ? config.name : row.slug,
 			description: description ? markdownText(description, 300) : null,
-			language: config.language === "sl" ? "sl" : "en",
+			language: isLanguageCode(config.language) ? config.language : "en",
 			indexable: config.indexable !== false,
 		};
 	} catch {

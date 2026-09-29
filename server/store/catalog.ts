@@ -6,6 +6,7 @@ import { suggestTax, type BuyerTax, type SupplyType, type TaxCategory } from "..
 import { imagesOf } from "./images";
 import { imagePath, type LoadedStore } from "./store";
 import { parseLicenseProduct } from "../license-pricing";
+import { productTexts, translatedCategories, type ProductText } from "./translations";
 import type { Availability } from "./config";
 import type { CatalogItemRow, StoreAttributeRow, StoreCategoryRow, StoreImageRow, StoreProductRow } from "../database/models";
 
@@ -104,17 +105,25 @@ export interface ProductQuery {
 	sort: ProductSort;
 	limit: number;
 	offset: number;
+	language: string | null;
 }
 
-function baseFilter(sql: SQL, projectId: string, query: Pick<ProductQuery, "categories" | "search">) {
+function baseFilter(sql: SQL, projectId: string, query: Pick<ProductQuery, "categories" | "search" | "language">) {
 	const pattern = query.search === null ? null : `%${query.search.toLowerCase()}%`;
 	const category = query.categories === null ? sql`` : sql`AND sp.store_category IN ${sql(query.categories)}`;
 	const search =
 		pattern === null
 			? sql``
 			: sql`AND (LOWER(c.name) LIKE ${pattern} OR LOWER(COALESCE(sp.summary, '')) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}
-				OR c.uuid IN (SELECT a.item FROM store_attributes a WHERE a.project = ${projectId} AND LOWER(a.attribute_value) LIKE ${pattern}))`;
+				OR c.uuid IN (SELECT a.item FROM store_attributes a WHERE a.project = ${projectId} AND LOWER(a.attribute_value) LIKE ${pattern})
+				${translatedSearch(sql, projectId, query.language, pattern)})`;
 	return sql`sp.project = ${projectId} AND sp.published = 1 AND c.archived = 0 ${category} ${search}`;
+}
+
+function translatedSearch(sql: SQL, projectId: string, language: string | null, pattern: string) {
+	if (language === null) return sql``;
+	return sql`OR c.uuid IN (SELECT t.item FROM store_product_translations t WHERE t.project = ${projectId} AND t.language = ${language}
+		AND (LOWER(COALESCE(t.name, '')) LIKE ${pattern} OR LOWER(COALESCE(t.summary, '')) LIKE ${pattern}))`;
 }
 
 function attributeFilter(sql: SQL, projectId: string, filters: Map<string, string[]>) {
@@ -150,7 +159,7 @@ export async function listProducts(projectId: string, query: ProductQuery): Prom
 	return { rows: rows.map(normalized), total: Number(counted.count) };
 }
 
-export async function facetsFor(projectId: string, query: Pick<ProductQuery, "categories" | "search">) {
+export async function facetsFor(projectId: string, query: Pick<ProductQuery, "categories" | "search" | "language">) {
 	const rows = (await Database`
 		SELECT a.attribute AS attribute, a.attribute_value AS value, COUNT(DISTINCT a.item) AS count
 		FROM store_attributes a
@@ -231,12 +240,21 @@ export function presentCard(store: LoadedStore, row: ProductRow, pricing: Pricin
 	};
 }
 
-export async function presentCards(store: LoadedStore, rows: ProductRow[]) {
-	const [pricing, images, categories] = await Promise.all([
+export function translatedRow(row: ProductRow, text: ProductText | undefined): ProductRow {
+	if (!text) return row;
+	return { ...row, name: text.name ?? row.name, summary: text.summary ?? row.summary, description: text.description ?? row.description };
+}
+
+export async function presentCards(store: LoadedStore, rows: ProductRow[], language: string | null = null) {
+	const [pricing, images, categories, texts] = await Promise.all([
 		pricingFor(store.project.currency, rows),
 		imagesOf(rows.map((row) => row.uuid)),
-		categoriesOf(store.project.uuid),
+		categoriesOf(store.project.uuid).then((list) => translatedCategories(store.project.uuid, list, language)),
+		productTexts(
+			rows.map((row) => row.uuid),
+			language
+		),
 	]);
 	const byId = new Map(categories.map((category) => [category.uuid, category]));
-	return rows.map((row) => presentCard(store, row, pricing, images.get(row.uuid) ?? [], byId));
+	return rows.map((row) => presentCard(store, translatedRow(row, texts.get(row.uuid)), pricing, images.get(row.uuid) ?? [], byId));
 }

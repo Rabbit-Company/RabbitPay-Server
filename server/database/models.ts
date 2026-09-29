@@ -752,6 +752,36 @@ export interface RecurringExpenseRow extends Omit<
 	status: "active" | "paused" | "completed" | "canceled";
 }
 
+export interface StoreLanguageRow {
+	project: string;
+	language: string;
+	name: string;
+	enabled: number;
+	strings: string;
+	content: string;
+	created: number;
+	updated: number;
+}
+
+export interface StoreProductTranslationRow {
+	item: string;
+	language: string;
+	project: string;
+	name: string | null;
+	summary: string | null;
+	description: string | null;
+	updated: number;
+}
+
+export interface StoreCategoryTranslationRow {
+	store_category: string;
+	language: string;
+	project: string;
+	name: string | null;
+	description: string | null;
+	updated: number;
+}
+
 export interface StoreSettingsRow {
 	project: string;
 	slug: string;

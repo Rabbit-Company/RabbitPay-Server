@@ -1,16 +1,16 @@
-import { formatMoneyIn } from "../../../server/formats";
-import { language, t, tn } from "../i18n";
+import { formatMoneyIn, localeFor } from "../../../server/formats";
+import { locale as activeLocale, t, tn } from "../i18n";
 import type { StoreDayHours } from "../../../server/store/config";
 import type { LicenseChoice, LicenseProduct } from "../../../server/license-pricing";
 
 const DAY = 24 * 60 * 60 * 1000;
 
 export function money(amount: number, currency: string): string {
-	return formatMoneyIn(amount, currency, language());
+	return formatMoneyIn(amount, currency, activeLocale());
 }
 
 function locale(): string {
-	return language() === "sl" ? "sl-SI" : "en-GB";
+	return localeFor(activeLocale());
 }
 
 export function shortDate(timestamp: number): string {

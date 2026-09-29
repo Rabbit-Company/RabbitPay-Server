@@ -2,7 +2,14 @@ import type { SQL } from "bun";
 import type { Dialect } from "./dialect";
 import { schemaTypes } from "./schema-types";
 import { createSchema, run } from "./schema";
-import { addStoreOrderNumbers, createLicenseProductSchema, createProformaSchema, createStoreCouponSchema, createStoreSchema } from "./store-schema";
+import {
+	addStoreOrderNumbers,
+	createLicenseProductSchema,
+	createProformaSchema,
+	createStoreCouponSchema,
+	createStoreLanguageSchema,
+	createStoreSchema,
+} from "./store-schema";
 import {
 	addEmployeeSeats,
 	addEmployeeWorkforceSettings,
@@ -293,6 +300,7 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 26, name: "license products", up: createLicenseProductSchema },
 	{ version: 27, name: "store order numbers", up: addStoreOrderNumbers },
 	{ version: 28, name: "pro forma and advance invoices", up: createProformaSchema },
+	{ version: 29, name: "store languages", up: createStoreLanguageSchema },
 ];
 
 export class SchemaTooNew extends Error {

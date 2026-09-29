@@ -1,7 +1,7 @@
 import { CustomerApi, clearCustomerSession, type CustomerOrder, type CustomerProfile } from "../customer-api";
 import { addressForm, customerForm } from "../customer-forms";
 import { el, emptyState, saveFile, statusPill, table } from "../dom";
-import { language, t } from "../i18n";
+import { locale, t } from "../i18n";
 import { navigate } from "../router";
 import { confirmDialog, reportError, toast } from "../ui";
 import { formatMoneyIn } from "../../../server/formats";
@@ -128,7 +128,7 @@ function orderRow(order: CustomerOrder): HTMLElement {
 		{},
 		el("td", {}, el("a", { class: "mono", href: `/customer/invoices/${order.invoice}` }, order.reference)),
 		el("td", {}, order.store_url ? el("a", { href: order.store_url }, order.store) : order.store),
-		el("td", {}, new Date(order.created).toLocaleDateString(language())),
+		el("td", {}, new Date(order.created).toLocaleDateString(locale())),
 		el("td", {}, statusPill(order.payment_status)),
 		el(
 			"td",
@@ -136,7 +136,7 @@ function orderRow(order: CustomerOrder): HTMLElement {
 			fulfillmentPill(order.fulfillment),
 			order.tracking_url ? el("a", { class: "tracking-link", href: order.tracking_url, target: "_blank", rel: "noopener noreferrer" }, t("shop.track")) : null
 		),
-		el("td", { class: "numeric" }, formatMoneyIn(order.total_amount, order.currency, language()))
+		el("td", { class: "numeric" }, formatMoneyIn(order.total_amount, order.currency, locale()))
 	);
 }
 

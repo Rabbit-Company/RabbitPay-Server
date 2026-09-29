@@ -335,6 +335,91 @@ describe("the online store module", () => {
 		expect((await call("POST", `/store/${slug}/quote`, undefined, { lines: [] })).error).toBe(1161);
 	});
 
+	test("offers the languages the merchant adds with their own texts", async () => {
+		const before = await call("GET", `/store/${slug}`);
+		const fallback = before.data.config.language;
+		expect(before.data.languages.map((language: { code: string }) => language.code)).toEqual([fallback]);
+
+		const italian = { name: "Italiano", enabled: false, strings: { "shop.add_to_cart": "Aggiungi al carrello", "count.products.many": "{count} prodotti" } };
+		expect((await call("PUT", `${base()}/store/languages/Italian`, ownerToken, italian)).error).toBe(1246);
+		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, strings: { "<b>": "x" } })).error).toBe(1246);
+		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, name: "x".repeat(61) })).error).toBe(1246);
+		const added = await call("PUT", `${base()}/store/languages/it`, ownerToken, italian);
+		expect(added.error).toBe(0);
+		expect(added.data.languages.map((language: { code: string }) => language.code)).toEqual(["en", "sl", "it"]);
+
+		const hidden = await call("GET", `/store/${slug}?lang=it`);
+		expect(hidden.data.language.code).toBe(fallback);
+
+		await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, enabled: true });
+		const shown = await call("GET", `/store/${slug}?lang=it`);
+		expect(shown.data.languages.map((language: { code: string }) => language.code)).toEqual([fallback, "it"]);
+		expect(shown.data.language).toEqual({ code: "it", strings: italian.strings });
+
+		const badContent = await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, enabled: true, content: { "hero.colour": "Blu" } });
+		expect(badContent.error).toBe(1246);
+		const content = { "hero.title": "Benvenuti", "shipping.post": "Posta", "page.privacy.title": "Privacy" };
+		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, enabled: true, content })).error).toBe(0);
+		const kept = await call("PUT", `${base()}/store/languages/it`, ownerToken, { ...italian, enabled: true });
+		expect(kept.data.languages.find((language: { code: string }) => language.code === "it").content).toEqual(content);
+
+		const product = await call("GET", `${base()}/store/products/${gpu}`, ownerToken);
+		const translations = { it: { name: "Scheda grafica Asus", summary: null, description: "## Punti di forza" } };
+		expect((await call("PUT", `${base()}/store/products/${gpu}`, ownerToken, { ...product.data, translations: { de: translations.it } })).error).toBe(1156);
+		const translated = await call("PUT", `${base()}/store/products/${gpu}`, ownerToken, { ...product.data, translations });
+		expect(translated.error).toBe(0);
+		expect(translated.data.translations).toEqual(translations);
+		const { translations: _, ...withoutTranslations } = product.data;
+		const untouched = await call("PUT", `${base()}/store/products/${gpu}`, ownerToken, withoutTranslations);
+		expect(untouched.data.translations).toEqual(translations);
+		const category = await call("PATCH", `${base()}/store/categories/${parentCategory}`, ownerToken, {
+			translations: { it: { name: "Schede grafiche", description: null } },
+		});
+		expect(category.data.translations).toEqual({ it: { name: "Schede grafiche", description: null } });
+
+		const italianStore = await call("GET", `/store/${slug}?lang=it`);
+		expect(italianStore.data.config.hero.title).toBe("Benvenuti");
+		expect(italianStore.data.config.shipping.find((option: { id: string }) => option.id === "post").name).toBe("Posta");
+		expect(italianStore.data.config.pages.find((page: { slug: string }) => page.slug === "privacy").title).toBe("Privacy");
+		expect(italianStore.data.categories.find((entry: { uuid: string }) => entry.uuid === parentCategory).name).toBe("Schede grafiche");
+		expect((await call("GET", `/store/${slug}`)).data.config.hero.title).not.toBe("Benvenuti");
+
+		const found = await call("GET", `/store/${slug}/products?q=scheda&lang=it`);
+		expect(found.data.products.map((entry: { name: string }) => entry.name)).toEqual(["Scheda grafica Asus"]);
+		expect((await call("GET", `/store/${slug}/products?q=scheda`)).data.total).toBe(0);
+		const page = await call("GET", `/store/${slug}/products/asus-dual-rx-9060-xt?lang=it`);
+		expect(page.data.name).toBe("Scheda grafica Asus");
+		expect(page.data.summary).toBe(product.data.summary);
+		expect(page.data.description).toBe("## Punti di forza");
+		expect(page.data.trail[0].name).toBe("Schede grafiche");
+		const quote = await call("POST", `/store/${slug}/quote?lang=it`, undefined, { lines: [{ product: gpu, quantity: 1, license: null }] });
+		expect(quote.data.lines[0].name).toBe("Scheda grafica Asus");
+		expect(quote.data.shipping_options.find((option: { id: string }) => option.id === "post").name).toBe("Posta");
+		const plain = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: gpu, quantity: 1, license: null }] });
+		expect(plain.data.lines[0].name).not.toBe("Scheda grafica Asus");
+
+		const english = await call("PUT", `${base()}/store/languages/en`, ownerToken, { name: null, enabled: false, strings: { "shop.add_to_cart": " Buy now " } });
+		expect(english.data.languages.find((language: { code: string }) => language.code === "en").strings).toEqual({ "shop.add_to_cart": "Buy now" });
+
+		const state = await call("GET", `${base()}/store`, ownerToken);
+		const save = (language: string) =>
+			call("PUT", `${base()}/store`, ownerToken, { slug, domain: state.data.domain, enabled: true, config: { ...state.data.config, language } });
+		expect((await save("de")).error).toBe(1151);
+		expect((await save("it")).error).toBe(0);
+		expect((await call("GET", `/store/${slug}`)).data.language.code).toBe("it");
+		expect((await call("DELETE", `${base()}/store/languages/it`, ownerToken)).error).toBe(1248);
+		expect((await call("DELETE", `${base()}/store/languages/en`, ownerToken)).error).toBe(1247);
+
+		expect((await save(fallback)).error).toBe(0);
+		const removed = await call("DELETE", `${base()}/store/languages/it`, ownerToken);
+		expect(removed.error).toBe(0);
+		expect(removed.data.languages.map((language: { code: string }) => language.code)).toEqual(["en", "sl"]);
+		expect((await call("GET", `${base()}/store/products/${gpu}`, ownerToken)).data.translations).toEqual({});
+		const categories = await call("GET", `${base()}/store/categories`, ownerToken);
+		expect(categories.data.find((entry: { uuid: string }) => entry.uuid === parentCategory).translations).toEqual({});
+		await call("PUT", `${base()}/store/languages/en`, ownerToken, { name: null, enabled: false, strings: {} });
+	});
+
 	test("sends a store branded sign in link that returns to the checkout", async () => {
 		customerToken = await customerLogin("ana@example.com");
 		const link = messages.at(-1)!;
