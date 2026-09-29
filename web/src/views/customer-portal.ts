@@ -2,7 +2,7 @@ import { el, emptyState, field, input, saveFile, select, statusPill, table } fro
 import { CustomerApi, clearCustomerSession, customerToken, storeCustomerSession, type CustomerInvoice, type CustomerProforma } from "../customer-api";
 import { navigate, onLeave } from "../router";
 import { reportError } from "../ui";
-import { language, t } from "../i18n";
+import { isUiLanguage, language, setLanguage, t } from "../i18n";
 import { logo } from "../logo";
 import { languageSwitcher } from "../language";
 import { themeSwitcher } from "../theme-switcher";
@@ -18,6 +18,8 @@ function safeReturn(value: unknown): string | null {
 
 export function customerLoginView(): HTMLElement {
 	const fragment = new URLSearchParams(window.location.hash.slice(1));
+	const linkLanguage = fragment.get("lang");
+	if (isUiLanguage(linkLanguage) && linkLanguage !== language()) setLanguage(linkLanguage);
 	const fragmentToken = fragment.get("token");
 	const token = fragmentToken ?? history.state?.customerLoginToken ?? null;
 	const returnTo = safeReturn(fragment.get("return")) ?? safeReturn(history.state?.customerReturn);

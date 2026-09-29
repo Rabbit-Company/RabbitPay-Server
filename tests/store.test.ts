@@ -428,6 +428,24 @@ describe("the online store module", () => {
 		expect(link.text).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout`)}`);
 	});
 
+	test("keeps the shopper's language through the sign in link", async () => {
+		const request = (email: string, extra: Record<string, unknown>) =>
+			call("POST", "/customer/auth/request", undefined, { email, store: slug, return: `/shop/${slug}/checkout?step=2`, ...extra });
+
+		expect((await request("lang-en@example.com", { language: "en", store_language: "en" })).error).toBe(0);
+		const english = messages.at(-1)!;
+		expect(english.subject).toContain("Pixel Parts");
+		expect(english.text).toContain(`&lang=en&return=${encodeURIComponent(`/shop/${slug}/checkout?step=2&lang=en`)}`);
+
+		expect((await request("lang-sl@example.com", { language: "sl", store_language: "sl" })).error).toBe(0);
+		expect(messages.at(-1)!.text).toContain(`&lang=sl&return=${encodeURIComponent(`/shop/${slug}/checkout?step=2&lang=sl`)}`);
+
+		expect((await request("lang-bad@example.com", { language: "xx", store_language: '"><script>' })).error).toBe(0);
+		const fallback = messages.at(-1)!.text;
+		expect(fallback).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout?step=2`)}`);
+		expect(fallback).not.toContain("script");
+	});
+
 	test("places an unnumbered order that takes the stock and can be paid", async () => {
 		expect((await call("POST", `/store/${slug}/checkout`, undefined, checkout())).error).toBe(1000);
 		expect((await call("POST", `/store/${slug}/checkout`, customerToken, checkout())).error).toBe(1168);

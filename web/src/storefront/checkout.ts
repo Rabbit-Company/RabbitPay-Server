@@ -160,7 +160,11 @@ export function signInCard(ctx: StoreContext, returnPath: string, heading: strin
 				event.preventDefault();
 				submit.disabled = true;
 				try {
-					await CustomerApi.requestLogin(email.value.trim(), { store: ctx.store.slug, return: returnPath });
+					await CustomerApi.requestLogin(email.value.trim(), {
+						store: ctx.store.slug,
+						store_language: ctx.store.language.code,
+						return: returnPath,
+					});
 					card.replaceChildren(
 						el("div", { class: "sf-empty-icon" }, icon("mail", 30)),
 						el("h2", {}, t("shop.check_email")),

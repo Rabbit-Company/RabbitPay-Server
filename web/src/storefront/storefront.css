@@ -1855,7 +1855,7 @@ body.sf-locked {
 	margin: 0.75rem 0 0;
 }
 
-.sf input,
+.sf input:where(:not([type="checkbox"], [type="radio"])),
 .sf select,
 .sf textarea {
 	padding: 0.7rem 0.85rem;
@@ -1870,7 +1870,7 @@ body.sf-locked {
 .sf select:not([multiple]) {
 	padding-right: 2.2rem;
 }
-.sf input:focus,
+.sf input:where(:not([type="checkbox"], [type="radio"])):focus,
 .sf select:focus,
 .sf textarea:focus {
 	outline: none;
