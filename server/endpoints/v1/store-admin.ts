@@ -18,7 +18,7 @@ import { deliverSoon, queueEmail } from "../../email/outbox";
 import { MAX_MARKDOWN_LENGTH } from "../../markdown";
 import { legalPages } from "../../store/legal";
 import { isDomain, isSlug, isWebUrl, legalLanguage, localizeDefaults, readStoreConfig, slugify } from "../../store/config";
-import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, sellerFor, settingsFor } from "../../store/store";
+import { brandImages, draftFor, forgetDomains, imagePath, normalizeHost, sellerFor, settingsFor, storeUrl } from "../../store/store";
 import { imagesOf, MAX_PRODUCT_IMAGES, readStoreImage, removeStoreImages, STORE_IMAGE_BODY_LIMIT, storeImage } from "../../store/images";
 import { attributesOf, categoriesOf, descendantsOf } from "../../store/catalog";
 import { cancelOrder, findOrder, isFulfillment, orderItems, presentOrder, type OrderRow } from "../../store/orders";
@@ -71,10 +71,6 @@ async function readJson(ctx: Context<AppState>): Promise<Record<string, unknown>
 
 function licensed(ctx: Context<AppState>): boolean {
 	return storeActive(Permissions.project(ctx));
-}
-
-export function storeUrl(settings: { slug: string; domain: string | null }): string {
-	return settings.domain ? `https://${settings.domain}` : `${Utils.publicUrl()}/shop/${settings.slug}`;
 }
 
 async function storeState(project: ProjectRow) {

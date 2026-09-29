@@ -1,4 +1,5 @@
 import Database from "../database/database";
+import Utils from "../utils";
 import { addressLines, companyFor, displayNameOf } from "../company";
 import { storeActive } from "../licensing";
 import { defaultStoreConfig, parseStoredConfig, slugify, type StoreConfig, type StoreSeller } from "./config";
@@ -92,6 +93,10 @@ export function forgetDomains() {
 
 export function storePath(settings: Pick<StoreSettingsRow, "slug">): string {
 	return `/shop/${settings.slug}`;
+}
+
+export function storeUrl(settings: Pick<StoreSettingsRow, "slug" | "domain">): string {
+	return settings.domain ? `https://${settings.domain}` : `${Utils.publicUrl()}/shop/${settings.slug}`;
 }
 
 export function imagePath(image: Pick<StoreImageRow, "uuid">): string {

@@ -85,10 +85,10 @@ export namespace Server {
 		);
 
 		app.onNotFound(async (ctx) => {
-			const pathname = new URL(ctx.req.url).pathname;
-			if (pathname.startsWith("/api/") || pathname === "/metrics") return Utils.jsonError(ErrorCode.INVALID_ENDPOINT);
+			const url = new URL(ctx.req.url);
+			if (url.pathname.startsWith("/api/") || url.pathname === "/metrics") return Utils.jsonError(ErrorCode.INVALID_ENDPOINT);
 
-			const page = await WebInterface.serve(pathname, ctx.req.method, ctx.req.headers.get("host"));
+			const page = await WebInterface.serve(url, ctx.req.method, ctx.req.headers.get("host"));
 			return page ?? Utils.jsonError(ErrorCode.INVALID_ENDPOINT);
 		});
 

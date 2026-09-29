@@ -624,17 +624,105 @@ describe("the online store module", () => {
 	test("serves the storefront page with store search engine tags and keeps the admin hidden", async () => {
 		const storefront = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/asus-dual-rx-9060-xt`));
 		const html = await storefront.text();
-		expect(html).toContain("<title>Pixel Parts</title>");
+		expect(storefront.status).toBe(200);
+		expect(html).toMatch(/<title>[^<]+ \| Pixel Parts<\/title>/);
 		expect(html).toContain('content="index, follow"');
 		expect(html).toContain('name="rabbitpay-store" content="pixel-parts" data-domain="0"');
+		expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/p/asus-dual-rx-9060-xt" />');
+		expect(html).toContain('<meta property="og:type" content="product" />');
+		expect(html).toContain('<meta property="og:image" content="http://127.0.0.1:8099/api/v1/public/store-images/');
+		expect(html).not.toContain('hreflang="');
+		const structured = JSON.parse(html.match(/<script type="application\/ld\+json">([^<]+)<\/script>/)![1]!);
+		expect(structured).toMatchObject({
+			"@type": "Product",
+			offers: { "@type": "Offer", priceCurrency: "EUR", url: "https://shop.pixel.test/p/asus-dual-rx-9060-xt" },
+		});
+		expect(structured.offers.price).toMatch(/^\d+\.\d{2}$/);
+		expect(structured.offers.availability).toMatch(/^https:\/\/schema\.org\//);
+
+		const category = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?sort=price_asc`))).text();
+		expect(category).toContain("<title>AMD | Pixel Parts</title>");
+		expect(category).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd" />');
+
+		const missing = await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/p/no-such-product`));
+		expect(missing.status).toBe(404);
+		expect(await missing.text()).toContain('content="noindex, nofollow"');
+		expect((await Server.app.handle(new Request("http://127.0.0.1/shop/no-such-store"))).status).toBe(404);
+
+		const cart = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/cart`))).text();
+		expect(cart).toContain('content="noindex, nofollow"');
+		expect(cart).not.toContain("canonical");
 
 		const domain = await Server.app.handle(new Request("http://127.0.0.1/", { headers: { host: "shop.pixel.test" } }));
-		expect(await domain.text()).toContain('data-domain="1"');
+		const domainHtml = await domain.text();
+		expect(domainHtml).toContain('data-domain="1"');
+		expect(domainHtml).toContain('<link rel="canonical" href="https://shop.pixel.test/" />');
 
 		const admin = await Server.app.handle(new Request("http://127.0.0.1/projects"));
 		const adminHtml = await admin.text();
 		expect(adminHtml).toContain('content="noindex, nofollow"');
 		expect(adminHtml).not.toContain("rabbitpay-store");
+	});
+
+	test("links every language version of a storefront page", async () => {
+		const fallback = (await call("GET", `/store/${slug}`)).data.config.language;
+		const italian = { name: "Italiano", enabled: true, strings: {} };
+		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, italian)).error).toBe(0);
+		try {
+			const html = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?lang=it`))).text();
+			expect(html).toContain('<html lang="it">');
+			expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd?lang=it" />');
+			expect(html).toContain(`<link rel="alternate" hreflang="${fallback}" href="https://shop.pixel.test/c/amd" />`);
+			expect(html).toContain('<link rel="alternate" hreflang="it" href="https://shop.pixel.test/c/amd?lang=it" />');
+			expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.pixel.test/c/amd" />');
+
+			const unknown = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?lang=de`))).text();
+			expect(unknown).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd" />');
+
+			const sitemap = await (await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml", { headers: { host: "shop.pixel.test" } }))).text();
+			expect(sitemap).toContain("<loc>https://shop.pixel.test/c/amd?lang=it</loc>");
+			expect(sitemap).toContain('<xhtml:link rel="alternate" hreflang="it" href="https://shop.pixel.test/p/asus-dual-rx-9060-xt?lang=it"/>');
+		} finally {
+			expect((await call("DELETE", `${base()}/store/languages/it`, ownerToken)).error).toBe(0);
+		}
+	});
+
+	test("publishes robots rules and sitemaps for the store and the site", async () => {
+		const domainRobots = await Server.app.handle(new Request("http://127.0.0.1/robots.txt", { headers: { host: "shop.pixel.test" } }));
+		expect(domainRobots.headers.get("content-type")).toContain("text/plain");
+		const robots = await domainRobots.text();
+		expect(robots).toContain("Disallow: /checkout");
+		expect(robots).toContain("Sitemap: https://shop.pixel.test/sitemap.xml");
+
+		const domainSitemap = await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml", { headers: { host: "shop.pixel.test" } }));
+		expect(domainSitemap.headers.get("content-type")).toContain("application/xml");
+		const sitemap = await domainSitemap.text();
+		expect(sitemap).toContain("<loc>https://shop.pixel.test/</loc>");
+		expect(sitemap).toContain("<loc>https://shop.pixel.test/c/amd</loc>");
+		expect(sitemap).toContain("<loc>https://shop.pixel.test/p/asus-dual-rx-9060-xt</loc>");
+		expect(sitemap).not.toContain("hreflang");
+
+		const siteRobots = await (await Server.app.handle(new Request("http://127.0.0.1/robots.txt"))).text();
+		expect(siteRobots).toContain("Disallow: /projects");
+		expect(siteRobots).toContain("Disallow: /shop/*/checkout");
+		expect(siteRobots).toContain("Sitemap: http://127.0.0.1:8099/sitemap.xml");
+
+		const index = await (await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml"))).text();
+		expect(index).toContain("<loc>http://127.0.0.1:8099/sitemap-home.xml</loc>");
+		expect(index).not.toContain(`/shop/${slug}/sitemap.xml`);
+		expect((await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/sitemap.xml`))).status).toBe(404);
+
+		await Database`UPDATE store_settings SET domain = NULL WHERE project = ${project}`;
+		try {
+			expect(await (await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml"))).text()).toContain(
+				`<loc>http://127.0.0.1:8099/shop/${slug}/sitemap.xml</loc>`
+			);
+			const own = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/sitemap.xml`))).text();
+			expect(own).toContain(`<loc>http://127.0.0.1:8099/shop/${slug}</loc>`);
+			expect(own).toContain(`<loc>http://127.0.0.1:8099/shop/${slug}/p/asus-dual-rx-9060-xt</loc>`);
+		} finally {
+			await Database`UPDATE store_settings SET domain = 'shop.pixel.test' WHERE project = ${project}`;
+		}
 	});
 
 	test("exports and deletes the customer's data on request", async () => {
