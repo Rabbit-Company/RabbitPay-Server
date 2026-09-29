@@ -1,6 +1,7 @@
 import Database from "../database/database";
 import { datesBetween } from "./holidays";
 import { isIsoDate, workingDaysBetween, type HolidayCalendar } from "./calendar";
+import { ABSENCE_KINDS } from "./absence-kinds";
 import type { AbsenceKind, AbsenceRow } from "../database/models";
 
 export interface AbsenceInput {
@@ -11,7 +12,6 @@ export interface AbsenceInput {
 	note: string | null;
 }
 
-export const ABSENCE_KINDS: AbsenceKind[] = ["vacation", "sick", "injury", "paid_leave", "unpaid", "parental", "other"];
 export const PAID_ABSENCE_KINDS: AbsenceKind[] = ["vacation", "paid_leave", "sick", "injury"];
 const MAX_ABSENCE_DAYS = 366;
 

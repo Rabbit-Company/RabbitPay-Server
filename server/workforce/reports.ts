@@ -1,7 +1,8 @@
 import Database from "../database/database";
 import { addDays, datesBetween, weekdayOf } from "./holidays";
 import { holidayCalendar, isPaidHoliday, isWorkingDay, monthRange, workingDaysBetween, type HolidayCalendar } from "./calendar";
-import { absenceDayFraction, absenceWorkingDays, ABSENCE_KINDS } from "./absences";
+import { absenceDayFraction, absenceWorkingDays } from "./absences";
+import { ABSENCE_KINDS } from "./absence-kinds";
 import { formatClock, nightMinutesOf, paidBreaks, segmentsOf, workedMinutes } from "./timesheets";
 import { configFor, type WorkforceConfig } from "./config";
 import type { Person } from "./people";

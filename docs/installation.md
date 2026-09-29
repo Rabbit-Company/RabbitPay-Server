@@ -140,6 +140,7 @@ Database and document storage settings live in the environment because they are 
 | `DOCUMENT_S3_SECRET_ACCESS_KEY` | Optional S3 secret key.                                                                                                                       |
 | `DOCUMENT_S3_SESSION_TOKEN`     | Optional S3 session token.                                                                                                                    |
 | `RABBITPAY_LICENSE_SIGNING_KEY` | Only on the server that issues license keys. See [Administration](administration.md#the-issuing-server-and-licensed-servers).                 |
+| `RABBITPAY_RENDER_WORKERS`      | Background threads that render PDFs. Defaults to a quarter of the CPU threads, between 1 and 4. Each uses about 90 MB. `0` renders inline.    |
 
 Application settings are stored in the `settings` table and edited under Admin,
 Settings: the listen address, public URL, email, payment methods, chain
