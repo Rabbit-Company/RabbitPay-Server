@@ -2,6 +2,7 @@ export interface Route {
 	pattern: string;
 	render: (params: Record<string, string>) => Promise<HTMLElement> | HTMLElement;
 	requiresAuth: boolean;
+	accept: (params: Record<string, string>) => boolean;
 }
 
 const routes: Route[] = [];
@@ -12,8 +13,8 @@ let afterRender: () => void = () => {};
 let leaveHandlers: (() => void)[] = [];
 let renderRound = 0;
 
-export function define(pattern: string, render: Route["render"], requiresAuth = true) {
-	routes.push({ pattern, render, requiresAuth });
+export function define(pattern: string, render: Route["render"], requiresAuth = true, accept: Route["accept"] = () => true) {
+	routes.push({ pattern, render, requiresAuth, accept });
 }
 
 export function configure(options: { outlet: HTMLElement; notFound: () => HTMLElement; guard: () => boolean; afterRender: () => void }) {
@@ -69,7 +70,7 @@ export async function render() {
 
 	for (const route of routes) {
 		const params = match(route.pattern, path);
-		if (params === null) continue;
+		if (params === null || !route.accept(params)) continue;
 
 		if (route.requiresAuth && !guard()) {
 			navigate("/login", true);

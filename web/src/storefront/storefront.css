@@ -220,6 +220,27 @@
 	padding: 0.5rem 1rem;
 }
 
+.sf-language-offer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem 0.75rem;
+	padding: 0.4rem 1rem;
+	background: var(--sf-soft);
+	border-bottom: 1px solid var(--sf-line);
+	color: var(--text);
+	font-size: 0.88rem;
+}
+.sf-language-offer > svg {
+	color: var(--muted);
+	flex-shrink: 0;
+}
+.sf-language-offer .sf-icon-button {
+	width: 32px;
+	height: 32px;
+}
+
 .sf-header {
 	position: sticky;
 	top: 0;

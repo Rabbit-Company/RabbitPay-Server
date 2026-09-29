@@ -1805,6 +1805,7 @@ export const en = {
 	"shop.note_placeholder": "Anything we should know about your order",
 	"shop.notice": "This store only keeps your cart and sign in on this device. No tracking or advertising cookies.",
 	"shop.notice_ok": "Got it",
+	"shop.language_offer": "This store is also available in your language.",
 	"shop.open_until": "Open now until {time}",
 	"shop.opens_today": "Closed, opens today at {time}",
 	"shop.opens_on": "Closed, opens {day} at {time}",

@@ -1,6 +1,7 @@
 import { isAccentColor } from "../colors";
 import { MAX_MARKDOWN_LENGTH } from "../markdown";
 import { legalPages } from "./legal";
+import { isLanguageCode } from "./language-code";
 
 export const SOCIAL_NETWORKS = [
 	"discord",
@@ -29,16 +30,7 @@ export const STORE_HERO_STYLES = ["gradient", "image", "split", "minimal"] as co
 export const STORE_CARD_STYLES = ["elevated", "outlined", "flat"] as const;
 export const STORE_LANGUAGES = ["en", "sl"] as const;
 
-const LANGUAGE_CODE = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?$/;
-
-export function isLanguageCode(value: unknown): value is string {
-	if (typeof value !== "string" || !LANGUAGE_CODE.test(value)) return false;
-	try {
-		return Intl.getCanonicalLocales(value)[0] === value;
-	} catch {
-		return false;
-	}
-}
+export { isLanguageCode };
 export const STORE_COLUMNS = [2, 3, 4] as const;
 
 export const MAX_SOCIALS = 16;

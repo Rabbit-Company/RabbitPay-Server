@@ -5,7 +5,7 @@ import { Logger } from "./logger";
 import Utils from "./utils";
 import { escapeHtml } from "./markdown";
 import { normalizeHost, slugForHost, storeBySlug, storeUrl } from "./store/store";
-import { sitemapStores, storePageMeta, storeSitemap, STORE_PRIVATE_PATHS, type StorePageMeta } from "./store/seo";
+import { sitemapStores, storeLocation, storePageMeta, storeRoot, storeSitemap, STORE_PRIVATE_PATHS, type StorePageMeta } from "./store/seo";
 import { includedPayments, includedStorageGb, licensingEnforced } from "./licensing";
 
 const IMMUTABLE_ASSET = /-[a-z0-9]{8,}\.(js|css|woff2?|ttf|png|svg|jpg|jpeg|webp|ico)$/i;
@@ -138,6 +138,7 @@ function applicationHtml(html: string, pathname: string): string {
 interface Shell {
 	body: string;
 	status: number;
+	redirect?: string;
 }
 
 async function storefrontShell(html: string, url: URL, host: string | null): Promise<Shell | null> {
@@ -146,8 +147,11 @@ async function storefrontShell(html: string, url: URL, host: string | null): Pro
 		if (request === null) return null;
 		const store = await storeBySlug(request.slug);
 		if (store === null && !request.domain) return { body: applicationHtml(html, url.pathname), status: 404 };
-		const meta = store ? await storePageMeta(store, request.path, url.searchParams.get("lang")) : null;
-		return { body: storefrontHtml(html, request, meta), status: meta?.status ?? 200 };
+		if (store === null) return { body: storefrontHtml(html, request, null), status: 200 };
+		const location = await storeLocation(store, request.path, url.searchParams, storeRoot(request.slug, request.domain));
+		if ("redirect" in location) return { body: "", status: 301, redirect: location.redirect };
+		const meta = await storePageMeta(store, location.path, location.language);
+		return { body: storefrontHtml(html, request, meta), status: meta.status };
 	} catch (error) {
 		Logger.warn(`[WEB] Could not describe the storefront page ${url.pathname}: ${error}`);
 		return null;
@@ -167,6 +171,7 @@ async function indexResponse(url: URL, host: string | null): Promise<Response | 
 
 	const html = await index.text();
 	const shell = (await storefrontShell(html, url, host)) ?? { body: applicationHtml(html, url.pathname), status: 200 };
+	if (shell.redirect !== undefined) return new Response(null, { status: shell.status, headers: { Location: shell.redirect, "Cache-Control": "no-cache" } });
 
 	return new Response(shell.body, {
 		status: shell.status,
@@ -216,7 +221,8 @@ async function searchFile(pathname: string, host: string | null): Promise<Respon
 		const store = await storeBySlug(domainSlug);
 		if (pathname === "/robots.txt") {
 			const sitemap = store?.config.indexable ? `${storeUrl(store.settings)}/sitemap.xml` : null;
-			return textResponse(robotsText([...STORE_PRIVATE_PATHS, ...DOMAIN_PRIVATE_PATHS], sitemap), "text/plain");
+			const disallowed = [...STORE_PRIVATE_PATHS, ...STORE_PRIVATE_PATHS.map((path) => `/*${path}`), ...DOMAIN_PRIVATE_PATHS];
+			return textResponse(robotsText(disallowed, sitemap), "text/plain");
 		}
 		const sitemap = pathname === "/sitemap.xml" && store ? await storeSitemap(store) : null;
 		return sitemap === null ? null : textResponse(sitemap, "application/xml");

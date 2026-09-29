@@ -3,7 +3,8 @@ import Utils from "../utils";
 import { escapeHtml, markdownText } from "../markdown";
 import { minorUnitDigits } from "../invoicing";
 import { storeActive } from "../licensing";
-import { brandImages, imagePath, storeUrl, type LoadedStore } from "./store";
+import { brandImages, imagePath, type LoadedStore } from "./store";
+import { isLanguageCode } from "./language-code";
 import { categoriesOf, descendantsOf, presentCards, productBySlug, translatedRow } from "./catalog";
 import { imagesOf } from "./images";
 import { localizeConfig, offeredLanguages, storeLanguages, type StoreLanguage } from "./languages";
@@ -13,6 +14,7 @@ import type { ProjectRow, StoreSettingsRow } from "../database/models";
 
 const SITEMAP_LIMIT = 50000;
 const STORE_ROUTE = /^\/(c|p|page)\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/;
+const STORE_PAGE = /^\/(?:(?:c|p|page)\/[a-z0-9]+(?:-[a-z0-9]+)*|search|cart|checkout|order\/[^/]+|account)\/?$/;
 
 const SCHEMA_AVAILABILITY: Record<Availability, string> = {
 	in_stock: "https://schema.org/InStock",
@@ -57,10 +59,41 @@ async function languagesOf(store: LoadedStore, requested: string | null): Promis
 	};
 }
 
+export function storeRoot(slug: string, domain: boolean): string {
+	return domain ? "" : `/shop/${slug}`;
+}
+
+function localPath(root: string, path: string, language: string | null): string {
+	const prefix = language === null ? root : `${root}/${language}`;
+	return path === "/" ? prefix || "/" : `${prefix}${path}`;
+}
+
 export function pageUrl(store: Pick<LoadedStore, "settings" | "config">, path: string, language: string): string {
-	const base = storeUrl(store.settings);
-	const url = path === "/" ? (store.settings.domain ? `${base}/` : base) : `${base}${path}`;
-	return language === store.config.language ? url : `${url}?lang=${encodeURIComponent(language)}`;
+	const { slug, domain } = store.settings;
+	const origin = domain ? `https://${domain}` : Utils.publicUrl();
+	return `${origin}${localPath(storeRoot(slug, domain !== null), path, language === store.config.language ? null : language)}`;
+}
+
+function isStorePath(path: string): boolean {
+	return path === "/" || STORE_PAGE.test(path);
+}
+
+export type StoreLocation = { path: string; language: string | null } | { redirect: string };
+
+export async function storeLocation(store: LoadedStore, path: string, search: URLSearchParams, root: string): Promise<StoreLocation> {
+	const segment = path.match(/^\/([^/]+)(\/.*)?$/);
+	const prefixed = segment !== null && isLanguageCode(segment[1]) && isStorePath(segment[2] ?? "/");
+	const rest = prefixed ? (segment[2] ?? "/") : path;
+	const requested = prefixed ? segment[1]! : search.get("lang");
+	if (requested === null || !isStorePath(rest)) return { path: rest, language: null };
+
+	const language = (await languagesOf(store, requested)).translated?.code ?? null;
+	if (prefixed && language !== null && !search.has("lang")) return { path: rest, language };
+
+	const query = new URLSearchParams(search);
+	query.delete("lang");
+	const tail = query.size > 0 ? `?${query}` : "";
+	return { redirect: `${localPath(root, rest, language)}${tail}` };
 }
 
 function alternatesOf(store: LoadedStore, path: string, codes: string[]): Alternate[] {

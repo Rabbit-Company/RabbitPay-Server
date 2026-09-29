@@ -45,7 +45,8 @@ import { storeCouponsView } from "./views/store-coupons";
 import { storeTranslationView, storeTranslationsView } from "./views/store-translations";
 import { categoryView, homeView, pageView, productView, searchView } from "./storefront/pages";
 import { accountView as shopAccountView, cartView, checkoutView, orderView } from "./storefront/checkout";
-import { domainStore, storeError } from "./storefront/layout";
+import { domainStore, storeError, useRouteLanguage } from "./storefront/layout";
+import { isLanguageCode } from "../../server/store/language-code";
 import { absencesView, timesheetReportView, timesheetSettingsView, timesheetView } from "./views/timesheet";
 import { ticketsView, ticketView } from "./views/tickets";
 import { employeesView } from "./views/employees";
@@ -158,20 +159,37 @@ define(
 	projectRoute([Permission.EXPENSE_VIEW], (params) => expensesView(params.uuid))
 );
 
-function shop(render: () => Promise<HTMLElement>): Promise<HTMLElement> {
+function shop(language: string | null, render: () => Promise<HTMLElement>): Promise<HTMLElement> {
+	useRouteLanguage(language);
 	return render().catch((error) => storeError(error));
 }
 
+type ShopView = (slug: string, params: Record<string, string>) => Promise<HTMLElement>;
+
+const SHOP_VIEWS: [string, ShopView][] = [
+	["", (slug) => homeView(slug)],
+	["/c/:category", (slug, params) => categoryView(slug, params.category)],
+	["/p/:product", (slug, params) => productView(slug, params.product)],
+	["/search", (slug) => searchView(slug)],
+	["/cart", (slug) => cartView(slug)],
+	["/checkout", (slug) => checkoutView(slug)],
+	["/order/:invoice", (slug, params) => orderView(slug, params.invoice)],
+	["/page/:page", (slug, params) => pageView(slug, params.page)],
+	["/account", (slug) => shopAccountView(slug)],
+];
+
 function storefrontRoutes(prefix: string, slugOf: (params: Record<string, string>) => string) {
-	define(prefix || "/", (params) => shop(() => homeView(slugOf(params))), false);
-	define(`${prefix}/c/:category`, (params) => shop(() => categoryView(slugOf(params), params.category)), false);
-	define(`${prefix}/p/:product`, (params) => shop(() => productView(slugOf(params), params.product)), false);
-	define(`${prefix}/search`, (params) => shop(() => searchView(slugOf(params))), false);
-	define(`${prefix}/cart`, (params) => shop(() => cartView(slugOf(params))), false);
-	define(`${prefix}/checkout`, (params) => shop(() => checkoutView(slugOf(params))), false);
-	define(`${prefix}/order/:invoice`, (params) => shop(() => orderView(slugOf(params), params.invoice)), false);
-	define(`${prefix}/page/:page`, (params) => shop(() => pageView(slugOf(params), params.page)), false);
-	define(`${prefix}/account`, (params) => shop(() => shopAccountView(slugOf(params))), false);
+	for (const [path, view] of SHOP_VIEWS) {
+		define(`${prefix}${path}` || "/", (params) => shop(null, () => view(slugOf(params), params)), false);
+	}
+	for (const [path, view] of SHOP_VIEWS) {
+		define(
+			`${prefix}/:language${path}`,
+			(params) => shop(params.language, () => view(slugOf(params), params)),
+			false,
+			(params) => isLanguageCode(params.language)
+		);
+	}
 }
 
 if (domainSlug) storefrontRoutes("", () => domainSlug);

@@ -18,13 +18,19 @@ function languageKey(slug: string): string {
 	return `rabbitpay.store.${slug}.language`;
 }
 
-function visitorLanguage(slug: string): string | null {
-	const requested = new URLSearchParams(window.location.search).get("lang");
+function chosenLanguage(slug: string): string | null {
 	try {
-		if (requested) localStorage.setItem(languageKey(slug), requested);
-		return requested ?? localStorage.getItem(languageKey(slug));
+		return localStorage.getItem(languageKey(slug));
 	} catch {
-		return requested;
+		return null;
+	}
+}
+
+function rememberLanguage(slug: string, code: string) {
+	try {
+		localStorage.setItem(languageKey(slug), code);
+	} catch {
+		void 0;
 	}
 }
 
@@ -46,13 +52,20 @@ async function loadStore(slug: string, language: string | null): Promise<Storefr
 	return store;
 }
 
-function chooseLanguage(slug: string, next: string) {
-	try {
-		localStorage.setItem(languageKey(slug), next);
-	} catch {
-		void 0;
-	}
-	void render();
+let routeLanguage: string | null = null;
+
+export function useRouteLanguage(code: string | null) {
+	routeLanguage = code;
+}
+
+function localPath(root: string, path: string, language: string | null): string {
+	const prefix = language === null ? root : `${root}/${language}`;
+	return path === "/" ? prefix || "/" : `${prefix}${path}`;
+}
+
+function chooseLanguage(ctx: StoreContext, next: string) {
+	rememberLanguage(ctx.store.slug, next);
+	navigate(`${ctx.pathIn(next)}${window.location.search}`);
 }
 
 const FONTS: Record<string, string> = {
@@ -70,6 +83,7 @@ export interface StoreContext {
 	store: Storefront;
 	base: string;
 	link(path?: string): string;
+	pathIn(language: string): string;
 }
 
 const cache = new Map<string, { store: Storefront; loaded: number }>();
@@ -80,24 +94,24 @@ export function domainStore(): string | null {
 }
 
 export async function storeContext(slug: string): Promise<StoreContext> {
-	const wanted = visitorLanguage(slug);
-	let store = await loadStore(slug, wanted);
-	if (wanted === null) {
-		const detected = browserLanguage(store.languages);
-		if (detected && detected !== store.language.code) store = await loadStore(slug, detected);
-	}
+	const store = await loadStore(slug, routeLanguage ?? chosenLanguage(slug));
 	const code = store.language.code;
-	const base = isUiLanguage(code) ? code : isUiLanguage(store.config.language) ? store.config.language : "en";
+	const main = store.config.language;
+	const base = isUiLanguage(code) ? code : isUiLanguage(main) ? main : "en";
 	useStoreTexts({ code, base, strings: store.language.strings });
-	useShopperLanguage(code === store.config.language ? null : code);
-	const prefix = domainStore() === slug ? "" : `/shop/${slug}`;
+	useShopperLanguage(code === main ? null : code);
+
+	const root = domainStore() === slug ? "" : `/shop/${slug}`;
+	const current = localPath(root, "/", routeLanguage);
+	const rest = window.location.pathname.slice(current === "/" ? 0 : current.length) || "/";
+	const language = (target: string) => (target === main ? null : target);
+	if (routeLanguage === null && code !== main) history.replaceState(history.state, "", `${localPath(root, rest, code)}${window.location.search}`);
+
 	return {
 		store,
-		base: prefix,
-		link(path = "/") {
-			if (path === "/") return prefix || "/";
-			return `${prefix}${path}`;
-		},
+		base: root,
+		link: (path = "/") => localPath(root, path, language(code)),
+		pathIn: (target) => localPath(root, rest, language(target)),
 	};
 }
 
@@ -289,7 +303,7 @@ function languagePicker(ctx: StoreContext): HTMLElement | null {
 	);
 	picker.setAttribute("aria-label", t("app.language"));
 	picker.addEventListener("change", () => {
-		if (picker.value !== current) chooseLanguage(ctx.store.slug, picker.value);
+		if (picker.value !== current) chooseLanguage(ctx, picker.value);
 	});
 	return el("label", { class: "sf-language", title: t("app.language") }, icon("globe", 16), picker);
 }
@@ -342,7 +356,7 @@ function languageMenu(ctx: StoreContext): HTMLElement | null {
 	};
 	const pick = (code: string) => {
 		close();
-		if (code !== current) chooseLanguage(ctx.store.slug, code);
+		if (code !== current) chooseLanguage(ctx, code);
 	};
 	button.addEventListener("click", () => {
 		if (!menu.hidden) return close();
@@ -529,6 +543,35 @@ function footer(ctx: StoreContext): HTMLElement {
 	);
 }
 
+function languageOffer(ctx: StoreContext): HTMLElement | null {
+	const { store } = ctx;
+	if (store.language.code !== store.config.language || chosenLanguage(store.slug) !== null) return null;
+	const suggested = browserLanguage(store.languages);
+	const option = store.languages.find((entry) => entry.code === suggested);
+	if (!option || option.code === store.language.code) return null;
+
+	const switchButton = el("button", { class: "sf-button sf-button-small", type: "button", onClick: () => chooseLanguage(ctx, option.code) }, option.name);
+	switchButton.lang = option.code;
+	const dismiss = el(
+		"button",
+		{
+			class: "sf-icon-button",
+			type: "button",
+			title: t("ui.close"),
+			onClick: () => {
+				rememberLanguage(store.slug, store.config.language);
+				offer.remove();
+			},
+		},
+		icon("close", 18)
+	);
+	dismiss.setAttribute("aria-label", t("ui.close"));
+	const offer = el("div", { class: "sf-language-offer" }, icon("globe", 18), el("span", {}, t("shop.language_offer")), switchButton, dismiss);
+	offer.setAttribute("role", "region");
+	offer.setAttribute("aria-label", t("app.language"));
+	return offer;
+}
+
 function privacyNotice(ctx: StoreContext): HTMLElement | null {
 	try {
 		if (localStorage.getItem(NOTICE_KEY) === "1") return null;
@@ -572,6 +615,7 @@ export function storeLayout(ctx: StoreContext, content: HTMLElement, title: stri
 	const root = el(
 		"div",
 		{ class: `sf sf-radius-${theme.radius} sf-cards-${theme.card_style} sf-columns-${theme.columns}` },
+		languageOffer(ctx),
 		...header(ctx),
 		el("main", { class: "sf-main" }, content),
 		footer(ctx),

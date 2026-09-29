@@ -15,7 +15,7 @@ import { customerEslogResponse } from "../../eslog-archive";
 import { outstandingOf } from "../../invoicing";
 import { displayNameOf } from "../../company";
 import { isUiLanguage } from "../../../web/src/i18n/dictionary";
-import { isLanguageCode, isSlug } from "../../store/config";
+import { isSlug } from "../../store/config";
 import { portalAccess } from "../../workforce/tickets";
 import { storeBySlug } from "../../store/store";
 import { paymentStatusOf } from "../../store/orders";
@@ -27,14 +27,6 @@ function isReturnPath(value: unknown): value is string {
 	return typeof value === "string" && value.length <= 300 && /^\/(?![/\\])[^\s\\]*$/.test(value);
 }
 
-function returnWithLanguage(path: string, code: string | null): string {
-	if (code === null) return path;
-	const url = new URL(path, "http://return.invalid");
-	url.searchParams.set("lang", code);
-	const next = `${url.pathname}${url.search}${url.hash}`;
-	return isReturnPath(next) ? next : path;
-}
-
 const loginLimit = rateLimit({
 	windowMs: (Settings.security?.credential_rate_window || 900) * 1000,
 	max: Settings.security?.credential_rate_limit || 10,
@@ -44,7 +36,7 @@ const documentLimit = rateLimit({ windowMs: 60 * 1000, max: 20, message: "Too ma
 
 Server.app.post("/api/v1/customer/auth/request", loginLimit, async (ctx) => {
 	ctx.header("Cache-Control", "no-store");
-	let data: { email?: string; language?: string; store?: string; store_language?: string; return?: string };
+	let data: { email?: string; language?: string; store?: string; return?: string };
 	try {
 		data = await ctx.body();
 	} catch {
@@ -67,8 +59,7 @@ Server.app.post("/api/v1/customer/auth/request", loginLimit, async (ctx) => {
 	const store = isSlug(data.store, 100) ? await storeBySlug(data.store) : null;
 	const language = isUiLanguage(data.language) ? data.language : store && isUiLanguage(store.config.language) ? store.config.language : "en";
 	const origin = store?.settings.domain ? `https://${store.settings.domain}` : Utils.publicUrl();
-	const storeLanguage = store && isLanguageCode(data.store_language) ? data.store_language : null;
-	const returnTo = isReturnPath(data.return) ? `&return=${encodeURIComponent(returnWithLanguage(data.return, storeLanguage))}` : "";
+	const returnTo = isReturnPath(data.return) ? `&return=${encodeURIComponent(data.return)}` : "";
 	const url = `${origin}/customer/login#token=${token}&lang=${language}${returnTo}`;
 	const sender = store ? store.config.name : "RabbitPay";
 	try {

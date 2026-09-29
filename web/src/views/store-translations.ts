@@ -32,7 +32,7 @@ function nativeName(code: string): string {
 
 function storeLink(state: StoreState, code: string): string | null {
 	if (!state.exists || !state.enabled) return null;
-	return `${state.domain_url ?? state.url}?lang=${encodeURIComponent(code)}`;
+	return `${state.domain_url ?? state.url}/${code}`;
 }
 
 function textsSummary(language: StoreLanguage): string {

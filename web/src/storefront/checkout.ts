@@ -162,7 +162,6 @@ export function signInCard(ctx: StoreContext, returnPath: string, heading: strin
 				try {
 					await CustomerApi.requestLogin(email.value.trim(), {
 						store: ctx.store.slug,
-						store_language: ctx.store.language.code,
 						return: returnPath,
 					});
 					card.replaceChildren(
@@ -648,7 +647,7 @@ function ordersList(ctx: StoreContext, orders: CustomerOrder[]): HTMLElement {
 		"div",
 		{ class: "sf-order-list" },
 		...orders.map((order) => {
-			const own = order.store_url === ctx.link() || order.store_url === `${window.location.origin}${ctx.base}`;
+			const own = order.store_url === ctx.base || order.store_url === `${window.location.origin}${ctx.base}`;
 			const href = own ? ctx.link(`/order/${order.invoice}`) : `/customer/invoices/${order.invoice}`;
 			return el(
 				"a",

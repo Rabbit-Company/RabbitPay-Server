@@ -429,21 +429,16 @@ describe("the online store module", () => {
 	});
 
 	test("keeps the shopper's language through the sign in link", async () => {
-		const request = (email: string, extra: Record<string, unknown>) =>
-			call("POST", "/customer/auth/request", undefined, { email, store: slug, return: `/shop/${slug}/checkout?step=2`, ...extra });
+		const request = (email: string, language: string) =>
+			call("POST", "/customer/auth/request", undefined, { email, store: slug, language, return: `/shop/${slug}/en/checkout?step=2` });
 
-		expect((await request("lang-en@example.com", { language: "en", store_language: "en" })).error).toBe(0);
+		expect((await request("lang-en@example.com", "en")).error).toBe(0);
 		const english = messages.at(-1)!;
 		expect(english.subject).toContain("Pixel Parts");
-		expect(english.text).toContain(`&lang=en&return=${encodeURIComponent(`/shop/${slug}/checkout?step=2&lang=en`)}`);
+		expect(english.text).toContain(`&lang=en&return=${encodeURIComponent(`/shop/${slug}/en/checkout?step=2`)}`);
 
-		expect((await request("lang-sl@example.com", { language: "sl", store_language: "sl" })).error).toBe(0);
-		expect(messages.at(-1)!.text).toContain(`&lang=sl&return=${encodeURIComponent(`/shop/${slug}/checkout?step=2&lang=sl`)}`);
-
-		expect((await request("lang-bad@example.com", { language: "xx", store_language: '"><script>' })).error).toBe(0);
-		const fallback = messages.at(-1)!.text;
-		expect(fallback).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout?step=2`)}`);
-		expect(fallback).not.toContain("script");
+		expect((await request("lang-sl@example.com", "sl")).error).toBe(0);
+		expect(messages.at(-1)!.text).toContain(`&lang=sl&return=${encodeURIComponent(`/shop/${slug}/en/checkout?step=2`)}`);
 	});
 
 	test("places an unnumbered order that takes the stock and can be paid", async () => {
@@ -665,23 +660,47 @@ describe("the online store module", () => {
 	});
 
 	test("links every language version of a storefront page", async () => {
+		const page = async (path: string, host?: string) =>
+			await Server.app.handle(new Request(`http://127.0.0.1${path}`, host ? { headers: { host } } : undefined));
 		const fallback = (await call("GET", `/store/${slug}`)).data.config.language;
-		const italian = { name: "Italiano", enabled: true, strings: {} };
-		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, italian)).error).toBe(0);
+		expect((await call("PUT", `${base()}/store/languages/pay`, ownerToken, { name: "Pay", enabled: true, strings: {} })).error).toBe(1246);
+		expect((await call("PUT", `${base()}/store/languages/it`, ownerToken, { name: "Italiano", enabled: true, strings: {} })).error).toBe(0);
 		try {
-			const html = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?lang=it`))).text();
+			const html = await (await page(`/shop/${slug}/it/c/amd`)).text();
 			expect(html).toContain('<html lang="it">');
-			expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd?lang=it" />');
+			expect(html).toContain('<link rel="canonical" href="https://shop.pixel.test/it/c/amd" />');
 			expect(html).toContain(`<link rel="alternate" hreflang="${fallback}" href="https://shop.pixel.test/c/amd" />`);
-			expect(html).toContain('<link rel="alternate" hreflang="it" href="https://shop.pixel.test/c/amd?lang=it" />');
+			expect(html).toContain('<link rel="alternate" hreflang="it" href="https://shop.pixel.test/it/c/amd" />');
 			expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.pixel.test/c/amd" />');
 
-			const unknown = await (await Server.app.handle(new Request(`http://127.0.0.1/shop/${slug}/c/amd?lang=de`))).text();
-			expect(unknown).toContain('<link rel="canonical" href="https://shop.pixel.test/c/amd" />');
+			const home = await (await page("/it", "shop.pixel.test")).text();
+			expect(home).toContain('<html lang="it">');
+			expect(home).toContain('<link rel="canonical" href="https://shop.pixel.test/it" />');
+			expect(home).toContain('data-domain="1"');
 
-			const sitemap = await (await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml", { headers: { host: "shop.pixel.test" } }))).text();
-			expect(sitemap).toContain("<loc>https://shop.pixel.test/c/amd?lang=it</loc>");
-			expect(sitemap).toContain('<xhtml:link rel="alternate" hreflang="it" href="https://shop.pixel.test/p/asus-dual-rx-9060-xt?lang=it"/>');
+			const redirects: [string, string][] = [
+				[`/shop/${slug}/c/amd?lang=it&sort=name`, `/shop/${slug}/it/c/amd?sort=name`],
+				[`/shop/${slug}/${fallback}/c/amd`, `/shop/${slug}/c/amd`],
+				[`/shop/${slug}/de/p/asus-dual-rx-9060-xt`, `/shop/${slug}/p/asus-dual-rx-9060-xt`],
+				[`/shop/${slug}/it/cart?lang=it`, `/shop/${slug}/it/cart`],
+				[`/shop/${slug}?lang=${fallback}`, `/shop/${slug}`],
+			];
+			for (const [from, to] of redirects) {
+				const response = await page(from);
+				expect(response.status).toBe(301);
+				expect(response.headers.get("location")).toBe(to);
+			}
+			const domainRedirect = await page("/?lang=it", "shop.pixel.test");
+			expect(domainRedirect.headers.get("location")).toBe("/it");
+
+			const payment = await page("/pay/2f1c5f0c-2b1a-4f1e-9d7a-9a6b1f0c4d3e", "shop.pixel.test");
+			expect(payment.status).toBe(200);
+			expect(await payment.text()).toContain('content="noindex, nofollow"');
+
+			const sitemap = await (await page("/sitemap.xml", "shop.pixel.test")).text();
+			expect(sitemap).toContain("<loc>https://shop.pixel.test/it/c/amd</loc>");
+			expect(sitemap).toContain("<loc>https://shop.pixel.test/it</loc>");
+			expect(sitemap).toContain('<xhtml:link rel="alternate" hreflang="it" href="https://shop.pixel.test/it/p/asus-dual-rx-9060-xt"/>');
 		} finally {
 			expect((await call("DELETE", `${base()}/store/languages/it`, ownerToken)).error).toBe(0);
 		}
@@ -692,6 +711,7 @@ describe("the online store module", () => {
 		expect(domainRobots.headers.get("content-type")).toContain("text/plain");
 		const robots = await domainRobots.text();
 		expect(robots).toContain("Disallow: /checkout");
+		expect(robots).toContain("Disallow: /*/checkout");
 		expect(robots).toContain("Sitemap: https://shop.pixel.test/sitemap.xml");
 
 		const domainSitemap = await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml", { headers: { host: "shop.pixel.test" } }));

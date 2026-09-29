@@ -166,7 +166,7 @@ export interface CustomerTicketAccess {
 }
 
 export const CustomerApi = {
-	requestLogin(email: string, options: { store?: string; store_language?: string; return?: string } = {}) {
+	requestLogin(email: string, options: { store?: string; return?: string } = {}) {
 		return request<void>("/auth/request", { email, language: language(), ...options }, false);
 	},
 	verify(token: string) {

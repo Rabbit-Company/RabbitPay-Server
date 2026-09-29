@@ -1806,6 +1806,7 @@ export const sl: UiDictionary = {
 	"shop.note_placeholder": "Karkoli moramo vedeti o vašem naročilu",
 	"shop.notice": "Ta trgovina na tej napravi hrani le vašo košarico in prijavo. Brez piškotkov za sledenje ali oglaševanje.",
 	"shop.notice_ok": "Razumem",
+	"shop.language_offer": "Ta trgovina je na voljo tudi v vašem jeziku.",
 	"shop.open_until": "Odprto do {time}",
 	"shop.opens_today": "Zaprto, odpre se danes ob {time}",
 	"shop.opens_on": "Zaprto. Naslednjič odprto: {day}, {time}",
