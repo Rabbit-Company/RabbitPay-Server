@@ -448,7 +448,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				kind: "secret",
 			},
 			{ key: "domains.cloudflare_zone_id", label: "Cloudflare zone id", kind: "text" },
-			{ key: "domains.burrowgate_url", label: "BurrowGate URL", hint: "Address of the BurrowGate admin API", kind: "text", url: true },
+			{
+				key: "domains.burrowgate_url",
+				label: "BurrowGate URL",
+				hint: "Address of the BurrowGate gateway, such as http://127.0.0.1. Only the scheme, host and port are used.",
+				kind: "text",
+				url: true,
+			},
 			{
 				key: "domains.burrowgate_admin_token",
 				label: "BurrowGate admin token",

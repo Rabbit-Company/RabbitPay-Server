@@ -144,6 +144,7 @@ function messageFrom(value: unknown, fallback: string): string {
 	if (typeof value !== "object" || value === null) return fallback;
 	const record = value as Record<string, unknown>;
 	if (typeof record.error === "string") return record.error;
+	if (typeof record.info === "string") return record.info;
 	if (Array.isArray(record.errors)) {
 		const message = (record.errors[0] as { message?: unknown } | undefined)?.message;
 		if (typeof message === "string") return message;
@@ -152,11 +153,12 @@ function messageFrom(value: unknown, fallback: string): string {
 }
 
 async function providerFetch<T>(url: string, init: RequestInit, fallback: string, allowNotFound = false, timeoutMs = 15_000): Promise<T | null> {
+	const method = init.method ?? "GET";
 	let response: Response;
 	try {
 		response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
 	} catch (error) {
-		throw new DomainProvisioningFailed(`${fallback}: ${error instanceof Error ? error.message : "network error"}`);
+		throw new DomainProvisioningFailed(`${fallback}: ${method} ${url} failed: ${error instanceof Error ? error.message : "network error"}`);
 	}
 	if (allowNotFound && response.status === 404) return null;
 	let body: unknown = null;
@@ -165,7 +167,11 @@ async function providerFetch<T>(url: string, init: RequestInit, fallback: string
 	} catch {
 		body = null;
 	}
-	if (!response.ok) throw new DomainProvisioningFailed(`${fallback}: ${messageFrom(body, `HTTP ${response.status}`)}`);
+	if (!response.ok)
+		throw new DomainProvisioningFailed(`${fallback}: ${method} ${url} answered HTTP ${response.status}: ${messageFrom(body, "no error message")}`);
+	if (method !== "DELETE" && (typeof body !== "object" || body === null)) {
+		throw new DomainProvisioningFailed(`${fallback}: ${method} ${url} did not answer with JSON. Check that the address points at the provider API.`);
+	}
 	return body as T;
 }
 
@@ -237,8 +243,16 @@ interface BurrowGateSite {
 	originUrl?: string | null;
 }
 
+function gatewayOrigin(): string {
+	try {
+		return new URL(Settings.domains.burrowgate_url).origin;
+	} catch {
+		throw new DomainProvisioningFailed(`The BurrowGate URL ${Settings.domains.burrowgate_url} is not a valid address`);
+	}
+}
+
 function burrowGateUrl(path: string): string {
-	return `${Settings.domains.burrowgate_url.replace(/\/+$/, "")}${path}`;
+	return `${gatewayOrigin()}${path}`;
 }
 
 function burrowGateHeaders(): Record<string, string> {
@@ -246,7 +260,7 @@ function burrowGateHeaders(): Record<string, string> {
 		Authorization: `Bearer ${Settings.domains.burrowgate_admin_token}`,
 		"Content-Type": "application/json",
 		"X-BurrowGate-Admin": "1",
-		Origin: Settings.domains.burrowgate_url.replace(/\/+$/, ""),
+		Origin: gatewayOrigin(),
 	};
 }
 
@@ -279,7 +293,10 @@ async function burrowGateOrigin(): Promise<string> {
 			{ headers: burrowGateHeaders() },
 			"BurrowGate could not list its sites"
 		);
-		sites = Array.isArray(body?.items) ? body.items : [];
+		if (!Array.isArray(body?.items)) {
+			throw new DomainProvisioningFailed(`BurrowGate at ${gatewayOrigin()} did not return a site list. Check the BurrowGate URL.`);
+		}
+		sites = body.items;
 	} catch (error) {
 		if (fallback) return privateOrigin(fallback);
 		throw error;

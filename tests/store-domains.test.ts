@@ -72,7 +72,7 @@ const HOSTED = {
 	target: "customers.rabbitpay.test",
 	cloudflare_api_token: "cloudflare-token",
 	cloudflare_zone_id: "zone-id",
-	burrowgate_url: "https://gateway.rabbitpay.test/",
+	burrowgate_url: "https://gateway.rabbitpay.test/_burrowgate/admin",
 	burrowgate_admin_token: "burrowgate-token",
 	burrowgate_site_id: "main-site",
 	acme_email: "ops@rabbitpay.test",
@@ -305,6 +305,24 @@ describe("store domains", () => {
 		const [row] = await Database`SELECT last_error FROM store_domains WHERE project = ${project}`;
 		expect(row.last_error).toContain("points back at the public RabbitPay site");
 		expect(JSON.stringify(failed.data)).not.toContain("points back");
+	});
+
+	test("names the address when the BurrowGate URL does not reach the BurrowGate API", async () => {
+		useProvider("burrowgate", { ...HOSTED, burrowgate_url: "http://127.0.0.1:8085", burrowgate_origin: "http://10.0.0.5:8085" });
+		provide((_url, method) => {
+			if (method === "GET") return new Response("<!doctype html><title>RabbitPay</title>", { headers: { "Content-Type": "text/html" } });
+			return Response.json({ error: 404, info: "Invalid API endpoint" }, { status: 404 });
+		});
+		const connected = await call("POST", `/projects/${project}/store/domain`, { hostname: "shop.misrouted.test" });
+		const ownership = connected.data.domain.records[1];
+		txt.set(ownership.name, [[ownership.value]]);
+		cnames.set("shop.misrouted.test", ["customers.rabbitpay.test"]);
+
+		expect((await call("POST", `/projects/${project}/store/domain/check`)).data.domain.status).toBe("error");
+		const [row] = await Database`SELECT last_error FROM store_domains WHERE project = ${project}`;
+		expect(row.last_error).toBe(
+			"BurrowGate could not create the store domain site: POST http://127.0.0.1:8085/_burrowgate/api/admin/sites answered HTTP 404: Invalid API endpoint"
+		);
 	});
 
 	test("releases the domain and its provider resources when the project is deleted", async () => {
