@@ -2318,6 +2318,59 @@ body.sf-locked {
 .sf-drawer .sf-language {
 	padding: 0.5rem;
 }
+.sf-language-switch {
+	position: relative;
+}
+.sf-icon-button.sf-language-button {
+	width: auto;
+	gap: 0.3rem;
+	padding: 0 0.7rem;
+}
+.sf-language-code {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+.sf-language-menu {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 40;
+	min-width: 190px;
+	display: flex;
+	flex-direction: column;
+	padding: 0.4rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--sf-radius);
+	box-shadow: var(--shadow-raised);
+}
+.sf-language-menu[hidden] {
+	display: none;
+}
+.sf-language-option {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.6rem 0.75rem;
+	border: none;
+	border-radius: calc(var(--sf-radius) * 0.6);
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.sf-language-option:hover,
+.sf-language-option:focus-visible {
+	background: var(--sf-soft);
+	outline: none;
+}
+.sf-language-option.active {
+	color: var(--accent);
+	font-weight: 600;
+}
 
 .sf-notice {
 	position: fixed;

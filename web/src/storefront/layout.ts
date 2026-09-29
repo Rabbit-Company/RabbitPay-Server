@@ -28,6 +28,24 @@ function visitorLanguage(slug: string): string | null {
 	}
 }
 
+function browserLanguage(offered: { code: string }[]): string | null {
+	const codes = new Set(offered.map((language) => language.code));
+	for (const tag of navigator.languages ?? [navigator.language]) {
+		const code = tag.toLowerCase().split("-")[0];
+		if (code && codes.has(code)) return code;
+	}
+	return null;
+}
+
+async function loadStore(slug: string, language: string | null): Promise<Storefront> {
+	const key = `${slug}:${language ?? ""}`;
+	const cached = cache.get(key);
+	if (cached && Date.now() - cached.loaded < CACHE_MS) return cached.store;
+	const store = await StoreApi.store(slug, language);
+	cache.set(key, { store, loaded: Date.now() });
+	return store;
+}
+
 function chooseLanguage(slug: string, next: string) {
 	try {
 		localStorage.setItem(languageKey(slug), next);
@@ -63,10 +81,11 @@ export function domainStore(): string | null {
 
 export async function storeContext(slug: string): Promise<StoreContext> {
 	const wanted = visitorLanguage(slug);
-	const key = `${slug}:${wanted ?? ""}`;
-	const cached = cache.get(key);
-	const store = cached && Date.now() - cached.loaded < CACHE_MS ? cached.store : await StoreApi.store(slug, wanted);
-	cache.set(key, { store, loaded: Date.now() });
+	let store = await loadStore(slug, wanted);
+	if (wanted === null) {
+		const detected = browserLanguage(store.languages);
+		if (detected && detected !== store.language.code) store = await loadStore(slug, detected);
+	}
 	const code = store.language.code;
 	const base = isUiLanguage(code) ? code : isUiLanguage(store.config.language) ? store.config.language : "en";
 	useStoreTexts({ code, base, strings: store.language.strings });
@@ -275,6 +294,68 @@ function languagePicker(ctx: StoreContext): HTMLElement | null {
 	return el("label", { class: "sf-language", title: t("app.language") }, icon("globe", 16), picker);
 }
 
+function languageMenu(ctx: StoreContext): HTMLElement | null {
+	const { languages } = ctx.store;
+	if (languages.length < 2) return null;
+	const current = locale();
+	const button = el(
+		"button",
+		{ class: "sf-icon-button sf-language-button", type: "button", title: t("app.language") },
+		icon("globe", 20),
+		el("span", { class: "sf-language-code" }, current.toUpperCase())
+	);
+	button.setAttribute("aria-label", t("app.language"));
+	button.setAttribute("aria-haspopup", "menu");
+	button.setAttribute("aria-expanded", "false");
+
+	const options = languages.map((option) => {
+		const selected = option.code === current;
+		const entry = el(
+			"button",
+			{ class: `sf-language-option${selected ? " active" : ""}`, type: "button", onClick: () => pick(option.code) },
+			el("span", {}, option.name),
+			selected ? icon("check", 16) : null
+		);
+		entry.lang = option.code;
+		entry.setAttribute("role", "menuitemradio");
+		entry.setAttribute("aria-checked", String(selected));
+		return entry;
+	});
+	const menu = el("div", { class: "sf-language-menu" }, ...options);
+	menu.setAttribute("role", "menu");
+	menu.hidden = true;
+	const wrapper = el("div", { class: "sf-language-switch" }, button, menu);
+
+	const close = () => {
+		menu.hidden = true;
+		button.setAttribute("aria-expanded", "false");
+		document.removeEventListener("click", outside, true);
+		document.removeEventListener("keydown", escape, true);
+	};
+	const outside = (event: Event) => {
+		if (!wrapper.contains(event.target as Node)) close();
+	};
+	const escape = (event: KeyboardEvent) => {
+		if (event.key !== "Escape") return;
+		close();
+		button.focus();
+	};
+	const pick = (code: string) => {
+		close();
+		if (code !== current) chooseLanguage(ctx.store.slug, code);
+	};
+	button.addEventListener("click", () => {
+		if (!menu.hidden) return close();
+		menu.hidden = false;
+		button.setAttribute("aria-expanded", "true");
+		document.addEventListener("click", outside, true);
+		document.addEventListener("keydown", escape, true);
+		(options.find((option) => option.classList.contains("active")) ?? options[0])?.focus();
+	});
+	onLeave(close);
+	return wrapper;
+}
+
 function header(ctx: StoreContext): HTMLElement[] {
 	const menu = drawer(ctx);
 	const announcement = ctx.store.config.announcement ? el("div", { class: "sf-announcement" }, ctx.store.config.announcement) : null;
@@ -294,7 +375,7 @@ function header(ctx: StoreContext): HTMLElement[] {
 				menuButton,
 				brand(ctx),
 				categoryNav(ctx),
-				el("div", { class: "sf-header-actions" }, searchForm(ctx), account, cartButton(ctx))
+				el("div", { class: "sf-header-actions" }, searchForm(ctx), languageMenu(ctx), account, cartButton(ctx))
 			)
 		),
 		menu.element,
