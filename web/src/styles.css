@@ -2362,6 +2362,9 @@ select:not([multiple]) {
 	flex-wrap: wrap;
 	gap: 0.75rem;
 }
+.keys-actions {
+	margin-top: 0.75rem;
+}
 .line-actions > select {
 	width: auto;
 	min-width: 11rem;

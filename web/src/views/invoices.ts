@@ -520,7 +520,7 @@ function keysCard(uuid: string, invoice: Invoice, keys: InvoiceKeys | null, proj
 		offerResend
 			? el(
 					"div",
-					{ class: "line-actions" },
+					{ class: "line-actions keys-actions" },
 					el("button", { class: "button ghost", type: "button", onClick: () => void resend() }, t("invoices.keys_email_again"))
 				)
 			: null
