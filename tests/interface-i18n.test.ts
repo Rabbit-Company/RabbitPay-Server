@@ -65,7 +65,7 @@ describe("the interface dictionaries", () => {
 	test("picks the Slovenian plural form that matches the count", () => {
 		expect(translateCount("sl", "count.days", 1)).toBe("1 dan");
 		expect(translateCount("sl", "count.days", 2)).toBe("2 dneva");
-		expect(translateCount("sl", "count.days", 3)).toBe("3 dnevi");
+		expect(translateCount("sl", "count.days", 3)).toBe("3 dni");
 		expect(translateCount("sl", "count.days", 7)).toBe("7 dni");
 		expect(translateCount("sl", "count.invoices", 101)).toBe("101 račun");
 

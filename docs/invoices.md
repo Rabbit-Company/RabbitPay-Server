@@ -174,7 +174,7 @@ translation, or when a counted string is missing one of the four Slovenian plura
 forms.
 
 Counted strings are declined properly. Slovenian needs four forms where
-English needs two, so `1 dan`, `2 dneva`, `3 dnevi` and `7 dni` all come out
+English needs two, so `1 dan`, `2 dneva`, `3 dni` and `7 dni` all come out
 right through `Intl.PluralRules`. Where agreement would get ugly, the wording is
 turned around instead, so a count reads `Zapadlo: 3` rather than a sentence that
 has to guess a case.

@@ -503,7 +503,7 @@ export const sl: UiDictionary = {
 
 	"count.days.one": "{count} dan",
 	"count.days.two": "{count} dneva",
-	"count.days.few": "{count} dnevi",
+	"count.days.few": "{count} dni",
 	"count.days.other": "{count} dni",
 	"count.employees.one": "{count} zaposleni",
 	"count.employees.two": "{count} zaposlena",
