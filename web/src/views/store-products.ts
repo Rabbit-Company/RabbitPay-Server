@@ -110,7 +110,8 @@ export async function storeProductsView(uuid: string): Promise<HTMLElement> {
 								el(
 									"td",
 									{},
-									el("a", { href: `/projects/${uuid}/store/products/${product.uuid}` }, el("strong", {}, product.name)),
+									el("a", { href: `/projects/${uuid}/store/products/${product.uuid}` }, el("strong", {}, product.store_name ?? product.name)),
+									product.store_name ? el("div", { class: "muted" }, product.name) : null,
 									product.sku ? el("div", { class: "muted mono" }, product.sku) : null
 								),
 								el("td", { class: "mono" }, formatMoney(grossOf(product.unit_price, product.tax_rate), product.currency)),
@@ -384,7 +385,7 @@ function productTranslations(state: StoreState, details: StoreProductDetails) {
 	const readers = new Map<string, () => ProductText>();
 	const panelFor = (code: string) => {
 		const text = details.translations[code];
-		const name = input("text", { maxlength: "200", value: text?.name ?? "", placeholder: details.item.name });
+		const name = input("text", { maxlength: "200", value: text?.name ?? "", placeholder: details.name ?? details.item.name });
 		const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: details.summary ?? t("store.summary_placeholder") });
 		summary.value = text?.summary ?? "";
 		const description = markdownField(
@@ -434,6 +435,7 @@ function productEditor(
 	featured.checked = details.featured;
 	const slug = input("text", { value: details.slug, required: true, maxlength: "80" });
 	const category = select(categoryOptions(categories, t("store.no_category")), details.category ?? "");
+	const storeName = input("text", { value: details.name ?? "", maxlength: "200", placeholder: details.item.name });
 	const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: t("store.summary_placeholder") });
 	summary.value = details.summary ?? "";
 	const descriptionField = markdownField(details.description ?? "", t("store.description_markdown_placeholder"));
@@ -511,6 +513,7 @@ function productEditor(
 				submit.disabled = true;
 				try {
 					await Api.saveStoreProduct(uuid, item.uuid, {
+						name: storeName.value.trim() || null,
 						slug: slug.value.trim(),
 						published: published.checked,
 						featured: featured.checked,
@@ -548,6 +551,7 @@ function productEditor(
 					el(
 						"div",
 						{ class: "stack" },
+						field(t("store.store_name"), storeName, t("store.store_name_hint")),
 						field(t("store.summary"), summary, t("store.summary_hint")),
 						el(
 							"div",

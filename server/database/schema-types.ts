@@ -76,6 +76,7 @@ const TEXT_LENGTHS: Record<string, number> = {
 	language: 32,
 	accent_color: 32,
 	invoice_format: 30,
+	store_name: 200,
 	order_format: 30,
 	proforma_format: 30,
 	proforma_settlement: 16,

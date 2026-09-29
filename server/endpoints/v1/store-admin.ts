@@ -511,6 +511,7 @@ Server.app.delete(`${base}/coupons/:coupon`, Auth.required(), Permissions.requir
 
 type ListedProduct = CatalogItemRow & {
 	store_slug: string | null;
+	store_name: string | null;
 	published: number | null;
 	featured: number | null;
 	store_category: string | null;
@@ -544,7 +545,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 		AND (LOWER(c.name) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}) ${statusFilter} ${categoryFilter}`;
 
 	const rows = (await Database`
-		SELECT c.*, sp.slug AS store_slug, sp.published, sp.featured, sp.store_category, sp.summary,
+		SELECT c.*, sp.slug AS store_slug, sp.name AS store_name, sp.published, sp.featured, sp.store_category, sp.summary,
 			CASE WHEN c.license IS NOT NULL THEN NULL
 				WHEN c.delivers_keys = 1 THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available')
 				ELSE sp.stock END AS stock,
@@ -562,6 +563,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 		products: rows.map((row) => ({
 			uuid: row.uuid,
 			name: row.name,
+			store_name: row.store_name,
 			sku: row.sku,
 			unit_price: row.unit_price,
 			currency: row.currency,
@@ -641,6 +643,7 @@ async function productState(project: ProjectRow, item: CatalogItemRow) {
 			keys_available: keys ? Number(keys[0].count) : null,
 		},
 		listed: Boolean(product),
+		name: product?.name ?? null,
 		slug,
 		published: Boolean(product?.published),
 		featured: Boolean(product?.featured),
@@ -667,6 +670,7 @@ Server.app.get(`${base}/products/:item`, Auth.required(), Permissions.require(Pe
 });
 
 interface ProductInput {
+	name: string | null;
 	slug: string;
 	published: boolean;
 	featured: boolean;
@@ -694,6 +698,7 @@ function readProduct(data: Record<string, unknown>): ProductInput | null {
 	const category = data.category === null || data.category === undefined || data.category === "" ? null : data.category;
 	if (category !== null && !Validate.uuid(category as string)) return null;
 	if (!Validate.optionalText(data.summary, 300) || !Validate.optionalText(data.description, MAX_MARKDOWN_LENGTH)) return null;
+	if (!Validate.optionalText(data.name, 200)) return null;
 	const comparePrice = optionalWhole(data.compare_price, 100_000_000_00);
 	const stock = optionalWhole(data.stock, 1_000_000_000);
 	const minDays = optionalWhole(data.delivery_min_days, 365);
@@ -718,6 +723,7 @@ function readProduct(data: Record<string, unknown>): ProductInput | null {
 
 	const text = (value: unknown) => (typeof value === "string" && value.trim() !== "" ? value.trim() : null);
 	return {
+		name: text(data.name),
 		slug: data.slug,
 		published: data.published,
 		featured: data.featured,
@@ -760,7 +766,7 @@ Server.app.put(`${base}/products/:item`, Auth.required(), Permissions.require(Pe
 	await Database.begin(async (tx) => {
 		if (existing) {
 			await tx`
-				UPDATE store_products SET store_category = ${input.category}, slug = ${input.slug}, published = ${input.published ? 1 : 0},
+				UPDATE store_products SET name = ${input.name}, store_category = ${input.category}, slug = ${input.slug}, published = ${input.published ? 1 : 0},
 					featured = ${input.featured ? 1 : 0}, summary = ${input.summary}, description = ${input.description}, compare_price = ${input.compare_price},
 					stock = ${stock}, allow_backorder = ${input.allow_backorder ? 1 : 0}, delivery_min_days = ${input.delivery_min_days},
 					delivery_max_days = ${input.delivery_max_days}, restock_at = ${input.restock_at}, sort_order = ${input.sort_order}, updated = ${now}
@@ -768,9 +774,9 @@ Server.app.put(`${base}/products/:item`, Auth.required(), Permissions.require(Pe
 			`;
 		} else {
 			await tx`
-				INSERT INTO store_products(item, project, store_category, slug, published, featured, summary, description, compare_price, stock,
+				INSERT INTO store_products(item, project, name, store_category, slug, published, featured, summary, description, compare_price, stock,
 					allow_backorder, delivery_min_days, delivery_max_days, restock_at, sort_order, created, updated)
-				VALUES(${item.uuid}, ${project.uuid}, ${input.category}, ${input.slug}, ${input.published ? 1 : 0}, ${input.featured ? 1 : 0},
+				VALUES(${item.uuid}, ${project.uuid}, ${input.name}, ${input.category}, ${input.slug}, ${input.published ? 1 : 0}, ${input.featured ? 1 : 0},
 					${input.summary}, ${input.description}, ${input.compare_price}, ${stock}, ${input.allow_backorder ? 1 : 0}, ${input.delivery_min_days},
 					${input.delivery_max_days}, ${input.restock_at}, ${input.sort_order}, ${now}, ${now})
 			`;

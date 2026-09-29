@@ -2202,6 +2202,8 @@ export const en = {
 	"store.product_content": "Product page",
 	"store.summary": "Short summary",
 	"store.summary_hint": "One or two sentences shown on product cards.",
+	"store.store_name": "Name in the store",
+	"store.store_name_hint": "Leave empty to use the item name. Invoices and receipts always show the item name.",
 	"store.summary_placeholder": "16 GB GDDR6, ray tracing and FSR 4 for 1440p gaming",
 	"store.product_description": "Description",
 	"store.description_markdown_placeholder": "## Highlights\n- Quiet triple fan cooler\n- 3 years warranty\n\n| Spec | Value |\n|---|---|\n| Memory | 16 GB |",

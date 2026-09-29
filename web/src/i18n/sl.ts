@@ -2205,6 +2205,8 @@ export const sl: UiDictionary = {
 	"store.product_content": "Stran izdelka",
 	"store.summary": "Kratek povzetek",
 	"store.summary_hint": "En ali dva stavka, prikazana na karticah izdelkov.",
+	"store.store_name": "Ime v trgovini",
+	"store.store_name_hint": "Pustite prazno za ime artikla. Računi in potrdila vedno prikazujejo ime artikla.",
 	"store.summary_placeholder": "16 GB GDDR6, sledenje žarkom in FSR 4 za igranje v 1440p",
 	"store.product_description": "Opis",
 	"store.description_markdown_placeholder":

@@ -115,6 +115,7 @@ export interface StoreListedProduct {
 	supply_type: string;
 	delivers_keys: boolean;
 	license: boolean;
+	store_name: string | null;
 	listed: boolean;
 	slug: string | null;
 	published: boolean;
@@ -153,6 +154,7 @@ export interface StoreProductDetails {
 		keys_available: number | null;
 	};
 	listed: boolean;
+	name: string | null;
 	slug: string;
 	published: boolean;
 	featured: boolean;

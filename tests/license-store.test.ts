@@ -61,8 +61,9 @@ async function customerLogin(email: string): Promise<string> {
 	return (await call("POST", "/customer/auth/verify", undefined, { token })).data.token;
 }
 
-function publish(item: string, productSlug: string) {
+function publish(item: string, productSlug: string, name: string | null = null) {
 	return call("PUT", `${base()}/store/products/${item}`, tokens.admin, {
+		name,
 		slug: productSlug,
 		published: true,
 		featured: false,
@@ -174,7 +175,8 @@ describe("license products", () => {
 		expect((await call("POST", `${base()}/license/redeem`, tokens.admin, { code })).error).toBe(0);
 		const state = await call("GET", `${base()}/store`, tokens.admin);
 		expect((await call("PUT", `${base()}/store`, tokens.admin, { slug, domain: null, enabled: true, config: state.data.config })).error).toBe(0);
-		expect((await publish(seats, "employee-seats")).error).toBe(0);
+		const listed = await publish(seats, "employee-seats", "Employee seats");
+		expect(listed.data).toMatchObject({ name: "Employee seats", item: { name: "Employee seats for RabbitPay" } });
 		expect((await publish(payments, "payments")).error).toBe(0);
 		const bank = await call("PUT", `${base()}/processors/bank_transfer`, tokens.admin, {
 			enabled: true,
@@ -183,7 +185,9 @@ describe("license products", () => {
 		expect(bank.error).toBe(0);
 
 		const product = await call("GET", `/store/${slug}/products/employee-seats`);
-		expect(product.data).toMatchObject({ availability: "in_stock", stock: null, digital: true, license: SEATS, price: 1220 });
+		expect(product.data).toMatchObject({ name: "Employee seats", availability: "in_stock", stock: null, digital: true, license: SEATS, price: 1220 });
+		const found = await call("GET", `/store/${slug}/products?q=employee%20seats`);
+		expect(found.data.products.map((entry: { name: string }) => entry.name)).toEqual(["Employee seats"]);
 	});
 
 	test("quotes price the chosen amounts and refuse choices outside the limits", async () => {
@@ -196,7 +200,12 @@ describe("license products", () => {
 		expect(quote.error).toBe(0);
 		expect(quote.data.lines).toHaveLength(2);
 		expect(licensePrice(SEATS as never, { amount: 20, days: 365 })).toBe(36500);
-		expect(quote.data.lines[0]).toMatchObject({ unit_price: 44530, issue: null, license: { type: "employees", amount: 20, days: 365, server_id: null } });
+		expect(quote.data.lines[0]).toMatchObject({
+			name: "Employee seats",
+			unit_price: 44530,
+			issue: null,
+			license: { type: "employees", amount: 20, days: 365, server_id: null },
+		});
 		expect(quote.data.lines[1]).toMatchObject({ unit_price: 1220, quantity: 2, total: 2440 });
 		expect(quote.data.withdrawal_waiver).toBe(true);
 		expect(quote.data.requires_shipping).toBe(false);

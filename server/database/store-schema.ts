@@ -307,3 +307,7 @@ export async function createStoreLanguageSchema(sql: SQL, dialect: Dialect) {
 		`CREATE INDEX IF NOT EXISTS idx_store_category_translations_language ON store_category_translations(project, language)`,
 	]);
 }
+
+export async function addStoreProductNames(sql: SQL, dialect: Dialect) {
+	await sql.unsafe(`ALTER TABLE store_products ADD COLUMN name ${schemaTypes(dialect).text("store_name")}`);
+}

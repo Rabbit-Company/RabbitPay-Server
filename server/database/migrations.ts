@@ -4,6 +4,7 @@ import { schemaTypes } from "./schema-types";
 import { createSchema, run } from "./schema";
 import {
 	addStoreOrderNumbers,
+	addStoreProductNames,
 	createLicenseProductSchema,
 	createProformaSchema,
 	createStoreCouponSchema,
@@ -301,6 +302,7 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 27, name: "store order numbers", up: addStoreOrderNumbers },
 	{ version: 28, name: "pro forma and advance invoices", up: createProformaSchema },
 	{ version: 29, name: "store languages", up: createStoreLanguageSchema },
+	{ version: 30, name: "store product names", up: addStoreProductNames },
 ];
 
 export class SchemaTooNew extends Error {

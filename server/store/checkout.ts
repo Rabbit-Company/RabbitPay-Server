@@ -5,7 +5,7 @@ import { calculateTotals, taxIncluded, type InvoiceItemInput } from "../invoicin
 import { convertedPrice, customAmountRate, sellerOf } from "../pos-sale";
 import { isCustomerType, suggestTax, type BuyerTax } from "../tax";
 import { imagesOf } from "./images";
-import { availabilityOf, grossOf, needsShipping, pricingFor, productsByItem, taxRateFor, type Availability, type ProductRow } from "./catalog";
+import { availabilityOf, grossOf, needsShipping, pricingFor, productsByItem, storeNameOf, taxRateFor, type Availability, type ProductRow } from "./catalog";
 import { imagePath, type LoadedStore } from "./store";
 import { couponIssue, grossDiscountOf, type CouponIssue } from "./coupons";
 import type { StoreShippingOption } from "./config";
@@ -260,7 +260,7 @@ export async function quoteCart(
 		quoted.push({
 			product: row.uuid,
 			slug: row.slug,
-			name: row.name,
+			name: storeNameOf(row),
 			sku: row.sku,
 			image: firstImage ? imagePath(firstImage) : null,
 			quantity: line.quantity,

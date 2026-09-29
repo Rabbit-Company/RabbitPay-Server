@@ -16,7 +16,8 @@ export const PRODUCT_SORTS = ["featured", "newest", "price_asc", "price_desc", "
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
 export type ProductRow = CatalogItemRow &
-	Omit<StoreProductRow, "project" | "created" | "updated" | "sort_order"> & {
+	Omit<StoreProductRow, "project" | "created" | "updated" | "sort_order" | "name"> & {
+		store_name: string | null;
 		store_sort: number;
 		store_created: number;
 		available: number | null;
@@ -66,7 +67,7 @@ function availableColumn(sql: SQL) {
 
 function selectProducts(sql: SQL) {
 	return sql`
-		SELECT c.*, sp.store_category, sp.slug, sp.published, sp.featured, sp.summary, sp.description, sp.compare_price, sp.stock,
+		SELECT c.*, sp.name AS store_name, sp.store_category, sp.slug, sp.published, sp.featured, sp.summary, sp.description, sp.compare_price, sp.stock,
 			sp.allow_backorder, sp.delivery_min_days, sp.delivery_max_days, sp.restock_at, sp.sort_order AS store_sort, sp.created AS store_created,
 			${availableColumn(sql)} AS available
 		FROM store_products sp JOIN catalog_items c ON c.uuid = sp.item
@@ -114,7 +115,7 @@ function baseFilter(sql: SQL, projectId: string, query: Pick<ProductQuery, "cate
 	const search =
 		pattern === null
 			? sql``
-			: sql`AND (LOWER(c.name) LIKE ${pattern} OR LOWER(COALESCE(sp.summary, '')) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}
+			: sql`AND (LOWER(COALESCE(sp.name, c.name)) LIKE ${pattern} OR LOWER(COALESCE(sp.summary, '')) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}
 				OR c.uuid IN (SELECT a.item FROM store_attributes a WHERE a.project = ${projectId} AND LOWER(a.attribute_value) LIKE ${pattern})
 				${translatedSearch(sql, projectId, query.language, pattern)})`;
 	return sql`sp.project = ${projectId} AND sp.published = 1 AND c.archived = 0 ${category} ${search}`;
@@ -137,9 +138,9 @@ function attributeFilter(sql: SQL, projectId: string, filters: Map<string, strin
 
 function orderBy(sql: SQL, sort: ProductSort) {
 	if (sort === "newest") return sql`ORDER BY sp.created DESC, c.uuid ASC`;
-	if (sort === "price_asc") return sql`ORDER BY c.unit_price ASC, c.name ASC, c.uuid ASC`;
-	if (sort === "price_desc") return sql`ORDER BY c.unit_price DESC, c.name ASC, c.uuid ASC`;
-	if (sort === "name") return sql`ORDER BY c.name ASC, c.uuid ASC`;
+	if (sort === "price_asc") return sql`ORDER BY c.unit_price ASC, COALESCE(sp.name, c.name) ASC, c.uuid ASC`;
+	if (sort === "price_desc") return sql`ORDER BY c.unit_price DESC, COALESCE(sp.name, c.name) ASC, c.uuid ASC`;
+	if (sort === "name") return sql`ORDER BY COALESCE(sp.name, c.name) ASC, c.uuid ASC`;
 	return sql`ORDER BY sp.featured DESC, sp.sort_order ASC, sp.created DESC, c.uuid ASC`;
 }
 
@@ -240,9 +241,17 @@ export function presentCard(store: LoadedStore, row: ProductRow, pricing: Pricin
 	};
 }
 
+export function storeNameOf(row: Pick<ProductRow, "name" | "store_name">, text?: Pick<ProductText, "name">): string {
+	return text?.name ?? row.store_name ?? row.name;
+}
+
 export function translatedRow(row: ProductRow, text: ProductText | undefined): ProductRow {
-	if (!text) return row;
-	return { ...row, name: text.name ?? row.name, summary: text.summary ?? row.summary, description: text.description ?? row.description };
+	return {
+		...row,
+		name: storeNameOf(row, text),
+		summary: text?.summary ?? row.summary,
+		description: text?.description ?? row.description,
+	};
 }
 
 export async function presentCards(store: LoadedStore, rows: ProductRow[], language: string | null = null) {

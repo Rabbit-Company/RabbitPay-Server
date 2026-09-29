@@ -809,6 +809,7 @@ export interface StoreProductRow {
 	project: string;
 	store_category: string | null;
 	slug: string;
+	name: string | null;
 	published: number;
 	featured: number;
 	summary: string | null;
