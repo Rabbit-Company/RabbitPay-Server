@@ -1,5 +1,6 @@
 import { join, normalize, resolve, sep } from "node:path";
 import { Settings } from "./settings";
+import { isWebUrl } from "./settings-schema";
 import { Logger } from "./logger";
 import Utils from "./utils";
 import Database from "./database/database";
@@ -111,7 +112,8 @@ const HOME_DESCRIPTION =
 function applicationHtml(html: string, pathname: string): string {
 	if (Settings.web?.landing_page === false) return html;
 	const licensing = licensingEnforced();
-	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" />`;
+	const store = licensing && isWebUrl(Settings.web?.license_store_url ?? "") ? Settings.web.license_store_url : "";
+	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" data-license-store="${escapeHtml(store)}" />`;
 	if (pathname !== "/" && pathname !== "/index.html") return html.replace("</head>", `${flag}</head>`);
 
 	const tags = [

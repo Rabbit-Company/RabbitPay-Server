@@ -3057,6 +3057,7 @@ export const sl: UiDictionary = {
 	"landing.price_everything": "Računi, plačila, stranke, stroški in poročila",
 	"landing.price_licenses": "Licenčni ključi",
 	"landing.price_licenses_body": "Kupite enkrat in unovčite na kateremkoli projektu. Nič se ne podaljša samo.",
+	"landing.buy_licenses": "Kupi licenčne ključe",
 	"landing.license_payments": "Več plačil",
 	"landing.license_storage": "Več prostora za dokumente",
 	"landing.license_store": "Spletna trgovina",

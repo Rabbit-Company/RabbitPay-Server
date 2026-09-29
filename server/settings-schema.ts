@@ -32,6 +32,7 @@ export interface ServerSettings {
 		enabled: boolean;
 		path: string;
 		landing_page: boolean;
+		license_store_url: string;
 	};
 	cache: {
 		local: CacheScope;
@@ -179,7 +180,7 @@ export interface ServerSettings {
 
 export const DEFAULT_SETTINGS: ServerSettings = {
 	server: { hostname: "0.0.0.0", port: 8085, proxy: "direct", trusted_proxies: "", burrowgate_secret: "", public_url: "http://localhost:8085" },
-	web: { enabled: true, path: "./web/dist", landing_page: true },
+	web: { enabled: true, path: "./web/dist", landing_page: true, license_store_url: "" },
 	cache: {
 		local: { adapter: "memory", redis: { url: "redis://localhost/", options: { connectionTimeout: 500 } }, file: { path: "./data/cache/local" } },
 		external: { adapter: "memory", redis: { url: "redis://localhost/", options: { connectionTimeout: 2000 } }, file: { path: "./data/cache/external" } },
@@ -276,6 +277,16 @@ export interface SettingField {
 	min?: number;
 	max?: number;
 	restart?: boolean;
+	url?: boolean;
+}
+
+export function isWebUrl(value: string): boolean {
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === "https:" || parsed.protocol === "http:";
+	} catch {
+		return false;
+	}
 }
 
 export interface SettingGroup {
@@ -373,6 +384,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				label: "Show the home page",
 				hint: "Visitors who are not signed in see a page about RabbitPay at the public URL. Turn off to send them straight to sign in.",
 				kind: "boolean",
+			},
+			{
+				key: "web.license_store_url",
+				label: "License store link",
+				hint: "Where the Buy license keys button on the home page leads, for example https://rabbitpay.net/shop/rabbitpay. It opens in a new tab. Leave empty to hide the button.",
+				kind: "text",
+				url: true,
 			},
 		],
 	},
@@ -799,8 +817,12 @@ export function coerceSetting(field: SettingField, raw: unknown): SettingValue |
 			return NUMERIC_CHOICES.has(field.key) ? Number(value) : value;
 		}
 		case "text":
-		case "secret":
-			return typeof raw === "string" && raw.length <= 2000 ? raw.trim() : undefined;
+		case "secret": {
+			if (typeof raw !== "string" || raw.length > 2000) return undefined;
+			const value = raw.trim();
+			if (field.url && value !== "" && !isWebUrl(value)) return undefined;
+			return value;
+		}
 	}
 }
 

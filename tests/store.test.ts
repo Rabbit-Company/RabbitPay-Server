@@ -20,7 +20,7 @@ const { default: Auth } = await import("../server/auth");
 const { generateLicenseCode, storageFor } = await import("../server/licensing");
 const { expireUnpaidOrders, issuePaidDrafts, UNPAID_ORDER_GRACE_DAYS } = await import("../server/paid-drafts");
 
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true };
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
 
 interface Result {
 	status: number;

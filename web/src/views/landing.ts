@@ -51,6 +51,17 @@ export function landingEnabled(): boolean {
 	return landingFlag() !== null;
 }
 
+function licenseStore(): string | null {
+	const value = landingFlag()?.dataset.licenseStore;
+	if (!value) return null;
+	try {
+		const url = new URL(value);
+		return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+	} catch {
+		return null;
+	}
+}
+
 function allowance(key: "freePayments" | "freeStorage"): number | null {
 	const value = landingFlag()?.dataset[key];
 	return value ? Number(value) : null;
@@ -251,6 +262,10 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 		"landing.license_workforce",
 		"landing.license_white_label",
 	];
+	const store = licenseStore();
+	const buy = store
+		? el("a", { class: "button secondary wide", href: store, target: "_blank", rel: "noopener" }, el("span", {}, t("landing.buy_licenses")), glyph("arrow", 18))
+		: null;
 
 	return section(
 		"pricing",
@@ -273,7 +288,8 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 				{ class: "landing-plan" },
 				el("h3", {}, t("landing.price_licenses")),
 				el("p", { class: "muted" }, t("landing.price_licenses_body")),
-				el("ul", { class: "landing-checks" }, ...extras.map((item) => el("li", {}, glyph("check", 18), el("span", {}, t(item)))))
+				el("ul", { class: "landing-checks" }, ...extras.map((item) => el("li", {}, glyph("check", 18), el("span", {}, t(item))))),
+				buy
 			)
 		)
 	);

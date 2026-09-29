@@ -15,7 +15,8 @@ writeFileSync(`${FIXTURE}/index-abcd1234.js`, "console.log(1)");
 writeFileSync(`${FIXTURE}/plain.js`, "console.log(2)");
 
 const { Settings } = await import("../server/settings");
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true };
+const { SETTING_FIELDS, coerceSetting } = await import("../server/settings-schema");
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
 
 const { Server } = await import("../server/server");
 await Server.configure();
@@ -76,9 +77,27 @@ describe("web interface", () => {
 	test("lets search engines index the home page and describes it", async () => {
 		const html = await (await get("/")).text();
 		expect(html).toContain('<meta name="robots" content="index, follow" />');
-		expect(html).toContain('<meta name="rabbitpay-landing" content="1" data-free-payments="50" data-free-storage="1" />');
+		expect(html).toContain('<meta name="rabbitpay-landing" content="1" data-free-payments="50" data-free-storage="1" data-license-store="" />');
 		expect(html).toContain('<meta property="og:url" content="http://127.0.0.1:8099/" />');
 		expect(html).toContain("<title>RabbitPay | Invoicing and payments</title>");
+	});
+
+	test("links the pricing to the license store only when it is a web address", async () => {
+		const field = SETTING_FIELDS.find((entry) => entry.key === "web.license_store_url")!;
+		expect(coerceSetting(field, " https://rabbitpay.net/shop/rabbitpay ")).toBe("https://rabbitpay.net/shop/rabbitpay");
+		expect(coerceSetting(field, "")).toBe("");
+		expect(coerceSetting(field, "javascript:alert(1)")).toBeUndefined();
+		expect(coerceSetting(field, "rabbitpay.net/shop")).toBeUndefined();
+
+		Settings.web.license_store_url = 'https://rabbitpay.net/shop/rabbitpay?ref=home&x="1"';
+		try {
+			const html = await (await get("/")).text();
+			expect(html).toContain('data-license-store="https://rabbitpay.net/shop/rabbitpay?ref=home&amp;x=&quot;1&quot;"');
+			Settings.web.license_store_url = "javascript:alert(1)";
+			expect(await (await get("/")).text()).toContain('data-license-store=""');
+		} finally {
+			Settings.web.license_store_url = "";
+		}
 	});
 
 	test("keeps application pages out of search engines", async () => {

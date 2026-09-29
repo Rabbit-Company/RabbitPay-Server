@@ -3053,6 +3053,7 @@ export const en = {
 	"landing.price_everything": "Invoices, payments, customers, expenses and reports",
 	"landing.price_licenses": "License keys",
 	"landing.price_licenses_body": "Buy once and redeem on any project. Nothing renews on its own.",
+	"landing.buy_licenses": "Buy license keys",
 	"landing.license_payments": "More payments",
 	"landing.license_storage": "More document storage",
 	"landing.license_store": "Online store",
