@@ -142,16 +142,14 @@ function tidySection(section: Section): Section {
 	};
 }
 
-function render(brand: EmailBrand, subject: string, original: Section): EmailContent {
-	const section = tidySection(original);
-	const t = translator(brand.language);
-	const accent = isAccentColor(brand.accent) ? brand.accent : BRAND_BLUE;
-	const accentText = accentTextFor(accent);
-	const footer = [t(brand.whiteLabel ? "email.footer_plain" : "email.footer", { merchant: brand.merchant }), ...brand.address, brand.footerText].filter(
-		(line): line is string => Boolean(line)
-	);
-	const closing = [...section.closing, ...(brand.signature ? [brand.signature] : []), ...(brand.replyTo ? [t("email.reply")] : [])];
+interface LocalizedSection {
+	language: string;
+	section: Section;
+}
 
+function sectionParts(original: Section, language: string, accent: string, accentText: string, closing: string[]): { text: string[]; html: string } {
+	const section = tidySection(original);
+	const t = translator(language);
 	const textParts: string[] = [section.heading, "", ...section.paragraphs];
 	if (section.summary) {
 		const { label, amount, status, facts } = section.summary;
@@ -166,10 +164,10 @@ function render(brand: EmailBrand, subject: string, original: Section): EmailCon
 		textParts.push("");
 		for (const row of rows)
 			textParts.push(
-				`${row.quantity === null ? "" : `${quantityWithUnit(String(row.quantity), row.unit, brand.language)} x `}${row.description}  ${money(row.gross, currency, brand.language)}`
+				`${row.quantity === null ? "" : `${quantityWithUnit(String(row.quantity), row.unit, language)} x `}${row.description}  ${money(row.gross, currency, language)}`
 			);
-		if (tax > 0) textParts.push(`${t("email.includes_tax")}: ${money(tax, currency, brand.language)}`);
-		textParts.push(`${t("invoice.total")}: ${money(total, currency, brand.language)}`);
+		if (tax > 0) textParts.push(`${t("email.includes_tax")}: ${money(tax, currency, language)}`);
+		textParts.push(`${t("invoice.total")}: ${money(total, currency, language)}`);
 	}
 	if (section.details) {
 		textParts.push("", `${section.details.title}:`, ...section.details.rows.map((row) => `${row.label}: ${row.value}`));
@@ -177,7 +175,6 @@ function render(brand: EmailBrand, subject: string, original: Section): EmailCon
 	if (section.button) textParts.push("", `${section.button.label}: ${section.button.url}`);
 	if (section.secondaryLink) textParts.push("", section.secondaryLink.intro, `${section.secondaryLink.label}: ${section.secondaryLink.url}`);
 	if (closing.length > 0) textParts.push("", ...closing);
-	textParts.push("", "--", ...footer);
 
 	const summaryHtml = section.summary
 		? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 28px;background:${PANEL};border:1px solid ${LINE};border-radius:14px;border-collapse:separate;">
@@ -232,16 +229,16 @@ ${section.lines.rows
 			`<tr><td style="padding:14px 16px 14px 0;border-bottom:1px solid ${LINE};color:${INK};vertical-align:top;">${escapeHtml(row.description)}${
 				row.quantity === null || (row.quantity === 1 && !row.unit)
 					? ""
-					: `<br><span style="font-size:13px;color:${MUTED};">${escapeHtml(t("invoice.quantity"))} ${escapeHtml(quantityWithUnit(String(row.quantity), row.unit, brand.language))}</span>`
-			}</td><td align="right" style="padding:14px 0;border-bottom:1px solid ${LINE};color:${INK};white-space:nowrap;vertical-align:top;">${escapeHtml(money(row.gross, section.lines!.currency, brand.language))}</td></tr>`
+					: `<br><span style="font-size:13px;color:${MUTED};">${escapeHtml(t("invoice.quantity"))} ${escapeHtml(quantityWithUnit(String(row.quantity), row.unit, language))}</span>`
+			}</td><td align="right" style="padding:14px 0;border-bottom:1px solid ${LINE};color:${INK};white-space:nowrap;vertical-align:top;">${escapeHtml(money(row.gross, section.lines!.currency, language))}</td></tr>`
 	)
 	.join("\n")}
 ${
 	section.lines.tax !== 0
-		? `<tr><td style="padding:14px 0 0;color:${MUTED};">${escapeHtml(t("email.includes_tax"))}</td><td align="right" style="padding:14px 0 0;color:${MUTED};white-space:nowrap;">${escapeHtml(money(section.lines.tax, section.lines.currency, brand.language))}</td></tr>`
+		? `<tr><td style="padding:14px 0 0;color:${MUTED};">${escapeHtml(t("email.includes_tax"))}</td><td align="right" style="padding:14px 0 0;color:${MUTED};white-space:nowrap;">${escapeHtml(money(section.lines.tax, section.lines.currency, language))}</td></tr>`
 		: ""
 }
-<tr><td style="padding:8px 0 0;font-size:16px;font-weight:700;color:${INK};">${escapeHtml(t("invoice.total"))}</td><td align="right" style="padding:8px 0 0;font-size:16px;font-weight:700;color:${INK};white-space:nowrap;">${escapeHtml(money(section.lines.total, section.lines.currency, brand.language))}</td></tr>
+<tr><td style="padding:8px 0 0;font-size:16px;font-weight:700;color:${INK};">${escapeHtml(t("invoice.total"))}</td><td align="right" style="padding:8px 0 0;font-size:16px;font-weight:700;color:${INK};white-space:nowrap;">${escapeHtml(money(section.lines.total, section.lines.currency, language))}</td></tr>
 </table>`
 		: "";
 
@@ -291,7 +288,47 @@ ${paragraphHtml(section.secondaryLink.intro, `margin:0 0 6px;color:${MUTED};font
 		? paragraphHtml(t("email.link_hint", { url: section.button.url }), `margin:0 0 8px;font-size:12px;color:${FAINT};word-break:break-all;`)
 		: "";
 	const closingHtml = closing.map((text) => paragraphHtml(text, `margin:0 0 8px;color:${MUTED};font-size:14px;`)).join("\n");
-	const preheader = section.preheader ?? section.paragraphs[0] ?? section.heading;
+	return {
+		text: textParts,
+		html: `<h1 style="margin:0 0 16px;font-size:26px;font-weight:700;letter-spacing:-0.02em;line-height:1.25;color:${INK};">${escapeHtml(section.heading)}</h1>
+${section.paragraphs.map((text) => paragraphHtml(text)).join("\n")}
+${summaryHtml}
+${keysHtml}
+${actionHtml}
+${noteHtml}
+${linesHtml}
+${detailsHtml}
+${secondaryLinkHtml}
+${closingHtml}
+${linkHint}
+`,
+	};
+}
+
+const DIVIDER = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 36px;">
+<tr><td style="border-top:1px solid ${LINE};font-size:0;line-height:0;">&nbsp;</td></tr>
+</table>`;
+
+function render(brand: EmailBrand, subject: string, original: Section, others: LocalizedSection[] = []): EmailContent {
+	const t = translator(brand.language);
+	const accent = isAccentColor(brand.accent) ? brand.accent : BRAND_BLUE;
+	const accentText = accentTextFor(accent);
+	const footer = [t(brand.whiteLabel ? "email.footer_plain" : "email.footer", { merchant: brand.merchant }), ...brand.address, brand.footerText]
+		.filter((line): line is string => Boolean(line))
+		.map(tidy);
+	const sections = [{ language: brand.language, section: original }, ...others];
+	const parts = sections.map(({ language, section }, index) =>
+		sectionParts(section, language, accent, accentText, [
+			...section.closing,
+			...(index === 0 && brand.signature ? [brand.signature] : []),
+			...(brand.replyTo ? [translator(language)("email.reply")] : []),
+		])
+	);
+	const body = parts
+		.map((part, index) => (index === 0 ? part.html : `${DIVIDER}\n<div lang="${escapeHtml(sections[index]!.language)}">\n${part.html}</div>`))
+		.join("\n");
+	const first = tidySection(original);
+	const preheader = first.preheader ?? first.paragraphs[0] ?? first.heading;
 	const brandHtml = brand.logoUrl
 		? `<img src="${escapeHtml(brand.logoUrl)}" alt="${escapeHtml(brand.merchant)}" height="44" style="display:block;height:44px;max-width:200px;border:0;outline:none;text-decoration:none;">`
 		: `<span style="font-size:18px;font-weight:700;letter-spacing:-0.01em;color:${INK};">${escapeHtml(brand.merchant)}</span>`;
@@ -324,17 +361,7 @@ ${paragraphHtml(section.secondaryLink.intro, `margin:0 0 6px;color:${MUTED};font
 <tr><td height="5" style="height:5px;line-height:5px;font-size:0;background:${accent};border-radius:18px 18px 0 0;">&nbsp;</td></tr>
 <tr><td class="card" style="padding:40px 44px 36px;font-family:${FONT};font-size:15px;line-height:1.6;color:${BODY};">
 ${brand.logoUrl ? `<p style="margin:0 0 6px;font-size:13px;font-weight:600;color:${MUTED};">${escapeHtml(brand.merchant)}</p>` : ""}
-<h1 style="margin:0 0 16px;font-size:26px;font-weight:700;letter-spacing:-0.02em;line-height:1.25;color:${INK};">${escapeHtml(section.heading)}</h1>
-${section.paragraphs.map((text) => paragraphHtml(text)).join("\n")}
-${summaryHtml}
-${keysHtml}
-${actionHtml}
-${noteHtml}
-${linesHtml}
-${detailsHtml}
-${secondaryLinkHtml}
-${closingHtml}
-${linkHint}
+${body}
 </td></tr>
 </table>
 </td></tr>
@@ -347,7 +374,8 @@ ${footer.map((line) => escapeHtml(line)).join("<br>")}
 </body>
 </html>`;
 
-	return { subject, text: textParts.join("\n"), html };
+	const text = [...parts[0]!.text, ...parts.slice(1).flatMap((part) => ["", "---", "", ...part.text]), "", "--", ...footer];
+	return { subject, text: text.join("\n"), html };
 }
 
 export function customerLoginEmail(language: UiLanguage, url: string, store: { name: string; accent: string } | null = null): EmailContent {
@@ -649,4 +677,43 @@ export function noticeEmail(brand: EmailBrand, notice: NoticeContent): EmailCont
 		button: notice.button,
 		closing: notice.closing ?? [],
 	});
+}
+
+export interface LegalNotice {
+	kind: "terms" | "privacy";
+	version: number;
+	operator: string;
+	service: string;
+	url: string;
+	effective: Record<"sl" | "en", string>;
+}
+
+function legalSection(language: "sl" | "en", notice: LegalNotice): Section {
+	const t = translator(language);
+	const terms = notice.kind === "terms";
+	const date = notice.effective[language];
+	return {
+		heading: t(terms ? "email.legal.heading_terms" : "email.legal.heading_privacy"),
+		paragraphs: [
+			t(terms ? "email.legal.intro_terms" : "email.legal.intro_privacy", { operator: notice.operator, service: notice.service, date }),
+			t(terms ? "email.legal.action_terms" : "email.legal.action_privacy"),
+		],
+		summary: {
+			label: t(terms ? "email.legal.document_terms" : "email.legal.document_privacy"),
+			amount: t("email.legal.version", { version: notice.version }),
+			status: terms ? { label: t("email.legal.status_accept"), tone: "warning" } : { label: t("email.legal.status_none"), tone: "success" },
+			facts: [
+				{ label: t("email.legal.effective"), value: date },
+				{ label: t("email.legal.service"), value: notice.service },
+			],
+		},
+		button: { label: t("email.legal.button"), url: notice.url },
+		closing: [],
+	};
+}
+
+export function legalNoticeEmail(brand: EmailBrand, notice: LegalNotice): EmailContent {
+	const key = notice.kind === "terms" ? "email.legal.subject_terms" : "email.legal.subject_privacy";
+	const subject = `${translator("sl")(key)} | ${translator("en")(key)}`;
+	return render({ ...brand, language: "sl" }, subject, legalSection("sl", notice), [{ language: "en", section: legalSection("en", notice) }]);
 }

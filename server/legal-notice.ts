@@ -1,67 +1,44 @@
 import Database from "./database/database";
 import { isEnabled, sendEmail } from "./email/mailer";
-import { escapeHtml } from "./markdown";
+import { legalNoticeEmail, type EmailBrand, type EmailContent } from "./email/templates";
 import { Logger } from "./logger";
 import { Settings } from "./settings";
 import Utils from "./utils";
 import { effectiveOf, formatLegalDate } from "./legal";
 import type { LegalDocumentRow } from "./database/models";
 
-interface NoticeText {
-	subject: string;
-	paragraphs: string[];
-}
-
-function noticeText(document: LegalDocumentRow): { sl: NoticeText; en: NoticeText } {
+export function noticeMessage(document: LegalDocumentRow): EmailContent {
 	const url = Utils.publicUrl();
-	const link = `${url}/${document.kind}?upcoming=1`;
 	const operator = Settings.legal.operator_name || "RabbitPay";
-	const version = Number(document.version);
 	const effective = effectiveOf(document);
-	const terms = document.kind === "terms";
-
-	return {
-		sl: {
-			subject: terms ? "Spremembe Splošnih pogojev uporabe" : "Spremembe Politike zasebnosti",
-			paragraphs: [
-				"Pozdravljeni,",
-				terms
-					? `${operator} bo ${formatLegalDate("sl", effective)} začel uporabljati različico ${version} Splošnih pogojev uporabe storitve ${url}.`
-					: `${operator} bo ${formatLegalDate("sl", effective)} začel uporabljati različico ${version} Politike zasebnosti storitve ${url}.`,
-				`Novo različico si lahko preberete na ${link}`,
-				terms
-					? "Ob naslednji prijavi po tem datumu jo boste morali sprejeti. Če se s spremembami ne strinjate, lahko storitev prenehate uporabljati in zahtevate vračilo kupnine za neunovčene licenčne ključe."
-					: "Za nadaljnjo uporabo storitve vam ni treba storiti ničesar.",
-			],
-		},
-		en: {
-			subject: terms ? "Changes to the Terms of Service" : "Changes to the Privacy Policy",
-			paragraphs: [
-				"Hello,",
-				terms
-					? `${operator} will apply version ${version} of the Terms of Service for ${url} from ${formatLegalDate("en", effective)}.`
-					: `${operator} will apply version ${version} of the Privacy Policy for ${url} from ${formatLegalDate("en", effective)}.`,
-				`You can read the new version at ${link}`,
-				terms
-					? "You will need to accept it the next time you sign in after that date. If you do not agree, you may stop using the service and request a refund of unredeemed license keys."
-					: "You do not need to do anything to keep using the service.",
-			],
-		},
+	const brand: EmailBrand = {
+		merchant: operator,
+		language: "sl",
+		accent: null,
+		dateFormat: "auto",
+		replyTo: Settings.legal.contact_email || null,
+		address: Settings.legal.address
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean),
+		whiteLabel: true,
+		logoUrl: null,
 	};
-}
-
-function render(document: LegalDocumentRow): { subject: string; text: string; html: string } {
-	const { sl, en } = noticeText(document);
-	const text = [...sl.paragraphs, "", "---", "", ...en.paragraphs].join("\n\n");
-	const html = [...sl.paragraphs, null, ...en.paragraphs].map((paragraph) => (paragraph === null ? "<hr>" : `<p>${escapeHtml(paragraph)}</p>`)).join("\n");
-	return { subject: `${sl.subject} | ${en.subject}`, text, html };
+	return legalNoticeEmail(brand, {
+		kind: document.kind,
+		version: Number(document.version),
+		operator,
+		service: new URL(url).host,
+		url: `${url}/${document.kind}?upcoming=1`,
+		effective: { sl: formatLegalDate("sl", effective), en: formatLegalDate("en", effective) },
+	});
 }
 
 export async function notifyAccounts(document: LegalDocumentRow): Promise<number | null> {
 	if (!isEnabled()) return null;
 
 	const recipients = (await Database`SELECT email FROM accounts WHERE status = 'active' ORDER BY created ASC`) as { email: string }[];
-	const message = render(document);
+	const message = noticeMessage(document);
 	const senderName = Settings.legal.operator_name || "RabbitPay";
 	const replyTo = Settings.legal.contact_email || null;
 

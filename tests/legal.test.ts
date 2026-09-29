@@ -275,9 +275,9 @@ describe("scheduled versions", () => {
 	});
 
 	test("email every active account about a change when asked", async () => {
-		const sent: { to: string; subject: string; text: string; replyTo?: string }[] = [];
+		const sent: { to: string; subject: string; text: string; html: string; replyTo?: string }[] = [];
 		setTransport({
-			sendMail: async (message: { to: string; subject: string; text: string; replyTo?: string }) => (sent.push(message), { messageId: "x" }),
+			sendMail: async (message: { to: string; subject: string; text: string; html: string; replyTo?: string }) => (sent.push(message), { messageId: "x" }),
 		} as never);
 		Settings.email.enabled = true;
 		try {
@@ -296,6 +296,16 @@ describe("scheduled versions", () => {
 			expect(sent[0].subject).toBe("Spremembe Politike zasebnosti | Changes to the Privacy Policy");
 			expect(sent[0].text).toContain("/privacy?upcoming=1");
 			expect(sent[0].replyTo).toBe("info@rabbitpay.net");
+			expect(sent[0].text).toContain("Posodabljamo Politiko zasebnosti");
+			expect(sent[0].text).toContain("We are updating our Privacy Policy");
+			expect(sent[0].text.indexOf("Posodabljamo")).toBeLessThan(sent[0].text.indexOf("We are updating"));
+			expect(sent[0].text).toContain("Poslal SIMONCA ZAJC S.P.\n");
+			expect(sent[0].html).toContain('<html lang="sl">');
+			expect(sent[0].html).toContain('<div lang="en">');
+			expect(sent[0].html).toContain("Ukrepanje ni potrebno");
+			expect(sent[0].html).toContain("No action needed");
+			expect(sent[0].html).toContain("Različica 2");
+			expect(sent[0].html).toContain("Version 2");
 		} finally {
 			Settings.email.enabled = false;
 			setTransport(null);
