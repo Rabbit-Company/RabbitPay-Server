@@ -3002,7 +3002,8 @@ select:not([multiple]) {
 	justify-content: center;
 	margin-bottom: 1rem;
 }
-.pay-pdf {
+.pay-pdf,
+.pay-back {
 	margin-top: 0.75rem;
 }
 .pay-logo {

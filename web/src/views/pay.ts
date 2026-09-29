@@ -235,9 +235,10 @@ export async function payView(invoiceId: string): Promise<HTMLElement> {
 		brand.hidden = mark === null;
 		const back = returnPath();
 		footer.replaceChildren(
-			...[back ? el("a", { class: "button ghost", href: back }, ui("shop.back_to_order")) : null, poweredBy(invoice.branding, t("brand.powered_by"))].filter(
-				(node): node is HTMLElement => node !== null
-			)
+			...[
+				back ? el("a", { class: "button ghost pay-back", href: back }, ui("shop.back_to_order")) : null,
+				poweredBy(invoice.branding, t("brand.powered_by")),
+			].filter((node): node is HTMLElement => node !== null)
 		);
 		const order = invoice.document === "order";
 		const proforma = invoice.document === "proforma";

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
 import { prepareTest } from "./environment";
 
 process.env.RABBITPAY_RENDER_WORKERS = "2";
@@ -64,6 +65,35 @@ describe("render pool", () => {
 		expect(results.every(isPdf)).toBe(true);
 		expect(RenderPool.waiting()).toBe(0);
 	});
+
+	test("starts its workers inside the compiled server binary", async () => {
+		const root = `${import.meta.dir}/..`;
+		const scratch = `${import.meta.dir}/.render-binary`;
+		const script = ((await Bun.file(`${root}/package.json`).json()) as { scripts: { build: string } }).scripts.build;
+		expect(script).toContain("server/index.ts");
+		await Bun.write(
+			`${root}/server/.render-probe.ts`,
+			`import RenderPool from "./render-pool";
+RenderPool.render({ kind: "invoice", document: {} as never, logo: null, payLink: false }).then(
+	() => console.log("rendered"),
+	(error) => console.log("rejected:" + error.message)
+).finally(() => process.exit(0));
+`
+		);
+		try {
+			const command = script.replace("server/index.ts", "server/.render-probe.ts").replace("./rabbitpay-server", `${scratch}/probe`);
+			const built = Bun.spawnSync(["sh", "-c", command], { cwd: root, stderr: "pipe" });
+			expect(built.exitCode).toBe(0);
+			const run = Bun.spawnSync([`${scratch}/probe`], { cwd: "/", env: { ...process.env, RABBITPAY_RENDER_WORKERS: "1" }, stdout: "pipe" });
+			const output = run.stdout.toString();
+			expect(output).toContain("rejected:");
+			expect(output).not.toContain("The render worker failed");
+			expect(output).not.toContain("ModuleNotFound");
+		} finally {
+			rmSync(`${root}/server/.render-probe.ts`, { force: true });
+			rmSync(scratch, { recursive: true, force: true });
+		}
+	}, 60_000);
 
 	test("reports a failed render and keeps working", async () => {
 		await expect(RenderPool.render({ kind: "invoice", document: {} as never, logo: null, payLink: false })).rejects.toThrow();

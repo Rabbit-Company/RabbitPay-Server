@@ -19,6 +19,12 @@ interface Slot {
 
 type Reply = { id: number; data: Uint8Array } | { id: number; error: string };
 
+const COMPILED = /\/(?:\$bunfs|~BUN)\//.test(import.meta.url);
+
+function workerEntry(): string | URL {
+	return COMPILED ? "./server/render-worker.ts" : new URL("./render-worker.ts", import.meta.url);
+}
+
 function configuredWorkers(): number {
 	const value = Bun.env.RABBITPAY_RENDER_WORKERS?.trim();
 	if (!value) return DEFAULT_WORKERS;
@@ -59,7 +65,7 @@ namespace RenderPool {
 	}
 
 	function spawn(): Slot {
-		const worker = new Worker(new URL("./render-worker.ts", import.meta.url));
+		const worker = new Worker(workerEntry());
 		const slot: Slot = { worker, task: null, timer: null };
 		worker.onmessage = (event: MessageEvent<Reply>) => finish(slot, event.data);
 		worker.onerror = (event) => retire(slot, new Error(`The render worker failed: ${event.message}`));
