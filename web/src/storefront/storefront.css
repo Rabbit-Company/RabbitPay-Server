@@ -1048,6 +1048,9 @@ body.sf-locked {
 	padding: 0;
 	margin: 0;
 }
+.sf-same-address {
+	margin-bottom: 1rem;
+}
 .sf-check a {
 	color: var(--accent) !important;
 	font-weight: 600;

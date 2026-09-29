@@ -345,7 +345,7 @@ export async function checkoutView(slug: string): Promise<HTMLElement> {
 		"section",
 		{ class: "sf-step" },
 		el("h2", {}, el("span", { class: "sf-step-number" }, "2"), t("shop.delivery")),
-		el("label", { class: "sf-check" }, same, el("span", {}, t("shop.same_address"))),
+		el("label", { class: "sf-check sf-same-address" }, same, el("span", {}, t("shop.same_address"))),
 		delivery.element,
 		el("h3", {}, t("shop.shipping_method")),
 		shippingHost
