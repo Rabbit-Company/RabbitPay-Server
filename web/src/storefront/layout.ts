@@ -577,9 +577,20 @@ export function storeLayout(ctx: StoreContext, content: HTMLElement, title: stri
 		footer(ctx),
 		privacyNotice(ctx)
 	);
-	root.style.setProperty("--sf-font", FONTS[theme.font] ?? FONTS.system);
-	root.style.setProperty("--sf-radius", RADII[theme.radius] ?? RADII.soft);
+	applyThemeShape(root, theme);
 	return root;
+}
+
+export function applyThemeShape(node: HTMLElement, theme: Pick<Storefront["config"]["theme"], "font" | "radius">) {
+	node.style.setProperty("--sf-font", FONTS[theme.font] ?? FONTS.system);
+	node.style.setProperty("--sf-radius", RADII[theme.radius] ?? RADII.soft);
+}
+
+export function applyStorePreviewTheme(node: HTMLElement, theme: Pick<Storefront["config"]["theme"], "font" | "radius" | "accent">) {
+	applyThemeShape(node, theme);
+	node.style.setProperty("--accent", theme.accent);
+	node.style.setProperty("--accent-text", accentTextFor(theme.accent));
+	node.classList.add("sf-prose-preview");
 }
 
 export function availabilityLabel(product: Pick<ProductCard, "availability" | "stock" | "restock_at" | "digital">): HTMLElement {

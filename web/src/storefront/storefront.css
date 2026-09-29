@@ -1468,6 +1468,24 @@ body.sf-locked {
 	background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
+.markdown-preview.sf-prose-preview {
+	font-family: var(--sf-font);
+	font-size: 16px;
+	line-height: 1.75;
+	color: var(--text);
+	-webkit-font-smoothing: antialiased;
+}
+.sf-prose-preview h1,
+.sf-prose-preview h2,
+.sf-prose-preview h3,
+.sf-prose-preview h4 {
+	font-family: var(--sf-font);
+	letter-spacing: -0.02em;
+}
+.sf-prose-preview a:hover {
+	text-decoration: none;
+}
+
 .sf-lightbox {
 	position: fixed;
 	inset: 0;

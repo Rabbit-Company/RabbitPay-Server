@@ -22,6 +22,7 @@ import { renderMarkdown } from "../../../server/markdown";
 import { slugify } from "../../../server/store/config";
 import { contentLanguages, languagePanels, MAX_STORE_IMAGE_BYTES, storeSection } from "./store";
 import { icon } from "../storefront/icons";
+import { applyStorePreviewTheme } from "../storefront/layout";
 
 const MAX_IMAGES = 12;
 
@@ -367,10 +368,11 @@ function imageManager(uuid: string, item: string, images: StoreImage[], editable
 	);
 }
 
-function markdownField(value: string, placeholder: string): { textarea: HTMLTextAreaElement; element: HTMLElement } {
+function markdownField(state: StoreState, value: string, placeholder: string): { textarea: HTMLTextAreaElement; element: HTMLElement } {
 	const textarea = el("textarea", { rows: "14", maxlength: "50000", placeholder });
 	textarea.value = value;
 	const preview = el("div", { class: "markdown-preview sf-prose" });
+	applyStorePreviewTheme(preview, state.config.theme);
 	const sync = () => (preview.innerHTML = renderMarkdown(textarea.value) || `<p class="muted">${t("store.preview_empty")}</p>`);
 	textarea.addEventListener("input", sync);
 	sync();
@@ -389,6 +391,7 @@ function productTranslations(state: StoreState, details: StoreProductDetails) {
 		const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: details.summary ?? t("store.summary_placeholder") });
 		summary.value = text?.summary ?? "";
 		const description = markdownField(
+			state,
 			text?.description ?? "",
 			details.description ? t("store.translation_fallback") : t("store.description_markdown_placeholder")
 		);
@@ -438,7 +441,7 @@ function productEditor(
 	const storeName = input("text", { value: details.name ?? "", maxlength: "200", placeholder: details.item.name });
 	const summary = el("textarea", { rows: "2", maxlength: "300", placeholder: t("store.summary_placeholder") });
 	summary.value = details.summary ?? "";
-	const descriptionField = markdownField(details.description ?? "", t("store.description_markdown_placeholder"));
+	const descriptionField = markdownField(state, details.description ?? "", t("store.description_markdown_placeholder"));
 	const description = descriptionField.textarea;
 	const translations = productTranslations(state, details);
 

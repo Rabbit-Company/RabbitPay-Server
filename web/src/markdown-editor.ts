@@ -2,6 +2,7 @@ import { el } from "./dom";
 import { t, type UiKey } from "./i18n";
 import { renderMarkdown } from "../../server/markdown";
 import { zoomableImages } from "./lightbox";
+import { applyStorePreviewTheme } from "./storefront/layout";
 
 interface MarkdownEditorOptions {
 	value?: string;
@@ -10,6 +11,7 @@ interface MarkdownEditorOptions {
 	maxlength?: number;
 	required?: boolean;
 	hint?: string;
+	storeTheme?: Parameters<typeof applyStorePreviewTheme>[1];
 }
 
 interface Tool {
@@ -87,6 +89,7 @@ export function markdownEditor(options: MarkdownEditorOptions = {}): { element: 
 	});
 	textarea.value = options.value ?? "";
 	const preview = el("div", { class: "markdown-preview sf-prose markdown-body" });
+	if (options.storeTheme) applyStorePreviewTheme(preview, options.storeTheme);
 	preview.hidden = true;
 
 	const toolbar = el(

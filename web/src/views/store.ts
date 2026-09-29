@@ -281,11 +281,11 @@ function shippingRow(currency: string) {
 	};
 }
 
-function pageRow(templates: StorePage[]) {
-	return (page: StorePage, remove: () => void) => pageEditor(page, templates.find((entry) => entry.slug === page.slug) ?? null, remove);
+function pageRow(templates: StorePage[], theme: () => StoreState["config"]["theme"]) {
+	return (page: StorePage, remove: () => void) => pageEditor(page, templates.find((entry) => entry.slug === page.slug) ?? null, remove, theme());
 }
 
-function pageEditor(page: StorePage, template: StorePage | null, remove: () => void) {
+function pageEditor(page: StorePage, template: StorePage | null, remove: () => void, theme: StoreState["config"]["theme"]) {
 	const reserved = (RESERVED_PAGE_SLUGS as readonly string[]).includes(page.slug);
 	const title = input("text", { value: page.title, required: true, maxlength: "120" });
 	const slug = input("text", { value: page.slug, required: true, maxlength: "60", disabled: reserved });
@@ -295,7 +295,7 @@ function pageEditor(page: StorePage, template: StorePage | null, remove: () => v
 	slug.addEventListener("input", () => (slug.dataset.touched = "1"));
 	const footer = input("checkbox");
 	footer.checked = page.footer;
-	const editor = markdownEditor({ value: page.content, rows: 12, hint: t("store.markdown_hint") });
+	const editor = markdownEditor({ value: page.content, rows: 12, hint: t("store.markdown_hint"), storeTheme: theme });
 	editor.textarea.required = reserved;
 	const details = el(
 		"details",
@@ -477,7 +477,7 @@ function settingsForm(project: Project, state: StoreState): HTMLElement {
 	const missing = state.templates.filter((template) => !config.pages.some((page) => page.slug === template.slug));
 	const pages = listEditor(
 		state.exists ? config.pages : [...config.pages, ...missing],
-		pageRow(state.templates),
+		pageRow(state.templates, () => state.config.theme),
 		() => ({ slug: `page-${Math.random().toString(36).slice(2, 6)}`, title: t("store.new_page"), content: "", footer: true }),
 		t("store.add_page"),
 		12

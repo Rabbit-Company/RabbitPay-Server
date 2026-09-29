@@ -3520,7 +3520,7 @@ img.zoomable {
 	position: sticky;
 	top: 1rem;
 }
-.product-editor .card h2 {
+.product-editor .card > h2 {
 	margin-bottom: 0;
 }
 .product-editor .field {
