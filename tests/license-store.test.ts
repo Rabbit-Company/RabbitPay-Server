@@ -103,6 +103,7 @@ function checkout(lines: unknown[], overrides: Record<string, unknown> = {}) {
 		note: null,
 		accept_terms: true,
 		waive_withdrawal: true,
+		accept_license_scope: true,
 		save_profile: false,
 		...overrides,
 	};
@@ -208,6 +209,7 @@ describe("license products", () => {
 		});
 		expect(quote.data.lines[1]).toMatchObject({ unit_price: 1220, quantity: 2, total: 2440 });
 		expect(quote.data.withdrawal_waiver).toBe(true);
+		expect(quote.data.license_scope).toBe(true);
 		expect(quote.data.requires_shipping).toBe(false);
 		expect(quote.data.licenses).toBeUndefined();
 
@@ -227,10 +229,14 @@ describe("license products", () => {
 		];
 		expect((await call("POST", `/store/${slug}/checkout`, customer, checkout([{ product: seats, quantity: 1 }]))).error).toBe(1161);
 		expect((await call("POST", `/store/${slug}/checkout`, customer, checkout(lines, { waive_withdrawal: false }))).error).toBe(1169);
+		expect((await call("POST", `/store/${slug}/checkout`, customer, checkout(lines, { accept_license_scope: false }))).error).toBe(1250);
+		expect((await call("POST", `/store/${slug}/checkout`, customer, checkout(lines, { accept_license_scope: "yes" }))).error).not.toBe(0);
 
 		const placed = await call("POST", `/store/${slug}/checkout`, customer, checkout(lines));
 		expect(placed.status).toBe(201);
 		order = placed.data.invoice;
+		const [recorded] = await Database`SELECT metadata FROM invoices WHERE uuid = ${order}`;
+		expect(JSON.parse(recorded.metadata).license_scope_accepted_at).toBeGreaterThan(0);
 		const items = await Database`SELECT description, quantity, unit_price FROM invoice_items WHERE invoice = ${order} ORDER BY sort_order`;
 		expect(items[0].description).toBe(`Employee seats for RabbitPay (20 employees, 365 days, server ${server})`);
 		expect(items[1].description).toBe("Payments (5000 payments, for rabbitpay.net)");

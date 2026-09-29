@@ -143,6 +143,7 @@ export interface Quote {
 	unknown: string[];
 	requires_shipping: boolean;
 	withdrawal_waiver: boolean;
+	license_scope: boolean;
 	shipping_options: ShippingChoice[];
 	shipping: ShippingChoice | null;
 	items_total: number;
@@ -175,6 +176,7 @@ export interface CheckoutRequest {
 	note: string | null;
 	accept_terms: boolean;
 	waive_withdrawal: boolean;
+	accept_license_scope: boolean;
 	save_profile: boolean;
 	coupon: string | null;
 }

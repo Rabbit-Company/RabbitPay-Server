@@ -32,6 +32,8 @@ Storitev na naslovu {{service_url}} (v nadaljevanju: storitev) zagotavlja:
 
 4.4. Naročnik je odgovoren za vsebino in zakonitost dokumentov, ki jih izda s storitvijo, vključno z računi, davčno obravnavo, davčnim potrjevanjem računov in hrambo evidenc. Storitev je orodje in ne nadomešča računovodskega ali davčnega svetovanja.
 
+4.5. Storitev je zasnovana za poslovne subjekte s sedežem v Sloveniji in za zahteve slovenske zakonodaje, vključno z davčnim potrjevanjem računov pri Finančni upravi Republike Slovenije (FURS), e-računi e-SLOG ter slovenskimi pravili o DDV in računovodstvu. Podpira tudi pogosta pravila EU za čezmejno prodajo, kot so preverjanje identifikacijskih številk za DDV prek sistema VIES, obrnjena davčna obveznost in sistem VEM (OSS). Ne jamčimo, da storitev izpolnjuje pravne ali davčne zahteve katerekoli druge države, vključno z zahtevami za e-račune in davčno potrjevanje računov, in storitev ne podpira sistemov e-računov ali davčnega potrjevanja računov drugih držav. Naročnik s sedežem ali poslovanjem zunaj Slovenije mora sam preveriti, ali storitev izpolnjuje zahteve, ki veljajo zanj, in jo za ta namen uporablja na lastno odgovornost.
+
 ## 5. Brezplačna kvota in licenčni ključi
 
 5.1. Vsak projekt vključuje mesečno brezplačno kvoto, trenutno {{free_payments}} zaključenih plačil na mesec in {{free_storage}} GB prostora za dokumente. Brezplačno kvoto lahko spremenimo z vsaj 30-dnevnim predhodnim obvestilom.

@@ -32,6 +32,8 @@ The service at {{service_url}} (the "Service") is provided by:
 
 4.4. The Customer is responsible for the content and legal correctness of the documents it issues with the Service, including invoices, tax treatment, fiscal verification and record keeping. The Service is a tool and does not replace accounting or tax advice.
 
+4.5. The Service is designed for businesses established in Slovenia and for the requirements of Slovenian law, including fiscal verification of invoices with the Financial Administration of the Republic of Slovenia (FURS), e-SLOG e-invoices and Slovenian VAT and accounting rules. It also supports common EU rules for cross-border sales, such as VAT number checks through VIES, the reverse charge and the One Stop Shop (OSS). We do not promise that the Service meets the legal or tax requirements of any other country, including its e-invoicing and fiscal verification requirements, and the Service does not support other countries' e-invoicing or fiscal verification systems. A Customer established or operating outside Slovenia must itself check whether the Service meets the requirements that apply to it, and uses the Service for that purpose at its own responsibility.
+
 ## 5. Free allowance and license keys
 
 5.1. Each project includes a free monthly allowance, currently {{free_payments}} completed payments per month and {{free_storage}} GB of document storage. We may change the free allowance with at least 30 days' notice.

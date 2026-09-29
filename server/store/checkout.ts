@@ -61,6 +61,7 @@ export interface CheckoutInput {
 	note: string | null;
 	accept_terms: boolean;
 	waive_withdrawal: boolean;
+	accept_license_scope: boolean;
 	save_profile: boolean;
 	coupon: string | null;
 }
@@ -92,6 +93,7 @@ export interface Quote {
 	unknown: string[];
 	requires_shipping: boolean;
 	withdrawal_waiver: boolean;
+	license_scope: boolean;
 	shipping_options: (StoreShippingOption & { cost: number })[];
 	shipping: (StoreShippingOption & { cost: number }) | null;
 	items_total: number;
@@ -341,6 +343,7 @@ export async function quoteCart(
 		unknown: lines.filter((line) => !products.has(line.product)).map((line) => line.product),
 		requires_shipping: requiresShipping,
 		withdrawal_waiver: rows.some((row) => Boolean(row.delivers_keys)),
+		license_scope: rows.some((row) => row.license !== null),
 		shipping_options: options,
 		shipping: selected,
 		items_total: itemsTotal,
@@ -421,6 +424,7 @@ export async function upsertCustomer(projectId: string, email: string, customer:
 export function checkoutProblem(input: CheckoutInput, quote: Quote): ErrorCode | null {
 	if (!input.accept_terms) return ErrorCode.CHECKOUT_TERMS_REQUIRED;
 	if (quote.withdrawal_waiver && !input.waive_withdrawal) return ErrorCode.CHECKOUT_WAIVER_REQUIRED;
+	if (quote.license_scope && !input.accept_license_scope) return ErrorCode.CHECKOUT_LICENSE_SCOPE_REQUIRED;
 	if (quote.unknown.length > 0 || quote.lines.length === 0) return ErrorCode.INVALID_CART;
 	if (quote.lines.some((line) => line.issue === "configuration")) return ErrorCode.INVALID_CART;
 	if (quote.lines.some((line) => line.issue !== null)) return ErrorCode.STORE_OUT_OF_STOCK;

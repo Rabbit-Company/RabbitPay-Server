@@ -201,7 +201,8 @@ function compliance(): HTMLElement {
 			{ class: "landing-band-text" },
 			el("p", { class: "landing-eyebrow" }, t("landing.eu_eyebrow")),
 			el("h2", {}, t("landing.eu_title")),
-			el("p", { class: "landing-lead" }, t("landing.eu_lead"))
+			el("p", { class: "landing-lead" }, t("landing.eu_lead")),
+			el("p", { class: "landing-note" }, t("landing.eu_scope"))
 		),
 		el("ul", { class: "landing-checks" }, ...items.map((item) => el("li", {}, glyph("check", 18), el("span", {}, t(item)))))
 	);
@@ -289,6 +290,7 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 				el("h3", {}, t("landing.price_licenses")),
 				el("p", { class: "muted" }, t("landing.price_licenses_body")),
 				el("ul", { class: "landing-checks" }, ...extras.map((item) => el("li", {}, glyph("check", 18), el("span", {}, t(item))))),
+				el("p", { class: "landing-note" }, t("landing.license_scope")),
 				buy
 			)
 		)

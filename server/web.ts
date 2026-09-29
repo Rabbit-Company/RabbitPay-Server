@@ -111,7 +111,7 @@ function storefrontHtml(html: string, request: StoreRequest, meta: StorePageMeta
 }
 
 const HOME_DESCRIPTION =
-	"Invoicing and payments for small businesses. Accept cards, PayPal, bank transfers, Bitcoin, Ethereum and Monero, and keep expenses and reports in one place.";
+	"Invoicing and payments for Slovenian businesses, with FURS fiscal verification, e-SLOG e-invoices and VAT reports built in. Accept cards, PayPal, bank transfers and crypto.";
 
 function applicationHtml(html: string, pathname: string): string {
 	if (Settings.web?.landing_page === false) return html;

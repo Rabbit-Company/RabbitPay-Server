@@ -515,6 +515,7 @@ describe("the online store module", () => {
 
 		const quote = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: key, quantity: 1 }] });
 		expect(quote.data.withdrawal_waiver).toBe(true);
+		expect(quote.data.license_scope).toBe(false);
 		const refused = await call("POST", `/store/${slug}/checkout`, customerToken, checkout({ lines: [{ product: key, quantity: 1 }] }));
 		expect(refused.error).toBe(1169);
 

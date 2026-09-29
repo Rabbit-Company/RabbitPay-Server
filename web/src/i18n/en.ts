@@ -2307,6 +2307,8 @@ export const en = {
 	"license.store_open": "Open store settings",
 	"shop.digital_waiver":
 		"I expressly agree that delivery of the digital content starts right after payment, and I acknowledge that I thereby lose my right of withdrawal.",
+	"shop.license_scope":
+		"I understand that RabbitPay is designed for businesses in Slovenia and for Slovenian law, and that it does not support other countries' e-invoicing or fiscal systems.",
 	"shop.withdrawal_note": "As a consumer you can withdraw from the contract within 14 days.",
 	"shop.withdrawal_link": "Right of withdrawal and form",
 	"shop.social_email": "Email",
@@ -2328,6 +2330,7 @@ export const en = {
 	"error.1166": "Your details are not valid. Check the name, address, country and VAT ID.",
 	"error.1167": "Accept the terms of sale and the privacy policy to place the order.",
 	"error.1168": "This store cannot take orders right now.",
+	"error.1250": "Confirm that you understand RabbitPay is designed for businesses in Slovenia and Slovenian law.",
 	"error.1169": "Confirm that delivery of the digital content starts right away and that you then lose the right of withdrawal.",
 	"error.1225": "This coupon code is not valid for this order.",
 	"error.1226": "This coupon code has already been used up.",
@@ -2984,7 +2987,7 @@ export const en = {
 	"landing.nav_self_hosting": "Self-hosting",
 	"landing.get_started": "Get started",
 	"landing.create_account": "Create a free account",
-	"landing.hero_eyebrow": "Invoicing and payments for small businesses",
+	"landing.hero_eyebrow": "Invoicing and payments for Slovenian businesses",
 	"landing.hero_title": "Get paid the way your customers want to pay.",
 	"landing.hero_lead":
 		"RabbitPay sends your invoices and accepts cards, PayPal, bank transfers and crypto. Expenses, stock and reports sit right next to them. Use it here, or run it on your own server.",
@@ -3034,8 +3037,11 @@ export const en = {
 	"landing.feature_api": "API and webhooks",
 	"landing.feature_api_body": "A REST API and signed webhooks, so your own systems react to every invoice and payment.",
 	"landing.eu_eyebrow": "Made in Slovenia",
-	"landing.eu_title": "Ready for Slovenian and EU rules",
-	"landing.eu_lead": "The paperwork is built in, so invoices, cash sales and VAT returns follow the rules from day one.",
+	"landing.eu_title": "Built for Slovenian businesses",
+	"landing.eu_lead":
+		"The paperwork follows Slovenian law, so invoices, cash sales and VAT returns meet the rules from day one. Selling to customers across the EU is covered too.",
+	"landing.eu_scope":
+		"RabbitPay is designed for businesses registered in Slovenia. It does not support other countries' e-invoicing or fiscal systems, such as Italy's SDI, Germany's XRechnung or Croatia's fiscalization. If your business is registered elsewhere, check that it meets your local requirements first.",
 	"landing.eu_eslog": "e-SLOG 2.0 e-invoices",
 	"landing.eu_furs": "FURS fiscal verification of receipts",
 	"landing.eu_ddv": "DDV records and VAT reports",
@@ -3054,6 +3060,7 @@ export const en = {
 	"landing.price_everything": "Invoices, payments, customers, expenses and reports",
 	"landing.price_licenses": "License keys",
 	"landing.price_licenses_body": "Buy once and redeem on any project. Nothing renews on its own.",
+	"landing.license_scope": "Designed for businesses registered in Slovenia and for Slovenian law.",
 	"landing.buy_licenses": "Buy license keys",
 	"landing.license_payments": "More payments",
 	"landing.license_storage": "More document storage",

@@ -335,6 +335,8 @@ export async function checkoutView(slug: string): Promise<HTMLElement> {
 	const terms = el("input", { type: "checkbox", required: true });
 	const waiver = el("input", { type: "checkbox" });
 	const waiverRow = el("label", { class: "sf-check" }, waiver, el("span", {}, t("shop.digital_waiver")));
+	const scope = el("input", { type: "checkbox" });
+	const scopeRow = el("label", { class: "sf-check" }, scope, el("span", {}, t("shop.license_scope")));
 	const termsPage = config.pages.find((page) => page.slug === "terms");
 	const privacyPage = config.pages.find((page) => page.slug === "privacy");
 	const withdrawalPage = config.pages.find((page) => page.slug === "withdrawal");
@@ -366,6 +368,8 @@ export async function checkoutView(slug: string): Promise<HTMLElement> {
 		deliverySection.hidden = !quote.requires_shipping;
 		waiverRow.hidden = !quote.withdrawal_waiver;
 		waiver.required = quote.withdrawal_waiver;
+		scopeRow.hidden = !quote.license_scope;
+		scope.required = quote.license_scope;
 		delivery.setRequired(quote.requires_shipping && !same.checked && !quote.shipping?.pickup);
 		shippingHost.replaceChildren(
 			shippingChoices(ctx, quote, shipping, (id) => {
@@ -404,6 +408,7 @@ export async function checkoutView(slug: string): Promise<HTMLElement> {
 						note: config.checkout.order_notes && note.value.trim() ? note.value.trim() : null,
 						accept_terms: terms.checked,
 						waive_withdrawal: quote.withdrawal_waiver && waiver.checked,
+						accept_license_scope: quote.license_scope && scope.checked,
 						save_profile: save.checked,
 						coupon: quote.coupon?.code ?? null,
 					});
@@ -474,6 +479,7 @@ export async function checkoutView(slug: string): Promise<HTMLElement> {
 					)
 				),
 				waiverRow,
+				scopeRow,
 				el("p", { class: "sf-fineprint" }, t("shop.payment_after", { days: tn("count.days", config.checkout.payment_days) }))
 			)
 		),

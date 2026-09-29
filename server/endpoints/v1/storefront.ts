@@ -320,6 +320,7 @@ function readCheckout(data: Record<string, unknown>, store: LoadedStore): Checko
 	if (data.shipping !== null && data.shipping !== undefined && typeof data.shipping !== "string") return null;
 	if (typeof data.accept_terms !== "boolean" || (data.save_profile !== undefined && typeof data.save_profile !== "boolean")) return null;
 	if (data.waive_withdrawal !== undefined && typeof data.waive_withdrawal !== "boolean") return null;
+	if (data.accept_license_scope !== undefined && typeof data.accept_license_scope !== "boolean") return null;
 	const coupon = data.coupon === null || data.coupon === undefined || data.coupon === "" ? null : normalizeCode(data.coupon);
 	if (coupon === null && data.coupon !== null && data.coupon !== undefined && data.coupon !== "") return null;
 	return {
@@ -330,6 +331,7 @@ function readCheckout(data: Record<string, unknown>, store: LoadedStore): Checko
 		note: typeof note === "string" && note.trim() !== "" ? note.trim() : null,
 		accept_terms: data.accept_terms,
 		waive_withdrawal: data.waive_withdrawal === true,
+		accept_license_scope: data.accept_license_scope === true,
 		save_profile: data.save_profile === true,
 		coupon,
 	};
@@ -407,6 +409,7 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 					order: number,
 					terms_accepted_at: now,
 					...(quote.withdrawal_waiver ? { withdrawal_waived_at: now } : {}),
+					...(quote.license_scope ? { license_scope_accepted_at: now } : {}),
 					...(quote.coupon ? { coupon: quote.coupon.code } : {}),
 				},
 				status: "draft",

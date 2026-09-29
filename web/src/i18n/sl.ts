@@ -2311,6 +2311,8 @@ export const sl: UiDictionary = {
 	"license.store_open": "Odpri nastavitve trgovine",
 	"shop.digital_waiver":
 		"Izrecno soglašam, da se dobava digitalne vsebine začne takoj po plačilu, in potrjujem, da s tem izgubim pravico do odstopa od pogodbe.",
+	"shop.license_scope":
+		"Razumem, da je RabbitPay zasnovan za podjetja v Sloveniji in za slovensko zakonodajo ter da ne podpira sistemov e-računov ali davčnega potrjevanja drugih držav.",
 	"shop.withdrawal_note": "Kot potrošnik lahko od pogodbe odstopite v 14 dneh.",
 	"shop.withdrawal_link": "Odstop od pogodbe in obrazec",
 	"shop.social_email": "E-pošta",
@@ -2332,6 +2334,7 @@ export const sl: UiDictionary = {
 	"error.1166": "Vaši podatki niso veljavni. Preverite ime, naslov, državo in ID za DDV.",
 	"error.1167": "Za oddajo naročila sprejmite splošne pogoje in politiko zasebnosti.",
 	"error.1168": "Ta trgovina trenutno ne sprejema naročil.",
+	"error.1250": "Potrdite, da razumete, da je RabbitPay zasnovan za podjetja v Sloveniji in za slovensko zakonodajo.",
 	"error.1169": "Potrdite, da se dobava digitalne vsebine začne takoj in da s tem izgubite pravico do odstopa.",
 	"error.1225": "Ta koda za popust ne velja za to naročilo.",
 	"error.1226": "Ta koda za popust je že porabljena.",
@@ -2988,7 +2991,7 @@ export const sl: UiDictionary = {
 	"landing.nav_self_hosting": "Lastni strežnik",
 	"landing.get_started": "Začni",
 	"landing.create_account": "Ustvari brezplačen račun",
-	"landing.hero_eyebrow": "Računi in plačila za mala podjetja",
+	"landing.hero_eyebrow": "Računi in plačila za slovenska podjetja",
 	"landing.hero_title": "Prejmite plačilo tako, kot želijo plačati vaše stranke.",
 	"landing.hero_lead":
 		"RabbitPay pošilja vaše račune in sprejema kartice, PayPal, bančna nakazila in kriptovalute. Stroški, zaloga in poročila so takoj zraven. Uporabljajte ga tukaj ali na svojem strežniku.",
@@ -3038,8 +3041,11 @@ export const sl: UiDictionary = {
 	"landing.feature_api": "API in webhooki",
 	"landing.feature_api_body": "REST API in podpisani webhooki, da se vaši sistemi odzovejo na vsak račun in plačilo.",
 	"landing.eu_eyebrow": "Narejeno v Sloveniji",
-	"landing.eu_title": "Pripravljeno na slovenska in evropska pravila",
-	"landing.eu_lead": "Papirologija je vgrajena, zato računi, gotovinska prodaja in obračun DDV od prvega dne sledijo pravilom.",
+	"landing.eu_title": "Narejeno za slovenska podjetja",
+	"landing.eu_lead":
+		"Papirologija sledi slovenski zakonodaji, zato so računi, gotovinska prodaja in obračun DDV od prvega dne skladni s pravili. Poskrbljeno je tudi za prodajo strankam po vsej EU.",
+	"landing.eu_scope":
+		"RabbitPay je zasnovan za podjetja, registrirana v Sloveniji. Ne podpira sistemov e-računov ali davčnega potrjevanja drugih držav, kot so italijanski SDI, nemški XRechnung ali hrvaška fiskalizacija. Če je vaše podjetje registrirano drugje, najprej preverite, ali izpolnjuje zahteve, ki veljajo za vas.",
 	"landing.eu_eslog": "e-računi e-SLOG 2.0",
 	"landing.eu_furs": "Davčno potrjevanje računov pri FURS",
 	"landing.eu_ddv": "Evidence DDV in poročila",
@@ -3058,6 +3064,7 @@ export const sl: UiDictionary = {
 	"landing.price_everything": "Računi, plačila, stranke, stroški in poročila",
 	"landing.price_licenses": "Licenčni ključi",
 	"landing.price_licenses_body": "Kupite enkrat in unovčite na kateremkoli projektu. Nič se ne podaljša samo.",
+	"landing.license_scope": "Zasnovano za podjetja, registrirana v Sloveniji, in za slovensko zakonodajo.",
 	"landing.buy_licenses": "Kupi licenčne ključe",
 	"landing.license_payments": "Več plačil",
 	"landing.license_storage": "Več prostora za dokumente",
