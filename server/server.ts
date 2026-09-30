@@ -13,6 +13,8 @@ import { NumberingExhausted } from "./invoice-numbers";
 import type { AppState } from "./database/models";
 
 const STORE_IMAGE_UPLOAD = /^\/api\/v1\/projects\/[^/]+\/store\/(?:images\/(?:logo|hero)|products\/[^/]+\/images)$/;
+const ACCOUNTING_IMPORT =
+	/^\/api\/v1\/projects\/[^/]+\/(?:(?:recorded-invoices\/import|accounting\/bank-statements|expenses\/import|expenses\/import-csv)(?:\/preview)?|(?:recorded-invoices|expenses)\/[^/]+\/attachment)$/;
 
 export namespace Server {
 	export const app = new Web<AppState>();
@@ -50,7 +52,10 @@ export namespace Server {
 		app.use(
 			bodyLimit({
 				maxSize: 256 * 1024,
-				skip: (ctx) => STORE_IMAGE_UPLOAD.test(new URL(ctx.req.url).pathname),
+				skip: (ctx) => {
+					const path = new URL(ctx.req.url).pathname;
+					return STORE_IMAGE_UPLOAD.test(path) || ACCOUNTING_IMPORT.test(path);
+				},
 			})
 		);
 

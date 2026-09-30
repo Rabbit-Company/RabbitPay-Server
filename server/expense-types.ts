@@ -43,7 +43,7 @@ export type ExpenseInput = Pick<
 	| "tax_rate_date"
 	| "paid_at"
 	| "notes"
-> & { vat_lines: ExpenseVatLineInput[] };
+> & { vat_lines: ExpenseVatLineInput[]; provisional_share?: boolean | number };
 export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at"> & {
 	interval_unit: string;
 	interval_count: number;

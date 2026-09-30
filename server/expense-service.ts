@@ -68,7 +68,8 @@ export function validExpense(data: ExpenseInput): boolean {
 		(!reportable || Boolean(data.supplier_tax_number?.trim() || data.supplier_country)) &&
 		(!reportable || (lines.length > 0 && lineTax === data.tax_amount && lineDeductible === data.deductible_tax_amount)) &&
 		(data.vat_handling === "1" || (data.self_assessment_period !== null && data.self_assessment_tax !== null && data.self_assessment_tax > 0)) &&
-		(data.paid_at === null || validExpenseDate(data.paid_at))
+		(data.paid_at === null || validExpenseDate(data.paid_at)) &&
+		(data.provisional_share === undefined || typeof data.provisional_share === "boolean" || data.provisional_share === 0 || data.provisional_share === 1)
 	);
 }
 
@@ -99,12 +100,13 @@ export async function insertExpense(
 	await sql`
 			INSERT INTO expenses(uuid, project, description, supplier, supplier_tax_number, supplier_country, invoice_number, category, currency,
 				total_amount, tax_amount, deductible_tax_amount, expense_date, issue_date, receipt_date, supply_date, vat_treatment, asset_type,
-				vat_handling, self_assessment_period, self_assessment_tax, tax_exchange_rate, tax_rate_date, paid_at, notes, recurring, occurrence, created_by, created, updated)
+				vat_handling, self_assessment_period, self_assessment_tax, tax_exchange_rate, tax_rate_date, paid_at, notes, recurring, occurrence, created_by, created, updated,
+				provisional_share)
 			VALUES(${uuid}, ${project}, ${data.description.trim()}, ${data.supplier?.trim() || null}, ${data.supplier_tax_number?.trim() || null},
 				${data.supplier_country}, ${data.invoice_number?.trim() || null}, ${data.category.trim()}, ${data.currency}, ${data.total_amount},
 				${data.tax_amount}, ${data.deductible_tax_amount}, ${data.expense_date}, ${data.issue_date}, ${data.receipt_date}, ${data.supply_date},
 				${data.vat_treatment}, ${data.asset_type}, ${data.vat_handling}, ${data.self_assessment_period}, ${data.self_assessment_tax}, ${data.tax_exchange_rate}, ${data.tax_rate_date}, ${data.paid_at},
-				${data.notes?.trim() || null}, ${recurring}, ${occurrence}, ${author}, ${now}, ${now})
+				${data.notes?.trim() || null}, ${recurring}, ${occurrence}, ${author}, ${now}, ${now}, ${data.provisional_share ? 1 : 0})
 	`;
 	for (const [sort, line] of data.vat_lines.entries()) {
 		await sql`INSERT INTO expense_vat_lines(uuid, expense, rate, tax_base, tax_amount, deductible_tax_amount, sort_order)

@@ -86,6 +86,8 @@ export interface ProjectRow {
 	white_label_until: number | null;
 	store_until: number | null;
 	workforce_until: number | null;
+	accounting_until: number | null;
+	bookkeeping: Bookkeeping;
 	logo_updated: number | null;
 	email_server: string | null;
 	invoice_format: string;
@@ -562,13 +564,14 @@ export interface TransactionRow {
 	failed_at: number | null;
 	expires_at: number | null;
 	license_billing: LicenseBilling | null;
+	base_amount: number | null;
 	created: number;
 	updated: number;
 }
 
 export type LicenseBilling = "free" | "paid" | "unmetered";
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting";
 
 export type LicenseStatus = "available" | "redeemed" | "revoked";
 
@@ -662,6 +665,7 @@ export interface ExpenseRow {
 	vat_treatment: string;
 	asset_type: string;
 	vat_handling: string;
+	provisional_share: number;
 	self_assessment_period: string | null;
 	self_assessment_tax: number | null;
 	tax_exchange_rate: number | null;
@@ -1123,3 +1127,191 @@ export interface PayrollLineRow {
 	created: number;
 	updated: number;
 }
+
+export type AccountKind = "asset" | "liability" | "equity" | "revenue" | "expense";
+
+export interface LedgerAccountRow {
+	uuid: string;
+	project: string;
+	code: string;
+	name: string;
+	account_kind: AccountKind;
+	system_key: string | null;
+	iban: string | null;
+	active: number;
+	created: number;
+	updated: number;
+}
+
+export interface LedgerCategoryAccountRow {
+	project: string;
+	expense_category: string;
+	ledger_account: string;
+	updated: number;
+}
+
+export type JournalSourceType =
+	| "invoice"
+	| "credit_note"
+	| "payment"
+	| "refund"
+	| "expense"
+	| "expense_payment"
+	| "recorded_invoice"
+	| "recorded_payment"
+	| "bank_transaction"
+	| "depreciation"
+	| "asset_disposal"
+	| "payroll"
+	| "deductible_share"
+	| "year_result"
+	| "year_closing"
+	| "year_opening"
+	| "manual";
+
+export interface JournalEntryRow {
+	uuid: string;
+	project: string;
+	year: number;
+	number: number;
+	entry_date: number;
+	description: string;
+	source_type: JournalSourceType;
+	source_id: string;
+	reverses: string | null;
+	fingerprint: string;
+	posted_by: string | null;
+	created: number;
+}
+
+export interface JournalLineRow {
+	uuid: string;
+	entry: string;
+	project: string;
+	ledger_account: string;
+	debit: number;
+	credit: number;
+	partner: string | null;
+	sort_order: number;
+}
+
+export interface RecordedInvoiceRow {
+	uuid: string;
+	project: string;
+	document_type: "invoice" | "credit_note";
+	reference: string;
+	buyer_name: string;
+	buyer_vat_number: string | null;
+	buyer_country: string | null;
+	currency: string;
+	tax_currency: string;
+	tax_exchange_rate: number | null;
+	tax_rate_date: number | null;
+	issued_at: number;
+	supply_date: number | null;
+	due_date: number | null;
+	paid_at: number | null;
+	payment_account: "bank" | "cash";
+	subtotal: number;
+	tax_amount: number;
+	total_amount: number;
+	notes: string | null;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface RecordedInvoiceLineRow {
+	uuid: string;
+	recorded_invoice: string;
+	tax_rate: number;
+	tax_treatment: string;
+	net_amount: number;
+	tax_amount: number;
+	sort_order: number;
+}
+
+export interface BankStatementRow {
+	uuid: string;
+	project: string;
+	iban: string;
+	statement_id: string;
+	currency: string;
+	period_from: number | null;
+	period_to: number | null;
+	opening_balance: number | null;
+	closing_balance: number | null;
+	file_name: string | null;
+	created_by: string | null;
+	created: number;
+}
+
+export type BankTransactionStatus = "open" | "matched" | "booked" | "ignored";
+export type BankMatchType = "invoice" | "recorded_invoice" | "expense";
+
+export interface BankTransactionRow {
+	uuid: string;
+	project: string;
+	statement: string;
+	booking_date: number;
+	value_date: number | null;
+	amount: number;
+	currency: string;
+	counterparty_name: string | null;
+	counterparty_iban: string | null;
+	reference: string | null;
+	remittance: string | null;
+	bank_reference: string | null;
+	fingerprint: string;
+	status: BankTransactionStatus;
+	match_type: BankMatchType | null;
+	match_id: string | null;
+	ledger_account: string | null;
+	payment_transaction: string | null;
+	matched_by: string | null;
+	matched_at: number | null;
+	created: number;
+}
+
+export interface RecordedInvoiceAttachmentRow {
+	recorded_invoice: string;
+	storage_key: string;
+	file_name: string;
+	content_type: string;
+	byte_size: number;
+	sha256: string;
+	created: number;
+}
+
+export interface AccountingYearRow {
+	uuid: string;
+	project: string;
+	year: number;
+	closed_by: string | null;
+	closed_at: number;
+	reopened_by: string | null;
+	reopened_at: number | null;
+	reopen_reason: string | null;
+}
+
+export type AssetCategory = "intangible" | "building" | "equipment" | "computer" | "small_inventory";
+
+export interface FixedAssetRow {
+	uuid: string;
+	project: string;
+	name: string;
+	asset_category: AssetCategory;
+	expense: string | null;
+	acquired_at: number;
+	depreciation_from: number;
+	acquisition_value: number;
+	accumulated_before: number;
+	annual_rate: number;
+	disposed_at: number | null;
+	notes: string | null;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export type Bookkeeping = "company" | "sole_double" | "sole_simplified" | "sole_flat_rate";

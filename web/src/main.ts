@@ -51,6 +51,14 @@ import { absencesView, timesheetReportView, timesheetSettingsView, timesheetView
 import { ticketsView, ticketView } from "./views/tickets";
 import { employeesView } from "./views/employees";
 import { payrollRatesView, payrollRunsView, payrollRunView } from "./views/payroll";
+import { accountingClientsView, accountingJournalView, accountLedgerView, ledgerAccountsView, trialBalanceView } from "./views/accounting";
+import { recordedInvoicesView } from "./views/recorded-invoices";
+import { bankView } from "./views/bank";
+import { yearsView } from "./views/years";
+import { statementsView } from "./views/statements";
+import { assetsView } from "./views/assets";
+import { kpoView } from "./views/kpo";
+import { ajpesView } from "./views/ajpes";
 import { customerTicketsView, customerTicketView } from "./views/customer-tickets";
 
 const root = document.querySelector("#app") as HTMLElement;
@@ -221,6 +229,7 @@ define(
 );
 define("/account", () => accountView());
 define("/converter", () => converterView());
+define("/accounting", () => accountingClientsView());
 define("/admin", () => adminOverviewView());
 define("/admin/licenses", () => adminLicensesView());
 define("/admin/projects", () => adminProjectsView());
@@ -343,6 +352,50 @@ define(
 define(
 	"/projects/:uuid/recurring/:recurring/edit",
 	projectRoute([Permission.SUBSCRIPTION_EDIT], (params) => recurringFormView(params.uuid, params.recurring))
+);
+define(
+	"/projects/:uuid/accounting",
+	projectRoute([Permission.REPORT_VIEW], (params) => accountingJournalView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/trial-balance",
+	projectRoute([Permission.REPORT_VIEW], (params) => trialBalanceView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/recorded-invoices",
+	projectRoute([Permission.REPORT_VIEW], (params) => recordedInvoicesView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/ajpes",
+	projectRoute([Permission.REPORT_VIEW], (params) => ajpesView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/kpo",
+	projectRoute([Permission.REPORT_VIEW], (params) => kpoView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/assets",
+	projectRoute([Permission.REPORT_VIEW], (params) => assetsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/statements",
+	projectRoute([Permission.REPORT_VIEW], (params) => statementsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/years",
+	projectRoute([Permission.REPORT_VIEW], (params) => yearsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/bank",
+	projectRoute([Permission.REPORT_VIEW], (params) => bankView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/accounts",
+	projectRoute([Permission.REPORT_VIEW], (params) => ledgerAccountsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/ledger/:account",
+	projectRoute([Permission.REPORT_VIEW], (params) => accountLedgerView(params.uuid, params.account))
 );
 define(
 	"/projects/:uuid/transactions",

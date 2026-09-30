@@ -632,6 +632,166 @@ a:hover {
 	gap: 1rem;
 }
 
+.journal-line,
+.vat-line {
+	display: grid;
+	gap: 0.75rem;
+	align-items: end;
+}
+
+.journal-line {
+	grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
+}
+
+.vat-line {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) repeat(2, minmax(0, 1fr)) auto;
+}
+
+@media (max-width: 640px) {
+	.journal-line,
+	.vat-line {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+.account-select {
+	width: 100%;
+	min-width: min(26rem, 100%);
+}
+
+.ledger-page p,
+.ledger-page ul {
+	margin: 0;
+}
+.ledger-page ul {
+	padding-left: 1.25rem;
+}
+.ledger-page h2,
+.ledger-page h3 {
+	margin: 0;
+}
+.ledger-page > :is(div, span, p):empty,
+.ledger-page .stack > :is(div, span, p):empty,
+.ledger-section > :is(div, span, p):empty {
+	display: none;
+}
+.ledger-head {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.ledger-head-row,
+.ledger-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	min-height: 2.5rem;
+}
+.ledger-head .muted {
+	max-width: 70rem;
+}
+.ledger-section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+.ledger-section + .ledger-section {
+	margin-top: 0.75rem;
+}
+.ledger-section-head {
+	min-height: 0;
+}
+.ledger-section-head .field {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+}
+.ledger-controls {
+	display: flex;
+	align-items: flex-end;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.ledger-controls .field {
+	width: 16rem;
+	max-width: 100%;
+}
+.ledger-controls.wide .field {
+	width: 40rem;
+}
+.ledger-controls.wide select {
+	max-width: 24rem;
+}
+.ledger-controls .switch,
+.ledger-controls > .muted {
+	min-height: 2.6rem;
+	display: flex;
+	align-items: center;
+}
+.ledger-notice {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 0.85rem 1rem;
+	border-radius: 8px;
+	border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+	background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+.ledger-page td {
+	padding-top: 0.55rem;
+	padding-bottom: 0.55rem;
+	vertical-align: baseline;
+}
+.ledger-page th.num,
+.ledger-page td.num {
+	width: 9.5rem;
+	text-align: right;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.ledger-page td.code,
+.ledger-page td.date {
+	white-space: nowrap;
+}
+.ledger-page td.code {
+	width: 5rem;
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+	font-size: 0.88em;
+}
+.ledger-page td.actions {
+	width: 1%;
+}
+.bank-actions {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 0.4rem;
+}
+.bank-actions .button {
+	white-space: normal;
+	text-align: right;
+}
+.ledger-page tr.entry-continues td {
+	border-bottom-color: transparent;
+	padding-bottom: 0.15rem;
+}
+.ledger-page tr.entry-continues + tr td {
+	padding-top: 0.15rem;
+}
+.ledger-page tr.total-row td {
+	border-top: 1px solid var(--border);
+	background: color-mix(in srgb, var(--border) 25%, transparent);
+}
+.ledger-page tr.group-row td {
+	font-weight: 600;
+}
+.ledger-wide th.num,
+.ledger-wide td.num {
+	width: auto;
+}
+
 .grid.stats {
 	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }

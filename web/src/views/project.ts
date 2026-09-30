@@ -23,7 +23,7 @@ export function invalidateProject(uuid: string) {
 
 type TabGroup = "sales" | "finance" | "work" | "project";
 
-const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[]; group?: TabGroup; workforce?: boolean }[] = [
+const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[]; group?: TabGroup; workforce?: boolean; accounting?: boolean }[] = [
 	{ id: "overview", label: "nav.overview", suffix: "", permissions: [Permission.PROJECT_VIEW] },
 	{ id: "invoices", label: "nav.invoices", suffix: "/invoices", permissions: [Permission.INVOICE_VIEW], group: "sales" },
 	{ id: "recurring", label: "nav.recurring", suffix: "/recurring", permissions: [Permission.SUBSCRIPTION_VIEW], group: "sales" },
@@ -34,6 +34,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 	{ id: "pos", label: "nav.terminal", suffix: "/pos", permissions: [Permission.POS_SELL], group: "sales" },
 	{ id: "expenses", label: "nav.expenses", suffix: "/expenses", permissions: [Permission.EXPENSE_VIEW], group: "finance" },
 	{ id: "statistics", label: "nav.statistics", suffix: "/statistics", permissions: [Permission.REPORT_VIEW], group: "finance" },
+	{ id: "accounting", label: "nav.accounting", suffix: "/accounting", permissions: [Permission.REPORT_VIEW], group: "finance", accounting: true },
 	{
 		id: "timesheet",
 		label: "nav.timesheet",
@@ -75,10 +76,12 @@ export function projectLayout(project: Project, content: HTMLElement): HTMLEleme
 		can(project, Permission.ITEM_CREATE) ? "new-item" : null,
 		can(project, Permission.EXPENSE_CREATE) ? "new-expense" : null,
 		can(project, Permission.SUBSCRIPTION_CREATE) ? "new-recurring" : null,
+		can(project, Permission.LEDGER_EDIT) && project.accounting ? "new-accounting-entry" : null,
 	].filter((action): action is string => action !== null);
 
 	const workforce = project.workforce || project.workforce_until !== null;
-	const available = TABS.filter((tab) => canAny(project, tab.permissions) && (!tab.workforce || workforce));
+	const accounting = project.accounting || project.accounting_until !== null;
+	const available = TABS.filter((tab) => canAny(project, tab.permissions) && (!tab.workforce || workforce) && (!tab.accounting || accounting));
 	let activeLabel = t("nav.menu");
 	const groups = new Map<TabGroup | null, HTMLElement[]>();
 	for (const tab of available) {

@@ -10,6 +10,8 @@ import type {
 	InvoiceRow,
 	ProjectCompanyRow,
 	ProjectRow,
+	RecordedInvoiceLineRow,
+	RecordedInvoiceRow,
 } from "./database/models";
 import { convertMinor } from "./tax-reporting";
 import { canSubmitSlovenianDdvEvidence, isTaxTreatment, splitVatNumber, type TaxTreatment } from "./tax";
@@ -29,7 +31,7 @@ export interface DdvExportOptions {
 
 export interface DdvValidationIssue {
 	code: string;
-	source: "header" | "invoice" | "credit_note" | "expense";
+	source: "header" | "invoice" | "credit_note" | "expense" | "recorded_invoice";
 	id: string | null;
 	reference: string | null;
 	message: string;
@@ -64,6 +66,10 @@ export interface DdvEvidenceFile {
 		Lista_KPR: { KPR: Record<string, string | number>[] };
 	};
 }
+
+type SalesDocument = Pick<InvoiceRow, "uuid" | "currency" | "tax_currency" | "tax_exchange_rate" | "buyer_vat_number" | "buyer_country"> & {
+	party: string | undefined;
+};
 
 interface NoteInvoice extends InvoiceRow {
 	note_uuid: string;
@@ -170,7 +176,7 @@ function taxPayerId(company: ProjectCompanyRow | undefined): string | null {
 	return null;
 }
 
-function convert(invoice: InvoiceRow, value: number): number | null {
+function convert(invoice: Pick<InvoiceRow, "currency" | "tax_currency" | "tax_exchange_rate">, value: number): number | null {
 	if (invoice.currency === "EUR") return value;
 	if (invoice.tax_currency !== "EUR" || invoice.tax_exchange_rate === null) return null;
 	return safeInteger(convertMinor(value, invoice.currency, invoice.tax_exchange_rate, "EUR"));
@@ -183,14 +189,14 @@ function convertExpense(expense: ExpenseRow, value: number): number | null {
 }
 
 function kirInvoiceRecord(
-	invoice: InvoiceRow,
+	invoice: SalesDocument,
 	reference: string,
 	issued: number,
 	lines: { net: number; vat: number; rate: number; treatment: string | null }[],
 	sign: 1 | -1,
 	period: string,
 	errors: DdvValidationIssue[],
-	source: "invoice" | "credit_note",
+	source: "invoice" | "credit_note" | "recorded_invoice",
 	timezone: string
 ): { record: Record<string, string | number>; base: number; vat: number; omitted: boolean } {
 	const record: Record<string, string | number> = {
@@ -201,7 +207,7 @@ function kirInvoiceRecord(
 		P4: date(issued, timezone),
 		OBRAVNAVA: "1",
 	};
-	assignParty(record, partyName(invoice), invoice.buyer_vat_number, invoice.buyer_country, "P6");
+	assignParty(record, invoice.party, invoice.buyer_vat_number, invoice.buyer_country, "P6");
 	let sourceBase = 0;
 	let sourceVat = 0;
 	let included = false;
@@ -372,6 +378,15 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 		WHERE e.project = ${project.uuid} AND e.vat_treatment <> 'not_reported' AND e.expense_date BETWEEN ${options.from} AND ${options.to}
 	`) as ExpenseAttachmentRow[];
 
+	const recorded = (await Database`
+		SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND issued_at BETWEEN ${options.from} AND ${options.to} ORDER BY issued_at, reference
+	`) as RecordedInvoiceRow[];
+	const recordedLines = recorded.length
+		? ((await Database`
+				SELECT * FROM recorded_invoice_lines WHERE recorded_invoice IN ${Database(recorded.map((row) => row.uuid))} ORDER BY sort_order
+			`) as RecordedInvoiceLineRow[])
+		: [];
+
 	const invoiceGroups = grouped(invoiceLines, (row) => row.invoice);
 	const noteGroups = grouped(noteLines, (row) => row.credit_note);
 	const expenseGroups = grouped(expenseLines, (row) => row.expense);
@@ -387,7 +402,7 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 
 	for (const invoice of invoices) {
 		const built = kirInvoiceRecord(
-			invoice,
+			{ ...invoice, party: partyName(invoice) },
 			invoice.reference,
 			invoice.issued_at!,
 			(invoiceGroups.get(invoice.uuid) ?? []).map((line) => ({
@@ -410,7 +425,7 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 	}
 	for (const note of notes) {
 		const built = kirInvoiceRecord(
-			note,
+			{ ...note, party: partyName(note) },
 			note.note_reference,
 			note.note_issued_at,
 			(noteGroups.get(note.note_uuid) ?? []).map((line) => ({
@@ -431,6 +446,31 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 			kirSourceBase = addIntegers(kirSourceBase, built.base);
 			kirSourceVat = addIntegers(kirSourceVat, built.vat);
 		}
+	}
+	const recordedGroups = grouped(recordedLines, (row) => row.recorded_invoice);
+	for (const record of recorded) {
+		const built = kirInvoiceRecord(
+			{ ...record, party: record.buyer_vat_number ? record.buyer_name.slice(0, 250) : undefined },
+			record.reference,
+			record.issued_at,
+			(recordedGroups.get(record.uuid) ?? []).map((line) => ({
+				net: line.net_amount,
+				vat: line.tax_amount,
+				rate: line.tax_rate,
+				treatment: line.tax_treatment,
+			})),
+			record.document_type === "credit_note" ? -1 : 1,
+			period,
+			errors,
+			"recorded_invoice",
+			project.timezone
+		);
+		if (!built.omitted) {
+			kir.push(built.record);
+			kirSourceBase = addIntegers(kirSourceBase, built.base);
+			kirSourceVat = addIntegers(kirSourceVat, built.vat);
+		} else
+			issue(warnings, "recorded_invoice", record.uuid, record.reference, "oss_omitted", "OSS transactions are not reported in KIR under the Union OSS scheme.");
 	}
 	for (const expense of expenses) {
 		const lines = expenseGroups.get(expense.uuid) ?? [];

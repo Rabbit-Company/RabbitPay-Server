@@ -8,7 +8,7 @@ const MEMBER_ROLES_BEFORE = "CHECK (role IN ('owner', 'admin', 'manager', 'accou
 const MEMBER_ROLES_AFTER = "CHECK (role IN ('owner', 'admin', 'manager', 'accountant', 'developer', 'viewer', 'cashier', 'supervisor', 'employee'))";
 const LICENSE_TYPES_BEFORE = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store'))";
 const LICENSE_TYPES_AFTER = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce'))";
-const LICENSE_TYPES_WITH_SEATS = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees'))";
+export const LICENSE_TYPES_WITH_SEATS = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees'))";
 const ENTRY_KINDS_BEFORE = "CHECK (kind IN ('regular', 'overtime'))";
 const ENTRY_KINDS_AFTER = "CHECK (kind IN ('regular', 'overtime', 'break'))";
 
@@ -44,7 +44,7 @@ async function checkConstraintNames(sql: SQL, dialect: Dialect, table: string, m
 	return rows.map((row) => row.name);
 }
 
-async function replaceCheck(sql: SQL, dialect: Dialect, table: string, marker: string, name: string, before: string, after: string) {
+export async function replaceCheck(sql: SQL, dialect: Dialect, table: string, marker: string, name: string, before: string, after: string) {
 	if (dialect === "sqlite") return rebuildSqliteTable(sql, table, before, after);
 
 	const existing = await checkConstraintNames(sql, dialect, table, marker);

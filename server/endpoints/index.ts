@@ -40,3 +40,7 @@ import "./v1/tickets";
 import "./v1/employees";
 import "./v1/payroll";
 import "./v1/customer-tickets";
+import "./v1/accounting";
+import "./v1/recorded-invoices";
+import "./v1/bank";
+import "./v1/fixed-assets";

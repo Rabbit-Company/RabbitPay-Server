@@ -55,6 +55,11 @@ export function append(parent: Node, children: Child[]) {
 	}
 }
 
+export function replaceContent(parent: Element, ...children: Child[]) {
+	clear(parent);
+	append(parent, children);
+}
+
 export function clear(node: Element) {
 	while (node.firstChild) node.removeChild(node.firstChild);
 }
@@ -89,8 +94,10 @@ export function emptyState(message: string, action?: HTMLElement) {
 	return el("div", { class: "empty" }, el("p", {}, message), action);
 }
 
-export function table(headers: string[], rows: HTMLElement[]) {
-	const head = el("tr", {}, ...headers.map((header) => el("th", {}, header)));
+export type TableHeader = string | { label: string; class: string };
+
+export function table(headers: TableHeader[], rows: HTMLElement[]) {
+	const head = el("tr", {}, ...headers.map((header) => (typeof header === "string" ? el("th", {}, header) : el("th", { class: header.class }, header.label))));
 	return el("div", { class: "table-wrap" }, el("table", {}, el("thead", {}, head), el("tbody", {}, ...rows)));
 }
 

@@ -19,7 +19,7 @@ import { isAccentColor } from "../../colors";
 import { isVatStatus } from "../../tax";
 import { isCountryCode } from "../../countries";
 import { canEmail } from "../../email/mailer";
-import { storeActive, whiteLabelActive, workforceActive } from "../../licensing";
+import { accountingActive, storeActive, whiteLabelActive, workforceActive } from "../../licensing";
 import { MAX_DAYS_AFTER, MAX_DAYS_BEFORE, isReminderDays } from "../../email/reminders";
 import { isTimezone } from "../../timezone";
 import type { ProformaSettlement, ProjectMemberRow, ProjectRow } from "../../database/models";
@@ -83,6 +83,9 @@ function withoutSecrets(project: ProjectRow, role: ProjectRole) {
 		store_until: project.store_until,
 		workforce: workforceActive(project),
 		workforce_until: project.workforce_until,
+		accounting: accountingActive(project),
+		accounting_until: project.accounting_until,
+		bookkeeping: project.bookkeeping,
 		has_logo: project.logo_updated !== null,
 		custom_email_server: project.email_server !== null,
 		email_reminders: Boolean(project.email_reminders),

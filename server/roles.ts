@@ -72,6 +72,8 @@ export enum Permission {
 
 	EMPLOYEE_VIEW = "employee.view",
 	EMPLOYEE_EDIT = "employee.edit",
+
+	LEDGER_EDIT = "ledger.edit",
 }
 
 // Define which permissions each role has
@@ -124,6 +126,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.TICKET_MANAGE,
 		Permission.EMPLOYEE_VIEW,
 		Permission.EMPLOYEE_EDIT,
+		Permission.LEDGER_EDIT,
 	],
 
 	[ProjectRole.MANAGER]: [
@@ -173,6 +176,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.SUBSCRIPTION_VIEW,
 		Permission.TIMESHEET_VIEW,
 		Permission.EMPLOYEE_VIEW,
+		Permission.LEDGER_EDIT,
 	],
 
 	[ProjectRole.DEVELOPER]: [

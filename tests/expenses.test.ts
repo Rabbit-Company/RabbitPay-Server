@@ -91,6 +91,18 @@ describe("expense records", () => {
 		expect((await call("DELETE", `${base()}/expenses/${created.data.uuid}`)).error).toBe(0);
 		expect((await call("PATCH", `${base()}/expenses/${created.data.uuid}`, { notes: "missing" })).status).toBe(404);
 	});
+	test("accepts supplier invoices larger than the general request limit", async () => {
+		const created = await call("POST", `${base()}/expenses`, expense());
+		const scan = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(900 * 1024, 3)]);
+		const uploaded = await call("PUT", `${base()}/expenses/${created.data.uuid}/attachment`, {
+			name: "scan.pdf",
+			type: "application/pdf",
+			data: scan.toString("base64"),
+		});
+		expect(uploaded.status).toBe(200);
+		expect(uploaded.data.byte_size).toBe(scan.length);
+		await call("DELETE", `${base()}/expenses/${created.data.uuid}`);
+	});
 	test("defaults tax and payment status without recording a payment", async () => {
 		const created = await call("POST", `${base()}/expenses`, { description: "Rent", category: "Office", total_amount: 50000, expense_date: date(3) });
 		expect(created.data.currency).toBe("EUR");
@@ -130,6 +142,35 @@ describe("expense records", () => {
 	test("validates pagination and period filters", async () => {
 		for (const query of ["limit=-1", "offset=1.2", "from=10&to=2", "status=unknown"])
 			expect((await call("GET", `${base()}/expenses?${query}`)).status).toBe(400);
+	});
+});
+
+describe("expense CSV import", () => {
+	const csv = [
+		"Dobavitelj;Številka;ID za DDV;Država;Datum izdaje;Kategorija;Obravnava;Stopnja DDV;Osnova;DDV;Plačano",
+		"Petrol d.d.;P-77;SI80267432;SI;4.3.2026;Travel;;22;100,00;22,00;4.3.2026",
+		"Petrol d.d.;P-77;SI80267432;SI;4.3.2026;Travel;;9,5;50,00;4,75;4.3.2026",
+		"Kavarna;K-5;;;5.3.2026;Marketing;;;12,00;;",
+		"Google Ireland;G-9;IE6388047V;IE;6.3.2026;Software;eu_services;22;80,00;17,60;",
+	].join("\n");
+
+	test("groups VAT lines per supplier invoice, handles reverse charge and imports once", async () => {
+		const preview = await call("POST", `${base()}/expenses/import-csv/preview`, { content: csv });
+		expect(preview.data.errors).toEqual([]);
+		const [fuel, coffee, google] = preview.data.documents.map((document: { input: any }) => document.input);
+		expect(fuel).toMatchObject({ total_amount: 17675, tax_amount: 2675, deductible_tax_amount: 2675, vat_treatment: "domestic", category: "Travel" });
+		expect(fuel.vat_lines).toHaveLength(2);
+		expect(coffee).toMatchObject({ total_amount: 1200, tax_amount: 0, vat_treatment: "not_reported", paid_at: null });
+		expect(google).toMatchObject({ total_amount: 8000, tax_amount: 1760, vat_treatment: "eu_services", supplier_country: "IE" });
+
+		const imported = await call("POST", `${base()}/expenses/import-csv`, { content: csv });
+		expect(imported.status).toBe(201);
+		expect(imported.data.imported).toBe(3);
+		const again = await call("POST", `${base()}/expenses/import-csv`, { content: csv });
+		expect(again.error).toBe(1112);
+		expect(again.data.errors.map((error: { code: string }) => error.code)).toEqual(["already_recorded", "already_recorded", "already_recorded"]);
+		const broken = await call("POST", `${base()}/expenses/import-csv/preview`, { content: "Dobavitelj;Številka;Datum izdaje;Osnova\nX;1;32.1.2026;abc" });
+		expect(broken.data.errors.map((error: { code: string }) => error.code)).toEqual(["invalid_date", "invalid_amount"]);
 	});
 });
 

@@ -20,6 +20,7 @@ const LICENSE_TYPES: { value: LicenseProduct["type"]; label: UiKey; rate: UiKey;
 	{ value: "white_label", label: "items.license_white_label", rate: "items.license_rate_days", amount: null },
 	{ value: "store", label: "items.license_store", rate: "items.license_rate_days", amount: null },
 	{ value: "workforce", label: "items.license_workforce", rate: "items.license_rate_days", amount: null },
+	{ value: "accounting", label: "items.license_accounting", rate: "items.license_rate_days", amount: null },
 	{ value: "employees", label: "items.license_employees", rate: "items.license_rate_employees", amount: "items.license_amount_employees" },
 ];
 

@@ -885,6 +885,94 @@ export interface PayrollLine {
 
 import type { PayrollRates } from "../../server/workforce/net-pay";
 import type { PayrollCalculation, PayrollItem } from "../../server/workforce/payroll-runs";
+import type { AccountLedgerRow, JournalEntryView, LedgerIssue, TrialBalanceRow } from "../../server/accounting/types";
+import type { LedgerAccountRow, RecordedInvoiceLineRow, RecordedInvoiceRow } from "../../server/database/models";
+import type { RecordedInvoiceInput } from "../../server/accounting/types";
+
+export type RecordedInvoice = RecordedInvoiceRow & {
+	lines: RecordedInvoiceLineRow[];
+	attachment?: { file_name: string; content_type: string; byte_size: number; created: number } | null;
+};
+export type { RecordedInvoiceInput };
+import type { ImportResult } from "../../server/accounting/recorded-import";
+import type { ExpenseImportResult } from "../../server/expense-import";
+export type { ExpenseImportResult };
+export type { ImportColumn, ImportError, ImportResult } from "../../server/accounting/recorded-import";
+import type { BankSuggestion } from "../../server/accounting/types";
+import type { BankStatementRow, BankTransactionRow } from "../../server/database/models";
+
+export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[] };
+export type BankStatement = BankStatementRow & { ledger_balance: number | null; lines: Partial<Record<BankTransactionRow["status"], number>> };
+export type { BankSuggestion };
+export type { AccountingYear, YearCloseRefusal } from "../../server/accounting/types";
+import type { AccountingYear, AjpesReport, FinancialStatements, KpoBook } from "../../server/accounting/types";
+export type { AjpesReport };
+export type { KpoBook, KpoColumn } from "../../server/accounting/types";
+import type { AssetCategory, FixedAssetRow } from "../../server/database/models";
+
+export type FixedAsset = FixedAssetRow & { accumulated: number; book_value: number };
+export type { AssetCategory };
+
+export interface AssetCandidate {
+	expense: string;
+	name: string;
+	supplier: string | null;
+	acquired_at: number;
+	value: number | null;
+	categories: AssetCategory[];
+}
+
+export interface FixedAssetInput {
+	name?: string;
+	asset_category: AssetCategory;
+	expense?: string | null;
+	acquired_at?: number;
+	acquisition_value?: number;
+	accumulated_before?: number;
+	depreciation_from?: number;
+	annual_rate?: number;
+	notes?: string | null;
+}
+export type { FinancialStatements, StatementLine } from "../../server/accounting/types";
+
+export interface StatementPreview {
+	statements: (Omit<BankStatementRow, "uuid" | "project" | "file_name" | "created_by" | "created"> & { transactions: number })[];
+	new_lines: number;
+	known_lines: number;
+}
+
+export type { AccountLedgerRow, JournalEntryView, LedgerIssue, TrialBalanceRow };
+
+export type LedgerAccount = Omit<LedgerAccountRow, "active"> & { active: boolean };
+
+export interface JournalPage {
+	entries: JournalEntryView[];
+	total: number;
+	limit: number;
+	offset: number;
+	issues: LedgerIssue[];
+}
+
+export interface AccountingClient {
+	uuid: string;
+	name: string;
+	display_name: string | null;
+	role: string;
+	accounting: boolean;
+	accounting_until: number | null;
+	entries_this_year: number;
+	last_posted: number | null;
+	unpaid_expenses: number;
+	unattached_expenses: number;
+	issues: number | null;
+}
+
+export interface ManualEntryInput {
+	date: number;
+	description: string;
+	lines: { account: string; debit: number; credit: number; partner: string | null }[];
+}
+
 export type { PayrollCalculation, PayrollItem, PayrollRates };
 
 export interface PayrollRatesTable {
@@ -955,6 +1043,9 @@ export interface Project {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	accounting: boolean;
+	accounting_until: number | null;
+	bookkeeping?: "company" | "sole_double" | "sole_simplified" | "sole_flat_rate";
 	has_logo: boolean;
 	custom_email_server: boolean;
 	email_reminders: boolean;
@@ -1013,7 +1104,7 @@ export interface Branding {
 	logo: string | null;
 }
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting";
 
 export interface License {
 	uuid: string;
@@ -1076,6 +1167,8 @@ export interface ProjectLicense extends LicenseIdentity {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	accounting: boolean;
+	accounting_until: number | null;
 	employees_included: number;
 	employees_licensed: number;
 	employees_used: number;
@@ -1165,6 +1258,8 @@ export interface AdminProject {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	accounting: boolean;
+	accounting_until: number | null;
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;
@@ -1909,6 +2004,198 @@ export const PublicApi = {
 };
 
 export const Api = {
+	recordedInvoices(uuid: string, options: { from?: number; to?: number; offset?: number; limit?: number }) {
+		return request<{ recorded_invoices: RecordedInvoice[]; total: number; limit: number; offset: number }>(
+			"GET",
+			`/projects/${uuid}/recorded-invoices${listQuery(options)}`
+		);
+	},
+
+	recordedBuyers(uuid: string) {
+		return request<{ buyers: { name: string; vat_number: string | null; country: string | null }[] }>("GET", `/projects/${uuid}/recorded-invoices/buyers`);
+	},
+
+	createRecordedInvoice(uuid: string, data: RecordedInvoiceInput) {
+		return request<RecordedInvoice>("POST", `/projects/${uuid}/recorded-invoices`, data);
+	},
+
+	updateRecordedInvoice(uuid: string, record: string, data: RecordedInvoiceInput) {
+		return request<RecordedInvoice>("PATCH", `/projects/${uuid}/recorded-invoices/${record}`, data);
+	},
+
+	previewRecordedImport(uuid: string, content: string) {
+		return request<ImportResult>("POST", `/projects/${uuid}/recorded-invoices/import/preview`, { content });
+	},
+
+	importRecordedInvoices(uuid: string, content: string) {
+		return request<{ imported: number }>("POST", `/projects/${uuid}/recorded-invoices/import`, { content });
+	},
+
+	uploadRecordedAttachment(uuid: string, record: string, data: { name: string; type: string; data: string }) {
+		return request<RecordedInvoice["attachment"]>("PUT", `/projects/${uuid}/recorded-invoices/${record}/attachment`, data);
+	},
+
+	recordedAttachment(uuid: string, record: string) {
+		return requestFile(`/projects/${uuid}/recorded-invoices/${record}/attachment`, "invoice");
+	},
+
+	deleteRecordedInvoice(uuid: string, record: string) {
+		return request<void>("DELETE", `/projects/${uuid}/recorded-invoices/${record}`);
+	},
+
+	previewBankStatement(uuid: string, name: string, data: string) {
+		return request<StatementPreview>("POST", `/projects/${uuid}/accounting/bank-statements/preview`, { name, data });
+	},
+
+	importBankStatement(uuid: string, name: string, data: string) {
+		return request<{ statements: number; imported: number; skipped: number }>("POST", `/projects/${uuid}/accounting/bank-statements`, { name, data });
+	},
+
+	bankStatements(uuid: string) {
+		return request<{ statements: BankStatement[] }>("GET", `/projects/${uuid}/accounting/bank-statements`);
+	},
+
+	bankTransactions(uuid: string, options: { status: string; offset?: number; limit?: number }) {
+		return request<{ transactions: BankTransaction[]; total: number }>("GET", `/projects/${uuid}/accounting/bank-transactions${listQuery(options)}`);
+	},
+
+	matchExactBankTransactions(uuid: string) {
+		return request<{ matched: number }>("POST", `/projects/${uuid}/accounting/bank-transactions/match-exact`);
+	},
+
+	matchBankTransaction(uuid: string, line: string, type: BankSuggestion["type"], id: string) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/match`, { type, id });
+	},
+
+	bookBankTransaction(uuid: string, line: string, account: string) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/book`, { account });
+	},
+
+	ignoreBankTransaction(uuid: string, line: string) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/ignore`);
+	},
+
+	reopenBankTransaction(uuid: string, line: string) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/reopen`);
+	},
+
+	financialStatements(uuid: string, year: number) {
+		return request<FinancialStatements & { issues: LedgerIssue[] }>("GET", `/projects/${uuid}/accounting/statements?year=${year}`);
+	},
+
+	updateBookkeeping(uuid: string, bookkeeping: NonNullable<Project["bookkeeping"]>) {
+		return request<{ bookkeeping: string }>("PUT", `/projects/${uuid}/accounting/settings`, { bookkeeping });
+	},
+
+	ajpesReport(uuid: string, year: number) {
+		return request<AjpesReport & { issues: LedgerIssue[] }>("GET", `/projects/${uuid}/accounting/ajpes?year=${year}`);
+	},
+
+	ajpesXml(uuid: string, year: number) {
+		return requestFile(`/projects/${uuid}/accounting/ajpes/export?year=${year}`, `ajpes-${year}.xml`);
+	},
+
+	kpoBook(uuid: string, year: number) {
+		return request<KpoBook & { issues: LedgerIssue[] }>("GET", `/projects/${uuid}/accounting/kpo?year=${year}`);
+	},
+
+	fixedAssets(uuid: string) {
+		return request<{ assets: FixedAsset[]; candidates: AssetCandidate[]; default_rates: Record<AssetCategory, number> }>(
+			"GET",
+			`/projects/${uuid}/accounting/assets`
+		);
+	},
+
+	createFixedAsset(uuid: string, data: FixedAssetInput) {
+		return request<FixedAsset>("POST", `/projects/${uuid}/accounting/assets`, data);
+	},
+
+	updateFixedAsset(uuid: string, asset: string, data: { name?: string; annual_rate?: number; disposed_at?: number | null; notes?: string | null }) {
+		return request<FixedAsset>("PATCH", `/projects/${uuid}/accounting/assets/${asset}`, data);
+	},
+
+	deleteFixedAsset(uuid: string, asset: string) {
+		return request<void>("DELETE", `/projects/${uuid}/accounting/assets/${asset}`);
+	},
+
+	accountingYears(uuid: string) {
+		return request<{ years: AccountingYear[] }>("GET", `/projects/${uuid}/accounting/years`);
+	},
+
+	setDeductibleShare(uuid: string, year: number, finalShare: number | null) {
+		return request<AccountingYear>("PUT", `/projects/${uuid}/accounting/years/${year}/deductible-share`, { final_share: finalShare });
+	},
+
+	closeAccountingYear(uuid: string, year: number) {
+		return request<AccountingYear>("POST", `/projects/${uuid}/accounting/years/${year}/close`);
+	},
+
+	reopenAccountingYear(uuid: string, year: number, reason: string) {
+		return request<AccountingYear>("POST", `/projects/${uuid}/accounting/years/${year}/reopen`, { reason });
+	},
+
+	accountingClients() {
+		return request<{ clients: AccountingClient[] }>("GET", "/accounting/clients");
+	},
+
+	redeemAccountingLicense(uuid: string, code: string) {
+		return request<{ accounting: boolean; accounting_until: number | null }>("POST", `/projects/${uuid}/accounting/license/redeem`, { code });
+	},
+
+	ledgerAccounts(uuid: string) {
+		return request<{ accounts: LedgerAccount[]; licensed: boolean }>("GET", `/projects/${uuid}/accounting/accounts`);
+	},
+
+	createLedgerAccount(uuid: string, data: { code: string; name: string }) {
+		return request<LedgerAccount>("POST", `/projects/${uuid}/accounting/accounts`, data);
+	},
+
+	updateLedgerAccount(uuid: string, account: string, data: { name?: string; active?: boolean }) {
+		return request<LedgerAccount>("PATCH", `/projects/${uuid}/accounting/accounts/${account}`, data);
+	},
+
+	ledgerCategories(uuid: string) {
+		return request<{ categories: { category: string; account: string }[] }>("GET", `/projects/${uuid}/accounting/category-accounts`);
+	},
+
+	mapLedgerCategory(uuid: string, category: string, account: string) {
+		return request<{ category: string; account: string }>("PUT", `/projects/${uuid}/accounting/category-accounts`, { category, account });
+	},
+
+	journal(uuid: string, options: { from: number; to: number; offset?: number; limit?: number }) {
+		return request<JournalPage>("GET", `/projects/${uuid}/accounting/journal${listQuery(options)}`);
+	},
+
+	postJournalEntry(uuid: string, data: ManualEntryInput) {
+		return request<JournalEntryView>("POST", `/projects/${uuid}/accounting/journal`, data);
+	},
+
+	reverseJournalEntry(uuid: string, entry: string) {
+		return request<JournalEntryView>("POST", `/projects/${uuid}/accounting/journal/${entry}/reverse`);
+	},
+
+	exportJournal(uuid: string, options: { from: number; to: number }) {
+		return requestFile(`/projects/${uuid}/accounting/journal/export${listQuery(options)}`, "dnevnik.csv");
+	},
+
+	exportTrialBalance(uuid: string, options: { from: number; to: number }) {
+		return requestFile(`/projects/${uuid}/accounting/trial-balance/export${listQuery(options)}`, "bruto-bilanca.csv");
+	},
+
+	trialBalance(uuid: string, options: { from: number; to: number }) {
+		return request<{ from: number; to: number; accounts: TrialBalanceRow[]; issues: LedgerIssue[] }>(
+			"GET",
+			`/projects/${uuid}/accounting/trial-balance${listQuery(options)}`
+		);
+	},
+
+	accountLedger(uuid: string, account: string, options: { from: number; to: number }) {
+		return request<{ from: number; to: number; account: LedgerAccount; opening: number; closing: number; lines: AccountLedgerRow[] }>(
+			"GET",
+			`/projects/${uuid}/accounting/ledger/${account}${listQuery(options)}`
+		);
+	},
+
 	expenses(uuid: string, options: { limit?: number; offset?: number; from?: number; to?: number; status?: string } = {}) {
 		return request<{ expenses: Expense[]; total: number; limit: number; offset: number }>("GET", `/projects/${uuid}/expenses${listQuery(options)}`);
 	},
@@ -1923,6 +2210,12 @@ export const Api = {
 	},
 	previewExpenseImport(uuid: string, file: { name: string; data: string }) {
 		return request<ExpenseImportPreview>("POST", `/projects/${uuid}/expenses/import/preview`, file);
+	},
+	previewExpenseCsv(uuid: string, content: string) {
+		return request<ExpenseImportResult>("POST", `/projects/${uuid}/expenses/import-csv/preview`, { content });
+	},
+	importExpenseCsv(uuid: string, content: string) {
+		return request<{ imported: number }>("POST", `/projects/${uuid}/expenses/import-csv`, { content });
 	},
 	uploadExpenseAttachment(uuid: string, expense: string, data: { name: string; type: string; data: string }) {
 		return request<Expense["attachment"]>("PUT", `/projects/${uuid}/expenses/${expense}/attachment`, data);

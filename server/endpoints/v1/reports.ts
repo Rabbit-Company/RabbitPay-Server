@@ -6,7 +6,7 @@ import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
 import { convertMinor, reportingCurrency } from "../../tax-reporting";
 import { isTaxTreatment, splitVatNumber, type TaxTreatment } from "../../tax";
-import type { CreditNoteItemRow, InvoiceItemRow, InvoiceRow } from "../../database/models";
+import type { CreditNoteItemRow, InvoiceItemRow, InvoiceRow, RecordedInvoiceLineRow, RecordedInvoiceRow } from "../../database/models";
 
 type ZeroRated = Exclude<TaxTreatment, "domestic" | "oss">;
 
@@ -99,13 +99,19 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 		let counted = 0;
 		let creditNotes = 0;
 
-		const rateFor = (invoice: InvoiceRow): number | null => {
+		const rateFor = (invoice: Pick<InvoiceRow, "currency" | "tax_currency" | "tax_exchange_rate">): number | null => {
 			if (invoice.currency === currency) return 1;
 			if (invoice.tax_currency === currency && invoice.tax_exchange_rate !== null) return invoice.tax_exchange_rate;
 			return null;
 		};
 
-		const book = (invoice: InvoiceRow, reference: string, rate: number, lines: BookedLine[], sign: 1 | -1) => {
+		const book = (
+			invoice: Pick<InvoiceRow, "uuid" | "currency" | "buyer_country" | "buyer_vat_number">,
+			reference: string,
+			rate: number,
+			lines: BookedLine[],
+			sign: 1 | -1
+		) => {
 			const convert = (amount: number) => sign * safeInteger(convertMinor(amount, invoice.currency, rate, currency));
 
 			for (const line of lines) {
@@ -187,6 +193,37 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 					treatment: line.tax_treatment,
 				})),
 				-1
+			);
+		}
+
+		const recorded = (await Database`
+			SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND issued_at >= ${from} AND issued_at <= ${to} ORDER BY issued_at ASC
+		`) as RecordedInvoiceRow[];
+		const recordedLines = recorded.length
+			? ((await Database`
+					SELECT * FROM recorded_invoice_lines WHERE recorded_invoice IN ${Database(recorded.map((row) => row.uuid))}
+				`) as RecordedInvoiceLineRow[])
+			: [];
+		const linesByRecord = grouped(recordedLines, (line) => line.recorded_invoice);
+		for (const record of recorded) {
+			const rate = rateFor(record);
+			if (rate === null) {
+				missingRates.push({ invoice: record.uuid, reference: record.reference, currency: record.currency, issued_at: record.issued_at });
+				continue;
+			}
+			if (record.document_type === "credit_note") creditNotes++;
+			else counted++;
+			book(
+				record,
+				record.reference,
+				rate,
+				(linesByRecord.get(record.uuid) ?? []).map((line) => ({
+					net: line.net_amount,
+					vat: line.tax_amount,
+					rate: line.tax_rate,
+					treatment: line.tax_treatment,
+				})),
+				record.document_type === "credit_note" ? -1 : 1
 			);
 		}
 

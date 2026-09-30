@@ -16,6 +16,15 @@ export async function financialReport(project: string, from: number, to: number,
 		SELECT currency, issued_at, 'revenue', -(total_amount - tax_amount), NULL FROM credit_notes
 		WHERE project = ${project} AND issued_at BETWEEN ${from} AND ${to}
 		UNION ALL
+		SELECT currency, issued_at, 'revenue', CASE WHEN document_type = 'credit_note' THEN -subtotal ELSE subtotal END, NULL FROM recorded_invoices
+		WHERE project = ${project} AND issued_at BETWEEN ${from} AND ${to}
+		UNION ALL
+		SELECT currency, paid_at, 'received', total_amount, NULL FROM recorded_invoices
+		WHERE project = ${project} AND document_type = 'invoice' AND paid_at BETWEEN ${from} AND ${to}
+		UNION ALL
+		SELECT currency, paid_at, 'refunds', total_amount, NULL FROM recorded_invoices
+		WHERE project = ${project} AND document_type = 'credit_note' AND paid_at BETWEEN ${from} AND ${to}
+		UNION ALL
 		SELECT currency, expense_date, 'expenses', total_amount - CASE
 			WHEN vat_treatment IN ('domestic_reverse_charge', 'eu_goods', 'eu_services') THEN 0
 			ELSE deductible_tax_amount

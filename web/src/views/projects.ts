@@ -3,7 +3,7 @@ import { Api, type Project } from "../api";
 import { el, emptyState, field, input } from "../dom";
 import { formatDate } from "../money";
 import { modal, reportError, secretReveal, withLoading } from "../ui";
-import { sellsOnly, terminalPath } from "../access";
+import { can, Permission, sellsOnly, terminalPath } from "../access";
 import { roleLabel, t } from "../i18n";
 
 function projectCard(project: Project): HTMLElement {
@@ -59,12 +59,15 @@ function createProjectDialog(onCreated: () => void) {
 
 export function projectsView(): HTMLElement {
 	const list = el("div", { class: "stack" });
+	const clients = el("a", { class: "button ghost", href: "/accounting" }, t("accounting.clients"));
+	clients.hidden = true;
 
 	const load = () =>
 		withLoading(
 			list,
 			() => Api.projects(),
 			(projects) => {
+				clients.hidden = projects.filter((project) => can(project, Permission.LEDGER_EDIT)).length < 2;
 				if (projects.length === 0) {
 					return emptyState(
 						t("projects.empty"),
@@ -84,7 +87,12 @@ export function projectsView(): HTMLElement {
 			"div",
 			{ class: "page-head" },
 			el("div", {}, el("h1", {}, t("projects.title")), el("p", { class: "muted" }, t("projects.intro"))),
-			el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog(load) }, t("projects.new"))
+			el(
+				"div",
+				{ class: "line-actions" },
+				clients,
+				el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog(load) }, t("projects.new"))
+			)
 		),
 		list
 	);

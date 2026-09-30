@@ -16,6 +16,7 @@ export function describeLicense(
 	if (license.type === "storage") return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB` });
 	if (license.type === "store") return t("license.grants_store", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "workforce") return t("license.grants_workforce", { days: tn("count.days", license.duration_days ?? 0) });
+	if (license.type === "accounting") return t("license.grants_accounting", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "employees") {
 		return t("license.grants_employees", { employees: tn("count.employees", license.employees ?? 0), days: tn("count.days", license.duration_days ?? 0) });
 	}
@@ -434,6 +435,27 @@ function workforceCard(uuid: string, state: ProjectLicense): HTMLElement {
 	);
 }
 
+function accountingCard(uuid: string, state: ProjectLicense): HTMLElement {
+	const status = !state.enforced
+		? el("p", {}, t("license.accounting_included"))
+		: state.accounting
+			? el("p", {}, el("span", { class: "pill pill-active" }, t("status.active")), ` ${t("license.until", { date: formatDate(state.accounting_until) })}`)
+			: el(
+					"p",
+					{ class: "warn" },
+					state.accounting_until ? t("license.accounting_ended", { date: formatDate(state.accounting_until) }) : t("license.accounting_offer")
+				);
+
+	return el(
+		"div",
+		{ class: "card stack" },
+		el("h2", {}, t("license.accounting")),
+		status,
+		el("p", { class: "muted" }, t("license.accounting_hint")),
+		el("div", { class: "line-actions" }, el("a", { class: "button ghost", href: `/projects/${uuid}/accounting` }, t("license.accounting_open")))
+	);
+}
+
 function historyCard(state: ProjectLicense): HTMLElement {
 	if (state.licenses.length === 0) return el("div", {});
 
@@ -485,6 +507,7 @@ export async function licenseView(uuid: string): Promise<HTMLElement> {
 			whiteLabelCard(uuid, project, state, server, () => void refresh()),
 			storeCard(uuid, state),
 			workforceCard(uuid, state),
+			accountingCard(uuid, state),
 			historyCard(state)
 		);
 	};

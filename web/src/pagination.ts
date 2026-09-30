@@ -1,4 +1,4 @@
-import { el, table } from "./dom";
+import { el, table, type TableHeader } from "./dom";
 import { t } from "./i18n";
 import { reportError } from "./ui";
 import { PageState } from "../../server/page-state";
@@ -79,7 +79,7 @@ export function pagedTable(headers: string[], rows: HTMLElement[], size = PAGE_S
 }
 
 export function remoteTable(
-	headers: string[],
+	headers: TableHeader[],
 	fetchPage: (offset: number, size: number) => Promise<{ rows: HTMLElement[]; total: number }>,
 	empty: string,
 	initial?: { rows: HTMLElement[]; total: number }

@@ -452,6 +452,25 @@ describe("storage limits", () => {
 	});
 });
 
+describe("accounting", () => {
+	test("an accounting license is redeemed for a number of days and stacks onto what is left", async () => {
+		expect((await license()).accounting).toBe(false);
+		const first = await createLicense({ type: "accounting", duration_days: 30 });
+		const redeemed = await call("POST", `${base()}/license/redeem`, { token: ownerToken, body: { code: first.code } });
+		expect(redeemed.data.accounting).toBe(true);
+		expect(redeemed.data.accounting_until).toBeGreaterThan(Date.now() + 29 * DAY);
+
+		const second = await createLicense({ type: "accounting", duration_days: 10 });
+		const extended = await call("POST", `${base()}/license/redeem`, { token: ownerToken, body: { code: second.code } });
+		expect(extended.data.accounting_until - redeemed.data.accounting_until).toBe(10 * DAY);
+		expect((await call("GET", `${base()}`, { token: ownerToken })).data.accounting).toBe(true);
+	});
+
+	test("accounting keys need a number of days", async () => {
+		expect((await call("POST", "/api/v1/admin/licenses", { token: adminToken, body: { type: "accounting" } })).error).toBe(1095);
+	});
+});
+
 describe("white label", () => {
 	test("branding and email servers need an active license", async () => {
 		expect((await call("PUT", `${base()}/branding/logo`, { token: ownerToken, body: { data: PNG } })).error).toBe(1097);

@@ -12,8 +12,8 @@ export { MAX_LICENSE_DAYS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LI
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
-export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees"];
+export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
+export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting"];
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -100,6 +100,11 @@ export function workforceActive(project: Pick<ProjectRow, "workforce_until">, no
 	return project.workforce_until !== null && project.workforce_until > now;
 }
 
+export function accountingActive(project: Pick<ProjectRow, "accounting_until">, now = Date.now()): boolean {
+	if (!licensingEnforced()) return true;
+	return project.accounting_until !== null && project.accounting_until > now;
+}
+
 export function extendWhiteLabel(current: number | null, days: number, now = Date.now()): number {
 	return Math.max(current ?? 0, now) + days * DAY;
 }
@@ -179,6 +184,8 @@ export interface ProjectUsage {
 	store_until: number | null;
 	workforce: boolean;
 	workforce_until: number | null;
+	accounting: boolean;
+	accounting_until: number | null;
 	employees_included: number;
 	employees_licensed: number;
 	employees_used: number;
@@ -259,17 +266,29 @@ export async function storageFor(projectId: string): Promise<ProjectStorageUsage
 				WHERE n.project = ${projectId} AND d.status = 'ready') AS credit_notes,
 			(SELECT COALESCE(SUM(a.byte_size), 0) FROM expense_attachments a JOIN expenses e ON e.uuid = a.expense
 				WHERE e.project = ${projectId}) AS expenses,
+			(SELECT COALESCE(SUM(a.byte_size), 0) FROM recorded_invoice_attachments a JOIN recorded_invoices r ON r.uuid = a.recorded_invoice
+				WHERE r.project = ${projectId}) AS recorded,
 			(SELECT COALESCE(SUM(byte_size), 0) FROM ddv_exports WHERE project = ${projectId}) AS exports,
 			(SELECT COALESCE(SUM(archive_size), 0) FROM fiscal_documents WHERE project = ${projectId} AND archive_key IS NOT NULL) AS verified,
 			(SELECT COALESCE(SUM(byte_size), 0) FROM store_images WHERE project = ${projectId}) AS store_images,
 			(SELECT COALESCE(SUM(byte_size), 0) FROM eslog_documents WHERE project = ${projectId}) AS einvoices
-	`) as { invoices: number; credit_notes: number; expenses: number; exports: number; verified: number; store_images: number; einvoices: number }[];
+	`) as {
+		invoices: number;
+		credit_notes: number;
+		expenses: number;
+		recorded: number;
+		exports: number;
+		verified: number;
+		store_images: number;
+		einvoices: number;
+	}[];
 	const included = includedStorageGb() * STORAGE_GB_BYTES;
 	const licensed = project.paid_storage_bytes;
 	const used =
 		safeStorageBytes(totals.invoices) +
 		safeStorageBytes(totals.credit_notes) +
 		safeStorageBytes(totals.expenses) +
+		safeStorageBytes(totals.recorded) +
 		safeStorageBytes(totals.exports) +
 		safeStorageBytes(totals.verified) +
 		safeStorageBytes(totals.store_images) +
@@ -295,8 +314,8 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 
 	const period = periodOf(now);
 	const [project] = (await Database`
-		SELECT free_transactions, paid_transactions, white_label_until, store_until, workforce_until FROM projects WHERE uuid = ${projectId}
-	`) as Pick<ProjectRow, "free_transactions" | "paid_transactions" | "white_label_until" | "store_until" | "workforce_until">[];
+		SELECT free_transactions, paid_transactions, white_label_until, store_until, workforce_until, accounting_until FROM projects WHERE uuid = ${projectId}
+	`) as Pick<ProjectRow, "free_transactions" | "paid_transactions" | "white_label_until" | "store_until" | "workforce_until" | "accounting_until">[];
 	const [usage] = (await Database`SELECT * FROM project_usage WHERE project = ${projectId} AND period = ${period}`) as ProjectUsageRow[];
 
 	const enforced = licensingEnforced();
@@ -319,6 +338,8 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		store_until: project.store_until,
 		workforce: workforceActive(project, now),
 		workforce_until: project.workforce_until,
+		accounting: accountingActive(project, now),
+		accounting_until: project.accounting_until,
 		...(await employeeSeatsFor(projectId, now)),
 		...storage,
 	};
@@ -460,12 +481,18 @@ async function findRedeemable(input: string): Promise<LicenseKeyRow | ErrorCode>
 	return stored ?? ErrorCode.LICENSE_NOT_FOUND;
 }
 
-export async function redeemLicense(projectId: string, input: string, username: string): Promise<LicenseKeyRow | ErrorCode> {
+export async function redeemLicense(
+	projectId: string,
+	input: string,
+	username: string,
+	allowed: LicenseType[] = LICENSE_TYPES
+): Promise<LicenseKeyRow | ErrorCode> {
 	await meterProject(projectId);
 
 	const license = await findRedeemable(input);
 	if (typeof license === "number") return license;
 	if (license.status !== "available") return ErrorCode.LICENSE_ALREADY_REDEEMED;
+	if (!allowed.includes(license.type)) return ErrorCode.LICENSE_TYPE_NOT_ALLOWED;
 
 	const redeemed = await Database.begin(async (tx) => {
 		const timestamp = Date.now();
@@ -490,6 +517,10 @@ export async function redeemLicense(projectId: string, input: string, username: 
 			const [project] = (await tx`SELECT workforce_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "workforce_until">[];
 			const until = extendWhiteLabel(project.workforce_until, license.duration_days ?? 0, timestamp);
 			await tx`UPDATE projects SET workforce_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+		} else if (license.type === "accounting") {
+			const [project] = (await tx`SELECT accounting_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "accounting_until">[];
+			const until = extendWhiteLabel(project.accounting_until, license.duration_days ?? 0, timestamp);
+			await tx`UPDATE projects SET accounting_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 		} else if (license.type === "storage") {
 			const bytes = (license.storage_gb ?? 0) * STORAGE_GB_BYTES;
 			await tx`UPDATE projects SET paid_storage_bytes = paid_storage_bytes + ${bytes}, updated = ${timestamp} WHERE uuid = ${projectId}`;

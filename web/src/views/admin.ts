@@ -62,6 +62,8 @@ const LICENSE_TYPE_FILTERS = [
 	{ value: "storage", label: "Storage" },
 	{ value: "store", label: "Online store" },
 	{ value: "workforce", label: "Workforce" },
+	{ value: "employees", label: "Employee seats" },
+	{ value: "accounting", label: "Accounting" },
 ];
 
 const LICENSE_PILLS: Record<License["status"], string> = { available: "open", redeemed: "active", revoked: "canceled" };
@@ -138,7 +140,8 @@ export function describeLicense(license: Pick<License, "type" | "transactions" |
 		const employees = license.employees ?? 0;
 		return `${employees.toLocaleString()} ${employees === 1 ? "employee" : "employees"} for ${days} ${days === 1 ? "day" : "days"}`;
 	}
-	const name = license.type === "store" ? "Online store" : license.type === "workforce" ? "Workforce" : "White label";
+	const names: Record<string, string> = { store: "Online store", workforce: "Workforce", accounting: "Accounting" };
+	const name = names[license.type] ?? "White label";
 	return `${name} for ${days} ${days === 1 ? "day" : "days"}`;
 }
 
@@ -262,6 +265,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			{ value: "store", label: "Online store" },
 			{ value: "workforce", label: "Workforce (timesheets, tickets, employees)" },
 			{ value: "employees", label: "Employee seats" },
+			{ value: "accounting", label: "Accounting (ledger, books, year end)" },
 		],
 		"transactions"
 	);
@@ -285,7 +289,8 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 
 	const sync = () => {
 		const transactionsSelected = type.value === "transactions";
-		const white = type.value === "white_label" || type.value === "store" || type.value === "workforce" || type.value === "employees";
+		const white =
+			type.value === "white_label" || type.value === "store" || type.value === "workforce" || type.value === "employees" || type.value === "accounting";
 		const storageSelected = type.value === "storage";
 		const employeesSelected = type.value === "employees";
 		transactionsField.hidden = !transactionsSelected;
@@ -635,6 +640,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 		const whiteLabel = project.white_label_until && project.white_label_until > Date.now() ? `Until ${formatDate(project.white_label_until)}` : "No";
 		const store = project.store_until && project.store_until > Date.now() ? `Until ${formatDate(project.store_until)}` : "No";
 		const workforce = project.workforce_until && project.workforce_until > Date.now() ? `Until ${formatDate(project.workforce_until)}` : "No";
+		const accounting = project.accounting_until && project.accounting_until > Date.now() ? `Until ${formatDate(project.accounting_until)}` : "No";
 		const storage =
 			project.storage_limit === null
 				? `${formatBytes(project.storage_used)} / unlimited`
@@ -656,6 +662,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 			el("td", {}, whiteLabel),
 			el("td", {}, store),
 			el("td", {}, workforce),
+			el("td", {}, accounting),
 			el("td", {}, formatDate(project.created)),
 			el(
 				"td",
@@ -682,7 +689,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 			return { items: result.projects, total: result.total };
 		},
 		row,
-		["Project", "Owner", "Free used this month", "Paid balance", "Storage", "White label", "Online store", "Workforce", "Created", ""],
+		["Project", "Owner", "Free used this month", "Paid balance", "Storage", "White label", "Online store", "Workforce", "Accounting", "Created", ""],
 		"No projects match."
 	);
 

@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 import Database from "./database/database";
-import type { AccountingPeriodLockRow } from "./database/models";
+import type { AccountingPeriodLockRow, ProjectRow } from "./database/models";
+import { zonedParts } from "./timezone";
 
 export async function accountingPeriodLock(project: string, timestamp: number, sql: SQL = Database): Promise<AccountingPeriodLockRow | null> {
 	const [row] = (await sql`
@@ -11,13 +12,21 @@ export async function accountingPeriodLock(project: string, timestamp: number, s
 	return row ?? null;
 }
 
+export async function closedYear(project: string, timestamp: number, sql: SQL = Database): Promise<boolean> {
+	const [row] = (await sql`SELECT timezone FROM projects WHERE uuid = ${project}`) as Pick<ProjectRow, "timezone">[];
+	if (!row) return false;
+	const year = zonedParts(timestamp, row.timezone).year;
+	const [closed] = await sql`SELECT 1 AS closed FROM accounting_years WHERE project = ${project} AND year = ${year} AND reopened_at IS NULL LIMIT 1`;
+	return closed !== undefined;
+}
+
 export async function accountingPeriodLocked(project: string, timestamp: number, sql: SQL = Database): Promise<boolean> {
-	return (await accountingPeriodLock(project, timestamp, sql)) !== null;
+	return (await accountingPeriodLock(project, timestamp, sql)) !== null || (await closedYear(project, timestamp, sql));
 }
 
 export class AccountingPeriodLocked extends Error {
 	constructor() {
-		super("This accounting period is locked after a DDV submission.");
+		super("This accounting period is locked after a DDV submission or a year end close.");
 	}
 }
 

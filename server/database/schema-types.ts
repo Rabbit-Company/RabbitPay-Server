@@ -24,6 +24,13 @@ const ID_COLUMNS = new Set([
 	"record",
 	"run",
 	"proforma",
+	"entry",
+	"reverses",
+	"ledger_account",
+	"recorded_invoice",
+	"statement",
+	"match_id",
+	"payment_transaction",
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
@@ -122,6 +129,20 @@ const TEXT_LENGTHS: Record<string, number> = {
 	pay_date: 10,
 	finalized_by: 30,
 	verified_by: 30,
+	source_type: 32,
+	system_key: 64,
+	account_kind: 16,
+	expense_category: 80,
+	posted_by: 30,
+	payment_account: 16,
+	asset_category: 32,
+	bookkeeping: 32,
+	closed_by: 30,
+	reopened_by: 30,
+	iban: 34,
+	statement_id: 140,
+	match_type: 32,
+	matched_by: 30,
 };
 
 export function schemaTypes(dialect: Dialect) {

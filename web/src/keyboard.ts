@@ -3,7 +3,7 @@ import { t } from "./i18n";
 import { navigate } from "./router";
 import { modal } from "./ui";
 
-type CreateAction = "new-invoice" | "new-customer" | "new-item" | "new-expense" | "new-recurring";
+type CreateAction = "new-invoice" | "new-customer" | "new-item" | "new-expense" | "new-recurring" | "new-accounting-entry";
 
 interface CreateShortcut {
 	key: string;
@@ -18,6 +18,7 @@ const createShortcuts: CreateShortcut[] = [
 	{ key: "F4", action: "new-item", path: "/items", label: () => t("shortcuts.new_item") },
 	{ key: "F6", action: "new-expense", path: "/expenses", label: () => t("shortcuts.new_expense") },
 	{ key: "F7", action: "new-recurring", path: "/recurring/new", label: () => t("shortcuts.new_recurring") },
+	{ key: "F8", action: "new-accounting-entry", path: "/accounting", label: () => t("shortcuts.new_accounting") },
 ];
 
 let pendingAction: CreateAction | null = null;
@@ -63,6 +64,8 @@ function activeForm(): HTMLFormElement | null {
 const TAB_SELECTOR = '.tab:not([href$="/pos"])';
 
 function projectTabs(): HTMLAnchorElement[] {
+	const subtabs = [...document.querySelectorAll<HTMLAnchorElement>(".subtabs a.subtab")].filter(visible);
+	if (subtabs.length > 1) return subtabs;
 	return [...document.querySelectorAll<HTMLAnchorElement>(`.tabs ${TAB_SELECTOR}, .project-nav ${TAB_SELECTOR}`)].filter(visible);
 }
 

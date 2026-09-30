@@ -37,12 +37,14 @@ export interface RecordedPayment {
 	status: "pending" | "confirmed" | "completed";
 	notes: string | null;
 	recordedBy: string;
+	settledAt?: number;
 }
 
 export async function recordPayment(payment: RecordedPayment): Promise<{ uuid: string; balance: InvoiceBalance }> {
 	const { invoice } = payment;
 	const uuid = crypto.randomUUID();
 	const timestamp = Date.now();
+	const settledAt = payment.settledAt ?? timestamp;
 	const settled = payment.status === "confirmed" || payment.status === "completed";
 	const details = payment.notes ? { notes: payment.notes, recorded_by: payment.recordedBy } : { recorded_by: payment.recordedBy };
 
@@ -52,7 +54,7 @@ export async function recordPayment(payment: RecordedPayment): Promise<{ uuid: s
 				fee_amount, net_amount, payment_method, payment_details, confirmed_at, completed_at, created, updated)
 			VALUES(${uuid}, ${invoice.project}, ${invoice.uuid}, ${invoice.customer}, ${payment.processor}, ${payment.processorTxId}, ${payment.status},
 				'payment', ${invoice.currency}, ${payment.amount}, ${payment.fee}, ${payment.amount - payment.fee}, ${payment.paymentMethod},
-				${JSON.stringify(details)}, ${settled ? timestamp : null}, ${payment.status === "completed" ? timestamp : null}, ${timestamp}, ${timestamp})
+				${JSON.stringify(details)}, ${settled ? settledAt : null}, ${payment.status === "completed" ? settledAt : null}, ${timestamp}, ${timestamp})
 		`;
 
 		return await applyBalance(tx, invoice.uuid);

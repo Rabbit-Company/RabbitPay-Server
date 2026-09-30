@@ -9,7 +9,7 @@ export const RATE_DAYS = 30;
 export const RATE_PAYMENTS = 1000;
 
 const SERVER_ID = /^RPS(?:-[0-9A-HJKMNP-TV-Z]{5}){4}$/;
-const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
+const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
 
 export interface LicenseGrant {
 	type: LicenseType;
@@ -46,7 +46,7 @@ export function usesAmount(type: LicenseType): boolean {
 }
 
 export function usesDays(type: LicenseType): boolean {
-	return type === "white_label" || type === "store" || type === "workforce" || type === "employees";
+	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting";
 }
 
 export function amountLimit(type: LicenseType): number {

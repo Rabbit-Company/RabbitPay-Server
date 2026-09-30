@@ -1,14 +1,24 @@
 import { PageState } from "../../../server/page-state";
 import { pagedTable, pagination, PAGE_SIZE } from "../pagination";
-import { Api, type Customer, type Expense, type ExpenseImportPreview, type ExpenseInput, type ExpenseSchedule, type Project } from "../api";
+import {
+	Api,
+	type Customer,
+	type Expense,
+	type ExpenseImportPreview,
+	type ExpenseImportResult,
+	type ExpenseInput,
+	type ExpenseSchedule,
+	type Project,
+} from "../api";
 import { combobox, staticCombobox, type ComboOption } from "../combobox";
 import { currencyOptions, currencyRates } from "../currencies";
-import { expenseCategoryLabel, expenseCategoryOptions } from "../expense-categories";
+import { expenseCategoryLabel, expenseCategoryNote, expenseCategoryOptions, nonDeductibleCategory } from "../expense-categories";
+import { csvImportDialog } from "../csv-import";
 import { can, Permission } from "../access";
 import { el, field, input, select, table, emptyState, saveFile } from "../dom";
 import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, minorUnitDigits, toDateInput, toMajorUnits, toMinorUnits } from "../money";
 import { confirmDialog, modal, reportError, toast } from "../ui";
-import { statusLabel, t } from "../i18n";
+import { statusLabel, t, type UiKey } from "../i18n";
 import { loadProject, projectLayout } from "./project";
 import type { DateFormat } from "../../../server/formats";
 import { includedTaxAtRate } from "../../../server/expense-types";
@@ -161,6 +171,9 @@ async function editor(
 		placeholder: t("expenses.category_search"),
 	});
 	category.input.maxLength = 80;
+	const categoryValue = () => category.selected?.value ?? category.value.trim();
+	const categoryWithoutDeduction = () => nonDeductibleCategory(categoryValue());
+	const categoryNote = el("p", { class: "muted" });
 	const currency = staticCombobox(currencyOptions(known.currencies, startCurrency), startCurrency, {
 		required: true,
 		placeholder: t("currency.search"),
@@ -246,6 +259,8 @@ async function editor(
 	useStandardRate.hidden = standardRate <= 0;
 	const taxControl = el("div", { class: "expense-tax-control" }, tax, useStandardRate);
 	const deductionControl = el("div", { class: "expense-deduction-control" }, deductionMode, deductible);
+	const provisionalShare = input("checkbox");
+	provisionalShare.checked = Boolean(expense?.provisional_share);
 	estimateTax();
 	const schedule = recurring ? (row as ExpenseSchedule | null) : null;
 	const date = input("date", {
@@ -325,7 +340,7 @@ async function editor(
 				const baseMinor = minorValue(base);
 				const taxMinor = Math.round((baseMinor * rate) / 100);
 				showMinorValue(lineTax, taxMinor);
-				showMinorValue(lineDeductible, project.vat_status === "registered" ? taxMinor : 0);
+				showMinorValue(lineDeductible, project.vat_status === "registered" && !categoryWithoutDeduction() ? taxMinor : 0);
 				refreshVatLines();
 			});
 			lineTax.addEventListener("input", refreshVatLines);
@@ -387,6 +402,8 @@ async function editor(
 		exchangeFields,
 		field(t("expenses.vat_handling"), vatHandling),
 		assessmentFields,
+		el("label", { class: "switch" }, provisionalShare, el("span", {}, t("expenses.provisional_share"))),
+		el("p", { class: "muted" }, t("expenses.provisional_share_hint")),
 		field(t("expenses.attachment"), attachment, t("expenses.attachment_hint")),
 		attachmentActions
 	);
@@ -404,7 +421,7 @@ async function editor(
 				const currentTax = minorValue(tax);
 				showMinorValue(standard.base, Math.max(0, minorValue(amount) - currentTax));
 				showMinorValue(standard.tax, currentTax);
-				showMinorValue(standard.deductible, project.vat_status === "registered" ? currentTax : 0);
+				showMinorValue(standard.deductible, project.vat_status === "registered" && !categoryWithoutDeduction() ? currentTax : 0);
 			}
 			automaticTax = false;
 			refreshVatLines();
@@ -414,6 +431,18 @@ async function editor(
 	const syncVatHandling = () => {
 		assessmentFields.hidden = vatHandling.value === "1";
 	};
+	const syncCategory = (changed: boolean) => {
+		const note = expenseCategoryNote(categoryValue());
+		categoryNote.textContent = note ?? "";
+		categoryNote.hidden = note === null;
+		if (!changed || !categoryWithoutDeduction()) return;
+		deductionMode.value = "none";
+		for (const line of vatLineControls) showMinorValue(line.deductible, 0);
+		syncDeduction();
+		refreshVatLines();
+	};
+	category.onChange(() => syncCategory(true));
+	syncCategory(false);
 	vatTreatment.addEventListener("change", syncVatTreatment);
 	vatHandling.addEventListener("change", syncVatHandling);
 	currency.onChange(syncVatTreatment);
@@ -443,6 +472,7 @@ async function editor(
 		imported ? importNotice(imported) : null,
 		field(t("expenses.description"), description),
 		el("div", { class: "grid" }, field(t("expenses.supplier"), supplier.element), field(t("expenses.category"), category.element, t("expenses.category_hint"))),
+		categoryNote,
 		recurring ? null : field(t("expenses.vat_treatment"), vatTreatment),
 		el("div", { class: "grid" }, field(t("expenses.amount"), amount), field(t("expenses.currency"), currency.element)),
 		el(
@@ -488,6 +518,7 @@ async function editor(
 			total_amount: toMinorUnits(Number(amount.value), currency.value),
 			tax_amount: toMinorUnits(Number(tax.value), currency.value),
 			deductible_tax_amount: toMinorUnits(Number(deductible.value), currency.value),
+			provisional_share: !recurring && vatTreatment.value !== "not_reported" && provisionalShare.checked,
 			expense_date: dayStartFromDateInput(date.value, project.timezone),
 			issue_date: recurring || !issueDate.value ? null : dayStartFromDateInput(issueDate.value, project.timezone),
 			receipt_date: recurring || !receiptDate.value ? null : dayStartFromDateInput(receiptDate.value, project.timezone),
@@ -556,6 +587,86 @@ async function editor(
 		} finally {
 			save.disabled = false;
 		}
+	});
+}
+
+const CSV_COLUMNS = [
+	"supplier",
+	"invoice_number",
+	"supplier_tax_number",
+	"supplier_country",
+	"issue_date",
+	"receipt_date",
+	"category",
+	"description",
+	"currency",
+	"exchange_rate",
+	"vat_treatment",
+	"vat_rate",
+	"net_amount",
+	"vat_amount",
+	"deductible_vat",
+	"paid_date",
+	"notes",
+];
+
+function importCsv(project: Project, onImported: () => void) {
+	csvImportDialog<ExpenseImportResult["documents"][number]>({
+		title: t("expenses.import_csv"),
+		hint: t("expenses.import_csv_hint"),
+		fileName: "expenses.csv",
+		columns: CSV_COLUMNS,
+		columnLabel: (column) => t(`expenses.csv_column_${column}` as UiKey),
+		example: {
+			sl: [
+				"Petrol d.d.",
+				"P-77",
+				"SI80267432",
+				"SI",
+				"4.3.2026",
+				"4.3.2026",
+				"Travel",
+				"Gorivo",
+				"EUR",
+				"",
+				"domestic",
+				"22",
+				"100,00",
+				"22,00",
+				"22,00",
+				"4.3.2026",
+				"",
+			],
+			en: [
+				"Petrol d.d.",
+				"P-77",
+				"SI80267432",
+				"SI",
+				"2026-03-04",
+				"2026-03-04",
+				"Travel",
+				"Fuel",
+				"EUR",
+				"",
+				"domestic",
+				"22",
+				"100.00",
+				"22.00",
+				"22.00",
+				"2026-03-04",
+				"",
+			],
+		},
+		headers: [t("expenses.supplier"), t("expenses.date"), t("expenses.category"), t("expenses.amount")],
+		row: (document) => [
+			`${document.input.supplier ?? ""} ${document.input.invoice_number ?? ""}`,
+			formatDate(document.input.expense_date, project.date_format as DateFormat, project.timezone),
+			expenseCategoryLabel(document.input.category),
+			formatMoney(document.input.total_amount, document.input.currency),
+		],
+		preview: (content) => Api.previewExpenseCsv(project.uuid, content),
+		commit: (content) => Api.importExpenseCsv(project.uuid, content),
+		onImported,
 	});
 }
 
@@ -731,6 +842,7 @@ export async function expensesView(uuid: string): Promise<HTMLElement> {
 							{ class: "line-actions" },
 							addExpense,
 							action(t("expenses.import"), async () => importEinvoice(project, reload)),
+							action(t("expenses.import_csv"), async () => importCsv(project, reload)),
 							action(t("expenses.add_recurring"), async () => editor(project, true, null, reload))
 						)
 					: null

@@ -6,7 +6,7 @@ export const ISSUER_PUBLIC_KEY = "MCowBQYDK2VwAyEATQexSJApVWsQU+EimKUyHecWPi1H9H
 
 export const SIGNED_LICENSE_PREFIX = "RPAY2";
 const SIGNED_LICENSE = /^RPAY2\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/;
-const SIGNED_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees"];
+const SIGNED_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
 
 export interface SignedLicense {
 	v: 1;

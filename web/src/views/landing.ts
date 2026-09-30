@@ -261,6 +261,7 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 		"landing.license_storage",
 		"landing.license_store",
 		"landing.license_workforce",
+		"landing.license_accounting",
 		"landing.license_white_label",
 	];
 	const store = licenseStore();

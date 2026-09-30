@@ -1,4 +1,5 @@
 import type { Context } from "@rabbit-company/web";
+import { bodyLimit } from "@rabbit-company/web-middleware/body-limit";
 import { createHash } from "node:crypto";
 import { Server } from "../../server";
 import Database from "../../database/database";
@@ -14,6 +15,7 @@ import type { AppState, ExpenseAttachmentRow, ExpenseRow, ExpenseVatLineRow, Rec
 import { documentStorage } from "../../document-storage";
 import { hasStorageCapacity } from "../../licensing";
 import { accountingPeriodLocked } from "../../accounting-periods";
+import { parseExpenseImport } from "../../expense-import";
 import Errors from "../../errors";
 import {
 	EINVOICE_CONTENT_TYPE,
@@ -25,6 +27,8 @@ import {
 } from "../../einvoice-import";
 
 const base = "/api/v1/projects/:uuid";
+const attachmentBody = bodyLimit<AppState>({ maxSize: 28 * 1024 * 1024, message: "The file is too large." });
+const einvoiceBody = bodyLimit<AppState>({ maxSize: 7 * 1024 * 1024, message: "The file is too large." });
 
 async function body(ctx: Context<AppState>): Promise<Record<string, unknown> | null> {
 	try {
@@ -141,7 +145,7 @@ async function importSuggestion(ctx: Context<AppState>, file: { bytes: Buffer })
 	}
 }
 
-Server.app.post(`${base}/expenses/import/preview`, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
+Server.app.post(`${base}/expenses/import/preview`, einvoiceBody, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
 	const file = await uploadedEinvoice(ctx);
 	if (!file) return Utils.fail(ctx, ErrorCode.INVALID_EINVOICE);
 	const suggestion = await importSuggestion(ctx, file);
@@ -149,7 +153,7 @@ Server.app.post(`${base}/expenses/import/preview`, Auth.required(), Permissions.
 	return Utils.ok(ctx, suggestion);
 });
 
-Server.app.post(`${base}/expenses/import`, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
+Server.app.post(`${base}/expenses/import`, einvoiceBody, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
 	const project = Permissions.project(ctx);
 	const file = await uploadedEinvoice(ctx);
 	if (!file) return Utils.fail(ctx, ErrorCode.INVALID_EINVOICE);
@@ -205,7 +209,8 @@ Server.app.patch(`${base}/expenses/:expense`, Auth.required(), Permissions.requi
 			receipt_date = ${data.receipt_date}, supply_date = ${data.supply_date}, vat_treatment = ${data.vat_treatment}, asset_type = ${data.asset_type},
 			vat_handling = ${data.vat_handling}, self_assessment_period = ${data.self_assessment_period}, self_assessment_tax = ${data.self_assessment_tax},
 			tax_exchange_rate = ${data.tax_exchange_rate}, tax_rate_date = ${data.tax_rate_date},
-			paid_at = ${data.paid_at}, notes = ${data.notes?.trim() || null}, updated = ${Date.now()} WHERE uuid = ${row.uuid}`;
+			paid_at = ${data.paid_at}, notes = ${data.notes?.trim() || null}, provisional_share = ${data.provisional_share ? 1 : 0}, updated = ${Date.now()}
+			WHERE uuid = ${row.uuid}`;
 		await tx`DELETE FROM expense_vat_lines WHERE expense = ${row.uuid}`;
 		for (const [sort, line] of data.vat_lines.entries()) {
 			await tx`INSERT INTO expense_vat_lines(uuid, expense, rate, tax_base, tax_amount, deductible_tax_amount, sort_order)
@@ -229,7 +234,7 @@ Server.app.delete(`${base}/expenses/:expense`, Auth.required(), Permissions.requ
 	return Utils.ok(ctx);
 });
 
-Server.app.put(`${base}/expenses/:expense/attachment`, Auth.required(), Permissions.require(Permission.EXPENSE_EDIT), async (ctx) => {
+Server.app.put(`${base}/expenses/:expense/attachment`, attachmentBody, Auth.required(), Permissions.require(Permission.EXPENSE_EDIT), async (ctx) => {
 	const project = Permissions.project(ctx);
 	const [expense] = (await Database`SELECT * FROM expenses WHERE uuid = ${ctx.params.expense} AND project = ${project.uuid}`) as ExpenseRow[];
 	if (!expense) return Utils.fail(ctx, ErrorCode.EXPENSE_NOT_FOUND);
@@ -415,4 +420,40 @@ Server.app.patch(`${base}/expense-schedules/:schedule`, Auth.required(), Permiss
 	const [updated] = await Database`SELECT * FROM recurring_expenses WHERE uuid = ${row.uuid}`;
 	await audit(ctx, "expense_schedule.updated", row.uuid, updated, row);
 	return Utils.ok(ctx, { ...updated, auto_paid: Boolean(updated.auto_paid) });
+});
+
+const csvBody = bodyLimit<AppState>({ maxSize: 5 * 1024 * 1024, message: "The file is too large." });
+
+async function csvContent(ctx: Context<AppState>): Promise<string | null> {
+	const raw = await body(ctx);
+	return typeof raw?.content === "string" ? raw.content : null;
+}
+
+Server.app.post(`${base}/expenses/import-csv/preview`, csvBody, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
+	const content = await csvContent(ctx);
+	if (content === null) return Utils.fail(ctx, ErrorCode.INVALID_EXPENSE);
+	return Utils.ok(ctx, await parseExpenseImport(content, Permissions.project(ctx)));
+});
+
+Server.app.post(`${base}/expenses/import-csv`, csvBody, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
+	const content = await csvContent(ctx);
+	if (content === null) return Utils.fail(ctx, ErrorCode.INVALID_EXPENSE);
+	const project = Permissions.project(ctx);
+	const plan = await parseExpenseImport(content, project);
+	if (plan.errors.length > 0 || plan.documents.length === 0)
+		return Utils.failWithReason(ctx, ErrorCode.INVALID_EXPENSE, "Fix the rows with errors before importing. Nothing was imported.", plan);
+	const author = Auth.account(ctx).username;
+	const created = await Database.begin(async (tx) => {
+		const ids: string[] = [];
+		for (const document of plan.documents) ids.push(await insertExpense(tx, project.uuid, document.input, author));
+		return ids;
+	});
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "expense.csv_imported",
+		entityType: "expense",
+		entityId: created[0],
+		newValue: { count: created.length, invoices: plan.documents.map((document) => document.input.invoice_number) },
+	});
+	return Utils.ok(ctx, { imported: created.length }, 201);
 });
