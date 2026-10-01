@@ -14,9 +14,11 @@ import { isLicenseIssuer } from "../../license-signing";
 import { normalizeServerId, serverId } from "../../server-identity";
 import Errors, { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
-import { presentSettings, updateSettings } from "../../settings";
+import { presentSettings, settingsWith, updateSettings, type ServerSettings } from "../../settings";
 import { settingField } from "../../settings-schema";
 import { refreshClients } from "../../settings-clients";
+import { bitcoinClientFor, ethereumClientFor } from "../../crypto/chains";
+import { failureReason, type ChainProbe, type ChainStatus } from "../../crypto/chain-status";
 import { Settings } from "../../settings";
 import { BackupInProgress, backupNow, backupRunning, backupsSupported, latestBackups, type BackupResult } from "../../backups";
 import {
@@ -45,6 +47,11 @@ import { MAX_INVITE_USES, createInvite, presentInvite } from "../../registration
 import type { AccountRow, LicenseKeyRow, LicenseStatus, ProjectRow, RegistrationInviteRow } from "../../database/models";
 
 const guard = [Auth.required(), Admin.required()] as const;
+
+const CONNECTION_PROBES = new Map<string, (settings: ServerSettings) => ChainProbe>([
+	["btc", (settings) => bitcoinClientFor(settings.btc)],
+	["eth", (settings) => ethereumClientFor(settings.eth)],
+]);
 
 const LICENSE_STATUSES: LicenseStatus[] = ["available", "redeemed", "revoked"];
 const ACCOUNT_STATUSES = ["active", "suspended"];
@@ -252,6 +259,41 @@ Server.app.patch("/api/v1/admin/settings", ...guard, async (ctx) => {
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} changed settings: ${changed.join(", ") || "nothing"}`);
 
 	return Utils.ok(ctx, { ...after, master_key_configured: Vault.isConfigured(), ...(await licenseIdentity()), changed, restart_required: restart });
+});
+
+Server.app.post("/api/v1/admin/settings/:group/test", ...guard, async (ctx) => {
+	const group = ctx.params["group"] ?? "";
+	const probeFor = CONNECTION_PROBES.get(group);
+	if (!probeFor) return Utils.failWithReason(ctx, ErrorCode.INVALID_SETTING, "These settings cannot be tested.");
+
+	let data: { values?: Record<string, unknown> };
+	try {
+		data = await ctx.body<{ values?: Record<string, unknown> }>();
+	} catch {
+		data = {};
+	}
+
+	const values = data.values ?? {};
+	if (typeof values !== "object" || Array.isArray(values)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+
+	const { settings, problem } = settingsWith(values);
+	if (problem) {
+		const label = settingField(problem.key)?.label ?? problem.key;
+		return Utils.failWithReason(
+			ctx,
+			ErrorCode.INVALID_SETTING,
+			problem.reason === "unknown" ? `Unknown setting ${problem.key}.` : `${label} has an invalid value.`
+		);
+	}
+
+	let status: ChainStatus;
+	try {
+		status = await probeFor(settings).status();
+	} catch (error) {
+		return Utils.failWithReason(ctx, ErrorCode.CONNECTION_TEST_FAILED, failureReason(error).slice(0, 300));
+	}
+
+	return Utils.ok(ctx, status);
 });
 
 Server.app.get("/api/v1/admin/backups", ...guard, async (ctx) => {

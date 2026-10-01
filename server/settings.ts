@@ -116,25 +116,38 @@ export async function reloadSettings(): Promise<boolean> {
 
 export type SettingsProblem = { key: string; reason: "unknown" | "invalid" | "master_key" };
 
-export async function updateSettings(changes: Record<string, unknown>): Promise<SettingsProblem | null> {
+function acceptChanges(changes: Record<string, unknown>, stored: boolean): { accepted: Record<string, SettingValue>; problem: SettingsProblem | null } {
 	const accepted: Record<string, SettingValue> = {};
 	for (const [key, raw] of Object.entries(changes)) {
 		const field = settingField(key);
-		if (!field) return { key, reason: "unknown" };
+		if (!field) return { accepted, problem: { key, reason: "unknown" } };
 
 		const clearing = field.kind === "secret" && raw === null;
 		if (field.kind === "secret" && (raw === undefined || raw === "")) continue;
 
 		const value = clearing ? "" : coerceSetting(field, raw);
-		if (value === undefined) return { key, reason: "invalid" };
-		if (field.kind === "secret" && value !== "" && !Vault.isConfigured()) return { key, reason: "master_key" };
+		if (value === undefined) return { accepted, problem: { key, reason: "invalid" } };
+		if (stored && field.kind === "secret" && value !== "" && !Vault.isConfigured()) return { accepted, problem: { key, reason: "master_key" } };
 
 		accepted[key] = value;
 	}
+	return { accepted, problem: null };
+}
+
+export async function updateSettings(changes: Record<string, unknown>): Promise<SettingsProblem | null> {
+	const { accepted, problem } = acceptChanges(changes, true);
+	if (problem) return problem;
 
 	await store(accepted);
 	await reloadSettings();
 	return null;
+}
+
+export function settingsWith(changes: Record<string, unknown>): { settings: ServerSettings; problem: SettingsProblem | null } {
+	const settings = structuredClone(Settings);
+	const { accepted, problem } = acceptChanges(changes, false);
+	for (const [key, value] of Object.entries(accepted)) writePath(settings, key, value);
+	return { settings, problem };
 }
 
 export function presentSettings() {

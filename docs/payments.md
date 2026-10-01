@@ -171,9 +171,12 @@ use. The server cannot spend from them. Bitcoin and Ethereum keep separate
 derivation index spaces, and so does every key, so two projects never share an
 address.
 
-The chain is read through any Etherscan compatible API, set by `api_url`.
-Etherscan itself needs an `api_key`. Blockscout does not and can be self hosted,
-which avoids telling a third party which addresses are yours.
+The chain is read through any Etherscan compatible API, set by `api_url`. The
+default is Etherscan API V2 at `https://api.etherscan.io/v2/api`, which serves
+every chain from one address, so the configured `chain_id` is sent with each
+request. Etherscan itself needs an `api_key`, also on its free plan. Blockscout
+does not and can be self hosted, which avoids telling a third party which
+addresses are yours.
 
 Amounts use BigInt throughout. One ether is 10^18 wei, which overflows both a
 JavaScript number and a 64 bit database integer, so transfers are read and summed
@@ -199,6 +202,15 @@ your own wallet.
 | Ethereum | `etherscan`       | Etherscan, or Blockscout which needs no key  |
 | Ethereum | `rpc`             | geth, erigon, reth or similar over JSON-RPC  |
 | Monero   | always RPC        | monero-wallet-rpc                            |
+
+Test connection under Admin, Settings, Bitcoin or Ethereum checks the chosen
+backend with the values in the form, saved or not, so you can try a
+configuration before turning the method on. It reports the network and the
+current block. For Bitcoin Core it also checks that the wallet is loaded and can
+take watch only addresses, and for an Ethereum node that it is on the configured
+chain id. An Etherscan compatible API is only asked for the transactions of an
+unused address, which is the lookup the server relies on. Nothing is saved and
+no invoice or address is created.
 
 A public API sees every address you ask about, so it learns which addresses are
 yours even though it never holds your keys. Your own node avoids that. The

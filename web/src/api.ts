@@ -1237,6 +1237,12 @@ export interface AdminSettings extends LicenseIdentity {
 	restart_required?: string[];
 }
 
+export interface ConnectionStatus {
+	network: string | null;
+	height: number | null;
+	warnings: string[];
+}
+
 export interface AdminBackups {
 	supported: boolean;
 	enabled: boolean;
@@ -3350,6 +3356,10 @@ export const AdminApi = {
 
 	updateSettings(values: Record<string, SettingValue | null>) {
 		return request<AdminSettings>("PATCH", "/admin/settings", { values });
+	},
+
+	testSettings(group: string, values: Record<string, SettingValue | null>) {
+		return request<ConnectionStatus>("POST", `/admin/settings/${group}/test`, { values });
 	},
 
 	backups() {

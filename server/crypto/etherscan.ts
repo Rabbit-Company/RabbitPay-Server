@@ -1,3 +1,5 @@
+import { unusedEthereumAddress, type ChainProbe, type ChainStatus } from "./chain-status";
+
 export interface AddressTransfer {
 	hash: string;
 	value: bigint;
@@ -23,19 +25,22 @@ interface EtherscanResponse {
 	result?: EtherscanTransaction[] | string;
 }
 
-export class EtherscanClient implements EthereumChainClient {
+export class EtherscanClient implements EthereumChainClient, ChainProbe {
 	private readonly baseUrl: string;
 	private readonly apiKey: string;
+	private readonly chainId: number;
 	private readonly timeoutMs: number;
 
-	constructor(baseUrl: string, apiKey = "", timeoutMs = 10000) {
+	constructor(baseUrl: string, apiKey = "", chainId = 1, timeoutMs = 10000) {
 		this.baseUrl = baseUrl.replace(/\/+$/, "");
 		this.apiKey = apiKey;
+		this.chainId = chainId;
 		this.timeoutMs = timeoutMs;
 	}
 
 	async transfersTo(address: string): Promise<AddressTransfer[]> {
 		const query = new URLSearchParams({
+			chainid: String(this.chainId),
 			module: "account",
 			action: "txlist",
 			address,
@@ -87,5 +92,10 @@ export class EtherscanClient implements EthereumChainClient {
 		}
 
 		return transfers;
+	}
+
+	async status(): Promise<ChainStatus> {
+		await this.transfersTo(unusedEthereumAddress());
+		return { network: null, height: null, warnings: [] };
 	}
 }

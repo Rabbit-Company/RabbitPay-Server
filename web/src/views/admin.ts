@@ -1,5 +1,6 @@
 import {
 	AdminApi,
+	ApiError,
 	getUsername,
 	type AdminAccount,
 	type AdminLegal,
@@ -8,6 +9,7 @@ import {
 	type AdminBackups,
 	type AdminProject,
 	type AdminSettings,
+	type ConnectionStatus,
 	type License,
 	type LicenseInput,
 	type LicenseType,
@@ -1158,8 +1160,21 @@ function settingsGroup(group: (typeof SETTING_GROUPS)[number], state: AdminSetti
 		return wrapper;
 	});
 
+	const changes = () => {
+		const values: Record<string, SettingValue | null> = {};
+		for (const [key, read] of readers) {
+			if (clears.has(key)) {
+				values[key] = null;
+				continue;
+			}
+			const value = read();
+			if (value !== undefined && String(value) !== String(state.values[key])) values[key] = value;
+		}
+		return values;
+	};
+
 	const save = el("button", { class: "button primary", type: "submit" }, `Save ${group.label.toLowerCase()}`);
-	const extras = group.id === "backups" ? backupPanel() : null;
+	const extras = group.id === "backups" ? backupPanel() : group.testable ? connectionPanel(group.id, group.label, changes) : null;
 
 	return el(
 		"form",
@@ -1169,15 +1184,7 @@ function settingsGroup(group: (typeof SETTING_GROUPS)[number], state: AdminSetti
 				event.preventDefault();
 				save.disabled = true;
 
-				const values: Record<string, SettingValue | null> = {};
-				for (const [key, read] of readers) {
-					if (clears.has(key)) {
-						values[key] = null;
-						continue;
-					}
-					const value = read();
-					if (value !== undefined && String(value) !== String(state.values[key])) values[key] = value;
-				}
+				const values = changes();
 
 				if (Object.keys(values).length === 0) {
 					toast("Nothing changed", "info");
@@ -1202,6 +1209,44 @@ function settingsGroup(group: (typeof SETTING_GROUPS)[number], state: AdminSetti
 		extras?.status ?? null,
 		el("div", { class: "form-actions" }, save, extras?.run ?? null)
 	);
+}
+
+function connectionSummary(label: string, result: ConnectionStatus): string {
+	if (result.network === null && result.height === null) return "The API answers address lookups.";
+	const chain = result.network === null ? label : `${label} ${result.network}`;
+	return result.height === null ? `${chain}.` : `${chain} at block ${result.height.toLocaleString()}.`;
+}
+
+function connectionPanel(group: string, label: string, changes: () => Record<string, SettingValue | null>): { status: HTMLElement; run: HTMLButtonElement } {
+	const status = el("div", { class: "stack-tight" });
+	status.hidden = true;
+
+	const show = (pill: string, outcome: string, lines: string[]) =>
+		status.replaceChildren(el("div", {}, el("span", { class: `pill ${pill}` }, outcome)), ...lines.map((line) => el("p", { class: "muted" }, line)));
+
+	const run = el(
+		"button",
+		{
+			class: "button",
+			type: "button",
+			onClick: async () => {
+				run.disabled = true;
+				status.hidden = false;
+				status.replaceChildren(el("p", { class: "muted" }, "Testing the connection"));
+				try {
+					const result = await AdminApi.testSettings(group, changes());
+					show(result.warnings.length > 0 ? "pill-pending" : "pill-active", "Connected", [connectionSummary(label, result), ...result.warnings]);
+				} catch (error) {
+					show("pill-overdue", "Failed", [error instanceof ApiError ? error.message : "The server could not be reached."]);
+				} finally {
+					run.disabled = false;
+				}
+			},
+		},
+		"Test connection"
+	) as HTMLButtonElement;
+
+	return { status, run };
 }
 
 const DESTINATION_LABELS: Record<string, string> = { directory: "Directory", s3: "S3" };

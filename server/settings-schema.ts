@@ -273,7 +273,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		rpc_url: "http://127.0.0.1:8545",
 		rpc_username: "",
 		rpc_password: "",
-		api_url: "https://api.etherscan.io/api",
+		api_url: "https://api.etherscan.io/v2/api",
 		api_key: "",
 		chain_id: 1,
 		confirmations: 12,
@@ -322,6 +322,7 @@ export interface SettingGroup {
 	label: string;
 	description: string;
 	fields: SettingField[];
+	testable?: boolean;
 }
 
 const CACHE_ADAPTERS = [
@@ -688,6 +689,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 		id: "btc",
 		label: "Bitcoin",
 		description: "A payment address per invoice, watched on chain.",
+		testable: true,
 		fields: [
 			{ key: "btc.enabled", label: "Enable Bitcoin", kind: "boolean" },
 			{
@@ -713,6 +715,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 		id: "eth",
 		label: "Ethereum",
 		description: "Native ETH only.",
+		testable: true,
 		fields: [
 			{ key: "eth.enabled", label: "Enable Ethereum", kind: "boolean" },
 			{
@@ -725,7 +728,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				],
 			},
 			{ key: "eth.api_url", label: "Etherscan API", kind: "text" },
-			{ key: "eth.api_key", label: "Etherscan API key", kind: "secret" },
+			{ key: "eth.api_key", label: "Etherscan API key", hint: "Etherscan needs one, also on its free plan. Blockscout does not.", kind: "secret" },
 			{ key: "eth.rpc_url", label: "RPC URL", kind: "text" },
 			{ key: "eth.rpc_username", label: "RPC username", kind: "text" },
 			{ key: "eth.rpc_password", label: "RPC password", kind: "secret" },

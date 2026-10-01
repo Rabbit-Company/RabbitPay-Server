@@ -1,3 +1,5 @@
+import { bitcoinNetworkOf, unusedBitcoinAddress, type ChainProbe, type ChainStatus } from "./chain-status";
+
 export interface AddressPayment {
 	txid: string;
 	value: number;
@@ -21,7 +23,7 @@ interface EsploraTransaction {
 	status?: { confirmed?: boolean; block_height?: number };
 }
 
-export class EsploraClient implements ChainClient {
+export class EsploraClient implements ChainClient, ChainProbe {
 	private readonly baseUrl: string;
 	private readonly timeoutMs: number;
 
@@ -69,5 +71,14 @@ export class EsploraClient implements ChainClient {
 		}
 
 		return payments;
+	}
+
+	async status(): Promise<ChainStatus> {
+		const height = await this.tipHeight();
+		const network = bitcoinNetworkOf(await this.get<string>("/block-height/0", "text"));
+		if (!network) return { network: null, height, warnings: ["This API serves a chain that is not a known Bitcoin network."] };
+
+		await this.paymentsTo(unusedBitcoinAddress(network.params), height);
+		return { network: network.name, height, warnings: [] };
 	}
 }

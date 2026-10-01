@@ -1,9 +1,10 @@
-import { Settings } from "../settings";
+import { Settings, type ServerSettings } from "../settings";
 import { EsploraClient, type ChainClient } from "./esplora";
 import { BitcoinRpcClient } from "./bitcoin-rpc";
 import { EtherscanClient, type EthereumChainClient } from "./etherscan";
 import { EthereumRpcClient } from "./ethereum-rpc";
 import { MoneroWalletRpc, type MoneroWallet } from "./monero-rpc";
+import type { ChainProbe } from "./chain-status";
 import { StripeApiClient, type StripeClient } from "../processors/stripe";
 import { PaypalApiClient, type PaypalClient } from "../processors/paypal";
 
@@ -18,35 +19,36 @@ export function ethereumBackend(): "rpc" | "etherscan" {
 	return Settings.eth?.backend === "rpc" ? "rpc" : "etherscan";
 }
 
+export function bitcoinClientFor(config: ServerSettings["btc"]): ChainClient & ChainProbe {
+	return config.backend === "rpc"
+		? new BitcoinRpcClient({
+				url: config.rpc_url || "http://127.0.0.1:8332",
+				username: config.rpc_username,
+				password: config.rpc_password,
+				wallet: config.rpc_wallet,
+			})
+		: new EsploraClient(config.api_url || "https://mempool.space/api");
+}
+
+export function ethereumClientFor(config: ServerSettings["eth"]): EthereumChainClient & ChainProbe {
+	return config.backend === "rpc"
+		? new EthereumRpcClient({
+				url: config.rpc_url || "http://127.0.0.1:8545",
+				username: config.rpc_username,
+				password: config.rpc_password,
+				confirmations: config.confirmations ?? 12,
+				chainId: config.chain_id || 1,
+			})
+		: new EtherscanClient(config.api_url || "https://api.etherscan.io/v2/api", config.api_key || "", config.chain_id || 1);
+}
+
 export function bitcoinChain(): ChainClient {
-	if (bitcoin) return bitcoin;
-
-	bitcoin =
-		bitcoinBackend() === "rpc"
-			? new BitcoinRpcClient({
-					url: Settings.btc?.rpc_url || "http://127.0.0.1:8332",
-					username: Settings.btc?.rpc_username,
-					password: Settings.btc?.rpc_password,
-					wallet: Settings.btc?.rpc_wallet,
-				})
-			: new EsploraClient(Settings.btc?.api_url || "https://mempool.space/api");
-
+	if (!bitcoin) bitcoin = bitcoinClientFor(Settings.btc);
 	return bitcoin;
 }
 
 export function ethereumChain(): EthereumChainClient {
-	if (ethereum) return ethereum;
-
-	ethereum =
-		ethereumBackend() === "rpc"
-			? new EthereumRpcClient({
-					url: Settings.eth?.rpc_url || "http://127.0.0.1:8545",
-					username: Settings.eth?.rpc_username,
-					password: Settings.eth?.rpc_password,
-					confirmations: Settings.eth?.confirmations ?? 12,
-				})
-			: new EtherscanClient(Settings.eth?.api_url || "https://api.etherscan.io/api", Settings.eth?.api_key || "");
-
+	if (!ethereum) ethereum = ethereumClientFor(Settings.eth);
 	return ethereum;
 }
 

@@ -209,6 +209,7 @@ All of these need an administrator session.
 | `GET`    | `/api/v1/admin/overview`                      | Totals, Server ID and issuer status.         |
 | `GET`    | `/api/v1/admin/settings`                      | Every setting. Secrets only say whether set. |
 | `PATCH`  | `/api/v1/admin/settings`                      | Change settings.                             |
+| `POST`   | `/api/v1/admin/settings/:group/test`          | Test the connection for `btc` or `eth`.      |
 | `GET`    | `/api/v1/admin/backups`                       | Backup destinations and the newest backups.  |
 | `POST`   | `/api/v1/admin/backups`                       | Run a backup now.                            |
 | `GET`    | `/api/v1/admin/licenses`                      | List license keys.                           |

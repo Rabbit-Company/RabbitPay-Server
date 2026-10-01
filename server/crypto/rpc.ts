@@ -38,17 +38,18 @@ export class JsonRpcClient {
 			signal: AbortSignal.timeout(this.timeoutMs),
 		});
 
-		if (!response.ok && response.status !== 500) throw new RpcError(response.status, `RPC responded ${response.status}`);
-
 		let payload: { result?: T; error?: { code?: number; message?: string } };
 		try {
 			payload = (await response.json()) as { result?: T; error?: { code?: number; message?: string } };
 		} catch {
+			if (!response.ok) throw new RpcError(response.status, `RPC responded ${response.status}`);
 			throw new RpcError(-1, "RPC returned an unreadable response");
 		}
 
-		if (payload.error) throw new RpcError(payload.error.code ?? -1, payload.error.message ?? "RPC call failed");
-		if (payload.result === undefined) throw new RpcError(-1, `RPC returned no result for ${method}`);
+		if (!response.ok && response.status !== 500 && !payload?.error?.message) throw new RpcError(response.status, `RPC responded ${response.status}`);
+
+		if (payload?.error) throw new RpcError(payload.error.code ?? -1, payload.error.message ?? "RPC call failed");
+		if (payload?.result === undefined) throw new RpcError(-1, `RPC returned no result for ${method}`);
 
 		return payload.result;
 	}
