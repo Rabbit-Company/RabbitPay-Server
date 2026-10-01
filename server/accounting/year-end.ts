@@ -108,7 +108,7 @@ export async function closeYear(project: ProjectRow, year: number, author: strin
 	const bounds = yearBounds(project, year);
 	if (Date.now() <= bounds.to) throw new YearCloseRefused("year_not_over");
 	if (await activeClose(project.uuid, year)) throw new YearCloseRefused("already_closed");
-	const sync = await syncLedger(project);
+	const sync = await syncLedger(project, { force: true });
 	const blocking = sync.issues.filter((issue) => issue.code === "missing_exchange_rate");
 	if (blocking.length > 0) throw new YearCloseRefused("ledger_issues", blocking);
 

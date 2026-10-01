@@ -23,7 +23,7 @@ namespace TaskLedger {
 			let posted = 0;
 			for (const project of projects) {
 				try {
-					const result = await syncLedger(project);
+					const result = await syncLedger(project, { force: true });
 					posted += result.posted + result.reversed;
 				} catch (err) {
 					Logger.error(`[LEDGER] Posting for project ${project.uuid} failed: ${err}`);

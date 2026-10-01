@@ -82,7 +82,7 @@ function validName(value: unknown): value is string {
 }
 
 Server.app.post(`${base}/sync`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
-	return Utils.ok(ctx, await syncLedger(Permissions.project(ctx)));
+	return Utils.ok(ctx, await syncLedger(Permissions.project(ctx), { force: true }));
 });
 
 Server.app.get(`${base}/accounts`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {

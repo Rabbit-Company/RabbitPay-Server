@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { createHash } from "node:crypto";
 import Database from "../database/database";
 import { safeInteger } from "../database/numbers";
-import { zonedParts } from "../timezone";
+import { localDate, zonedParts } from "../timezone";
 import { ensureChart } from "./chart";
 import { LedgerPlanner, type PlannedEntry } from "./sources";
 import type { LedgerIssue } from "./types";
@@ -50,9 +50,90 @@ export function fingerprint(posting: Pick<Posting, "date" | "description" | "lin
 	return createHash("sha256").update(`${posting.date}\n${posting.description}\n${lines}`).digest("hex");
 }
 
-async function nextNumber(sql: SQL, project: string, year: number): Promise<number> {
-	const [row] = (await sql`SELECT MAX(number) AS last FROM journal_entries WHERE project = ${project} AND year = ${year}`) as { last: number | null }[];
-	return safeInteger(row?.last ?? 0) + 1;
+const BATCH = 500;
+
+interface PendingEntry {
+	posting: Posting;
+	reverses: string | null;
+}
+
+const ENTRY_COLUMNS = [
+	"uuid",
+	"project",
+	"year",
+	"number",
+	"entry_date",
+	"description",
+	"source_type",
+	"source_id",
+	"reverses",
+	"fingerprint",
+	"posted_by",
+	"created",
+] as const satisfies (keyof JournalEntryRow)[];
+const LINE_COLUMNS = ["uuid", "entry", "project", "ledger_account", "debit", "credit", "partner", "sort_order"] as const satisfies (keyof JournalLineRow)[];
+
+async function postEntries(
+	sql: SQL,
+	project: Pick<ProjectRow, "uuid" | "timezone">,
+	pending: PendingEntry[],
+	author: string | null
+): Promise<JournalEntryRow[]> {
+	if (pending.length === 0) return [];
+	for (const { posting } of pending) if (!balanced(posting.lines)) throw new UnbalancedEntry();
+	const years = [...new Set(pending.map(({ posting }) => zonedParts(posting.date, project.timezone).year))];
+	const last = (await sql`
+		SELECT year, MAX(number) AS last FROM journal_entries WHERE project = ${project.uuid} AND year IN ${sql(years)} GROUP BY year
+	`) as { year: number; last: number | null }[];
+	const next = new Map(years.map((year) => [year, safeInteger(last.find((row) => Number(row.year) === year)?.last ?? 0) + 1]));
+	const created = Date.now();
+	const entries: JournalEntryRow[] = [];
+	const lines: JournalLineRow[] = [];
+	for (const { posting, reverses } of pending) {
+		const year = zonedParts(posting.date, project.timezone).year;
+		const number = next.get(year)!;
+		next.set(year, number + 1);
+		const entry: JournalEntryRow = {
+			uuid: crypto.randomUUID(),
+			project: project.uuid,
+			year,
+			number,
+			entry_date: posting.date,
+			description: posting.description,
+			source_type: posting.source_type,
+			source_id: posting.source_id,
+			reverses,
+			fingerprint: fingerprint(posting),
+			posted_by: author,
+			created,
+		};
+		entries.push(entry);
+		for (const [index, line] of posting.lines.entries()) {
+			lines.push({
+				uuid: crypto.randomUUID(),
+				entry: entry.uuid,
+				project: project.uuid,
+				ledger_account: line.ledger_account,
+				debit: line.debit,
+				credit: line.credit,
+				partner: line.partner,
+				sort_order: index,
+			});
+		}
+	}
+	for (let start = 0; start < entries.length; start += BATCH) {
+		await sql`INSERT INTO journal_entries ${sql(
+			entries.slice(start, start + BATCH).map((row) => ({ ...row })),
+			...ENTRY_COLUMNS
+		)}`;
+	}
+	for (let start = 0; start < lines.length; start += BATCH) {
+		await sql`INSERT INTO journal_lines ${sql(
+			lines.slice(start, start + BATCH).map((row) => ({ ...row })),
+			...LINE_COLUMNS
+		)}`;
+	}
+	return entries;
 }
 
 export async function postEntry(
@@ -62,40 +143,37 @@ export async function postEntry(
 	author: string | null,
 	reverses: string | null = null
 ): Promise<JournalEntryRow> {
-	if (!balanced(posting.lines)) throw new UnbalancedEntry();
-	const uuid = crypto.randomUUID();
-	const year = zonedParts(posting.date, project.timezone).year;
-	const number = await nextNumber(sql, project.uuid, year);
-	await sql`
-		INSERT INTO journal_entries(uuid, project, year, number, entry_date, description, source_type, source_id, reverses, fingerprint, posted_by, created)
-		VALUES(${uuid}, ${project.uuid}, ${year}, ${number}, ${posting.date}, ${posting.description}, ${posting.source_type}, ${posting.source_id},
-			${reverses}, ${fingerprint(posting)}, ${author}, ${Date.now()})
-	`;
-	for (const [index, line] of posting.lines.entries()) {
-		await sql`
-			INSERT INTO journal_lines(uuid, entry, project, ledger_account, debit, credit, partner, sort_order)
-			VALUES(${crypto.randomUUID()}, ${uuid}, ${project.uuid}, ${line.ledger_account}, ${line.debit}, ${line.credit}, ${line.partner}, ${index})
-		`;
-	}
-	const [row] = (await sql`SELECT * FROM journal_entries WHERE uuid = ${uuid}`) as JournalEntryRow[];
-	return row;
+	const [entry] = await postEntries(sql, project, [{ posting, reverses }], author);
+	return entry;
 }
 
-export async function reverseEntry(sql: SQL, project: Pick<ProjectRow, "uuid" | "timezone">, entry: JournalEntryRow, author: string | null) {
-	const lines = (await sql`SELECT * FROM journal_lines WHERE entry = ${entry.uuid} ORDER BY sort_order`) as JournalLineRow[];
-	return await postEntry(
-		sql,
-		project,
-		{
+async function reversals(sql: SQL, entries: JournalEntryRow[]): Promise<PendingEntry[]> {
+	const lines = new Map<string, JournalLineRow[]>();
+	for (let start = 0; start < entries.length; start += BATCH) {
+		const ids = entries.slice(start, start + BATCH).map((entry) => entry.uuid);
+		const rows = (await sql`SELECT * FROM journal_lines WHERE entry IN ${sql(ids)} ORDER BY entry, sort_order`) as JournalLineRow[];
+		for (const row of rows) lines.set(row.entry, [...(lines.get(row.entry) ?? []), row]);
+	}
+	return entries.map((entry) => ({
+		reverses: entry.uuid,
+		posting: {
 			source_type: entry.source_type,
 			source_id: entry.source_id,
 			date: entry.entry_date,
 			description: `Storno ${entry.year}/${entry.number}: ${entry.description}`.slice(0, 500),
-			lines: lines.map((line) => ({ ledger_account: line.ledger_account, debit: line.credit, credit: line.debit, partner: line.partner })),
+			lines: (lines.get(entry.uuid) ?? []).map((line) => ({
+				ledger_account: line.ledger_account,
+				debit: safeInteger(line.credit),
+				credit: safeInteger(line.debit),
+				partner: line.partner,
+			})),
 		},
-		author,
-		entry.uuid
-	);
+	}));
+}
+
+export async function reverseEntry(sql: SQL, project: Pick<ProjectRow, "uuid" | "timezone">, entry: JournalEntryRow, author: string | null) {
+	const [storno] = await postEntries(sql, project, await reversals(sql, [entry]), author);
+	return storno;
 }
 
 export async function activeEntries(project: string, sql: SQL = Database): Promise<JournalEntryRow[]> {
@@ -135,16 +213,57 @@ export function withLedger<T>(project: string, task: () => Promise<T>): Promise<
 	return next;
 }
 
-const lastIssues = new Map<string, LedgerIssue[]>();
+const synced = new Map<string, { stamp: string; issues: LedgerIssue[] }>();
 
 export function knownIssues(project: string): LedgerIssue[] | null {
-	return lastIssues.get(project) ?? null;
+	return synced.get(project)?.issues ?? null;
 }
 
-export function syncLedger(project: ProjectRow): Promise<SyncResult> {
+async function changeStamp(project: ProjectRow): Promise<string> {
+	const uuid = project.uuid;
+	const [sources] = await Database`
+		SELECT
+			(SELECT COUNT(*) FROM invoices WHERE project = ${uuid}) AS invoices,
+			(SELECT COUNT(issued_at) FROM invoices WHERE project = ${uuid}) AS invoices_issued,
+			(SELECT MAX(updated) FROM invoices WHERE project = ${uuid}) AS invoices_updated,
+			(SELECT COUNT(*) FROM credit_notes WHERE project = ${uuid}) AS credit_notes,
+			(SELECT COUNT(*) FROM transactions WHERE project = ${uuid}) AS transactions,
+			(SELECT COUNT(base_amount) FROM transactions WHERE project = ${uuid}) AS transactions_valued,
+			(SELECT MAX(updated) FROM transactions WHERE project = ${uuid}) AS transactions_updated,
+			(SELECT COUNT(*) FROM expenses WHERE project = ${uuid}) AS expenses,
+			(SELECT MAX(updated) FROM expenses WHERE project = ${uuid}) AS expenses_updated,
+			(SELECT COUNT(*) FROM recorded_invoices WHERE project = ${uuid}) AS recorded,
+			(SELECT MAX(updated) FROM recorded_invoices WHERE project = ${uuid}) AS recorded_updated,
+			(SELECT COUNT(*) FROM bank_transactions WHERE project = ${uuid}) AS bank_lines,
+			(SELECT SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) FROM bank_transactions WHERE project = ${uuid}) AS bank_open,
+			(SELECT MAX(matched_at) FROM bank_transactions WHERE project = ${uuid}) AS bank_matched,
+			(SELECT COUNT(*) FROM bank_transaction_matches WHERE project = ${uuid}) AS bank_matches,
+			(SELECT COUNT(*) FROM fixed_assets WHERE project = ${uuid}) AS assets,
+			(SELECT MAX(updated) FROM fixed_assets WHERE project = ${uuid}) AS assets_updated,
+			(SELECT COUNT(*) FROM payroll_runs WHERE project = ${uuid}) AS payroll,
+			(SELECT MAX(updated) FROM payroll_runs WHERE project = ${uuid}) AS payroll_updated,
+			(SELECT COUNT(*) FROM deductible_shares WHERE project = ${uuid}) AS shares,
+			(SELECT MAX(updated) FROM deductible_shares WHERE project = ${uuid}) AS shares_updated,
+			(SELECT COUNT(*) FROM ledger_accounts WHERE project = ${uuid}) AS accounts,
+			(SELECT MAX(updated) FROM ledger_accounts WHERE project = ${uuid}) AS accounts_updated,
+			(SELECT COUNT(*) FROM ledger_category_accounts WHERE project = ${uuid}) AS categories,
+			(SELECT MAX(updated) FROM ledger_category_accounts WHERE project = ${uuid}) AS categories_updated,
+			(SELECT COUNT(*) FROM accounting_years WHERE project = ${uuid}) AS years,
+			(SELECT MAX(closed_at) FROM accounting_years WHERE project = ${uuid}) AS years_closed,
+			(SELECT MAX(reopened_at) FROM accounting_years WHERE project = ${uuid}) AS years_reopened
+	`;
+	const settings = [project.currency, project.tax_currency, project.tax_country, project.timezone, project.bookkeeping];
+	return JSON.stringify([sources, settings, localDate(Date.now(), project.timezone)]);
+}
+
+export function syncLedger(project: ProjectRow, options: { force?: boolean } = {}): Promise<SyncResult> {
 	return withLedger(project.uuid, async () => {
+		const previous = synced.get(project.uuid);
+		if (!previous) await ensureChart(project.uuid);
+		const stamp = await changeStamp(project);
+		if (!options.force && previous?.stamp === stamp) return { posted: 0, reversed: 0, issues: previous.issues };
 		const result = await synchronize(project);
-		lastIssues.set(project.uuid, result.issues);
+		synced.set(project.uuid, { stamp, issues: result.issues });
 		return result;
 	});
 }
@@ -176,7 +295,7 @@ async function synchronize(project: ProjectRow): Promise<SyncResult> {
 			issues.push({ source_type, source_id, reference: null, code: "closed_year" });
 	};
 
-	const reversals: JournalEntryRow[] = [];
+	const reversed: JournalEntryRow[] = [];
 	const postings: Posting[] = [];
 	for (const posting of planned) {
 		const key = `${posting.source_type}:${posting.source_id}`;
@@ -187,20 +306,20 @@ async function synchronize(project: ProjectRow): Promise<SyncResult> {
 			blocked(posting.source_type, posting.source_id);
 			continue;
 		}
-		if (current) reversals.push(current);
+		if (current) reversed.push(current);
 		postings.push(posting);
 	}
 	for (const [key, entry] of active) {
 		if (skipped.has(key) || entry.source_type.startsWith("year_")) continue;
 		if (inClosedYear(entry.entry_date)) blocked(entry.source_type, entry.source_id);
-		else reversals.push(entry);
+		else reversed.push(entry);
 	}
 
-	if (reversals.length > 0 || postings.length > 0) {
+	if (reversed.length > 0 || postings.length > 0) {
 		await Database.begin(async (tx) => {
-			for (const entry of reversals) await reverseEntry(tx, project, entry, null);
-			for (const posting of postings) await postEntry(tx, project, posting, null);
+			const pending = [...(await reversals(tx, reversed)), ...postings.map((posting) => ({ posting, reverses: null }))];
+			await postEntries(tx, project, pending, null);
 		});
 	}
-	return { posted: postings.length, reversed: reversals.length, issues };
+	return { posted: postings.length, reversed: reversed.length, issues };
 }
