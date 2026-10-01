@@ -898,7 +898,17 @@ import type { ImportResult } from "../../server/accounting/recorded-import";
 import type { ExpenseImportResult } from "../../server/expense-import";
 export type { ExpenseImportResult };
 export type { ImportColumn, ImportError, ImportResult } from "../../server/accounting/recorded-import";
-import type { BankCandidate, BankMatchInput, BankSuggestion, RevaluationPreview } from "../../server/accounting/types";
+import type {
+	BankCandidate,
+	BankMatchInput,
+	BankSuggestion,
+	OpenItem,
+	OpenItemsKind,
+	OpenItemsReport,
+	PartnerOpenItems,
+	RevaluationPreview,
+} from "../../server/accounting/types";
+export type { OpenItem, OpenItemsKind, OpenItemsReport, PartnerOpenItems };
 import type { BankStatementRow, BankTransactionMatchRow, BankTransactionRow } from "../../server/database/models";
 
 export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[]; matches: BankTransactionMatchRow[] };
@@ -966,7 +976,19 @@ export interface AccountingClient {
 	unpaid_expenses: number;
 	unattached_expenses: number;
 	issues: number | null;
+	open_bank_lines: number;
+	unclosed_years: number[];
+	ddv_submitted_until: number | null;
 }
+
+export type JournalQuery = {
+	from: number;
+	to: number;
+	account?: string;
+	source?: string;
+	text?: string;
+	amount?: number | null;
+};
 
 export interface ManualEntryInput {
 	date: number;
@@ -2024,6 +2046,10 @@ export const Api = {
 		return request<RecordedInvoice>("PATCH", `/projects/${uuid}/recorded-invoices/${record}`, data);
 	},
 
+	recordedInvoice(uuid: string, record: string) {
+		return request<RecordedInvoice>("GET", `/projects/${uuid}/recorded-invoices/${record}`);
+	},
+
 	previewRecordedImport(uuid: string, content: string) {
 		return request<ImportResult>("POST", `/projects/${uuid}/recorded-invoices/import/preview`, { content });
 	},
@@ -2183,7 +2209,7 @@ export const Api = {
 		return request<{ category: string; account: string }>("PUT", `/projects/${uuid}/accounting/category-accounts`, { category, account });
 	},
 
-	journal(uuid: string, options: { from: number; to: number; offset?: number; limit?: number }) {
+	journal(uuid: string, options: JournalQuery & { offset?: number; limit?: number }) {
 		return request<JournalPage>("GET", `/projects/${uuid}/accounting/journal${listQuery(options)}`);
 	},
 
@@ -2195,12 +2221,24 @@ export const Api = {
 		return request<JournalEntryView>("POST", `/projects/${uuid}/accounting/journal/${entry}/reverse`);
 	},
 
-	exportJournal(uuid: string, options: { from: number; to: number }) {
+	exportJournal(uuid: string, options: JournalQuery) {
 		return requestFile(`/projects/${uuid}/accounting/journal/export${listQuery(options)}`, "dnevnik.csv");
 	},
 
 	exportTrialBalance(uuid: string, options: { from: number; to: number }) {
 		return requestFile(`/projects/${uuid}/accounting/trial-balance/export${listQuery(options)}`, "bruto-bilanca.csv");
+	},
+
+	openItems(uuid: string, options: { date: number; kind: OpenItemsKind }) {
+		return request<OpenItemsReport & { issues: LedgerIssue[] }>("GET", `/projects/${uuid}/accounting/open-items${listQuery(options)}`);
+	},
+
+	exportOpenItems(uuid: string, options: { date: number; kind: OpenItemsKind }) {
+		return requestFile(`/projects/${uuid}/accounting/open-items/export${listQuery(options)}`, "odprte-postavke.csv");
+	},
+
+	accountingPartners(uuid: string) {
+		return request<{ partners: { key: string; name: string; tax_number: string | null }[] }>("GET", `/projects/${uuid}/accounting/partners`);
 	},
 
 	trialBalance(uuid: string, options: { from: number; to: number }) {
@@ -2210,11 +2248,19 @@ export const Api = {
 		);
 	},
 
-	accountLedger(uuid: string, account: string, options: { from: number; to: number }) {
+	exportAccountLedger(uuid: string, account: string, options: { from: number; to: number; partner?: string }) {
+		return requestFile(`/projects/${uuid}/accounting/ledger/${account}/export${listQuery(options)}`, "kartica.csv");
+	},
+
+	accountLedger(uuid: string, account: string, options: { from: number; to: number; partner?: string }) {
 		return request<{ from: number; to: number; account: LedgerAccount; opening: number; closing: number; lines: AccountLedgerRow[] }>(
 			"GET",
 			`/projects/${uuid}/accounting/ledger/${account}${listQuery(options)}`
 		);
+	},
+
+	expense(uuid: string, expense: string) {
+		return request<Expense>("GET", `/projects/${uuid}/expenses/${expense}`);
 	},
 
 	expenses(uuid: string, options: { limit?: number; offset?: number; from?: number; to?: number; status?: string } = {}) {

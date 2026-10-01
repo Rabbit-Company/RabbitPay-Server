@@ -45,15 +45,88 @@ export interface PlannedEntry {
 	lines: PlannedLine[];
 }
 
-export interface Exposure {
+export interface PartnerRef {
 	key: string;
+	name: string;
+	tax_number: string | null;
+	address: string[];
+}
+
+export interface DocumentRef {
+	key: string;
+	type: "invoice" | "recorded_invoice" | "recorded_credit_note" | "expense" | "bank_transaction" | "manual";
 	reference: string | null;
-	currency: string;
+	partner: PartnerRef;
+	issued: number;
+	due: number | null;
+}
+
+export interface OpenItemMovement {
+	document: DocumentRef;
 	account: LedgerAccountRow;
-	partner: string | null;
+	currency: string;
 	date: number;
 	foreign: number;
 	base: number;
+	origin: boolean;
+}
+
+const LEGAL_FORMS = new Set(["doo", "dd", "sp", "dno", "kd", "gmbh", "ag", "ltd", "llc", "inc", "srl", "sro", "bv", "sa", "as", "oy", "ab"]);
+
+export function partnerName(name: string): string {
+	return name
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/\b(d)\.\s*(o)\.\s*(o)\.?/g, "doo")
+		.replace(/\b(s)\.\s*(p)\.?/g, "sp")
+		.replace(/\b(d)\.\s*(d)\.?/g, "dd")
+		.split(/[^a-z0-9]+/)
+		.filter((word) => word.length > 0 && !LEGAL_FORMS.has(word))
+		.join(" ");
+}
+
+export function taxIdentity(value: string | null | undefined): string | null {
+	const compact = (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+	if (compact.length < 5) return null;
+	return /^SI\d{8}$/.test(compact) ? compact.slice(2) : compact;
+}
+
+export function partnerRef(name: string | null | undefined, taxNumber: string | null | undefined, address: (string | null | undefined)[] = []): PartnerRef {
+	const display = (name ?? "").trim().slice(0, 200);
+	const tax = taxIdentity(taxNumber);
+	return {
+		key: tax ? `tax:${tax}` : `name:${partnerName(display)}`,
+		name: display,
+		tax_number: taxNumber?.trim() || null,
+		address: address.map((line) => (line ?? "").trim()).filter(Boolean),
+	};
+}
+
+function invoicePartner(invoice: InvoiceRow): PartnerRef {
+	let details: Partial<InvoiceRecipient> = {};
+	try {
+		details = invoice.buyer_details ? (JSON.parse(invoice.buyer_details) as InvoiceRecipient) : {};
+	} catch {
+		details = {};
+	}
+	return partnerRef(details.name, invoice.buyer_vat_number ?? details.vat_number ?? details.tax_number, [
+		details.address_line1,
+		details.address_line2,
+		[details.postal_code, details.city].filter(Boolean).join(" "),
+		details.country,
+	]);
+}
+
+function invoiceDocument(invoice: InvoiceRow): DocumentRef {
+	return {
+		key: invoice.uuid,
+		type: "invoice",
+		reference: invoice.reference,
+		partner: invoicePartner(invoice),
+		issued: invoice.issued_at ?? invoice.created,
+		due: invoice.due_date,
+	};
 }
 
 interface Amounts {
@@ -61,6 +134,8 @@ interface Amounts {
 	tax_currency: string | null;
 	tax_exchange_rate: number | null;
 }
+
+export const PARTNER_ACCOUNTS = new Set<SystemAccount>(["receivables_domestic", "receivables_foreign", "payables_domestic", "payables_foreign"]);
 
 const REVERSE_CHARGE_PURCHASES = ["domestic_reverse_charge", "eu_goods", "eu_services"];
 
@@ -164,7 +239,7 @@ function settledAt(transaction: TransactionRow): number {
 export class LedgerPlanner {
 	readonly entries: PlannedEntry[] = [];
 	readonly issues: LedgerIssue[] = [];
-	readonly exposures: Exposure[] = [];
+	readonly movements: OpenItemMovement[] = [];
 	private readonly settledThrough = new Map<string, { account: LedgerAccountRow; amount: number; currency: string }>();
 	private readonly base: string;
 	private readonly home: string;
@@ -204,31 +279,16 @@ export class LedgerPlanner {
 		return this.chart.system(treatment === "oss" ? "oss_vat" : "output_vat");
 	}
 
-	private expose(
-		document: Amounts,
-		key: string,
-		reference: string | null,
-		account: LedgerAccountRow,
-		partner: string | null,
-		date: number,
-		foreign: number,
-		base: number
-	) {
-		if (document.currency === this.base || foreign === 0) return;
-		this.exposures.push({ key, reference, currency: document.currency, account, partner, date, foreign, base });
+	private expose(document: Amounts, ref: DocumentRef, account: LedgerAccountRow, date: number, foreign: number, base: number, origin = false) {
+		if (foreign === 0 && base === 0) return;
+		this.movements.push({ document: ref, account, currency: document.currency, date, foreign, base, origin });
 	}
 
 	private missing(source_type: JournalSourceType, source_id: string, reference: string | null) {
 		this.issues.push({ source_type, source_id, reference, code: "missing_exchange_rate" });
 	}
 
-	private salesLines(
-		entry: EntryBuilder,
-		document: SalesDocument,
-		lines: SalesLine[],
-		sign: 1 | -1,
-		exposure: { key: string; reference: string | null; date: number }
-	): boolean {
+	private salesLines(entry: EntryBuilder, document: SalesDocument, lines: SalesLine[], sign: 1 | -1, ref: DocumentRef, date: number, origin: boolean): boolean {
 		let receivable = 0;
 		let foreign = 0;
 		for (const line of lines) {
@@ -244,7 +304,7 @@ export class LedgerPlanner {
 			receivable += net + vat;
 		}
 		entry.debit(this.receivable(document), sign * receivable, document.partner);
-		this.expose(document, exposure.key, exposure.reference, this.receivable(document), document.partner, exposure.date, sign * foreign, sign * receivable);
+		this.expose(document, ref, this.receivable(document), date, sign * foreign, sign * receivable, origin);
 		return true;
 	}
 
@@ -324,9 +384,7 @@ export class LedgerPlanner {
 
 		for (const invoice of invoices) {
 			const entry = new EntryBuilder();
-			if (
-				!this.salesLines(entry, salesDocument(invoice), invoiceLines(invoice), 1, { key: invoice.uuid, reference: invoice.reference, date: invoice.issued_at! })
-			) {
+			if (!this.salesLines(entry, salesDocument(invoice), invoiceLines(invoice), 1, invoiceDocument(invoice), invoice.issued_at!, true)) {
 				this.missing("invoice", invoice.uuid, invoice.reference);
 				continue;
 			}
@@ -343,7 +401,7 @@ export class LedgerPlanner {
 			const invoice = byInvoice.get(note.invoice);
 			if (!invoice) continue;
 			const entry = new EntryBuilder();
-			if (!this.salesLines(entry, salesDocument(invoice), noteLines(note), -1, { key: invoice.uuid, reference: invoice.reference, date: note.issued_at })) {
+			if (!this.salesLines(entry, salesDocument(invoice), noteLines(note), -1, invoiceDocument(invoice), note.issued_at, false)) {
 				this.missing("credit_note", note.uuid, note.reference);
 				continue;
 			}
@@ -383,17 +441,8 @@ export class LedgerPlanner {
 			const entry = new EntryBuilder();
 			entry.debit(money, sign * valued);
 			entry.credit(this.receivable(invoice), sign * amount, buyerName(invoice));
-			if (transaction.currency === invoice.currency)
-				this.expose(
-					invoice,
-					invoice.uuid,
-					invoice.reference,
-					this.receivable(invoice),
-					buyerName(invoice),
-					settledAt(transaction),
-					-sign * transaction.amount,
-					-sign * amount
-				);
+			const foreign = transaction.currency === invoice.currency ? transaction.amount : invoice.currency === this.base ? amount : 0;
+			this.expose(invoice, invoiceDocument(invoice), this.receivable(invoice), settledAt(transaction), -sign * foreign, -sign * amount);
 			const difference = sign * (valued - amount);
 			if (difference > 0) entry.credit(this.chart.system("fx_gains"), difference);
 			if (difference < 0) entry.debit(this.chart.system("fx_losses"), -difference);
@@ -544,6 +593,17 @@ export class LedgerPlanner {
 		const entry = new EntryBuilder();
 		entry.debit(this.chart.byIban(line.statement_iban) ?? this.chart.system("bank"), line.amount);
 		entry.credit(account, line.amount, line.counterparty_name?.slice(0, 200) ?? null);
+		if (account.system_key && PARTNER_ACCOUNTS.has(account.system_key as SystemAccount)) {
+			const ref: DocumentRef = {
+				key: `bank:${line.uuid}`,
+				type: "bank_transaction",
+				reference: line.bank_reference ?? line.reference,
+				partner: partnerRef(line.counterparty_name, null, [line.counterparty_iban]),
+				issued: line.booking_date,
+				due: null,
+			};
+			this.expose({ currency: this.base, tax_currency: this.base, tax_exchange_rate: null }, ref, account, line.booking_date, -line.amount, -line.amount, true);
+		}
 		const details = [line.counterparty_name, line.remittance].filter(Boolean).join(", ");
 		this.entries.push({
 			source_type: "bank_transaction",
@@ -556,10 +616,18 @@ export class LedgerPlanner {
 
 	private planRecordedInvoice(record: RecordedInvoiceRow, lines: RecordedInvoiceLineRow[]) {
 		const document: SalesDocument = { ...record, advance: false, partner: record.buyer_name.slice(0, 200) };
+		const ref: DocumentRef = {
+			key: record.uuid,
+			type: record.document_type === "credit_note" ? "recorded_credit_note" : "recorded_invoice",
+			reference: record.reference,
+			partner: partnerRef(record.buyer_name, record.buyer_vat_number),
+			issued: record.issued_at,
+			due: record.due_date,
+		};
 		const sign = record.document_type === "credit_note" ? -1 : 1;
 		const entry = new EntryBuilder();
 		const planned = lines.map((line) => ({ net: line.net_amount, vat: line.tax_amount, treatment: line.tax_treatment, advance: false }));
-		if (!this.salesLines(entry, document, planned, sign, { key: record.uuid, reference: record.reference, date: record.issued_at })) {
+		if (!this.salesLines(entry, document, planned, sign, ref, record.issued_at, true)) {
 			this.missing("recorded_invoice", record.uuid, record.reference);
 			return;
 		}
@@ -575,16 +643,7 @@ export class LedgerPlanner {
 		payment.debit(money, sign * paid);
 		payment.credit(this.receivable(document), sign * total, document.partner);
 		this.exchangeDifference(payment, sign * (paid - total));
-		this.expose(
-			document,
-			record.uuid,
-			record.reference,
-			this.receivable(document),
-			document.partner,
-			record.paid_at,
-			-sign * record.total_amount,
-			-sign * total
-		);
+		this.expose(document, ref, this.receivable(document), record.paid_at, -sign * record.total_amount, -sign * total);
 		this.entries.push({
 			source_type: "recorded_payment",
 			source_id: record.uuid,
@@ -651,7 +710,15 @@ export class LedgerPlanner {
 			entry.debit(this.chart.system("input_vat"), deductible);
 			entry.credit(payable, total, supplier);
 		}
-		this.expose(document, expense.uuid, label, payable, supplier, expense.expense_date, -expense.total_amount, -total);
+		const ref: DocumentRef = {
+			key: expense.uuid,
+			type: "expense",
+			reference: label,
+			partner: partnerRef(supplier ?? expense.description, expense.supplier_tax_number),
+			issued: expense.issue_date ?? expense.expense_date,
+			due: expense.due_date,
+		};
+		this.expose(document, ref, payable, expense.expense_date, -expense.total_amount, -total, true);
 		this.entries.push({
 			source_type: "expense",
 			source_id: expense.uuid,
@@ -666,7 +733,7 @@ export class LedgerPlanner {
 			payment.debit(payable, total, supplier);
 			payment.credit(this.moneyFor(key, "bank"), paid);
 			this.exchangeDifference(payment, total - paid);
-			this.expose(document, expense.uuid, label, payable, supplier, expense.paid_at, expense.total_amount, total);
+			this.expose(document, ref, payable, expense.paid_at, expense.total_amount, total);
 			this.entries.push({
 				source_type: "expense_payment",
 				source_id: expense.uuid,

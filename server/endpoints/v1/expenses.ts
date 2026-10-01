@@ -48,6 +48,7 @@ function expenseInput(data: Record<string, unknown>, currency: string, previous?
 		issue_date: null,
 		receipt_date: null,
 		supply_date: null,
+		due_date: null,
 		vat_treatment: "not_reported",
 		asset_type: "expense",
 		vat_handling: "1",
@@ -110,6 +111,12 @@ Server.app.get(`${base}/expenses`, Auth.required(), Permissions.require(Permissi
 			total: number;
 		}[];
 	return Utils.ok(ctx, { expenses: await Promise.all(rows.map(expenseDetails)), total: Number(count.total), limit, offset });
+});
+
+Server.app.get(`${base}/expenses/:expense`, Auth.required(), Permissions.require(Permission.EXPENSE_VIEW), async (ctx) => {
+	const [row] = (await Database`SELECT * FROM expenses WHERE project = ${Permissions.project(ctx).uuid} AND uuid = ${ctx.params.expense}`) as ExpenseRow[];
+	if (!row) return Utils.fail(ctx, ErrorCode.EXPENSE_NOT_FOUND);
+	return Utils.ok(ctx, await expenseDetails(row));
 });
 
 Server.app.post(`${base}/expenses`, Auth.required(), Permissions.require(Permission.EXPENSE_CREATE), async (ctx) => {
@@ -206,7 +213,7 @@ Server.app.patch(`${base}/expenses/:expense`, Auth.required(), Permissions.requi
 			supplier_tax_number = ${data.supplier_tax_number?.trim() || null}, supplier_country = ${data.supplier_country}, invoice_number = ${data.invoice_number?.trim() || null},
 			category = ${data.category.trim()}, currency = ${data.currency}, total_amount = ${data.total_amount}, tax_amount = ${data.tax_amount},
 			deductible_tax_amount = ${data.deductible_tax_amount}, expense_date = ${data.expense_date}, issue_date = ${data.issue_date},
-			receipt_date = ${data.receipt_date}, supply_date = ${data.supply_date}, vat_treatment = ${data.vat_treatment}, asset_type = ${data.asset_type},
+			receipt_date = ${data.receipt_date}, supply_date = ${data.supply_date}, due_date = ${data.due_date}, vat_treatment = ${data.vat_treatment}, asset_type = ${data.asset_type},
 			vat_handling = ${data.vat_handling}, self_assessment_period = ${data.self_assessment_period}, self_assessment_tax = ${data.self_assessment_tax},
 			tax_exchange_rate = ${data.tax_exchange_rate}, tax_rate_date = ${data.tax_rate_date},
 			paid_at = ${data.paid_at}, notes = ${data.notes?.trim() || null}, provisional_share = ${data.provisional_share ? 1 : 0}, updated = ${Date.now()}

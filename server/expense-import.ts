@@ -17,6 +17,7 @@ export type ExpenseImportColumn =
 	| "category"
 	| "issue_date"
 	| "receipt_date"
+	| "due_date"
 	| "expense_date"
 	| "currency"
 	| "exchange_rate"
@@ -61,6 +62,7 @@ const ALIASES: Record<ExpenseImportColumn, string[]> = {
 	category: ["category", "kategorija"],
 	issue_date: ["issue_date", "invoice_date", "date", "datum", "datum_izdaje"],
 	receipt_date: ["receipt_date", "received", "datum_prejema"],
+	due_date: ["due_date", "due", "zapadlost", "datum_zapadlosti", "rok_placila"],
 	expense_date: ["expense_date", "booking_date", "datum_knjizenja"],
 	currency: ["currency", "valuta"],
 	exchange_rate: ["exchange_rate", "tecaj"],
@@ -81,6 +83,7 @@ const DOCUMENT_COLUMNS: ExpenseImportColumn[] = [
 	"category",
 	"issue_date",
 	"receipt_date",
+	"due_date",
 	"expense_date",
 	"currency",
 	"exchange_rate",
@@ -176,6 +179,7 @@ export async function parseExpenseImport(content: string, project: ProjectRow): 
 					issue_date: issued,
 					receipt_date: received,
 					supply_date: null,
+					due_date: date("due_date"),
 					vat_treatment: (treatmentText || "not_reported") as ExpenseVatTreatment,
 					asset_type: "expense",
 					vat_handling: "1",

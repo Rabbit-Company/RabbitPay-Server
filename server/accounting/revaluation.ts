@@ -2,8 +2,8 @@ import Database from "../database/database";
 import { convertMinor } from "../invoicing";
 import { endOfLocalDate, startOfLocalDate } from "../timezone";
 import { ensureChart } from "./chart";
-import { postEntry, withLedger, type PostingLine } from "./journal";
-import { LedgerPlanner } from "./sources";
+import { ledgerMovements, postEntry, withLedger, type PostingLine } from "./journal";
+import type { OpenItemMovement } from "./sources";
 import type { JournalEntryRow, ProjectRow } from "../database/models";
 import type { RevaluationItem, RevaluationPreview } from "./types";
 
@@ -27,24 +27,22 @@ async function activeRevaluation(project: string, year: number): Promise<Journal
 }
 
 async function openItems(project: ProjectRow, until: number) {
-	const chart = await ensureChart(project.uuid);
-	const planner = new LedgerPlanner(project, chart);
-	await planner.plan();
-	const documents = new Map<string, Omit<RevaluationItem, "revalued" | "difference"> & { exposure: (typeof planner.exposures)[number] }>();
-	for (const exposure of planner.exposures) {
-		if (exposure.date > until) continue;
-		const current = documents.get(exposure.key) ?? {
-			reference: exposure.reference,
-			partner: exposure.partner,
-			currency: exposure.currency,
-			account: exposure.account.code,
+	const base = project.tax_currency ?? project.currency;
+	const documents = new Map<string, Omit<RevaluationItem, "revalued" | "difference"> & { movement: OpenItemMovement }>();
+	for (const movement of await ledgerMovements(project)) {
+		if (movement.date > until || movement.currency === base) continue;
+		const current = documents.get(movement.document.key) ?? {
+			reference: movement.document.reference,
+			partner: movement.document.partner.name || null,
+			currency: movement.currency,
+			account: movement.account.code,
 			open: 0,
 			booked: 0,
-			exposure,
+			movement,
 		};
-		current.open += exposure.foreign;
-		current.booked += exposure.base;
-		documents.set(exposure.key, current);
+		current.open += movement.foreign;
+		current.booked += movement.base;
+		documents.set(movement.document.key, current);
 	}
 	return [...documents.values()].filter((item) => item.open !== 0);
 }
@@ -52,7 +50,7 @@ async function openItems(project: ProjectRow, until: number) {
 export async function revaluationPreview(project: ProjectRow, year: number, rates: Record<string, number>): Promise<RevaluationPreview> {
 	const base = project.tax_currency ?? project.currency;
 	const items = await openItems(project, endOfLocalDate(`${year}-12-31`, project.timezone));
-	const lines = items.map(({ exposure: _exposure, ...item }) => {
+	const lines = items.map(({ movement: _movement, ...item }) => {
 		const rate = rates[item.currency];
 		const revalued = rate ? convertMinor(item.open, item.currency, rate, base) : null;
 		return { ...item, revalued, difference: revalued === null ? null : revalued - item.booked };
@@ -74,11 +72,11 @@ export async function postRevaluation(project: ProjectRow, year: number, rates: 
 		SELECT year FROM accounting_years WHERE project = ${project.uuid} AND year IN (${year}, ${year + 1}) AND reopened_at IS NULL
 	`) as { year: number }[];
 	if (closed.length > 0) throw new RevaluationRefused("year_closed");
+	const items = await openItems(project, end);
 	return await withLedger(project.uuid, async () => {
 		if (await activeRevaluation(project.uuid, year)) throw new RevaluationRefused("already_revalued");
 		const base = project.tax_currency ?? project.currency;
 		const chart = await ensureChart(project.uuid);
-		const items = await openItems(project, end);
 		if (items.some((item) => !(rates[item.currency] > 0))) throw new RevaluationRefused("invalid_rates");
 		const balances = new Map<string, PostingLine>();
 		const add = (account: string, partner: string | null, amount: number) => {
@@ -92,7 +90,7 @@ export async function postRevaluation(project: ProjectRow, year: number, rates: 
 		for (const item of items) {
 			const difference = convertMinor(item.open, item.currency, rates[item.currency], base) - item.booked;
 			if (difference === 0) continue;
-			add(item.exposure.account.uuid, item.exposure.partner, difference);
+			add(item.movement.account.uuid, item.partner, difference);
 			add(chart.system(difference > 0 ? "fx_gains" : "fx_losses").uuid, null, -difference);
 		}
 		const lines = [...balances.values()].filter((line) => line.debit !== 0 || line.credit !== 0);

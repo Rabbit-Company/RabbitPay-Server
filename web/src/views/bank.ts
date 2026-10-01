@@ -15,7 +15,7 @@ import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
-import { accountLabelOf, editable, ledgerPage, licenseNotice, moneyCell, numeric, section, sectionHead } from "./accounting";
+import { accountPicker, editable, ledgerPage, licenseNotice, moneyCell, numeric, section, sectionHead } from "./accounting";
 import type { DateFormat } from "../../../server/formats";
 
 function importDialog(project: Project, onImported: () => void) {
@@ -95,10 +95,7 @@ function importDialog(project: Project, onImported: () => void) {
 }
 
 function bookDialog(project: Project, line: BankTransaction, accounts: LedgerAccount[], onBooked: () => void) {
-	const account = select(
-		accounts.filter((entry) => entry.active && entry.system_key !== "bank").map((entry) => ({ value: entry.uuid, label: accountLabelOf(entry) }))
-	);
-	account.classList.add("account-select");
+	const account = accountPicker(accounts, "", (entry) => entry.system_key !== "bank");
 	const submit = el("button", { class: "button primary", type: "submit" }, t("bank.book_submit"));
 	const form = el(
 		"form",
@@ -108,6 +105,11 @@ function bookDialog(project: Project, line: BankTransaction, accounts: LedgerAcc
 				event.preventDefault();
 				submit.disabled = true;
 				try {
+					if (!account.value) {
+						account.input.focus();
+						submit.disabled = false;
+						return;
+					}
 					await Api.bookBankTransaction(project.uuid, line.uuid, account.value);
 					dialog.close();
 					onBooked();
@@ -119,10 +121,11 @@ function bookDialog(project: Project, line: BankTransaction, accounts: LedgerAcc
 		},
 		el("p", {}, `${line.counterparty_name ?? ""} ${formatMoney(line.amount, line.currency)}`),
 		el("p", { class: "muted" }, t(line.amount > 0 ? "bank.book_hint_in" : "bank.book_hint_out")),
-		field(t("bank.book_account"), account),
+		field(t("bank.book_account"), account.element),
 		el("div", { class: "form-actions" }, submit)
 	);
 	const dialog = modal(t("bank.book"), form, undefined, "dialog-medium");
+	account.input.focus();
 }
 
 async function matchDialog(project: Project, line: BankTransaction, onMatched: () => void) {
@@ -225,7 +228,7 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 		foreignNote,
 		el("div", { class: "line-actions" }, totals, submit)
 	);
-	const dialog = modal(t("bank.match_several_title"), form);
+	const dialog = modal(t("bank.match_several_title"), form, undefined, "dialog-large");
 	search.focus();
 }
 

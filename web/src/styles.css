@@ -4930,3 +4930,87 @@ fieldset.stack-tight {
 .pill.pill-sentence {
 	text-transform: none;
 }
+
+.open-items-details > td {
+	background: var(--bg);
+	padding: 0.5rem 0.75rem 1rem;
+}
+.iop-pages {
+	display: flex;
+	flex-direction: column;
+	gap: 2rem;
+}
+.iop-sheet {
+	gap: 14pt;
+}
+.iop-parties {
+	display: flex;
+	justify-content: space-between;
+	gap: 24pt;
+}
+.iop-title {
+	font-size: 16pt;
+	margin-top: 12pt;
+}
+.iop-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+.iop-table th,
+.iop-table td {
+	padding: 4pt 6pt;
+	border-bottom: 1px solid var(--doc-border);
+	text-align: left;
+}
+.iop-table .num {
+	text-align: right;
+	white-space: nowrap;
+}
+.iop-table td:nth-child(2),
+.iop-table td:nth-child(3) {
+	white-space: nowrap;
+}
+.iop-total td {
+	border-bottom: 0;
+}
+.iop-reply {
+	margin-top: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 8pt;
+	padding-top: 18pt;
+}
+.iop-lines {
+	height: 36pt;
+	border-bottom: 1px solid var(--doc-border);
+}
+.iop-signatures {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 36pt;
+	margin-top: 24pt;
+}
+.iop-sign-line {
+	height: 28pt;
+	border-bottom: 1px solid var(--doc-text);
+}
+
+@media print {
+	.iop-pages {
+		display: block;
+	}
+	.iop-sheet {
+		break-after: page;
+	}
+	.iop-sheet:last-child {
+		break-after: auto;
+	}
+}
+
+.ledger-page tr.class-row td {
+	border-top: 1px solid var(--border);
+	background: var(--bg);
+}
+.ledger-page tr.class-row.plain td {
+	background: none;
+}

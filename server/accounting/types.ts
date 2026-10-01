@@ -18,7 +18,15 @@ export interface JournalLineView {
 
 export interface JournalEntryView extends JournalEntryRow {
 	reversed_by: string | null;
+	invoice: string | null;
 	lines: JournalLineView[];
+}
+
+export interface JournalFilters {
+	account: string | null;
+	source: string | null;
+	text: string | null;
+	amount: number | null;
 }
 
 export interface TrialBalanceRow {
@@ -30,6 +38,10 @@ export interface TrialBalanceRow {
 	debit: number;
 	credit: number;
 	closing: number;
+	opening_debit: number;
+	opening_credit: number;
+	closing_debit: number;
+	closing_credit: number;
 }
 
 export interface AccountLedgerRow {
@@ -205,4 +217,43 @@ export interface RevaluationPreview {
 	items: RevaluationItem[];
 	difference: number;
 	posted: string | null;
+}
+
+export type OpenItemsKind = "receivable" | "payable" | "all";
+
+export type AgingBucket = "current" | "1_30" | "31_60" | "61_90" | "91_180" | "over_180";
+
+export interface OpenItem {
+	key: string;
+	type: "invoice" | "recorded_invoice" | "recorded_credit_note" | "expense" | "bank_transaction" | "manual";
+	reference: string | null;
+	date: number;
+	due_date: number | null;
+	account: string;
+	kind: "receivable" | "payable";
+	currency: string | null;
+	amount: number;
+	open: number;
+	open_foreign: number;
+	days_overdue: number;
+}
+
+export interface PartnerOpenItems {
+	key: string;
+	name: string;
+	tax_number: string | null;
+	address: string[];
+	receivable: number;
+	payable: number;
+	balance: number;
+	aging: Record<AgingBucket, number>;
+	items: OpenItem[];
+}
+
+export interface OpenItemsReport {
+	date: number;
+	kind: OpenItemsKind;
+	currency: string;
+	partners: PartnerOpenItems[];
+	accounts: { code: string; name: string; ledger: number; items: number; difference: number }[];
 }

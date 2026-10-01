@@ -4,7 +4,7 @@ import Database from "../database/database";
 import { safeInteger } from "../database/numbers";
 import { localDate, zonedParts } from "../timezone";
 import { ensureChart } from "./chart";
-import { LedgerPlanner, type PlannedEntry } from "./sources";
+import { LedgerPlanner, type OpenItemMovement, type PlannedEntry } from "./sources";
 import type { LedgerIssue } from "./types";
 import type { JournalEntryRow, JournalLineRow, JournalSourceType, ProjectRow } from "../database/models";
 
@@ -213,7 +213,7 @@ export function withLedger<T>(project: string, task: () => Promise<T>): Promise<
 	return next;
 }
 
-const synced = new Map<string, { stamp: string; issues: LedgerIssue[] }>();
+const synced = new Map<string, { stamp: string; issues: LedgerIssue[]; movements: OpenItemMovement[] }>();
 
 export function knownIssues(project: string): LedgerIssue[] | null {
 	return synced.get(project)?.issues ?? null;
@@ -262,13 +262,18 @@ export function syncLedger(project: ProjectRow, options: { force?: boolean } = {
 		if (!previous) await ensureChart(project.uuid);
 		const stamp = await changeStamp(project);
 		if (!options.force && previous?.stamp === stamp) return { posted: 0, reversed: 0, issues: previous.issues };
-		const result = await synchronize(project);
-		synced.set(project.uuid, { stamp, issues: result.issues });
+		const { result, movements } = await synchronize(project);
+		synced.set(project.uuid, { stamp, issues: result.issues, movements });
 		return result;
 	});
 }
 
-async function synchronize(project: ProjectRow): Promise<SyncResult> {
+export async function ledgerMovements(project: ProjectRow): Promise<OpenItemMovement[]> {
+	await syncLedger(project);
+	return synced.get(project.uuid)?.movements ?? [];
+}
+
+async function synchronize(project: ProjectRow): Promise<{ result: SyncResult; movements: OpenItemMovement[] }> {
 	const chart = await ensureChart(project.uuid);
 	const planner = new LedgerPlanner(project, chart);
 	await planner.plan();
@@ -321,5 +326,5 @@ async function synchronize(project: ProjectRow): Promise<SyncResult> {
 			await postEntries(tx, project, pending, null);
 		});
 	}
-	return { posted: postings.length, reversed: reversed.length, issues };
+	return { result: { posted: postings.length, reversed: reversed.length, issues }, movements: planner.movements };
 }

@@ -34,6 +34,7 @@ export type ExpenseInput = Pick<
 	| "issue_date"
 	| "receipt_date"
 	| "supply_date"
+	| "due_date"
 	| "vat_treatment"
 	| "asset_type"
 	| "vat_handling"
@@ -44,7 +45,7 @@ export type ExpenseInput = Pick<
 	| "paid_at"
 	| "notes"
 > & { vat_lines: ExpenseVatLineInput[]; provisional_share?: boolean | number };
-export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at"> & {
+export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at" | "due_date"> & {
 	interval_unit: string;
 	interval_count: number;
 	start_date: number;

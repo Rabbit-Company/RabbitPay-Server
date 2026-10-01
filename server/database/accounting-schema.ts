@@ -274,3 +274,7 @@ export async function createBankMatchSchema(sql: SQL, dialect: Dialect) {
 		`;
 	}
 }
+
+export async function addExpenseDueDate(sql: SQL, dialect: Dialect) {
+	await sql.unsafe(`ALTER TABLE expenses ADD COLUMN due_date ${schemaTypes(dialect).int64}`);
+}

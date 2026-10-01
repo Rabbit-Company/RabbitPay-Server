@@ -336,6 +336,7 @@ export async function suggestExpense(project: ProjectRow, invoice: IncomingInvoi
 			issue_date: issued,
 			receipt_date: receipt,
 			supply_date: invoice.supply_date ? startOfLocalDate(invoice.supply_date, timezone) : null,
+			due_date: invoice.due_date ? startOfLocalDate(invoice.due_date, timezone) : null,
 			vat_treatment: treatment,
 			asset_type: "expense",
 			vat_handling: "1",

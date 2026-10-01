@@ -433,6 +433,13 @@ export async function recordedInvoicesView(uuid: string): Promise<HTMLElement> {
 		);
 	};
 	await render();
+	const opened = new URLSearchParams(window.location.search).get("open");
+	if (opened && editable(project))
+		setTimeout(() => {
+			Api.recordedInvoice(uuid, opened)
+				.then((record) => recordDialog(project, record, () => void render()))
+				.catch(reportError);
+		}, 0);
 
 	return ledgerPage(
 		project,

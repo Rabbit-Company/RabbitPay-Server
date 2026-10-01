@@ -13,6 +13,11 @@ export function validExpenseDate(value: unknown): value is number {
 	return typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 8640000000000000;
 }
 
+function validDueDate(data: Pick<ExpenseInput, "expense_date" | "issue_date"> & { due_date?: number | null }): boolean {
+	if (data.due_date === undefined || data.due_date === null) return true;
+	return validExpenseDate(data.due_date) && data.due_date >= (data.issue_date ?? data.expense_date);
+}
+
 export function validExpense(data: ExpenseInput): boolean {
 	const lines = Array.isArray(data.vat_lines) ? data.vat_lines : [];
 	const validLines =
@@ -54,6 +59,7 @@ export function validExpense(data: ExpenseInput): boolean {
 		(data.issue_date === null || validExpenseDate(data.issue_date)) &&
 		(data.receipt_date === null || validExpenseDate(data.receipt_date)) &&
 		(data.supply_date === null || validExpenseDate(data.supply_date)) &&
+		validDueDate(data) &&
 		EXPENSE_VAT_TREATMENTS.includes(data.vat_treatment as (typeof EXPENSE_VAT_TREATMENTS)[number]) &&
 		EXPENSE_ASSET_TYPES.includes(data.asset_type as (typeof EXPENSE_ASSET_TYPES)[number]) &&
 		["1", "2", "3"].includes(data.vat_handling) &&
@@ -75,7 +81,7 @@ export function validExpense(data: ExpenseInput): boolean {
 
 export function validExpenseSchedule(data: ExpenseScheduleInput): boolean {
 	return (
-		validExpense({ ...data, expense_date: data.start_date, paid_at: null }) &&
+		validExpense({ ...data, expense_date: data.start_date, paid_at: null, due_date: null }) &&
 		data.vat_treatment === "not_reported" &&
 		data.vat_lines.length === 0 &&
 		isIntervalUnit(data.interval_unit) &&
@@ -99,12 +105,12 @@ export async function insertExpense(
 	const now = Date.now();
 	await sql`
 			INSERT INTO expenses(uuid, project, description, supplier, supplier_tax_number, supplier_country, invoice_number, category, currency,
-				total_amount, tax_amount, deductible_tax_amount, expense_date, issue_date, receipt_date, supply_date, vat_treatment, asset_type,
+				total_amount, tax_amount, deductible_tax_amount, expense_date, issue_date, receipt_date, supply_date, due_date, vat_treatment, asset_type,
 				vat_handling, self_assessment_period, self_assessment_tax, tax_exchange_rate, tax_rate_date, paid_at, notes, recurring, occurrence, created_by, created, updated,
 				provisional_share)
 			VALUES(${uuid}, ${project}, ${data.description.trim()}, ${data.supplier?.trim() || null}, ${data.supplier_tax_number?.trim() || null},
 				${data.supplier_country}, ${data.invoice_number?.trim() || null}, ${data.category.trim()}, ${data.currency}, ${data.total_amount},
-				${data.tax_amount}, ${data.deductible_tax_amount}, ${data.expense_date}, ${data.issue_date}, ${data.receipt_date}, ${data.supply_date},
+				${data.tax_amount}, ${data.deductible_tax_amount}, ${data.expense_date}, ${data.issue_date}, ${data.receipt_date}, ${data.supply_date}, ${data.due_date ?? null},
 				${data.vat_treatment}, ${data.asset_type}, ${data.vat_handling}, ${data.self_assessment_period}, ${data.self_assessment_tax}, ${data.tax_exchange_rate}, ${data.tax_rate_date}, ${data.paid_at},
 				${data.notes?.trim() || null}, ${recurring}, ${occurrence}, ${author}, ${now}, ${now}, ${data.provisional_share ? 1 : 0})
 	`;
@@ -138,6 +144,7 @@ export async function generateExpense(template: RecurringExpenseRow, now = Date.
 				issue_date: null,
 				receipt_date: null,
 				supply_date: null,
+				due_date: null,
 				vat_handling: "1",
 				self_assessment_period: null,
 				self_assessment_tax: null,

@@ -12,11 +12,13 @@ import { Logger } from "../../logger";
 import { zonedParts } from "../../timezone";
 import { ACCOUNT_CODE, CATEGORY_ACCOUNTS, ensureChart, kindForCode } from "../../accounting/chart";
 import { balanced, knownIssues, postEntry, reverseEntry, syncLedger, withLedger, type PostingLine } from "../../accounting/journal";
-import { accountLedger, journal, journalEntry, trialBalance } from "../../accounting/reports";
+import { accountLedger, journal, journalEntry, journalFilter, trialBalance } from "../../accounting/reports";
 import { accountingYears, closeYear, reopenYear, YearCloseRefused } from "../../accounting/year-end";
 import { financialStatements } from "../../accounting/statements";
 import { kpoBook } from "../../accounting/kpo";
 import { ajpesReport, ajpesXml } from "../../accounting/ajpes";
+import { knownPartners, openItems } from "../../accounting/open-items";
+import type { JournalFilters, OpenItemsKind } from "../../accounting/types";
 import { postRevaluation, revaluationPreview, revaluationSource, RevaluationRefused } from "../../accounting/revaluation";
 import type { ProjectCompanyRow } from "../../database/models";
 import { accountingPeriodLock, closedYear } from "../../accounting-periods";
@@ -44,6 +46,42 @@ function period(ctx: Context<AppState>): { from: number; to: number } | null {
 	const to = Number(query.get("to") ?? endOfLocalDate(`${year}-12-31`, timezone));
 	if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to - from > MAX_PERIOD) return null;
 	return { from, to };
+}
+
+const SOURCE_TYPES = [
+	"invoice",
+	"credit_note",
+	"payment",
+	"refund",
+	"expense",
+	"expense_payment",
+	"recorded_invoice",
+	"recorded_payment",
+	"bank_transaction",
+	"depreciation",
+	"asset_disposal",
+	"payroll",
+	"deductible_share",
+	"year_result",
+	"year_closing",
+	"year_opening",
+	"manual",
+];
+
+function journalFilters(ctx: Context<AppState>): JournalFilters | null {
+	const query = ctx.query();
+	const account = query.get("account") || null;
+	const source = query.get("source") || null;
+	const text = query.get("text")?.trim() || null;
+	const rawAmount = query.get("amount");
+	const amount = rawAmount === null || rawAmount === "" ? null : Number(rawAmount);
+	if (
+		(source !== null && !SOURCE_TYPES.includes(source)) ||
+		(text !== null && text.length > 200) ||
+		(amount !== null && (!Number.isSafeInteger(amount) || amount <= 0))
+	)
+		return null;
+	return { account, source, text, amount };
 }
 
 function businessYear(ctx: Context<AppState>, range: { from: number; to: number }): number | null {
@@ -162,11 +200,12 @@ Server.app.get(`${base}/journal`, Auth.required(), Permissions.require(Permissio
 	const query = ctx.query();
 	const limit = Number(query.get("limit") ?? 50);
 	const offset = Number(query.get("offset") ?? 0);
-	if (!range || !Number.isSafeInteger(limit) || !Number.isSafeInteger(offset) || limit < 1 || limit > 200 || offset < 0)
+	const filters = journalFilters(ctx);
+	if (!range || !filters || !Number.isSafeInteger(limit) || !Number.isSafeInteger(offset) || limit < 1 || limit > 200 || offset < 0)
 		return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
 	const project = Permissions.project(ctx);
 	const sync = await syncLedger(project);
-	return Utils.ok(ctx, { ...(await journal(project.uuid, range.from, range.to, limit, offset)), issues: sync.issues });
+	return Utils.ok(ctx, { ...(await journal(project.uuid, range.from, range.to, limit, offset, filters)), issues: sync.issues });
 });
 
 Server.app.get(`${base}/journal/:entry`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
@@ -272,8 +311,40 @@ Server.app.get(`${base}/ledger/:account`, Auth.required(), Permissions.require(P
 	const account = await findAccount(project.uuid, ctx.params.account);
 	if (!account) return Utils.fail(ctx, ErrorCode.LEDGER_ACCOUNT_NOT_FOUND);
 	await syncLedger(project);
-	const ledger = await accountLedger(project.uuid, account, range.from, range.to, yearStart);
+	const ledger = await accountLedger(project.uuid, account, range.from, range.to, yearStart, ledgerPartner(ctx));
 	return Utils.ok(ctx, { ...range, ...ledger, account: presentAccount(ledger.account) });
+});
+
+function ledgerPartner(ctx: Context<AppState>): string | null {
+	return ctx.query().get("partner")?.trim().slice(0, 200) || null;
+}
+
+Server.app.get(`${base}/ledger/:account/export`, Auth.required(), Permissions.require(Permission.REPORT_EXPORT), async (ctx) => {
+	const range = period(ctx);
+	if (!range) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const yearStart = businessYear(ctx, range);
+	if (yearStart === null) return Utils.fail(ctx, ErrorCode.LEDGER_PERIOD_SPANS_YEARS);
+	const project = Permissions.project(ctx);
+	const account = await findAccount(project.uuid, ctx.params.account);
+	if (!account) return Utils.fail(ctx, ErrorCode.LEDGER_ACCOUNT_NOT_FOUND);
+	await syncLedger(project);
+	const ledger = await accountLedger(project.uuid, account, range.from, range.to, yearStart, ledgerPartner(ctx));
+	return csvResponse(
+		[
+			["temeljnica", "datum", "opis", "partner", "breme", "dobro", "saldo"],
+			["", localDate(range.from, project.timezone), "Začetno stanje", null, null, null, major(ledger.opening)],
+			...ledger.lines.map((line) => [
+				`${line.year}/${line.number}`,
+				localDate(Number(line.entry_date), project.timezone),
+				line.description,
+				line.partner,
+				major(line.debit),
+				major(line.credit),
+				major(line.balance),
+			]),
+		],
+		`kartica-${account.code}.csv`
+	);
 });
 
 Server.app.post(`${base}/license/redeem`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
@@ -319,6 +390,15 @@ Server.app.get("/api/v1/accounting/clients", Auth.required(), async (ctx) => {
 			SUM(CASE WHEN e.vat_treatment <> 'not_reported' AND NOT EXISTS (SELECT 1 FROM expense_attachments ea WHERE ea.expense = e.uuid) THEN 1 ELSE 0 END) AS unattached
 		FROM expenses e WHERE e.project IN ${Database(ids)} GROUP BY e.project
 	`) as { project: string; unpaid: number; unattached: number }[];
+	const bankLines = (await Database`
+		SELECT project, COUNT(*) AS total FROM bank_transactions WHERE project IN ${Database(ids)} AND status = 'open' GROUP BY project
+	`) as { project: string; total: number }[];
+	const closedYears = (await Database`
+		SELECT project, year FROM accounting_years WHERE project IN ${Database(ids)} AND reopened_at IS NULL
+	`) as { project: string; year: number }[];
+	const ddv = (await Database`
+		SELECT project, MAX(period_to) AS until FROM accounting_period_locks WHERE project IN ${Database(ids)} AND unlocked_at IS NULL GROUP BY project
+	`) as { project: string; until: number | null }[];
 
 	return Utils.ok(ctx, {
 		clients: clients.map((row) => {
@@ -339,6 +419,12 @@ Server.app.get("/api/v1/accounting/clients", Auth.required(), async (ctx) => {
 				unpaid_expenses: Number(costs?.unpaid ?? 0),
 				unattached_expenses: Number(costs?.unattached ?? 0),
 				issues: issues === null ? null : issues.length,
+				open_bank_lines: Number(bankLines.find((line) => line.project === row.uuid)?.total ?? 0),
+				unclosed_years: own
+					.map((entry) => Number(entry.year))
+					.filter((entryYear) => entryYear < year && !closedYears.some((closed) => closed.project === row.uuid && Number(closed.year) === entryYear))
+					.sort((a, b) => a - b),
+				ddv_submitted_until: ddv.find((lock) => lock.project === row.uuid)?.until ?? null,
 			};
 		}),
 	});
@@ -430,14 +516,15 @@ function csvResponse(rows: (string | number | null)[][], name: string): Response
 
 Server.app.get(`${base}/journal/export`, Auth.required(), Permissions.require(Permission.REPORT_EXPORT), async (ctx) => {
 	const range = period(ctx);
-	if (!range) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const filters = journalFilters(ctx);
+	if (!range || !filters) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
 	const project = Permissions.project(ctx);
 	await syncLedger(project);
 	const rows = (await Database`
-		SELECT je.year, je.number, je.entry_date, je.description, je.source_type, la.code, la.name, jl.debit, jl.credit, jl.partner
-		FROM journal_lines jl JOIN journal_entries je ON je.uuid = jl.entry JOIN ledger_accounts la ON la.uuid = jl.ledger_account
-		WHERE jl.project = ${project.uuid} AND je.entry_date BETWEEN ${range.from} AND ${range.to}
-		ORDER BY je.year, je.number, jl.sort_order
+		SELECT e.year, e.number, e.entry_date, e.description, e.source_type, la.code, la.name, jl.debit, jl.credit, jl.partner
+		FROM journal_lines jl JOIN journal_entries e ON e.uuid = jl.entry JOIN ledger_accounts la ON la.uuid = jl.ledger_account
+		WHERE jl.project = ${project.uuid} AND e.entry_date BETWEEN ${range.from} AND ${range.to} ${journalFilter(filters)}
+		ORDER BY e.year, e.number, jl.sort_order
 	`) as {
 		year: number;
 		number: number;
@@ -479,8 +566,17 @@ Server.app.get(`${base}/trial-balance/export`, Auth.required(), Permissions.requ
 	const accounts = await trialBalance(project.uuid, range.from, range.to, yearStart);
 	return csvResponse(
 		[
-			["konto", "naziv_konta", "zacetno_stanje", "breme", "dobro", "koncno_stanje"],
-			...accounts.map((row) => [row.code, row.name, major(row.opening), major(row.debit), major(row.credit), major(row.closing)]),
+			["konto", "naziv_konta", "zacetno_breme", "zacetno_dobro", "promet_breme", "promet_dobro", "saldo_breme", "saldo_dobro"],
+			...accounts.map((row) => [
+				row.code,
+				row.name,
+				major(row.opening_debit),
+				major(row.opening_credit),
+				major(row.debit),
+				major(row.credit),
+				major(row.closing_debit),
+				major(row.closing_credit),
+			]),
 		],
 		"bruto-bilanca.csv"
 	);
@@ -581,4 +677,52 @@ Server.app.post(`${base}/years/:year/revaluation`, Auth.required(), Permissions.
 		if (error.reason === "year_not_over") return Utils.failWithReason(ctx, ErrorCode.YEAR_CLOSE_REFUSED, error.reason, { reason: error.reason, issues: [] });
 		return Utils.fail(ctx, ErrorCode.INVALID_REVALUATION);
 	}
+});
+
+function openItemsQuery(ctx: Context<AppState>): { until: number; kind: OpenItemsKind } | null {
+	const query = ctx.query();
+	const until = Number(query.get("date") ?? Date.now());
+	const kind = (query.get("kind") ?? "all") as OpenItemsKind;
+	if (!Number.isSafeInteger(until) || until <= 0 || !["receivable", "payable", "all"].includes(kind)) return null;
+	return { until, kind };
+}
+
+Server.app.get(`${base}/open-items`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
+	const options = openItemsQuery(ctx);
+	if (!options) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const project = Permissions.project(ctx);
+	const sync = await syncLedger(project);
+	return Utils.ok(ctx, { ...(await openItems(project, options.until, options.kind)), issues: sync.issues });
+});
+
+Server.app.get(`${base}/open-items/export`, Auth.required(), Permissions.require(Permission.REPORT_EXPORT), async (ctx) => {
+	const options = openItemsQuery(ctx);
+	if (!options) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const project = Permissions.project(ctx);
+	const report = await openItems(project, options.until, options.kind);
+	return csvResponse(
+		[
+			["partner", "davcna_stevilka", "konto", "dokument", "datum", "zapadlost", "dni_zamude", "znesek", "odprto", "valuta", "odprto_v_valuti"],
+			...report.partners.flatMap((partner) =>
+				partner.items.map((item) => [
+					partner.name,
+					partner.tax_number,
+					item.account,
+					item.reference,
+					localDate(item.date, project.timezone),
+					item.due_date === null ? null : localDate(item.due_date, project.timezone),
+					Math.max(item.days_overdue, 0),
+					major(item.amount),
+					major(item.open),
+					item.currency,
+					item.currency && item.currency !== report.currency ? major(item.open_foreign) : null,
+				])
+			),
+		],
+		`odprte-postavke-${localDate(options.until, project.timezone)}.csv`
+	);
+});
+
+Server.app.get(`${base}/partners`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
+	return Utils.ok(ctx, { partners: await knownPartners(Permissions.project(ctx)) });
 });

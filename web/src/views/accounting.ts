@@ -1,8 +1,18 @@
-import { Api, type AccountingClient, type LedgerAccount, type LedgerIssue, type Project } from "../api";
+import {
+	Api,
+	type AccountingClient,
+	type JournalEntryView,
+	type JournalQuery,
+	type LedgerAccount,
+	type LedgerIssue,
+	type Project,
+	type TrialBalanceRow,
+} from "../api";
 import { el, emptyState, field, input, saveFile, select, table, type TableHeader } from "../dom";
 import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, toDateInput, toMajorUnits, toMinorUnits } from "../money";
 import { can, Permission } from "../access";
 import { remoteTable } from "../pagination";
+import { combobox, staticCombobox, type Combobox, type ComboOption } from "../combobox";
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { invalidateProject, loadProject, projectLayout } from "./project";
@@ -10,12 +20,13 @@ import { currentPath, navigate } from "../router";
 import { expenseCategoryLabel } from "../expense-categories";
 import type { DateFormat } from "../../../server/formats";
 
-export type Tab = "journal" | "trial" | "accounts" | "recorded" | "bank" | "years" | "statements" | "assets" | "kpo" | "ajpes";
+export type Tab = "journal" | "trial" | "open" | "accounts" | "recorded" | "bank" | "years" | "statements" | "assets" | "kpo" | "ajpes";
 
 const TABS: { id: Tab; label: UiKey; suffix: string; hidden?: NonNullable<Project["bookkeeping"]>[] }[] = [
 	{ id: "journal", label: "accounting.tab_journal", suffix: "" },
 	{ id: "recorded", label: "accounting.tab_recorded", suffix: "/recorded-invoices" },
 	{ id: "bank", label: "accounting.tab_bank", suffix: "/bank" },
+	{ id: "open", label: "accounting.tab_open_items", suffix: "/open-items", hidden: ["sole_flat_rate"] },
 	{ id: "assets", label: "accounting.tab_assets", suffix: "/assets" },
 	{ id: "trial", label: "accounting.tab_trial_balance", suffix: "/trial-balance", hidden: ["sole_flat_rate"] },
 	{ id: "statements", label: "accounting.tab_statements", suffix: "/statements", hidden: ["sole_flat_rate"] },
@@ -128,10 +139,38 @@ export function tabs(project: Project, active: Tab): HTMLElement {
 	);
 }
 
+const PRESETS = ["this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "custom"] as const;
+type Preset = (typeof PRESETS)[number];
+
+function isoDay(year: number, month: number, day: number): string {
+	return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function presetRange(preset: Exclude<Preset, "custom">, today: string): [string, string] {
+	const year = Number(today.slice(0, 4));
+	const month = Number(today.slice(5, 7));
+	const monthRange = (y: number, first: number, last: number): [string, string] => [
+		isoDay(y, first, 1),
+		isoDay(y, last, new Date(Date.UTC(y, last, 0)).getUTCDate()),
+	];
+	const quarter = Math.floor((month - 1) / 3);
+	if (preset === "this_month") return monthRange(year, month, month);
+	if (preset === "last_month") return month === 1 ? monthRange(year - 1, 12, 12) : monthRange(year, month - 1, month - 1);
+	if (preset === "this_quarter") return monthRange(year, quarter * 3 + 1, quarter * 3 + 3);
+	if (preset === "last_quarter") return quarter === 0 ? monthRange(year - 1, 10, 12) : monthRange(year, quarter * 3 - 2, quarter * 3);
+	if (preset === "last_year") return monthRange(year - 1, 1, 12);
+	return monthRange(year, 1, 12);
+}
+
 export function period(project: Project, onChange: () => void, singleYear = false): Period {
-	const year = currentYear(project);
-	const from = input("date", { value: `${year}-01-01`, required: true });
-	const to = input("date", { value: `${year}-12-31`, required: true });
+	const today = toDateInput(Date.now(), project.timezone);
+	const [start, end] = presetRange("this_year", today);
+	const from = input("date", { value: start, required: true });
+	const to = input("date", { value: end, required: true });
+	const preset = select(
+		PRESETS.map((value) => ({ value, label: t(`accounting.period_${value}` as UiKey) })),
+		"this_year"
+	);
 	const keepWithinYear = (changed: HTMLInputElement) => {
 		if (!singleYear || from.value.slice(0, 4) === to.value.slice(0, 4)) return;
 		if (changed === from) to.value = `${from.value.slice(0, 4)}-12-31`;
@@ -140,12 +179,113 @@ export function period(project: Project, onChange: () => void, singleYear = fals
 	for (const control of [from, to])
 		control.addEventListener("change", () => {
 			if (!from.value || !to.value) return;
+			preset.value = "custom";
 			keepWithinYear(control);
 			onChange();
 		});
+	preset.addEventListener("change", () => {
+		if (preset.value === "custom") return;
+		[from.value, to.value] = presetRange(preset.value as Exclude<Preset, "custom">, today);
+		onChange();
+	});
 	return {
-		element: el("div", { class: "ledger-controls" }, field(t("accounting.from"), from), field(t("accounting.to"), to)),
+		element: el("div", { class: "ledger-controls" }, field(t("accounting.period"), preset), field(t("accounting.from"), from), field(t("accounting.to"), to)),
 		range: () => ({ from: dayStartFromDateInput(from.value, project.timezone), to: fromDateInput(to.value, project.timezone) }),
+	};
+}
+
+function sourceLink(uuid: string, entry: JournalEntryView): string | null {
+	const base = `/projects/${uuid}`;
+	switch (entry.source_type) {
+		case "invoice":
+		case "credit_note":
+		case "payment":
+		case "refund":
+			return entry.invoice ? `${base}/invoices/${entry.invoice}` : null;
+		case "expense":
+		case "expense_payment":
+			return `${base}/expenses?open=${entry.source_id}`;
+		case "recorded_invoice":
+		case "recorded_payment":
+			return `${base}/accounting/recorded-invoices?open=${entry.source_id}`;
+		case "bank_transaction":
+			return `${base}/accounting/bank`;
+		case "depreciation":
+		case "asset_disposal":
+			return `${base}/accounting/assets`;
+		case "payroll":
+			return `${base}/payroll/${entry.source_id}`;
+		case "deductible_share":
+		case "year_result":
+		case "year_closing":
+		case "year_opening":
+			return `${base}/accounting/years`;
+		default:
+			return null;
+	}
+}
+
+const SOURCES: JournalEntryView["source_type"][] = [
+	"invoice",
+	"credit_note",
+	"payment",
+	"refund",
+	"expense",
+	"expense_payment",
+	"recorded_invoice",
+	"recorded_payment",
+	"bank_transaction",
+	"depreciation",
+	"asset_disposal",
+	"payroll",
+	"deductible_share",
+	"year_result",
+	"year_closing",
+	"year_opening",
+	"manual",
+];
+
+interface JournalFilterControls {
+	element: HTMLElement;
+	values(): Omit<JournalQuery, "from" | "to">;
+}
+
+function journalFilterControls(accounts: LedgerAccount[], currency: string, onChange: () => void): JournalFilterControls {
+	const account = staticCombobox(
+		accounts.map((entry) => ({ value: entry.uuid, label: accountLabel(entry), keywords: entry.code })),
+		"",
+		{ placeholder: t("accounting.all_accounts"), class: "account-select" }
+	);
+	const source = select(
+		[{ value: "", label: t("accounting.all_sources") }, ...SOURCES.map((value) => ({ value, label: t(`accounting.source_${value}` as UiKey) }))],
+		""
+	);
+	const text = input("search", { placeholder: t("accounting.filter_text_placeholder"), maxlength: "200" });
+	const amount = input("number", { min: "0", step: "0.01" });
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const later = () => {
+		clearTimeout(timer);
+		timer = setTimeout(onChange, 300);
+	};
+	account.onChange(onChange);
+	source.addEventListener("change", onChange);
+	text.addEventListener("input", later);
+	amount.addEventListener("input", later);
+	return {
+		element: el(
+			"div",
+			{ class: "ledger-controls" },
+			field(t("accounting.filter_account"), account.element),
+			field(t("accounting.filter_source"), source),
+			field(t("accounting.filter_text"), text),
+			field(t("accounting.filter_amount"), amount)
+		),
+		values: () => ({
+			account: account.value || undefined,
+			source: source.value || undefined,
+			text: text.value.trim() || undefined,
+			amount: amount.value ? toMinorUnits(Number(amount.value), currency) : undefined,
+		}),
 	};
 }
 
@@ -214,53 +354,129 @@ function accountLabel(account: Pick<LedgerAccount, "code" | "name">): string {
 	return `${account.code} ${account.name}`;
 }
 
-function entryDialog(project: Project, accounts: LedgerAccount[], onPosted: () => void) {
+export function accountPicker(accounts: LedgerAccount[], selected = "", include: (account: LedgerAccount) => boolean = () => true): Combobox {
+	const options: ComboOption[] = accounts
+		.filter((account) => account.active && include(account))
+		.map((account) => ({
+			value: account.uuid,
+			label: accountLabel(account),
+			keywords: account.code,
+			hint: t(`accounting.kind_${account.account_kind}` as UiKey),
+		}));
+	return staticCombobox(options, selected, { required: true, class: "account-select", placeholder: t("accounting.account_search") });
+}
+
+function plainEnter(event: KeyboardEvent): boolean {
+	return event.key === "Enter" && !event.defaultPrevented && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey;
+}
+
+async function entryDialog(project: Project, accounts: LedgerAccount[], onPosted: () => void) {
 	const currency = baseCurrency(project);
-	const options = accounts.filter((account) => account.active).map((account) => ({ value: account.uuid, label: accountLabel(account) }));
+	const partners: ComboOption[] = (await Api.accountingPartners(project.uuid).catch(() => ({ partners: [] }))).partners.map((partner) => ({
+		value: partner.name,
+		label: partner.name,
+		hint: partner.tax_number ?? undefined,
+		keywords: partner.tax_number ?? undefined,
+	}));
 	const date = input("date", { value: toDateInput(Date.now(), project.timezone), required: true });
 	const description = input("text", { maxlength: "500", required: true });
 	const rows = el("div", { class: "stack" });
 	const totals = el("p", { class: "muted mono" });
-	const lines: { account: HTMLSelectElement; debit: HTMLInputElement; credit: HTMLInputElement; partner: HTMLInputElement; row: HTMLElement }[] = [];
+	interface Line {
+		account: Combobox;
+		debit: HTMLInputElement;
+		credit: HTMLInputElement;
+		partner: Combobox;
+		row: HTMLElement;
+	}
+	const lines: Line[] = [];
+	const submit = el("button", { class: "button primary", type: "submit" }, t("accounting.post"));
 
 	const sum = (key: "debit" | "credit") => lines.reduce((total, line) => total + toMinorUnits(Number(line[key].value || 0), currency), 0);
+	const balancedEntry = () => sum("debit") === sum("credit") && sum("debit") > 0;
 	const refresh = () => {
 		const debit = sum("debit");
 		const credit = sum("credit");
 		totals.textContent = t("accounting.entry_totals", { debit: formatMoney(debit, currency), credit: formatMoney(credit, currency) });
-		totals.className = debit === credit && debit > 0 ? "muted mono" : "warn mono";
+		totals.className = balancedEntry() ? "muted mono" : "warn mono";
 	};
-	const addLine = () => {
+	const fieldsOf = (line: Line) => [line.account.input, line.debit, line.credit, line.partner.input];
+
+	const advance = (line: Line, from: HTMLInputElement) => {
+		const fields = fieldsOf(line);
+		const next = fields[fields.indexOf(from) + 1];
+		if (from === line.debit && line.debit.value) {
+			line.partner.input.focus();
+			return;
+		}
+		if (next) {
+			next.focus();
+			return;
+		}
+		const following = lines[lines.indexOf(line) + 1];
+		if (following) following.account.input.focus();
+		else if (balancedEntry()) submit.focus();
+		else addLine().account.input.focus();
+	};
+
+	function addLine(): Line {
 		const difference = sum("debit") - sum("credit");
-		const account = select(options);
+		const account = accountPicker(accounts);
 		const debit = input("number", { min: "0", step: "0.01", placeholder: t("accounting.debit") });
 		const credit = input("number", { min: "0", step: "0.01", placeholder: t("accounting.credit") });
-		const partner = input("text", { maxlength: "200", placeholder: t("accounting.partner") });
-		const remove = el("button", { class: "button ghost small", type: "button" }, t("ui.delete"));
-		const row = el("div", { class: "journal-line" }, account, debit, credit, partner, remove);
-		const line = { account, debit, credit, partner, row };
+		const partner = combobox({ options: partners, freeText: true, placeholder: t("accounting.partner") });
+		partner.input.maxLength = 200;
+		const remove = el("button", { class: "button ghost small", type: "button", title: t("ui.delete") }, t("ui.delete"));
+		const row = el("div", { class: "journal-line" }, account.element, debit, credit, partner.element, remove);
+		const line: Line = { account, debit, credit, partner, row };
 		remove.addEventListener("click", () => {
 			if (lines.length <= 2) return;
 			lines.splice(lines.indexOf(line), 1);
 			row.remove();
 			refresh();
 		});
-		for (const control of [debit, credit]) control.addEventListener("input", refresh);
+		debit.addEventListener("input", () => {
+			if (debit.value) credit.value = "";
+			refresh();
+		});
+		credit.addEventListener("input", () => {
+			if (credit.value) debit.value = "";
+			refresh();
+		});
+		account.onChange((option) => {
+			if (option) (credit.value ? credit : debit).focus();
+		});
+		for (const control of fieldsOf(line))
+			control.addEventListener("keydown", (event) => {
+				if (!plainEnter(event)) return;
+				event.preventDefault();
+				advance(line, control);
+			});
 		lines.push(line);
 		rows.append(row);
 		if (difference !== 0) (difference > 0 ? credit : debit).value = String(toMajorUnits(Math.abs(difference), currency));
 		refresh();
-	};
+		return line;
+	}
 	addLine();
 	addLine();
+	description.addEventListener("keydown", (event) => {
+		if (!plainEnter(event)) return;
+		event.preventDefault();
+		lines[0].account.input.focus();
+	});
 
-	const submit = el("button", { class: "button primary", type: "submit" }, t("accounting.post"));
 	const form = el(
 		"form",
 		{
 			class: "stack",
 			onSubmit: async (event) => {
 				event.preventDefault();
+				const missing = lines.find((line) => !line.account.value);
+				if (missing) {
+					missing.account.input.focus();
+					return;
+				}
 				submit.disabled = true;
 				try {
 					await Api.postJournalEntry(project.uuid, {
@@ -285,11 +501,17 @@ function entryDialog(project: Project, accounts: LedgerAccount[], onPosted: () =
 		},
 		el("div", { class: "grid" }, field(t("accounting.date"), date), field(t("accounting.description"), description)),
 		rows,
-		el("div", { class: "line-actions" }, el("button", { class: "button ghost small", type: "button", onClick: addLine }, t("accounting.add_line")), totals),
+		el(
+			"div",
+			{ class: "line-actions" },
+			el("button", { class: "button ghost small", type: "button", onClick: () => addLine().account.input.focus() }, t("accounting.add_line")),
+			totals
+		),
 		el("p", { class: "muted" }, t("accounting.entry_hint")),
+		el("p", { class: "muted" }, t("accounting.entry_keys")),
 		el("div", { class: "form-actions" }, submit)
 	);
-	const dialog = modal(t("accounting.new_entry"), form);
+	const dialog = modal(t("accounting.new_entry"), form, undefined, "dialog-large");
 	description.focus();
 }
 
@@ -321,6 +543,7 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 	const notice = el("div", { class: "stack" });
 	const body = el("div", {});
 	const range = period(project, () => void render());
+	const filters = journalFilterControls(accounts, currency, () => void render());
 
 	const reverse = async (entry: string) => {
 		try {
@@ -344,7 +567,7 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 					numeric(t("accounting.credit")),
 				],
 				async (offset, limit) => {
-					const page = await Api.journal(uuid, { ...range.range(), offset, limit });
+					const page = await Api.journal(uuid, { ...range.range(), ...filters.values(), offset, limit });
 					showNotices(notice, project, page.issues);
 					const rows = page.entries.flatMap((entry) => {
 						const reversible = editable(project) && entry.source_type === "manual" && entry.reverses === null && entry.reversed_by === null;
@@ -358,8 +581,15 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 									"td",
 									{},
 									index === 0 ? entry.description : "",
-									index === 0 && reversible
-										? el("div", {}, el("button", { class: "button ghost small", type: "button", onClick: () => reverse(entry.uuid) }, t("accounting.reverse")))
+									index === 0 && (reversible || sourceLink(uuid, entry))
+										? el(
+												"div",
+												{ class: "line-actions" },
+												sourceLink(uuid, entry) ? el("a", { class: "button ghost small", href: sourceLink(uuid, entry)! }, t("accounting.open_source")) : null,
+												reversible
+													? el("button", { class: "button ghost small", type: "button", onClick: () => reverse(entry.uuid) }, t("accounting.reverse"))
+													: null
+											)
 										: null
 								),
 								el("td", {}, el("a", { href: `/projects/${uuid}/accounting/ledger/${line.account}` }, `${line.code} ${line.name}`)),
@@ -383,7 +613,7 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 			title: t("accounting.journal"),
 			intro: t("accounting.journal_hint"),
 			actions: [
-				exportButton(project, () => Api.exportJournal(uuid, range.range())),
+				exportButton(project, () => Api.exportJournal(uuid, { ...range.range(), ...filters.values() })),
 				editable(project)
 					? el(
 							"button",
@@ -391,7 +621,7 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 								class: "button primary",
 								type: "button",
 								dataset: { shortcutAction: "new-accounting-entry" },
-								onClick: () => entryDialog(project, accounts, () => void render()),
+								onClick: () => void entryDialog(project, accounts, () => void render()).catch(reportError),
 							},
 							t("accounting.new_entry")
 						)
@@ -400,7 +630,36 @@ export async function accountingJournalView(uuid: string): Promise<HTMLElement> 
 		},
 		notice,
 		range.element,
+		filters.element,
 		body
+	);
+}
+
+const CLASSES = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+type Totals = Pick<TrialBalanceRow, "opening_debit" | "opening_credit" | "debit" | "credit" | "closing_debit" | "closing_credit">;
+
+function totalsOf(rows: Totals[]): Totals {
+	const sum = (key: keyof Totals) => rows.reduce((total, row) => total + row[key], 0);
+	return {
+		opening_debit: sum("opening_debit"),
+		opening_credit: sum("opening_credit"),
+		debit: sum("debit"),
+		credit: sum("credit"),
+		closing_debit: sum("closing_debit"),
+		closing_credit: sum("closing_credit"),
+	};
+}
+
+function balanceRow(label: HTMLElement | string, totals: Totals, currency: string, className = ""): HTMLElement {
+	const strong = className !== "";
+	return el(
+		"tr",
+		{ class: className },
+		el("td", {}, typeof label === "string" && strong ? el("strong", {}, label) : label),
+		...(["opening_debit", "opening_credit", "debit", "credit", "closing_debit", "closing_credit"] as const).map((key) =>
+			moneyCell(totals[key], currency, { strong })
+		)
 	);
 }
 
@@ -410,45 +669,46 @@ export async function trialBalanceView(uuid: string): Promise<HTMLElement> {
 	const notice = el("div", { class: "stack" });
 	const body = el("div", {});
 	const range = period(project, () => void render(), true);
+	const level = select(
+		["accounts", "groups", "classes"].map((value) => ({ value, label: t(`accounting.level_${value}` as UiKey) })),
+		"accounts"
+	);
+	level.addEventListener("change", () => void render());
 
 	const render = async () => {
 		try {
 			const result = await Api.trialBalance(uuid, range.range());
 			showNotices(notice, project, result.issues);
-			const total = (key: "debit" | "credit") => result.accounts.reduce((sum, row) => sum + row[key], 0);
+			const rows: HTMLElement[] = [];
+			for (const accountClass of CLASSES) {
+				const members = result.accounts.filter((row) => row.code.startsWith(accountClass));
+				if (members.length === 0) continue;
+				if (level.value === "accounts") {
+					for (const row of members)
+						rows.push(balanceRow(el("a", { href: `/projects/${uuid}/accounting/ledger/${row.account}` }, accountLabel(row)), row, currency));
+				}
+				if (level.value === "groups") {
+					for (const group of [...new Set(members.map((row) => row.code.slice(0, 2)))])
+						rows.push(balanceRow(t("accounting.group_label", { code: group }), totalsOf(members.filter((row) => row.code.startsWith(group))), currency));
+				}
+				const label = t("accounting.class_total", { code: accountClass, name: t(`accounting.class_${accountClass}` as UiKey) });
+				rows.push(balanceRow(label, totalsOf(members), currency, level.value === "classes" ? "class-row plain" : "class-row"));
+			}
+			rows.push(balanceRow(t("accounting.total"), totalsOf(result.accounts), currency, "total-row"));
 			body.replaceChildren(
 				result.accounts.length === 0
 					? emptyState(t("accounting.journal_empty"))
 					: table(
 							[
 								t("accounting.account"),
-								numeric(t("accounting.opening")),
+								numeric(t("accounting.opening_debit")),
+								numeric(t("accounting.opening_credit")),
 								numeric(t("accounting.debit")),
 								numeric(t("accounting.credit")),
-								numeric(t("accounting.closing")),
+								numeric(t("accounting.closing_debit")),
+								numeric(t("accounting.closing_credit")),
 							],
-							[
-								...result.accounts.map((row) =>
-									el(
-										"tr",
-										{},
-										el("td", {}, el("a", { href: `/projects/${uuid}/accounting/ledger/${row.account}` }, accountLabel(row))),
-										moneyCell(row.opening, currency, { zero: true }),
-										moneyCell(row.debit, currency, { zero: true }),
-										moneyCell(row.credit, currency, { zero: true }),
-										moneyCell(row.closing, currency, { zero: true })
-									)
-								),
-								el(
-									"tr",
-									{ class: "total-row" },
-									el("td", {}, el("strong", {}, t("accounting.total"))),
-									el("td", {}),
-									moneyCell(total("debit"), currency, { strong: true, zero: true }),
-									moneyCell(total("credit"), currency, { strong: true, zero: true }),
-									el("td", {})
-								),
-							]
+							rows
 						)
 			);
 		} catch (error) {
@@ -467,6 +727,7 @@ export async function trialBalanceView(uuid: string): Promise<HTMLElement> {
 		},
 		notice,
 		range.element,
+		el("div", { class: "ledger-controls" }, field(t("accounting.level"), level)),
 		body
 	);
 }
@@ -478,10 +739,17 @@ export async function accountLedgerView(uuid: string, account: string): Promise<
 	const title = el("h2", {});
 	const body = el("div", { class: "stack" });
 	const range = period(project, () => void render(), true);
+	const partner = input("search", { placeholder: t("accounting.ledger_partner_placeholder"), maxlength: "200" });
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	partner.addEventListener("input", () => {
+		clearTimeout(timer);
+		timer = setTimeout(() => void render(), 300);
+	});
+	const query = () => ({ ...range.range(), partner: partner.value.trim() || undefined });
 
 	const render = async () => {
 		try {
-			const ledger = await Api.accountLedger(uuid, account, range.range());
+			const ledger = await Api.accountLedger(uuid, account, query());
 			title.textContent = accountLabel(ledger.account);
 			body.replaceChildren(
 				summaryCards([
@@ -524,8 +792,13 @@ export async function accountLedgerView(uuid: string, account: string): Promise<
 	return ledgerPage(
 		project,
 		"trial",
-		{ title, back: el("a", { class: "back-link", href: `/projects/${uuid}/accounting/trial-balance` }, t("accounting.back_to_trial_balance")) },
+		{
+			title,
+			back: el("a", { class: "back-link", href: `/projects/${uuid}/accounting/trial-balance` }, t("accounting.back_to_trial_balance")),
+			actions: [exportButton(project, () => Api.exportAccountLedger(uuid, account, query()))],
+		},
 		range.element,
+		el("div", { class: "ledger-controls" }, field(t("accounting.ledger_partner"), partner)),
 		body
 	);
 }
@@ -723,6 +996,8 @@ function clientRow(client: AccountingClient): HTMLElement {
 		: el("span", { class: "pill pill-canceled" }, t("accounting.client_unlicensed"));
 	const attention = [
 		client.issues ? t("accounting.client_issues", { count: client.issues }) : null,
+		client.unclosed_years.length ? t("accounting.client_unclosed", { years: client.unclosed_years.join(", ") }) : null,
+		client.open_bank_lines ? t("accounting.client_bank_lines", { count: client.open_bank_lines }) : null,
 		client.unattached_expenses ? t("accounting.client_unattached", { count: client.unattached_expenses }) : null,
 		client.unpaid_expenses ? t("accounting.client_unpaid", { count: client.unpaid_expenses }) : null,
 	].filter((note): note is string => note !== null);
@@ -738,6 +1013,7 @@ function clientRow(client: AccountingClient): HTMLElement {
 		el("td", {}, license),
 		el("td", { class: "mono" }, String(client.entries_this_year)),
 		el("td", {}, client.last_posted ? formatDate(client.last_posted) : ""),
+		el("td", {}, client.ddv_submitted_until ? formatDate(client.ddv_submitted_until) : ""),
 		el("td", {}, attention.length ? el("span", { class: "warn" }, attention.join(" | ")) : el("span", { class: "muted" }, t("accounting.client_ok")))
 	);
 }
@@ -761,6 +1037,7 @@ export async function accountingClientsView(): Promise<HTMLElement> {
 						t("accounting.client_license"),
 						t("accounting.client_entries"),
 						t("accounting.client_last_posted"),
+						t("accounting.client_ddv"),
 						t("accounting.client_attention"),
 					],
 					clients.map(clientRow)

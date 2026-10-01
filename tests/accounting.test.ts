@@ -1108,7 +1108,7 @@ describe("exports for accountants", () => {
 		expect(lines[0]).toBe("temeljnica;datum;opis;vir;konto;naziv_konta;breme;dobro;partner");
 		expect(lines[1]).toMatch(/^2026\/1;2026-01-/);
 		const trial = await (await get(`/accounting/trial-balance/export?from=${YEAR.from}&to=${YEAR.to}`)).text();
-		expect(trial).toContain("konto;naziv_konta;zacetno_stanje;breme;dobro;koncno_stanje");
+		expect(trial).toContain("konto;naziv_konta;zacetno_breme;zacetno_dobro;promet_breme;promet_dobro;saldo_breme;saldo_dobro");
 		expect(trial).toMatch(/\n1100;/);
 	});
 });
@@ -1356,6 +1356,205 @@ describe("foreign currency revaluation on 31 December", () => {
 			expect((await call("GET", `${base()}/accounting/years/2025/revaluation`)).data.posted).toBeNull();
 			expect((await balances(Date.UTC(2025, 11, 31, 23), Date.UTC(2026, 11, 31, 22, 59, 59, 999)))["2210"]).toBe(9900);
 			expect((await balances(Date.UTC(2024, 11, 31, 23), Date.UTC(2025, 11, 31, 22, 59, 59, 999)))["2210"]).toBe(9900);
+		} finally {
+			project = main;
+		}
+	});
+});
+
+describe("open items by partner", () => {
+	test("documents, credit notes and manual postings are grouped per partner with aging and reconcile to the ledger", async () => {
+		const main = project;
+		project = (await call("POST", "/api/v1/projects", { name: "ledger-open-items", currency: "EUR" })).data.uuid;
+		try {
+			await call("PATCH", base(), { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
+			const code = generateLicenseCode();
+			const now = Date.now();
+			await Database`INSERT INTO license_keys(uuid, code, type, duration_days, status, created, updated)
+				VALUES(${crypto.randomUUID()}, ${code}, 'accounting', 365, 'available', ${now}, ${now})`;
+			await call("POST", `${base()}/license/redeem`, { code });
+			const recorded = (reference: string, buyer: string, vat: string, issued: number, due: number | null, net: number, type = "invoice") =>
+				call("POST", `${base()}/recorded-invoices`, {
+					document_type: type,
+					reference,
+					buyer_name: buyer,
+					buyer_vat_number: vat,
+					buyer_country: "SI",
+					issued_at: issued,
+					due_date: due,
+					lines: [{ tax_rate: 22, tax_treatment: "domestic", net_amount: net, tax_amount: net * 0.22 }],
+				});
+			expect((await recorded("R-1", "Stranka d.o.o.", "SI11111111", Date.UTC(2026, 0, 5), Date.UTC(2026, 0, 20), 20000)).status).toBe(201);
+			expect((await recorded("R-2", "STRANKA DOO", "11111111", Date.UTC(2026, 2, 1), Date.UTC(2026, 2, 31), 10000)).status).toBe(201);
+			expect((await recorded("D-1", "Stranka d.o.o.", "SI 1111 1111", Date.UTC(2026, 2, 5), null, 2000, "credit_note")).status).toBe(201);
+			const expense = (supplier: string, tax: string | null, total: number, date: number, number: string) =>
+				call("POST", `${base()}/expenses`, {
+					description: "Storitev",
+					supplier,
+					supplier_tax_number: tax,
+					supplier_country: "SI",
+					invoice_number: number,
+					category: "Other",
+					currency: "EUR",
+					total_amount: total,
+					tax_amount: 0,
+					deductible_tax_amount: 0,
+					expense_date: date,
+				});
+			expect((await expense("Stranka d.o.o.", "SI11111111", 6100, Date.UTC(2026, 1, 10), "S-9")).status).toBe(201);
+			expect((await expense("Host d.o.o.", null, 3050, Date.UTC(2026, 3, 1), "H-1")).status).toBe(201);
+			expect(
+				(
+					await call("POST", `${base()}/accounting/journal`, {
+						date: Date.UTC(2026, 0, 1),
+						description: "Otvoritev terjatev",
+						lines: [
+							{ account: await accountId("1200"), debit: 10000, partner: "Stari kupec" },
+							{ account: await accountId("9300"), credit: 10000 },
+						],
+					})
+				).error
+			).toBe(0);
+
+			const report = (await call("GET", `${base()}/accounting/open-items?date=${Date.UTC(2026, 3, 30, 21, 59, 59, 999)}`)).data;
+			const partner = (name: string) => report.partners.find((row: { name: string }) => row.name === name);
+			const customer = report.partners.find((row: { tax_number: string | null }) => row.tax_number?.includes("11111111"));
+			expect(customer).toMatchObject({ receivable: 34160, payable: 6100, balance: 28060 });
+			expect(customer.items).toHaveLength(4);
+			expect(customer.aging).toEqual({ current: 0, "1_30": 12200, "31_60": -2440, "61_90": -6100, "91_180": 24400, over_180: 0 });
+			expect(partner("Host d.o.o.")).toMatchObject({ payable: 3050, balance: -3050 });
+			expect(partner("Stari kupec")).toMatchObject({ receivable: 10000 });
+			expect(report.partners).toHaveLength(3);
+			expect(report.accounts.find((row: { code: string }) => row.code === "1200")).toMatchObject({ ledger: 44160, difference: 0 });
+			expect(report.accounts.find((row: { code: string }) => row.code === "2200")).toMatchObject({ ledger: -9150, difference: 0 });
+
+			const suppliers = (await call("GET", `${base()}/accounting/open-items?kind=payable&date=${Date.UTC(2026, 3, 30, 21)}`)).data;
+			expect(suppliers.partners.map((row: { payable: number }) => row.payable).sort()).toEqual([3050, 6100]);
+			const before = (await call("GET", `${base()}/accounting/open-items?date=${Date.UTC(2026, 1, 1)}`)).data;
+			expect(before.partners.map((row: { balance: number }) => row.balance).sort()).toEqual([10000, 24400]);
+
+			const csv = await (
+				await Server.app.handle(
+					new Request(`http://localhost${base()}/accounting/open-items/export?date=${Date.UTC(2026, 3, 30, 21)}`, {
+						headers: { Authorization: `Bearer ${token}` },
+					})
+				)
+			).text();
+			expect(csv).toContain("R-1");
+			const partners = (await call("GET", `${base()}/accounting/partners`)).data.partners as { name: string }[];
+			expect(partners.map((row) => row.name)).toContain("Host d.o.o.");
+		} finally {
+			project = main;
+		}
+	});
+});
+
+describe("finding entries and balances", () => {
+	test("the journal filters by source, text, amount and account and links entries to their invoice", async () => {
+		const query = (extra: string) => call("GET", `${base()}/accounting/journal?from=${YEAR.from}&to=${YEAR.to}&limit=200&${extra}`);
+		const payments = (await query("source=payment")).data;
+		expect(payments.total).toBeGreaterThan(0);
+		for (const entry of payments.entries) {
+			expect(entry.source_type).toBe("payment");
+			expect(entry.invoice).not.toBeNull();
+		}
+		const host = (await query("text=HOST-1")).data;
+		expect(host.entries.some((entry: { source_id: string }) => entry.source_id === expense)).toBe(true);
+		const byAmount = (await query("amount=6100")).data;
+		expect(byAmount.total).toBeGreaterThan(0);
+		for (const entry of byAmount.entries)
+			expect(entry.lines.some((line: { debit: number; credit: number }) => line.debit === 6100 || line.credit === 6100)).toBe(true);
+		const bank = await accountId("1100");
+		for (const entry of (await query(`account=${bank}`)).data.entries)
+			expect(entry.lines.some((line: { account: string }) => line.account === bank)).toBe(true);
+		expect((await query("source=nonsense")).error).toBe(1263);
+		expect((await call("GET", `${base()}/expenses/${expense}`)).data).toMatchObject({ uuid: expense, invoice_number: "HOST-1" });
+	});
+
+	test("trial balance rows carry debit and credit sides and account cards filter by partner", async () => {
+		const result = await call("GET", `${base()}/accounting/trial-balance?from=${YEAR.from}&to=${YEAR.to}`);
+		for (const row of result.data.accounts as {
+			kind: string;
+			opening: number;
+			closing: number;
+			opening_debit: number;
+			opening_credit: number;
+			closing_debit: number;
+			closing_credit: number;
+		}[]) {
+			const side = row.kind === "asset" || row.kind === "expense" ? 1 : -1;
+			expect(side * (row.closing_debit - row.closing_credit) + 0).toBe(row.closing + 0);
+			expect(side * (row.opening_debit - row.opening_credit) + 0).toBe(row.opening + 0);
+			expect(row.closing_debit === 0 || row.closing_credit === 0).toBe(true);
+		}
+		const payables = await accountId("2200");
+		const card = (await call("GET", `${base()}/accounting/ledger/${payables}?from=${YEAR.from}&to=${YEAR.to}&partner=host`)).data;
+		expect(card.lines.length).toBeGreaterThan(0);
+		for (const line of card.lines) expect(line.partner.toLowerCase()).toContain("host");
+		const csv = await (
+			await Server.app.handle(
+				new Request(`http://localhost${base()}/accounting/ledger/${payables}/export?from=${YEAR.from}&to=${YEAR.to}&partner=host`, {
+					headers: { Authorization: `Bearer ${token}` },
+				})
+			)
+		).text();
+		expect(csv).toContain("temeljnica;datum;opis;partner;breme;dobro;saldo");
+		expect(csv).toContain("HOST-1");
+	});
+
+	test("the clients overview reports open bank lines, unclosed years and DDV submissions", async () => {
+		const clients = (await call("GET", "/api/v1/accounting/clients")).data.clients as {
+			uuid: string;
+			open_bank_lines: number;
+			unclosed_years: number[];
+			ddv_submitted_until: number | null;
+		}[];
+		const main = clients.find((client) => client.uuid === project)!;
+		const [open] = (await Database`SELECT COUNT(*) AS total FROM bank_transactions WHERE project = ${project} AND status = 'open'`) as { total: number }[];
+		expect(main.open_bank_lines).toBe(Number(open.total));
+		expect(Array.isArray(main.unclosed_years)).toBe(true);
+		const revalued = clients.find((client) => client.unclosed_years.includes(2025));
+		expect(revalued).toBeDefined();
+	});
+});
+
+describe("supplier due dates", () => {
+	test("expenses carry a due date that drives supplier aging, and CSV import reads it", async () => {
+		const main = project;
+		project = (await call("POST", "/api/v1/projects", { name: "ledger-due-dates", currency: "EUR" })).data.uuid;
+		try {
+			await call("PATCH", base(), { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
+			const expense = (overrides: Record<string, unknown>) =>
+				call("POST", `${base()}/expenses`, {
+					description: "Storitev",
+					supplier: "Dobavitelj d.o.o.",
+					supplier_tax_number: "SI66666666",
+					supplier_country: "SI",
+					category: "Other",
+					currency: "EUR",
+					total_amount: 12200,
+					tax_amount: 0,
+					deductible_tax_amount: 0,
+					expense_date: Date.UTC(2026, 2, 1),
+					issue_date: Date.UTC(2026, 2, 1),
+					...overrides,
+				});
+			expect((await expense({ invoice_number: "D-0", due_date: Date.UTC(2026, 1, 1) })).error).toBe(1112);
+			const created = await expense({ invoice_number: "D-1", due_date: Date.UTC(2026, 3, 30) });
+			expect(created.data).toMatchObject({ due_date: Date.UTC(2026, 3, 30) });
+			expect((await call("PATCH", `${base()}/expenses/${created.data.uuid}`, { due_date: Date.UTC(2026, 4, 15) })).data.due_date).toBe(Date.UTC(2026, 4, 15));
+			expect((await expense({ invoice_number: "D-2" })).data.due_date).toBeNull();
+
+			const report = (await call("GET", `${base()}/accounting/open-items?kind=payable&date=${Date.UTC(2026, 4, 1, 21)}`)).data;
+			const items = report.partners[0].items as { reference: string; due_date: number | null; days_overdue: number }[];
+			expect(items.find((item) => item.reference === "D-1")).toMatchObject({ due_date: Date.UTC(2026, 4, 15), days_overdue: -14 });
+			expect(items.find((item) => item.reference === "D-2")).toMatchObject({ due_date: null, days_overdue: 61 });
+			expect(report.partners[0].aging).toMatchObject({ current: -12200, "61_90": -12200 });
+
+			const csv = ["Dobavitelj;Številka;Datum izdaje;Datum zapadlosti;Osnova", "Najem d.o.o.;N-5;1.3.2026;31.3.2026;500,00"].join("\n");
+			const preview = (await call("POST", `${base()}/expenses/import-csv/preview`, { content: csv })).data;
+			expect(preview.errors).toEqual([]);
+			expect(preview.documents[0].input.due_date).toBe(Date.UTC(2026, 2, 30, 22));
 		} finally {
 			project = main;
 		}

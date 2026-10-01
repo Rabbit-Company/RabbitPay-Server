@@ -270,6 +270,7 @@ async function editor(
 	const issueDate = input("date", { value: expense?.issue_date ? toDateInput(expense.issue_date, project.timezone) : date.value });
 	const receiptDate = input("date", { value: expense?.receipt_date ? toDateInput(expense.receipt_date, project.timezone) : date.value });
 	const supplyDate = input("date", { value: expense?.supply_date ? toDateInput(expense.supply_date, project.timezone) : "" });
+	const dueDate = input("date", { value: expense?.due_date ? toDateInput(expense.due_date, project.timezone) : "" });
 	const vatHandling = select(
 		[
 			{ value: "1", label: t("expenses.vat_handling_regular") },
@@ -483,7 +484,9 @@ async function editor(
 		),
 		taxSummary,
 		ddvFields,
-		field(t(recurring ? "expenses.start" : "expenses.date"), date),
+		recurring
+			? field(t("expenses.start"), date)
+			: el("div", { class: "grid" }, field(t("expenses.date"), date), field(t("expenses.due_date"), dueDate, t("expenses.due_date_hint"))),
 		el(
 			"div",
 			{ class: "field" },
@@ -523,6 +526,7 @@ async function editor(
 			issue_date: recurring || !issueDate.value ? null : dayStartFromDateInput(issueDate.value, project.timezone),
 			receipt_date: recurring || !receiptDate.value ? null : dayStartFromDateInput(receiptDate.value, project.timezone),
 			supply_date: recurring || !supplyDate.value ? null : dayStartFromDateInput(supplyDate.value, project.timezone),
+			due_date: recurring || !dueDate.value ? null : dayStartFromDateInput(dueDate.value, project.timezone),
 			vat_treatment: recurring ? "not_reported" : vatTreatment.value,
 			asset_type: recurring ? "expense" : assetType.value,
 			vat_handling: recurring ? "1" : vatHandling.value,
@@ -827,6 +831,13 @@ export async function expensesView(uuid: string): Promise<HTMLElement> {
 			void load();
 		});
 	await reload();
+	const opened = new URLSearchParams(window.location.search).get("open");
+	if (opened && can(project, Permission.EXPENSE_EDIT))
+		setTimeout(() => {
+			Api.expense(uuid, opened)
+				.then((row) => editor(project, false, row, reload))
+				.catch(reportError);
+		}, 0);
 	return projectLayout(
 		project,
 		el(

@@ -259,8 +259,8 @@ describe("running", () => {
 		expect(invoice.issuer_name).toBe("Recurring Owner");
 		expect(invoice.total_amount).toBe(2440);
 		expect(invoice.reference.startsWith("DRAFT")).toBe(false);
-		const monthName = new Date(today()).toLocaleDateString("en-GB", { month: "long" });
-		expect(invoice.items[0].description).toBe(`Hosting for ${monthName} ${new Date(today()).getFullYear()}`);
+		const period = new Date(today()).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: TIMEZONE });
+		expect(invoice.items[0].description).toBe(`Hosting for ${period}`);
 		expect(invoice.notes).toStartWith("Covers ");
 		expect(invoice.notes).not.toContain("{period}");
 		expect(schedule.startOfDay(invoice.due_date, TIMEZONE)).toBe(schedule.startOfDay(now + 10 * DAY, TIMEZONE));

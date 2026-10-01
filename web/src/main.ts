@@ -58,6 +58,7 @@ import { yearsView } from "./views/years";
 import { statementsView } from "./views/statements";
 import { assetsView } from "./views/assets";
 import { kpoView } from "./views/kpo";
+import { iopPrintView, openItemsView } from "./views/open-items";
 import { ajpesView } from "./views/ajpes";
 import { customerTicketsView, customerTicketView } from "./views/customer-tickets";
 
@@ -384,6 +385,14 @@ define(
 define(
 	"/projects/:uuid/accounting/years",
 	projectRoute([Permission.REPORT_VIEW], (params) => yearsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/open-items",
+	projectRoute([Permission.REPORT_VIEW], (params) => openItemsView(params.uuid))
+);
+define(
+	"/projects/:uuid/accounting/open-items/print",
+	guarded([Permission.REPORT_VIEW], (params) => iopPrintView(params.uuid))
 );
 define(
 	"/projects/:uuid/accounting/bank",

@@ -662,6 +662,7 @@ export interface ExpenseRow {
 	issue_date: number | null;
 	receipt_date: number | null;
 	supply_date: number | null;
+	due_date: number | null;
 	vat_treatment: string;
 	asset_type: string;
 	vat_handling: string;
@@ -738,6 +739,7 @@ export interface RecurringExpenseRow extends Omit<
 	| "issue_date"
 	| "receipt_date"
 	| "supply_date"
+	| "due_date"
 	| "vat_handling"
 	| "self_assessment_period"
 	| "self_assessment_tax"
