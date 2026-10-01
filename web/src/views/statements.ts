@@ -4,7 +4,7 @@ import { formatMoney } from "../money";
 import { t } from "../i18n";
 import { reportError } from "../ui";
 import { loadProject } from "./project";
-import { ledgerPage, moneyCell, notices, numeric, section, yearSelect } from "./accounting";
+import { currentYear, ledgerPage, moneyCell, notices, numeric, section, yearSelect } from "./accounting";
 
 function statementTable(lines: StatementLine[], currency: string, year: number, footer: HTMLElement | null): HTMLElement {
 	const rows = lines
@@ -51,7 +51,7 @@ function csv(statements: FinancialStatements): string {
 
 export async function statementsView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
-	const year = yearSelect(new Date().getFullYear() - 1);
+	const year = yearSelect(currentYear(project) - 1);
 	const body = el("div", { class: "stack" });
 	let loaded: FinancialStatements | null = null;
 	const download = el("button", { class: "button ghost", type: "button", disabled: true }, t("stats.download_csv"));

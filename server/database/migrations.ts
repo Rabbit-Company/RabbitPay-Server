@@ -20,7 +20,7 @@ import {
 	createPayrollSchema,
 	createWorkforceSchema,
 } from "./workforce-schema";
-import { createAccountingSchema } from "./accounting-schema";
+import { createAccountingSchema, createBankMatchSchema } from "./accounting-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 export interface Migration {
@@ -307,6 +307,7 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 30, name: "store product names", up: addStoreProductNames },
 	{ version: 31, name: "store domains", up: createStoreDomainSchema },
 	{ version: 32, name: "accounting", up: createAccountingSchema },
+	{ version: 33, name: "bank line matches", up: createBankMatchSchema },
 ];
 
 export class SchemaTooNew extends Error {

@@ -17,9 +17,10 @@ import { accountingYears, closeYear, reopenYear, YearCloseRefused } from "../../
 import { financialStatements } from "../../accounting/statements";
 import { kpoBook } from "../../accounting/kpo";
 import { ajpesReport, ajpesXml } from "../../accounting/ajpes";
+import { postRevaluation, revaluationPreview, revaluationSource, RevaluationRefused } from "../../accounting/revaluation";
 import type { ProjectCompanyRow } from "../../database/models";
-import { closedYear } from "../../accounting-periods";
-import { localDate } from "../../timezone";
+import { accountingPeriodLock, closedYear } from "../../accounting-periods";
+import { endOfLocalDate, localDate, startOfLocalDate } from "../../timezone";
 import type { AppState, JournalEntryRow, LedgerAccountRow, ProjectMemberRow, ProjectRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid/accounting";
@@ -37,11 +38,19 @@ async function body(ctx: Context<AppState>): Promise<Record<string, unknown> | n
 
 function period(ctx: Context<AppState>): { from: number; to: number } | null {
 	const query = ctx.query();
-	const year = new Date().getUTCFullYear();
-	const from = Number(query.get("from") ?? Date.UTC(year, 0, 1));
-	const to = Number(query.get("to") ?? Date.UTC(year + 1, 0, 1) - 1);
+	const timezone = Permissions.project(ctx).timezone;
+	const year = zonedParts(Date.now(), timezone).year;
+	const from = Number(query.get("from") ?? startOfLocalDate(`${year}-01-01`, timezone));
+	const to = Number(query.get("to") ?? endOfLocalDate(`${year}-12-31`, timezone));
 	if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to - from > MAX_PERIOD) return null;
 	return { from, to };
+}
+
+function businessYear(ctx: Context<AppState>, range: { from: number; to: number }): number | null {
+	const timezone = Permissions.project(ctx).timezone;
+	const year = zonedParts(range.from, timezone).year;
+	if (zonedParts(range.to, timezone).year !== year) return null;
+	return startOfLocalDate(`${year}-01-01`, timezone);
 }
 
 function licensed(ctx: Context<AppState>): boolean {
@@ -59,6 +68,13 @@ function presentAccount(row: LedgerAccountRow) {
 async function findAccount(project: string, uuid: string): Promise<LedgerAccountRow | null> {
 	const [row] = (await Database`SELECT * FROM ledger_accounts WHERE project = ${project} AND uuid = ${uuid}`) as LedgerAccountRow[];
 	return row ?? null;
+}
+
+const VAT_ACCOUNTS = new Set(["input_vat", "advance_vat", "output_vat", "self_assessed_vat", "oss_vat"]);
+
+async function vatPeriodLocked(project: string, date: number, accounts: (LedgerAccountRow | undefined)[]): Promise<boolean> {
+	if (!accounts.some((account) => account?.system_key && VAT_ACCOUNTS.has(account.system_key))) return false;
+	return (await accountingPeriodLock(project, date)) !== null;
 }
 
 function validName(value: unknown): value is string {
@@ -179,6 +195,14 @@ Server.app.post(`${base}/journal`, Auth.required(), Permissions.require(Permissi
 	}
 	if (!balanced(lines)) return Utils.fail(ctx, ErrorCode.INVALID_JOURNAL_ENTRY);
 	if (await closedYear(project.uuid, date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+	if (
+		await vatPeriodLocked(
+			project.uuid,
+			date,
+			lines.map((line) => chart.byUuid(line.ledger_account))
+		)
+	)
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
 	const author = Auth.account(ctx).username;
 	const uuid = crypto.randomUUID();
 	const entry = await withLedger(project.uuid, () =>
@@ -188,6 +212,16 @@ Server.app.post(`${base}/journal`, Auth.required(), Permissions.require(Permissi
 	return Utils.ok(ctx, await journalEntry(project.uuid, entry.uuid));
 });
 
+async function revaluationPair(project: string, entry: JournalEntryRow): Promise<JournalEntryRow[]> {
+	const match = /^fx_revaluation:(\d{4})(:reversal)?$/.exec(entry.source_id);
+	if (entry.source_type !== "manual" || !match) return [];
+	const other = match[2] ? revaluationSource(Number(match[1])) : `${revaluationSource(Number(match[1]))}:reversal`;
+	return (await Database`
+		SELECT * FROM journal_entries e WHERE e.project = ${project} AND e.source_type = 'manual' AND e.source_id = ${other} AND e.reverses IS NULL
+			AND NOT EXISTS (SELECT 1 FROM journal_entries r WHERE r.reverses = e.uuid)
+	`) as JournalEntryRow[];
+}
+
 Server.app.post(`${base}/journal/:entry/reverse`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_LICENSE_REQUIRED);
 	const project = Permissions.project(ctx);
@@ -196,27 +230,49 @@ Server.app.post(`${base}/journal/:entry/reverse`, Auth.required(), Permissions.r
 	const [reversal] = await Database`SELECT uuid FROM journal_entries WHERE reverses = ${entry.uuid}`;
 	if (entry.source_type !== "manual" || entry.reverses !== null || reversal) return Utils.fail(ctx, ErrorCode.JOURNAL_ENTRY_NOT_REVERSIBLE);
 	if (await closedYear(project.uuid, entry.entry_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
-	const storno = await withLedger(project.uuid, () => Database.begin(async (tx) => reverseEntry(tx, project, entry, Auth.account(ctx).username)));
-	await audit(ctx, "journal_entry.reversed", "journal_entry", entry.uuid, { storno: storno.uuid });
+	const chart = await ensureChart(project.uuid);
+	const touched = (await Database`SELECT ledger_account FROM journal_lines WHERE entry = ${entry.uuid}`) as { ledger_account: string }[];
+	if (
+		await vatPeriodLocked(
+			project.uuid,
+			entry.entry_date,
+			touched.map((line) => chart.byUuid(line.ledger_account))
+		)
+	)
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	const paired = await revaluationPair(project.uuid, entry);
+	for (const other of paired) if (await closedYear(project.uuid, other.entry_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+	const author = Auth.account(ctx).username;
+	const storno = await withLedger(project.uuid, () =>
+		Database.begin(async (tx) => {
+			for (const other of paired) await reverseEntry(tx, project, other, author);
+			return await reverseEntry(tx, project, entry, author);
+		})
+	);
+	await audit(ctx, "journal_entry.reversed", "journal_entry", entry.uuid, { storno: storno.uuid, paired: paired.map((other) => other.uuid) });
 	return Utils.ok(ctx, await journalEntry(project.uuid, storno.uuid));
 });
 
 Server.app.get(`${base}/trial-balance`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
 	const range = period(ctx);
 	if (!range) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const yearStart = businessYear(ctx, range);
+	if (yearStart === null) return Utils.fail(ctx, ErrorCode.LEDGER_PERIOD_SPANS_YEARS);
 	const project = Permissions.project(ctx);
 	const sync = await syncLedger(project);
-	return Utils.ok(ctx, { ...range, accounts: await trialBalance(project.uuid, range.from, range.to), issues: sync.issues });
+	return Utils.ok(ctx, { ...range, accounts: await trialBalance(project.uuid, range.from, range.to, yearStart), issues: sync.issues });
 });
 
 Server.app.get(`${base}/ledger/:account`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
 	const range = period(ctx);
 	if (!range) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const yearStart = businessYear(ctx, range);
+	if (yearStart === null) return Utils.fail(ctx, ErrorCode.LEDGER_PERIOD_SPANS_YEARS);
 	const project = Permissions.project(ctx);
 	const account = await findAccount(project.uuid, ctx.params.account);
 	if (!account) return Utils.fail(ctx, ErrorCode.LEDGER_ACCOUNT_NOT_FOUND);
 	await syncLedger(project);
-	const ledger = await accountLedger(project.uuid, account, range.from, range.to);
+	const ledger = await accountLedger(project.uuid, account, range.from, range.to, yearStart);
 	return Utils.ok(ctx, { ...range, ...ledger, account: presentAccount(ledger.account) });
 });
 
@@ -416,9 +472,11 @@ Server.app.get(`${base}/journal/export`, Auth.required(), Permissions.require(Pe
 Server.app.get(`${base}/trial-balance/export`, Auth.required(), Permissions.require(Permission.REPORT_EXPORT), async (ctx) => {
 	const range = period(ctx);
 	if (!range) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const yearStart = businessYear(ctx, range);
+	if (yearStart === null) return Utils.fail(ctx, ErrorCode.LEDGER_PERIOD_SPANS_YEARS);
 	const project = Permissions.project(ctx);
 	await syncLedger(project);
-	const accounts = await trialBalance(project.uuid, range.from, range.to);
+	const accounts = await trialBalance(project.uuid, range.from, range.to, yearStart);
 	return csvResponse(
 		[
 			["konto", "naziv_konta", "zacetno_stanje", "breme", "dobro", "koncno_stanje"],
@@ -482,4 +540,45 @@ Server.app.get(`${base}/ajpes/export`, Auth.required(), Permissions.require(Perm
 	return new Response(xml, {
 		headers: { "Content-Type": "application/xml;charset=utf-8", "Content-Disposition": `attachment; filename="ajpes-${year}.xml"` },
 	});
+});
+
+function exchangeRates(value: unknown): Record<string, number> | null {
+	if (value === undefined || value === null) return {};
+	if (typeof value !== "object" || Array.isArray(value)) return null;
+	const rates: Record<string, number> = {};
+	for (const [currency, rate] of Object.entries(value as Record<string, unknown>)) {
+		if (!/^[A-Z]{3}$/.test(currency) || typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) return null;
+		rates[currency] = rate;
+	}
+	return rates;
+}
+
+Server.app.get(`${base}/years/:year/revaluation`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
+	const year = yearParam(ctx);
+	if (year === null) return Utils.fail(ctx, ErrorCode.INVALID_LEDGER_PERIOD);
+	const project = Permissions.project(ctx);
+	await syncLedger(project);
+	return Utils.ok(ctx, await revaluationPreview(project, year, {}));
+});
+
+Server.app.post(`${base}/years/:year/revaluation`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
+	if (!licensed(ctx)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_LICENSE_REQUIRED);
+	const year = yearParam(ctx);
+	const data = await body(ctx);
+	const rates = exchangeRates(data?.rates);
+	if (year === null || rates === null) return Utils.fail(ctx, ErrorCode.INVALID_REVALUATION);
+	const project = Permissions.project(ctx);
+	if (data?.preview === true) return Utils.ok(ctx, await revaluationPreview(project, year, rates));
+	await syncLedger(project);
+	try {
+		const posted = await postRevaluation(project, year, rates, Auth.account(ctx).username);
+		await audit(ctx, "accounting_year.revalued", "accounting_year", String(year), { rates, ...posted });
+		return Utils.ok(ctx, await revaluationPreview(project, year, rates));
+	} catch (error) {
+		if (!(error instanceof RevaluationRefused)) throw error;
+		if (error.reason === "year_closed") return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+		if (error.reason === "already_revalued") return Utils.fail(ctx, ErrorCode.REVALUATION_EXISTS);
+		if (error.reason === "year_not_over") return Utils.failWithReason(ctx, ErrorCode.YEAR_CLOSE_REFUSED, error.reason, { reason: error.reason, issues: [] });
+		return Utils.fail(ctx, ErrorCode.INVALID_REVALUATION);
+	}
 });

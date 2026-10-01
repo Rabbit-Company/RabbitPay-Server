@@ -4,11 +4,11 @@ import { t } from "../i18n";
 import { can, Permission } from "../access";
 import { reportError } from "../ui";
 import { loadProject } from "./project";
-import { ledgerPage, moneyCell, notices, numeric, section, yearSelect } from "./accounting";
+import { currentYear, ledgerPage, moneyCell, notices, numeric, section, yearSelect } from "./accounting";
 
 export async function ajpesView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
-	const year = yearSelect(new Date().getFullYear() - 1);
+	const year = yearSelect(currentYear(project) - 1);
 	const showAll = input("checkbox");
 	const body = el("div", { class: "stack" });
 	const form = el("span", { class: "muted" });

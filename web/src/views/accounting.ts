@@ -1,6 +1,6 @@
 import { Api, type AccountingClient, type LedgerAccount, type LedgerIssue, type Project } from "../api";
 import { el, emptyState, field, input, saveFile, select, table, type TableHeader } from "../dom";
-import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, toMajorUnits, toMinorUnits } from "../money";
+import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, toDateInput, toMajorUnits, toMinorUnits } from "../money";
 import { can, Permission } from "../access";
 import { remoteTable } from "../pagination";
 import { t, type UiKey } from "../i18n";
@@ -90,8 +90,12 @@ export function moneyCell(
 	return el("td", { class: classes }, options.strong && text ? el("strong", {}, text) : text);
 }
 
+export function currentYear(project: Pick<Project, "timezone">): number {
+	return Number(toDateInput(Date.now(), project.timezone).slice(0, 4));
+}
+
 export function yearSelect(selected: number): HTMLSelectElement {
-	const current = new Date().getFullYear();
+	const current = Math.max(selected, new Date().getFullYear());
 	return select(
 		Array.from({ length: 8 }, (_, index) => current - index).map((value) => ({ value: String(value), label: String(value) })),
 		String(selected)
@@ -124,11 +128,21 @@ export function tabs(project: Project, active: Tab): HTMLElement {
 	);
 }
 
-export function period(project: Project, onChange: () => void): Period {
-	const year = new Date().getFullYear();
+export function period(project: Project, onChange: () => void, singleYear = false): Period {
+	const year = currentYear(project);
 	const from = input("date", { value: `${year}-01-01`, required: true });
 	const to = input("date", { value: `${year}-12-31`, required: true });
-	for (const control of [from, to]) control.addEventListener("change", () => from.value && to.value && onChange());
+	const keepWithinYear = (changed: HTMLInputElement) => {
+		if (!singleYear || from.value.slice(0, 4) === to.value.slice(0, 4)) return;
+		if (changed === from) to.value = `${from.value.slice(0, 4)}-12-31`;
+		else from.value = `${to.value.slice(0, 4)}-01-01`;
+	};
+	for (const control of [from, to])
+		control.addEventListener("change", () => {
+			if (!from.value || !to.value) return;
+			keepWithinYear(control);
+			onChange();
+		});
 	return {
 		element: el("div", { class: "ledger-controls" }, field(t("accounting.from"), from), field(t("accounting.to"), to)),
 		range: () => ({ from: dayStartFromDateInput(from.value, project.timezone), to: fromDateInput(to.value, project.timezone) }),
@@ -203,7 +217,7 @@ function accountLabel(account: Pick<LedgerAccount, "code" | "name">): string {
 function entryDialog(project: Project, accounts: LedgerAccount[], onPosted: () => void) {
 	const currency = baseCurrency(project);
 	const options = accounts.filter((account) => account.active).map((account) => ({ value: account.uuid, label: accountLabel(account) }));
-	const date = input("date", { value: new Date().toISOString().slice(0, 10), required: true });
+	const date = input("date", { value: toDateInput(Date.now(), project.timezone), required: true });
 	const description = input("text", { maxlength: "500", required: true });
 	const rows = el("div", { class: "stack" });
 	const totals = el("p", { class: "muted mono" });
@@ -395,7 +409,7 @@ export async function trialBalanceView(uuid: string): Promise<HTMLElement> {
 	const currency = baseCurrency(project);
 	const notice = el("div", { class: "stack" });
 	const body = el("div", {});
-	const range = period(project, () => void render());
+	const range = period(project, () => void render(), true);
 
 	const render = async () => {
 		try {
@@ -463,7 +477,7 @@ export async function accountLedgerView(uuid: string, account: string): Promise<
 	const dateFormat = project.date_format as DateFormat;
 	const title = el("h2", {});
 	const body = el("div", { class: "stack" });
-	const range = period(project, () => void render());
+	const range = period(project, () => void render(), true);
 
 	const render = async () => {
 		try {

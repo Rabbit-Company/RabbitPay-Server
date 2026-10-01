@@ -45,6 +45,17 @@ export interface PlannedEntry {
 	lines: PlannedLine[];
 }
 
+export interface Exposure {
+	key: string;
+	reference: string | null;
+	currency: string;
+	account: LedgerAccountRow;
+	partner: string | null;
+	date: number;
+	foreign: number;
+	base: number;
+}
+
 interface Amounts {
 	currency: string;
 	tax_currency: string | null;
@@ -153,7 +164,8 @@ function settledAt(transaction: TransactionRow): number {
 export class LedgerPlanner {
 	readonly entries: PlannedEntry[] = [];
 	readonly issues: LedgerIssue[] = [];
-	private readonly settledThrough = new Map<string, LedgerAccountRow>();
+	readonly exposures: Exposure[] = [];
+	private readonly settledThrough = new Map<string, { account: LedgerAccountRow; amount: number; currency: string }>();
 	private readonly base: string;
 	private readonly home: string;
 
@@ -192,13 +204,35 @@ export class LedgerPlanner {
 		return this.chart.system(treatment === "oss" ? "oss_vat" : "output_vat");
 	}
 
+	private expose(
+		document: Amounts,
+		key: string,
+		reference: string | null,
+		account: LedgerAccountRow,
+		partner: string | null,
+		date: number,
+		foreign: number,
+		base: number
+	) {
+		if (document.currency === this.base || foreign === 0) return;
+		this.exposures.push({ key, reference, currency: document.currency, account, partner, date, foreign, base });
+	}
+
 	private missing(source_type: JournalSourceType, source_id: string, reference: string | null) {
 		this.issues.push({ source_type, source_id, reference, code: "missing_exchange_rate" });
 	}
 
-	private salesLines(entry: EntryBuilder, document: SalesDocument, lines: SalesLine[], sign: 1 | -1): boolean {
+	private salesLines(
+		entry: EntryBuilder,
+		document: SalesDocument,
+		lines: SalesLine[],
+		sign: 1 | -1,
+		exposure: { key: string; reference: string | null; date: number }
+	): boolean {
 		let receivable = 0;
+		let foreign = 0;
 		for (const line of lines) {
+			foreign += line.net + line.vat;
 			const net = this.convert(document, line.net);
 			const vat = this.convert(document, line.vat);
 			if (net === null || vat === null) return false;
@@ -210,25 +244,37 @@ export class LedgerPlanner {
 			receivable += net + vat;
 		}
 		entry.debit(this.receivable(document), sign * receivable, document.partner);
+		this.expose(document, exposure.key, exposure.reference, this.receivable(document), document.partner, exposure.date, sign * foreign, sign * receivable);
 		return true;
 	}
 
 	private async loadBankLinks(project: string) {
 		const lines = (await Database`
-			SELECT bt.match_type, bt.match_id, bt.payment_transaction, bs.iban FROM bank_transactions bt
-			JOIN bank_statements bs ON bs.uuid = bt.statement
-			WHERE bt.project = ${project} AND bt.status = 'matched'
-		`) as { match_type: string; match_id: string; payment_transaction: string | null; iban: string }[];
+			SELECT m.match_type, m.match_id, m.payment_transaction, m.amount, bt.currency, bs.iban FROM bank_transaction_matches m
+			JOIN bank_transactions bt ON bt.uuid = m.bank_transaction JOIN bank_statements bs ON bs.uuid = bt.statement
+			WHERE m.project = ${project} AND bt.status = 'matched'
+		`) as { match_type: string; match_id: string; payment_transaction: string | null; amount: number; currency: string; iban: string }[];
 		for (const line of lines) {
 			const account = this.chart.byIban(line.iban);
 			if (!account) continue;
-			if (line.match_type === "invoice" && line.payment_transaction) this.settledThrough.set(`payment:${line.payment_transaction}`, account);
-			else this.settledThrough.set(`${line.match_type}:${line.match_id}`, account);
+			const link = { account, amount: Number(line.amount), currency: line.currency };
+			if (line.match_type === "invoice" && line.payment_transaction) this.settledThrough.set(`payment:${line.payment_transaction}`, link);
+			else this.settledThrough.set(`${line.match_type}:${line.match_id}`, link);
 		}
 	}
 
 	private moneyFor(key: string, fallback: SystemAccount): LedgerAccountRow {
-		return this.settledThrough.get(key) ?? this.chart.system(fallback);
+		return this.settledThrough.get(key)?.account ?? this.chart.system(fallback);
+	}
+
+	private paidInBase(key: string, document: Amounts, value: number): number {
+		const link = this.settledThrough.get(key);
+		return link && link.currency === this.base && document.currency !== this.base ? link.amount : value;
+	}
+
+	private exchangeDifference(entry: EntryBuilder, gain: number) {
+		if (gain > 0) entry.credit(this.chart.system("fx_gains"), gain);
+		if (gain < 0) entry.debit(this.chart.system("fx_losses"), -gain);
 	}
 
 	async plan(): Promise<void> {
@@ -278,7 +324,9 @@ export class LedgerPlanner {
 
 		for (const invoice of invoices) {
 			const entry = new EntryBuilder();
-			if (!this.salesLines(entry, salesDocument(invoice), invoiceLines(invoice), 1)) {
+			if (
+				!this.salesLines(entry, salesDocument(invoice), invoiceLines(invoice), 1, { key: invoice.uuid, reference: invoice.reference, date: invoice.issued_at! })
+			) {
 				this.missing("invoice", invoice.uuid, invoice.reference);
 				continue;
 			}
@@ -295,7 +343,7 @@ export class LedgerPlanner {
 			const invoice = byInvoice.get(note.invoice);
 			if (!invoice) continue;
 			const entry = new EntryBuilder();
-			if (!this.salesLines(entry, salesDocument(invoice), noteLines(note), -1)) {
+			if (!this.salesLines(entry, salesDocument(invoice), noteLines(note), -1, { key: invoice.uuid, reference: invoice.reference, date: note.issued_at })) {
 				this.missing("credit_note", note.uuid, note.reference);
 				continue;
 			}
@@ -335,6 +383,17 @@ export class LedgerPlanner {
 			const entry = new EntryBuilder();
 			entry.debit(money, sign * valued);
 			entry.credit(this.receivable(invoice), sign * amount, buyerName(invoice));
+			if (transaction.currency === invoice.currency)
+				this.expose(
+					invoice,
+					invoice.uuid,
+					invoice.reference,
+					this.receivable(invoice),
+					buyerName(invoice),
+					settledAt(transaction),
+					-sign * transaction.amount,
+					-sign * amount
+				);
 			const difference = sign * (valued - amount);
 			if (difference > 0) entry.credit(this.chart.system("fx_gains"), difference);
 			if (difference < 0) entry.debit(this.chart.system("fx_losses"), -difference);
@@ -500,7 +559,7 @@ export class LedgerPlanner {
 		const sign = record.document_type === "credit_note" ? -1 : 1;
 		const entry = new EntryBuilder();
 		const planned = lines.map((line) => ({ net: line.net_amount, vat: line.tax_amount, treatment: line.tax_treatment, advance: false }));
-		if (!this.salesLines(entry, document, planned, sign)) {
+		if (!this.salesLines(entry, document, planned, sign, { key: record.uuid, reference: record.reference, date: record.issued_at })) {
 			this.missing("recorded_invoice", record.uuid, record.reference);
 			return;
 		}
@@ -509,10 +568,23 @@ export class LedgerPlanner {
 		if (record.paid_at === null) return;
 		const total = this.convert(document, record.total_amount);
 		if (total === null) return;
-		const money = this.moneyFor(`recorded_invoice:${record.uuid}`, record.payment_account === "cash" ? "cash" : "bank");
+		const key = `recorded_invoice:${record.uuid}`;
+		const money = this.moneyFor(key, record.payment_account === "cash" ? "cash" : "bank");
+		const paid = this.paidInBase(key, document, total);
 		const payment = new EntryBuilder();
-		payment.debit(money, sign * total);
+		payment.debit(money, sign * paid);
 		payment.credit(this.receivable(document), sign * total, document.partner);
+		this.exchangeDifference(payment, sign * (paid - total));
+		this.expose(
+			document,
+			record.uuid,
+			record.reference,
+			this.receivable(document),
+			document.partner,
+			record.paid_at,
+			-sign * record.total_amount,
+			-sign * total
+		);
 		this.entries.push({
 			source_type: "recorded_payment",
 			source_id: record.uuid,
@@ -579,6 +651,7 @@ export class LedgerPlanner {
 			entry.debit(this.chart.system("input_vat"), deductible);
 			entry.credit(payable, total, supplier);
 		}
+		this.expose(document, expense.uuid, label, payable, supplier, expense.expense_date, -expense.total_amount, -total);
 		this.entries.push({
 			source_type: "expense",
 			source_id: expense.uuid,
@@ -587,9 +660,13 @@ export class LedgerPlanner {
 			lines: entry.lines(),
 		});
 		if (expense.paid_at !== null) {
+			const key = `expense:${expense.uuid}`;
+			const paid = this.paidInBase(key, document, total);
 			const payment = new EntryBuilder();
 			payment.debit(payable, total, supplier);
-			payment.credit(this.moneyFor(`expense:${expense.uuid}`, "bank"), total);
+			payment.credit(this.moneyFor(key, "bank"), paid);
+			this.exchangeDifference(payment, total - paid);
+			this.expose(document, expense.uuid, label, payable, supplier, expense.paid_at, expense.total_amount, total);
 			this.entries.push({
 				source_type: "expense_payment",
 				source_id: expense.uuid,

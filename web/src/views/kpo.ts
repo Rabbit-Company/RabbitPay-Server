@@ -1,10 +1,10 @@
 import { Api, type KpoBook, type KpoColumn } from "../api";
 import { el, emptyState, field, saveFile, table } from "../dom";
-import { formatDate, formatMoney } from "../money";
+import { formatDate, formatMoney, toDateInput } from "../money";
 import { t, type UiKey } from "../i18n";
 import { reportError } from "../ui";
 import { loadProject } from "./project";
-import { baseCurrency, ledgerPage, moneyCell, notices, numeric, summaryCards, yearSelect } from "./accounting";
+import { baseCurrency, currentYear, ledgerPage, moneyCell, notices, numeric, summaryCards, yearSelect } from "./accounting";
 import type { DateFormat } from "../../../server/formats";
 
 const COLUMNS: KpoColumn[] = [
@@ -19,14 +19,14 @@ const COLUMNS: KpoColumn[] = [
 	"other_costs",
 ];
 
-function csv(book: KpoBook): string {
+function csv(book: KpoBook, timezone: string): string {
 	const cell = (value: string | number) => (/[",;\n]/.test(String(value)) ? `"${String(value).replace(/"/g, '""')}"` : String(value));
 	const major = (value: number | undefined) => ((value ?? 0) / 100).toFixed(2);
 	const header = ["sequence", "entry", "date", "description", ...COLUMNS];
 	const rows = book.rows.map((row) => [
 		row.sequence ?? "",
 		row.number,
-		new Date(row.date).toISOString().slice(0, 10),
+		toDateInput(row.date, timezone),
 		row.description,
 		...COLUMNS.map((column) => major(row.amounts[column])),
 	]);
@@ -37,12 +37,12 @@ function csv(book: KpoBook): string {
 export async function kpoView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const currency = baseCurrency(project);
-	const year = yearSelect(new Date().getFullYear());
+	const year = yearSelect(currentYear(project));
 	const body = el("div", { class: "stack" });
 	let loaded: KpoBook | null = null;
 	const download = el("button", { class: "button ghost", type: "button", disabled: true }, t("stats.download_csv"));
 	download.addEventListener("click", () => {
-		if (loaded) saveFile(new Blob([csv(loaded)], { type: "text/csv;charset=utf-8" }), `kpo-${loaded.year}.csv`);
+		if (loaded) saveFile(new Blob([csv(loaded, project.timezone)], { type: "text/csv;charset=utf-8" }), `kpo-${loaded.year}.csv`);
 	});
 
 	const render = async () => {

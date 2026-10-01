@@ -1,6 +1,15 @@
-import { Api, type BankStatement, type BankSuggestion, type BankTransaction, type LedgerAccount, type Project, type StatementPreview } from "../api";
+import {
+	Api,
+	type BankCandidate,
+	type BankStatement,
+	type BankSuggestion,
+	type BankTransaction,
+	type LedgerAccount,
+	type Project,
+	type StatementPreview,
+} from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
-import { formatDate, formatMoney } from "../money";
+import { formatDate, formatMoney, toMajorUnits, toMinorUnits } from "../money";
 import { remoteTable } from "../pagination";
 import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
@@ -116,6 +125,110 @@ function bookDialog(project: Project, line: BankTransaction, accounts: LedgerAcc
 	const dialog = modal(t("bank.book"), form, undefined, "dialog-medium");
 }
 
+async function matchDialog(project: Project, line: BankTransaction, onMatched: () => void) {
+	const { candidates } = await Api.bankCandidates(project.uuid, line.uuid);
+	const dateFormat = project.date_format as DateFormat;
+	const search = input("search", { placeholder: t("bank.match_search") });
+	const totals = el("p", { class: "mono" });
+	const foreignNote = el("p", { class: "muted" });
+	const submit = el("button", { class: "button primary", type: "submit", disabled: true }, t("bank.match_submit"));
+	const rows: { candidate: BankCandidate; pick: HTMLInputElement; amount: HTMLInputElement; row: HTMLElement }[] = [];
+
+	const refresh = () => {
+		const picked = rows.filter((entry) => entry.pick.checked);
+		const foreign = picked.find((entry) => entry.candidate.currency !== line.currency);
+		const selected = picked.reduce((sum, entry) => sum + entry.candidate.direction * toMinorUnits(Number(entry.amount.value || 0), line.currency), 0);
+		const difference = line.amount - selected;
+		foreignNote.textContent = foreign ? t("bank.match_foreign", { currency: foreign.candidate.currency }) : "";
+		totals.textContent = foreign
+			? ""
+			: t("bank.match_totals", {
+					selected: formatMoney(selected, line.currency),
+					line: formatMoney(line.amount, line.currency),
+					difference: formatMoney(difference, line.currency),
+				});
+		totals.className = difference === 0 || foreign ? "mono" : "mono warn";
+		submit.disabled = picked.length === 0 || (foreign ? picked.length !== 1 : difference !== 0);
+	};
+
+	for (const candidate of candidates) {
+		const pick = input("checkbox");
+		const sameCurrency = candidate.currency === line.currency;
+		const amount = input("number", { min: "0", step: "0.01", value: sameCurrency ? String(toMajorUnits(candidate.amount, candidate.currency)) : "" });
+		amount.disabled = !candidate.partial || !sameCurrency;
+		pick.addEventListener("change", refresh);
+		amount.addEventListener("input", refresh);
+		const row = el(
+			"tr",
+			{},
+			el("td", {}, pick),
+			el("td", {}, t(`bank.match_${candidate.type}` as UiKey), candidate.reference ? el("div", { class: "muted mono" }, candidate.reference) : null),
+			el("td", {}, candidate.name ?? ""),
+			el("td", { class: "date" }, formatDate(candidate.date, dateFormat, project.timezone)),
+			moneyCell(candidate.direction * candidate.amount, candidate.currency, { zero: true, warn: candidate.direction < 0 }),
+			el("td", { class: "num" }, sameCurrency ? amount : "")
+		);
+		rows.push({ candidate, pick, amount, row });
+	}
+	search.addEventListener("input", () => {
+		const wanted = search.value.trim().toLowerCase();
+		for (const entry of rows) {
+			const text = [entry.candidate.reference, entry.candidate.name, String(toMajorUnits(entry.candidate.amount, entry.candidate.currency))]
+				.join(" ")
+				.toLowerCase();
+			entry.row.hidden = wanted !== "" && !text.includes(wanted) && !entry.pick.checked;
+		}
+	});
+	refresh();
+
+	const form = el(
+		"form",
+		{
+			class: "stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					await Api.matchBankTransactionTo(
+						project.uuid,
+						line.uuid,
+						rows
+							.filter((entry) => entry.pick.checked)
+							.map((entry) => ({
+								type: entry.candidate.type,
+								id: entry.candidate.id,
+								amount:
+									entry.candidate.partial && entry.candidate.currency === line.currency ? toMinorUnits(Number(entry.amount.value || 0), line.currency) : null,
+							}))
+					);
+					dialog.close();
+					onMatched();
+				} catch (error) {
+					reportError(error);
+					refresh();
+				}
+			},
+		},
+		el("p", {}, `${line.counterparty_name ?? ""} ${formatMoney(line.amount, line.currency)}`),
+		el("p", { class: "muted" }, t("bank.match_several_hint")),
+		candidates.length === 0
+			? emptyState(t("bank.match_none"))
+			: el(
+					"div",
+					{ class: "stack" },
+					search,
+					table(
+						["", t("bank.match_document"), t("bank.counterparty"), t("bank.date"), numeric(t("bank.match_open")), numeric(t("bank.match_amount"))],
+						rows.map((entry) => entry.row)
+					)
+				),
+		foreignNote,
+		el("div", { class: "line-actions" }, totals, submit)
+	);
+	const dialog = modal(t("bank.match_several_title"), form);
+	search.focus();
+}
+
 function suggestionLabel(suggestion: BankSuggestion): string {
 	const kind = t(`bank.match_${suggestion.type}` as UiKey);
 	return [kind, suggestion.reference, suggestion.name, formatMoney(suggestion.amount, suggestion.currency)].filter(Boolean).join(" | ");
@@ -171,8 +284,16 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "bank-actions" },
-					el("span", { class: "muted" }, line.match_type ? t(`bank.match_${line.match_type}` as UiKey) : t(`bank.status_${line.status}` as UiKey)),
-					line.match_type === "invoice"
+					el(
+						"span",
+						{ class: "muted" },
+						line.matches.length > 1
+							? t("bank.match_documents", { count: line.matches.length })
+							: line.match_type
+								? t(`bank.match_${line.match_type}` as UiKey)
+								: t(`bank.status_${line.status}` as UiKey)
+					),
+					line.match_type === "invoice" || line.matches.some((match) => match.match_type === "invoice")
 						? null
 						: el(
 								"button",
@@ -202,6 +323,11 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "line-actions" },
+					el(
+						"button",
+						{ class: "button ghost small", type: "button", onClick: () => void matchDialog(project, line, () => void render()).catch(reportError) },
+						t("bank.match_several")
+					),
 					el(
 						"button",
 						{ class: "button ghost small", type: "button", onClick: () => bookDialog(project, line, accounts, () => void render()) },

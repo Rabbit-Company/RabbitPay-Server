@@ -79,6 +79,18 @@ export interface BankSuggestion {
 	exact: boolean;
 }
 
+export interface BankCandidate extends Omit<BankSuggestion, "exact"> {
+	direction: 1 | -1;
+	date: number;
+	partial: boolean;
+}
+
+export interface BankMatchInput {
+	type: BankMatchType;
+	id: string;
+	amount: number | null;
+}
+
 export type YearCloseRefusal = "year_not_over" | "earlier_year_open" | "ledger_issues" | "already_closed" | "nothing_to_close" | "later_year_closed";
 
 export interface AccountingYear {
@@ -173,4 +185,24 @@ export interface AjpesReport {
 	balance_sheet: AjpesLine[];
 	income_statement: AjpesLine[];
 	balanced: boolean;
+}
+
+export interface RevaluationItem {
+	reference: string | null;
+	partner: string | null;
+	currency: string;
+	account: string;
+	open: number;
+	booked: number;
+	revalued: number | null;
+	difference: number | null;
+}
+
+export interface RevaluationPreview {
+	year: number;
+	currency: string;
+	currencies: string[];
+	items: RevaluationItem[];
+	difference: number;
+	posted: string | null;
 }

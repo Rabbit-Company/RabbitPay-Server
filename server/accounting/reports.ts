@@ -59,7 +59,7 @@ export function signedBalance(kind: LedgerAccountRow["account_kind"], debit: num
 	return kind === "asset" || kind === "expense" ? addIntegers(debit, -credit) : addIntegers(credit, -debit);
 }
 
-export async function trialBalance(project: string, from: number, to: number): Promise<TrialBalanceRow[]> {
+export async function trialBalance(project: string, from: number, to: number, yearStart: number): Promise<TrialBalanceRow[]> {
 	const accounts = (await Database`SELECT * FROM ledger_accounts WHERE project = ${project} ORDER BY code`) as LedgerAccountRow[];
 	const totals = (await Database`
 		SELECT jl.ledger_account,
@@ -67,8 +67,9 @@ export async function trialBalance(project: string, from: number, to: number): P
 			COALESCE(SUM(CASE WHEN je.entry_date < ${from} OR je.source_type = 'year_opening' THEN jl.credit ELSE 0 END), 0) AS opening_credit,
 			COALESCE(SUM(CASE WHEN je.entry_date >= ${from} AND je.source_type <> 'year_opening' THEN jl.debit ELSE 0 END), 0) AS debit,
 			COALESCE(SUM(CASE WHEN je.entry_date >= ${from} AND je.source_type <> 'year_opening' THEN jl.credit ELSE 0 END), 0) AS credit
-		FROM journal_lines jl JOIN journal_entries je ON je.uuid = jl.entry
+		FROM journal_lines jl JOIN journal_entries je ON je.uuid = jl.entry JOIN ledger_accounts la ON la.uuid = jl.ledger_account
 		WHERE jl.project = ${project} AND je.entry_date <= ${to}
+			AND (la.account_kind NOT IN ('revenue', 'expense') OR je.entry_date >= ${yearStart})
 			AND NOT (je.source_type IN ('year_closing', 'year_result') AND je.entry_date >= ${from})
 			AND NOT (je.reverses IS NOT NULL AND je.entry_date >= ${from} AND EXISTS (
 				SELECT 1 FROM journal_entries o WHERE o.uuid = je.reverses AND o.source_type IN ('year_closing', 'year_result')))
@@ -96,11 +97,12 @@ export async function trialBalance(project: string, from: number, to: number): P
 		.filter((row) => row.opening !== 0 || row.debit !== 0 || row.credit !== 0);
 }
 
-export async function accountLedger(project: string, account: LedgerAccountRow, from: number, to: number) {
+export async function accountLedger(project: string, account: LedgerAccountRow, from: number, to: number, yearStart: number) {
+	const since = account.account_kind === "revenue" || account.account_kind === "expense" ? yearStart : 0;
 	const [opening] = (await Database`
 		SELECT COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
 		FROM journal_lines jl JOIN journal_entries je ON je.uuid = jl.entry
-		WHERE jl.project = ${project} AND jl.ledger_account = ${account.uuid} AND je.entry_date < ${from}
+		WHERE jl.project = ${project} AND jl.ledger_account = ${account.uuid} AND je.entry_date >= ${since} AND je.entry_date < ${from}
 	`) as { debit: number; credit: number }[];
 	const rows = (await Database`
 		SELECT je.uuid AS entry, je.year, je.number, je.entry_date, je.description, jl.debit, jl.credit, jl.partner

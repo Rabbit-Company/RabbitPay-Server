@@ -15,7 +15,7 @@ const { fillPaymentValues } = await import("../server/accounting/payment-values"
 await Server.configure();
 
 const password = new Bun.CryptoHasher("blake2b512").update("ledger-owner").digest("hex");
-const YEAR = { from: Date.UTC(2026, 0, 1), to: Date.UTC(2027, 0, 1) - 1 };
+const YEAR = { from: Date.UTC(2025, 11, 31, 23), to: Date.UTC(2026, 11, 31, 23) - 1 };
 
 let token = "";
 let project = "";
@@ -343,7 +343,7 @@ describe("advance invoices", () => {
 			expect((await call("POST", `${base()}/transactions`, { invoice: proforma.uuid, processor: "bank_transfer", amount: 61000 })).error).toBe(0);
 			await issuePaidDrafts();
 
-			const range = `from=${Date.UTC(2000, 0, 1)}&to=${Date.UTC(2100, 0, 1)}`;
+			const range = "";
 			const balances = async () =>
 				Object.fromEntries(
 					((await call("GET", `${base()}/accounting/trial-balance?${range}`)).data.accounts as { code: string; closing: number }[]).map((row) => [
@@ -886,11 +886,14 @@ describe("fixed assets", () => {
 		const [months] = (await Database`SELECT COUNT(*) AS total FROM journal_entries WHERE project = ${project} AND source_type = 'depreciation'`) as {
 			total: number;
 		}[];
-		expect(Number(months.total)).toBe(7);
+		const today = new Date();
+		const elapsed = Math.min(24, (today.getUTCFullYear() - 2026) * 12 + today.getUTCMonth() - 1);
+		const thisYear = Math.min(elapsed, 11);
+		expect(Number(months.total)).toBe(elapsed);
 		const accounts = await trialBalance();
-		expect(accounts["4320"].closing).toBe(7 * 5000);
-		expect(accounts["0500"].closing).toBe(-7 * 5000);
-		expect(created.data).toMatchObject({ accumulated: 35000, book_value: 85000 });
+		expect(accounts["4320"].closing).toBe(thisYear * 5000);
+		expect(accounts["0500"].closing).toBe(-thisYear * 5000);
+		expect(created.data).toMatchObject({ accumulated: elapsed * 5000, book_value: 120000 - elapsed * 5000 });
 
 		const disposed = await call("PATCH", `${base()}/accounting/assets/${created.data.uuid}`, { disposed_at: Date.UTC(2026, 5, 20) });
 		expect(disposed.data).toMatchObject({ accumulated: 20000, book_value: 0 });
@@ -1158,6 +1161,201 @@ describe("deductible share adjustment", () => {
 			const cleared = await call("PUT", `${base()}/accounting/years/2025/deductible-share`, { final_share: null });
 			expect(cleared.data).toMatchObject({ final_share: null, share_adjustment: 0 });
 			expect((await balances())["1600"]).toBe(3410);
+		} finally {
+			project = main;
+		}
+	});
+});
+
+describe("balances follow the business year", () => {
+	test("periods across a year end are refused and revenue and expense accounts start the year at zero", async () => {
+		const main = project;
+		project = (await call("POST", "/api/v1/projects", { name: "ledger-business-year", currency: "EUR" })).data.uuid;
+		try {
+			await call("PATCH", base(), { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
+			const code = generateLicenseCode();
+			const now = Date.now();
+			await Database`INSERT INTO license_keys(uuid, code, type, duration_days, status, created, updated)
+				VALUES(${crypto.randomUUID()}, ${code}, 'accounting', 365, 'available', ${now}, ${now})`;
+			await call("POST", `${base()}/license/redeem`, { code });
+			const sale = await call("POST", `${base()}/accounting/journal`, {
+				date: Date.UTC(2025, 2, 1),
+				description: "Gotovinska prodaja",
+				lines: [
+					{ account: await accountId("1000"), debit: 50000 },
+					{ account: await accountId("7600"), credit: 50000 },
+				],
+			});
+			expect(sale.error).toBe(0);
+
+			const across = `from=${Date.UTC(2025, 5, 1)}&to=${Date.UTC(2026, 5, 1)}`;
+			expect((await call("GET", `${base()}/accounting/trial-balance?${across}`)).error).toBe(1279);
+			expect((await call("GET", `${base()}/accounting/ledger/${await accountId("1000")}?${across}`)).error).toBe(1279);
+
+			const year2026 = `from=${Date.UTC(2025, 11, 31, 23)}&to=${Date.UTC(2026, 11, 31, 22, 59, 59, 999)}`;
+			const rows = (await call("GET", `${base()}/accounting/trial-balance?${year2026}`)).data.accounts as { code: string; opening: number }[];
+			expect(rows.find((row) => row.code === "1000")!.opening).toBe(50000);
+			expect(rows.find((row) => row.code === "7600")).toBeUndefined();
+			const ledger = (await call("GET", `${base()}/accounting/ledger/${await accountId("7600")}?${year2026}`)).data;
+			expect(ledger).toMatchObject({ opening: 0, closing: 0 });
+		} finally {
+			project = main;
+		}
+	});
+});
+
+describe("manual entries in a submitted DDV period", () => {
+	test("entries on VAT accounts are refused while other entries are allowed", async () => {
+		const exportId = crypto.randomUUID();
+		const now = Date.now();
+		await Database`INSERT INTO ddv_exports(uuid, project, period_from, period_to, revision, file_name, storage_key, byte_size, sha256, created_by, created)
+			VALUES(${exportId}, ${project}, ${Date.UTC(2026, 6, 31, 22)}, ${Date.UTC(2026, 7, 31, 21, 59, 59, 999)}, 1, 'ddv.zip', 'ddv/test.zip', 1, 'x', NULL, ${now})`;
+		await Database`INSERT INTO accounting_period_locks(uuid, project, period_from, period_to, timezone, source, source_id, locked_by, locked_at)
+			VALUES(${crypto.randomUUID()}, ${project}, ${Date.UTC(2026, 6, 31, 22)}, ${Date.UTC(2026, 7, 31, 21, 59, 59, 999)}, 'Europe/Ljubljana', 'ddv_export', ${exportId}, NULL, ${now})`;
+		try {
+			const date = Date.UTC(2026, 7, 15);
+			const vat = await call("POST", `${base()}/accounting/journal`, {
+				date,
+				description: "Popravek DDV",
+				lines: [
+					{ account: await accountId("1600"), debit: 1000 },
+					{ account: await accountId("2600"), credit: 1000 },
+				],
+			});
+			expect(vat.error).toBe(1128);
+			const accrual = await call("POST", `${base()}/accounting/journal`, {
+				date,
+				description: "Vnaprej vracunani stroski",
+				lines: [
+					{ account: await accountId("4190"), debit: 1000 },
+					{ account: await accountId("2900"), credit: 1000 },
+				],
+			});
+			expect(accrual.error).toBe(0);
+			expect((await call("POST", `${base()}/accounting/journal/${accrual.data.uuid}/reverse`)).error).toBe(0);
+		} finally {
+			await Database`DELETE FROM ddv_exports WHERE uuid = ${exportId}`;
+		}
+	});
+});
+
+describe("bank lines settling several documents", () => {
+	test("one payment covers an invoice in full and another in part, and a foreign supplier invoice is paid with an exchange difference", async () => {
+		const first = await issueInvoice(10000, 5);
+		const second = await issueInvoice(20000, 6);
+		const vendor = (
+			await call("POST", `${base()}/expenses`, {
+				description: "Licenca",
+				supplier: "US Vendor Inc.",
+				supplier_country: "US",
+				invoice_number: "US-7",
+				category: "Software",
+				currency: "USD",
+				total_amount: 11000,
+				tax_amount: 0,
+				deductible_tax_amount: 0,
+				tax_exchange_rate: 0.9,
+				tax_rate_date: Date.UTC(2026, 2, 2),
+				expense_date: Date.UTC(2026, 2, 2),
+			})
+		).data.uuid;
+		const xml = camt([
+			entry("300.00", "CRDT", "2026-03-15", "M-1", "Stranka d.o.o.", "Placilo vec racunov"),
+			entry("95.00", "DBIT", "2026-03-16", "M-2", "US Vendor Inc.", "Invoice US-7"),
+		]).replace("<Id>2026-03-001</Id>", "<Id>2026-03-002</Id>");
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "vec.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(2);
+		const lines = (await call("GET", `${base()}/accounting/bank-transactions?status=open`)).data.transactions as {
+			uuid: string;
+			bank_reference: string;
+			suggestions: { id: string }[];
+		}[];
+		const many = lines.find((row) => row.bank_reference === "M-1")!;
+		const foreign = lines.find((row) => row.bank_reference === "M-2")!;
+		expect(foreign.suggestions[0]).toMatchObject({ id: vendor });
+
+		const candidates = (await call("GET", `${base()}/accounting/bank-transactions/${many.uuid}/candidates`)).data.candidates as { id: string }[];
+		expect(candidates.some((candidate) => candidate.id === first) && candidates.some((candidate) => candidate.id === second)).toBe(true);
+		const wrong = await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/match`, {
+			matches: [
+				{ type: "invoice", id: first },
+				{ type: "invoice", id: second },
+			],
+		});
+		expect(wrong.error).toBe(1270);
+		const matched = await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/match`, {
+			matches: [
+				{ type: "invoice", id: first },
+				{ type: "invoice", id: second, amount: 17800 },
+			],
+		});
+		expect(matched.data).toMatchObject({ status: "matched", match_type: "invoice", match_id: null });
+		const statuses = (await Database`SELECT uuid, status FROM invoices WHERE uuid IN (${first}, ${second})`) as { uuid: string; status: string }[];
+		expect(Object.fromEntries(statuses.map((row) => [row.uuid, row.status]))).toEqual({ [first]: "paid", [second]: "partially_paid" });
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/reopen`)).error).toBe(1271);
+
+		const before = await trialBalance();
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${foreign.uuid}/match`, { type: "expense", id: vendor })).data.status).toBe("matched");
+		const after = await trialBalance();
+		expect(after["7770"].credit - (before["7770"]?.credit ?? 0)).toBe(400);
+		expect(after["1100"].credit - before["1100"].credit).toBe(9500);
+		expect(after["2210"].debit - (before["2210"]?.debit ?? 0)).toBe(9900);
+	});
+});
+
+describe("foreign currency revaluation on 31 December", () => {
+	test("open items are revalued at the year end rate, reversed on 1 January, and both entries are reversed together", async () => {
+		const main = project;
+		project = (await call("POST", "/api/v1/projects", { name: "ledger-revaluation", currency: "EUR" })).data.uuid;
+		try {
+			await call("PATCH", base(), { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
+			const code = generateLicenseCode();
+			const now = Date.now();
+			await Database`INSERT INTO license_keys(uuid, code, type, duration_days, status, created, updated)
+				VALUES(${crypto.randomUUID()}, ${code}, 'accounting', 365, 'available', ${now}, ${now})`;
+			await call("POST", `${base()}/license/redeem`, { code });
+			const created = await call("POST", `${base()}/expenses`, {
+				description: "Gostovanje",
+				supplier: "US Host LLC",
+				supplier_country: "US",
+				invoice_number: "H-25",
+				category: "Hosting",
+				currency: "USD",
+				total_amount: 11000,
+				tax_amount: 0,
+				deductible_tax_amount: 0,
+				tax_exchange_rate: 0.9,
+				tax_rate_date: Date.UTC(2025, 10, 10),
+				expense_date: Date.UTC(2025, 10, 10),
+			});
+			expect(created.status).toBe(201);
+
+			const preview = (await call("GET", `${base()}/accounting/years/2025/revaluation`)).data;
+			expect(preview).toMatchObject({ currencies: ["USD"], posted: null });
+			expect(preview.items[0]).toMatchObject({ reference: "H-25", account: "2210", open: -11000, booked: -9900 });
+			expect((await call("POST", `${base()}/accounting/years/2025/revaluation`, { rates: {} })).error).toBe(1280);
+			expect((await call("POST", `${base()}/accounting/years/2026/revaluation`, { rates: { USD: 0.95 } })).error).toBe(1274);
+
+			const posted = await call("POST", `${base()}/accounting/years/2025/revaluation`, { rates: { USD: 0.95 } });
+			expect(posted.data).toMatchObject({ difference: -550 });
+			expect(posted.data.posted).not.toBeNull();
+			expect((await call("POST", `${base()}/accounting/years/2025/revaluation`, { rates: { USD: 0.95 } })).error).toBe(1281);
+
+			const balances = async (from: number, to: number) =>
+				Object.fromEntries(
+					((await call("GET", `${base()}/accounting/trial-balance?from=${from}&to=${to}`)).data.accounts as { code: string; closing: number }[]).map((row) => [
+						row.code,
+						row.closing,
+					])
+				);
+			const yearEnd = await balances(Date.UTC(2024, 11, 31, 23), Date.UTC(2025, 11, 31, 22, 59, 59, 999));
+			expect(yearEnd).toMatchObject({ "2210": 10450, "7450": 550 });
+			const nextYear = await balances(Date.UTC(2025, 11, 31, 23), Date.UTC(2026, 11, 31, 22, 59, 59, 999));
+			expect(nextYear["2210"]).toBe(9900);
+
+			expect((await call("POST", `${base()}/accounting/journal/${posted.data.posted}/reverse`)).error).toBe(0);
+			expect((await call("GET", `${base()}/accounting/years/2025/revaluation`)).data.posted).toBeNull();
+			expect((await balances(Date.UTC(2025, 11, 31, 23), Date.UTC(2026, 11, 31, 22, 59, 59, 999)))["2210"]).toBe(9900);
+			expect((await balances(Date.UTC(2024, 11, 31, 23), Date.UTC(2025, 11, 31, 22, 59, 59, 999)))["2210"]).toBe(9900);
 		} finally {
 			project = main;
 		}

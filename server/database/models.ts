@@ -1273,6 +1273,17 @@ export interface BankTransactionRow {
 	created: number;
 }
 
+export interface BankTransactionMatchRow {
+	uuid: string;
+	project: string;
+	bank_transaction: string;
+	match_type: BankMatchType;
+	match_id: string;
+	amount: number;
+	payment_transaction: string | null;
+	created: number;
+}
+
 export interface RecordedInvoiceAttachmentRow {
 	recorded_invoice: string;
 	storage_key: string;

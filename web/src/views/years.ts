@@ -1,10 +1,10 @@
-import { Api, ApiError, type AccountingYear, type Project, type YearCloseRefusal } from "../api";
+import { Api, ApiError, type AccountingYear, type Project, type RevaluationPreview, type YearCloseRefusal } from "../api";
 import { el, emptyState, field, input, table } from "../dom";
 import { formatDate, formatMoney } from "../money";
 import { t, type UiKey } from "../i18n";
 import { confirmDialog, modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
-import { baseCurrency, editable, ledgerPage, licenseNotice, numeric } from "./accounting";
+import { baseCurrency, currentYear, editable, ledgerPage, licenseNotice, moneyCell, numeric } from "./accounting";
 import type { DateFormat } from "../../../server/formats";
 
 function refusal(error: unknown): string | null {
@@ -72,6 +72,91 @@ function shareDialog(project: Project, year: AccountingYear, onDone: () => void)
 	share.focus();
 }
 
+async function revaluationDialog(project: Project, year: AccountingYear, onDone: () => void) {
+	const initial = await Api.revaluation(project.uuid, year.year);
+	const rates = new Map(initial.currencies.map((currency) => [currency, input("number", { min: "0", step: "0.000001", required: true })]));
+	const preview = el("div", { class: "stack" });
+	const submit = el("button", { class: "button primary", type: "submit", disabled: true }, t("years.revalue_submit"));
+	const values = () => {
+		const result: Record<string, number> = {};
+		for (const [currency, field] of rates) if (Number(field.value) > 0) result[currency] = Number(field.value);
+		return result;
+	};
+	const show = (result: RevaluationPreview) => {
+		preview.replaceChildren(
+			table(
+				[
+					t("years.revalue_document"),
+					t("years.revalue_partner"),
+					numeric(t("years.revalue_open")),
+					numeric(t("years.revalue_booked")),
+					numeric(t("years.revalue_revalued")),
+					numeric(t("years.revalue_difference")),
+				],
+				result.items.map((item) =>
+					el(
+						"tr",
+						{},
+						el("td", {}, item.reference ?? "", el("div", { class: "muted mono" }, item.account)),
+						el("td", {}, item.partner ?? ""),
+						moneyCell(item.open, item.currency, { zero: true }),
+						moneyCell(item.booked, result.currency, { zero: true }),
+						moneyCell(item.revalued, result.currency, { zero: true }),
+						moneyCell(item.difference, result.currency, { warn: (item.difference ?? 0) < 0 })
+					)
+				)
+			),
+			el("p", { class: "mono" }, t("years.revalue_total", { amount: formatMoney(result.difference, result.currency) }))
+		);
+		submit.disabled = result.posted !== null || result.currencies.some((currency) => !(values()[currency] > 0));
+	};
+	for (const field of rates.values())
+		field.addEventListener("change", async () => {
+			try {
+				show(await Api.previewRevaluation(project.uuid, year.year, values()));
+			} catch (error) {
+				reportError(error);
+			}
+		});
+	show(initial);
+
+	const form = el(
+		"form",
+		{
+			class: "stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					await Api.postRevaluation(project.uuid, year.year, values());
+					dialog.close();
+					toast(t("years.revalued", { year: year.year }));
+					onDone();
+				} catch (error) {
+					reportError(error);
+					submit.disabled = false;
+				}
+			},
+		},
+		el("p", { class: "muted" }, t("years.revalue_hint")),
+		initial.posted !== null ? el("p", { class: "warn" }, t("years.revalue_posted", { year: year.year })) : null,
+		initial.items.length === 0
+			? emptyState(t("years.revalue_none", { year: year.year }))
+			: el(
+					"div",
+					{ class: "stack" },
+					el(
+						"div",
+						{ class: "grid" },
+						...[...rates].map(([currency, rate]) => field(t("years.revalue_rate", { currency }), rate, t("years.revalue_rate_hint")))
+					),
+					preview,
+					el("div", { class: "form-actions" }, submit)
+				)
+	);
+	const dialog = modal(t("years.revalue_title", { year: year.year }), form);
+}
+
 export async function yearsView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const currency = baseCurrency(project);
@@ -137,8 +222,19 @@ export async function yearsView(uuid: string): Promise<HTMLElement> {
 									el(
 										"td",
 										{ class: "actions" },
-										canEdit && !year.closed && year.entries > 0 && year.year < new Date().getFullYear()
+										canEdit && !year.closed && year.entries > 0 && year.year < currentYear(project)
 											? el("button", { class: "button ghost small", type: "button", onClick: () => close(year) }, t("years.close"))
+											: null,
+										canEdit && !year.closed && year.entries > 0 && year.year < currentYear(project)
+											? el(
+													"button",
+													{
+														class: "button ghost small",
+														type: "button",
+														onClick: () => void revaluationDialog(project, year, () => void render()).catch(reportError),
+													},
+													t("years.revalue")
+												)
 											: null,
 										canEdit && !year.closed && (year.provisional_expenses > 0 || year.final_share !== null)
 											? el(

@@ -232,3 +232,45 @@ export async function createAccountingSchema(sql: SQL, dialect: Dialect) {
 		`CREATE INDEX IF NOT EXISTS idx_bank_transactions_status ON bank_transactions(project, status, booking_date)`,
 	]);
 }
+
+export async function createBankMatchSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS bank_transaction_matches(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					bank_transaction ${types.text("bank_transaction")} NOT NULL,
+					match_type ${types.text("match_type")} NOT NULL,
+					match_id ${types.text("match_id")} NOT NULL,
+					amount ${types.int64} NOT NULL,
+					payment_transaction ${types.text("payment_transaction")},
+					created ${types.int64} NOT NULL,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (bank_transaction) REFERENCES bank_transactions(uuid) ON DELETE CASCADE,
+					UNIQUE(bank_transaction, match_type, match_id),
+					CHECK (amount > 0),
+					CHECK (match_type IN ('invoice', 'recorded_invoice', 'expense'))
+				)`,
+		`CREATE INDEX IF NOT EXISTS idx_bank_transaction_matches_document ON bank_transaction_matches(project, match_type, match_id)`,
+	]);
+	const matched = (await sql`
+		SELECT uuid, project, match_type, match_id, amount, payment_transaction, matched_at, created FROM bank_transactions
+		WHERE status = 'matched' AND match_type IS NOT NULL AND match_id IS NOT NULL
+	`) as {
+		uuid: string;
+		project: string;
+		match_type: string;
+		match_id: string;
+		amount: number;
+		payment_transaction: string | null;
+		matched_at: number | null;
+		created: number;
+	}[];
+	for (const row of matched) {
+		await sql`
+			INSERT INTO bank_transaction_matches(uuid, project, bank_transaction, match_type, match_id, amount, payment_transaction, created)
+			VALUES(${crypto.randomUUID()}, ${row.project}, ${row.uuid}, ${row.match_type}, ${row.match_id}, ${Math.abs(Number(row.amount))},
+				${row.payment_transaction}, ${row.matched_at ?? row.created})
+		`;
+	}
+}

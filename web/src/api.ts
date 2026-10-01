@@ -898,10 +898,11 @@ import type { ImportResult } from "../../server/accounting/recorded-import";
 import type { ExpenseImportResult } from "../../server/expense-import";
 export type { ExpenseImportResult };
 export type { ImportColumn, ImportError, ImportResult } from "../../server/accounting/recorded-import";
-import type { BankSuggestion } from "../../server/accounting/types";
-import type { BankStatementRow, BankTransactionRow } from "../../server/database/models";
+import type { BankCandidate, BankMatchInput, BankSuggestion, RevaluationPreview } from "../../server/accounting/types";
+import type { BankStatementRow, BankTransactionMatchRow, BankTransactionRow } from "../../server/database/models";
 
-export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[] };
+export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[]; matches: BankTransactionMatchRow[] };
+export type { BankCandidate, BankMatchInput, RevaluationPreview };
 export type BankStatement = BankStatementRow & { ledger_balance: number | null; lines: Partial<Record<BankTransactionRow["status"], number>> };
 export type { BankSuggestion };
 export type { AccountingYear, YearCloseRefusal } from "../../server/accounting/types";
@@ -2067,6 +2068,14 @@ export const Api = {
 		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/match`, { type, id });
 	},
 
+	matchBankTransactionTo(uuid: string, line: string, matches: BankMatchInput[]) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/match`, { matches });
+	},
+
+	bankCandidates(uuid: string, line: string) {
+		return request<{ candidates: BankCandidate[] }>("GET", `/projects/${uuid}/accounting/bank-transactions/${line}/candidates`);
+	},
+
 	bookBankTransaction(uuid: string, line: string, account: string) {
 		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/book`, { account });
 	},
@@ -2132,6 +2141,18 @@ export const Api = {
 
 	reopenAccountingYear(uuid: string, year: number, reason: string) {
 		return request<AccountingYear>("POST", `/projects/${uuid}/accounting/years/${year}/reopen`, { reason });
+	},
+
+	revaluation(uuid: string, year: number) {
+		return request<RevaluationPreview>("GET", `/projects/${uuid}/accounting/years/${year}/revaluation`);
+	},
+
+	previewRevaluation(uuid: string, year: number, rates: Record<string, number>) {
+		return request<RevaluationPreview>("POST", `/projects/${uuid}/accounting/years/${year}/revaluation`, { rates, preview: true });
+	},
+
+	postRevaluation(uuid: string, year: number, rates: Record<string, number>) {
+		return request<RevaluationPreview>("POST", `/projects/${uuid}/accounting/years/${year}/revaluation`, { rates });
 	},
 
 	accountingClients() {

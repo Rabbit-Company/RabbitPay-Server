@@ -15,6 +15,8 @@ import { syncLedger } from "../../accounting/journal";
 import {
 	BankMatchRefused,
 	bookTransaction,
+	candidatesFor,
+	matchesOf,
 	existingFingerprints,
 	ignoreTransaction,
 	importStatements,
@@ -25,6 +27,7 @@ import {
 } from "../../accounting/bank";
 import { importBody } from "./recorded-invoices";
 import { closedYear } from "../../accounting-periods";
+import type { BankMatchInput } from "../../accounting/types";
 import type { AppState, BankMatchType, BankStatementRow, BankTransactionRow, ProjectRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid/accounting";
@@ -151,9 +154,10 @@ Server.app.get(`${base}/bank-transactions`, Auth.required(), Permissions.require
 		SELECT * FROM bank_transactions WHERE project = ${project.uuid} ${filter} ORDER BY booking_date DESC, created DESC LIMIT ${limit} OFFSET ${offset}
 	`) as BankTransactionRow[];
 	const [count] = (await Database`SELECT COUNT(*) AS total FROM bank_transactions WHERE project = ${project.uuid} ${filter}`) as { total: number }[];
-	const suggestions = await suggestionsFor(project.uuid, rows);
+	const suggestions = await suggestionsFor(project, rows);
+	const matches = await matchesOf(rows.map((row) => row.uuid));
 	return Utils.ok(ctx, {
-		transactions: rows.map((row) => ({ ...row, suggestions: suggestions.get(row.uuid) ?? [] })),
+		transactions: rows.map((row) => ({ ...row, suggestions: suggestions.get(row.uuid) ?? [], matches: matches.get(row.uuid) ?? [] })),
 		total: Number(count.total),
 		limit,
 		offset,
@@ -170,10 +174,10 @@ Server.app.post(`${base}/bank-transactions/match-exact`, Auth.required(), Permis
 	const used = new Set<string>();
 	let matched = 0;
 	for (const transaction of open) {
-		const exact = ((await suggestionsFor(project.uuid, [transaction])).get(transaction.uuid) ?? []).filter((suggestion) => suggestion.exact);
+		const exact = ((await suggestionsFor(project, [transaction])).get(transaction.uuid) ?? []).filter((suggestion) => suggestion.exact);
 		if (exact.length !== 1 || used.has(exact[0].id) || (await closedYear(project.uuid, transaction.booking_date))) continue;
 		try {
-			await matchTransaction(project, transaction, exact[0].type, exact[0].id, author);
+			await matchTransaction(project, transaction, [{ type: exact[0].type, id: exact[0].id, amount: null }], author);
 			used.add(exact[0].id);
 			matched++;
 		} catch (error) {
@@ -187,6 +191,26 @@ Server.app.post(`${base}/bank-transactions/match-exact`, Auth.required(), Permis
 	return Utils.ok(ctx, { matched });
 });
 
+function matchInputs(data: Record<string, unknown> | null): BankMatchInput[] | null {
+	const raw = Array.isArray(data?.matches) ? (data.matches as unknown[]) : data ? [data] : [];
+	const inputs: BankMatchInput[] = [];
+	for (const item of raw) {
+		const entry = item as Record<string, unknown> | null;
+		if (!entry || !MATCH_TYPES.includes(entry.type as BankMatchType) || typeof entry.id !== "string") return null;
+		const amount = entry.amount === undefined || entry.amount === null ? null : entry.amount;
+		if (amount !== null && (typeof amount !== "number" || !Number.isSafeInteger(amount) || amount <= 0)) return null;
+		inputs.push({ type: entry.type as BankMatchType, id: entry.id, amount });
+	}
+	return inputs.length > 0 && inputs.length <= 50 ? inputs : null;
+}
+
+Server.app.get(`${base}/bank-transactions/:line/candidates`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const transaction = await findTransaction(project.uuid, ctx.params.line);
+	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
+	return Utils.ok(ctx, { candidates: await candidatesFor(project, transaction) });
+});
+
 Server.app.post(`${base}/bank-transactions/:line/match`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	const refused = editable(ctx);
 	if (refused) return refused;
@@ -194,15 +218,15 @@ Server.app.post(`${base}/bank-transactions/:line/match`, Auth.required(), Permis
 	const transaction = await findTransaction(project.uuid, ctx.params.line);
 	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
 	if (await closedYear(project.uuid, transaction.booking_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
-	const data = await body(ctx);
-	if (!MATCH_TYPES.includes(data?.type as BankMatchType) || typeof data?.id !== "string") return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+	const inputs = matchInputs(await body(ctx));
+	if (!inputs) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
 	try {
-		await matchTransaction(project, transaction, data.type as BankMatchType, data.id, Auth.account(ctx).username);
+		await matchTransaction(project, transaction, inputs, Auth.account(ctx).username);
 	} catch (error) {
 		if (error instanceof BankMatchRefused) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
 		throw error;
 	}
-	await audit(ctx, "bank_transaction.matched", transaction.uuid, { type: data.type, id: data.id });
+	await audit(ctx, "bank_transaction.matched", transaction.uuid, { matches: inputs });
 	await syncLedger(project);
 	return Utils.ok(ctx, await findTransaction(project.uuid, transaction.uuid));
 });
