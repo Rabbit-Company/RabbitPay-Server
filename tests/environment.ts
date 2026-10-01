@@ -41,6 +41,7 @@ export const TEST_SETTINGS: Record<string, string | number | boolean> = {
 	"rates.api_url": UNREACHABLE,
 	"vies.api_url": UNREACHABLE,
 	"vies.timeout": 2,
+	"registry.enabled": false,
 };
 
 export async function prepareTest(database = "sqlite://:memory:") {

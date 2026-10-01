@@ -149,6 +149,9 @@ export interface ServerSettings {
 		api_url: string;
 		timeout: number;
 	};
+	registry: {
+		enabled: boolean;
+	};
 	stripe: {
 		enabled: boolean;
 		api_url: string;
@@ -260,6 +263,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 	webhooks: { poll_interval: 15, timeout: 10, max_attempts: 5, allow_private_targets: false },
 	rates: { enabled: true, api_url: "https://forex.rabbitmonitor.com", cache_seconds: 60 },
 	vies: { enabled: true, api_url: "https://ec.europa.eu/taxation_customs/vies/rest-api", timeout: 20 },
+	registry: { enabled: true },
 	stripe: { enabled: false, api_url: "https://api.stripe.com", checkout_expiry: 86400 },
 	paypal: { enabled: false, api_url: "https://api-m.paypal.com" },
 	xmr: { enabled: false, confirmations: 10, poll_interval: 60, address_expiry: 3600 },
@@ -660,6 +664,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{ key: "vies.enabled", label: "Check VAT numbers with VIES", kind: "boolean" },
 			{ key: "vies.api_url", label: "VIES API", kind: "text" },
 			{ key: "vies.timeout", label: "VIES timeout", hint: "Seconds", kind: "number", min: 1 },
+			{
+				key: "registry.enabled",
+				label: "Slovenian company registry",
+				hint: "Downloads the FURS taxpayer lists once a day so company names, addresses and tax numbers fill in automatically.",
+				kind: "boolean",
+			},
 		],
 	},
 	{

@@ -1,10 +1,11 @@
 import { pagination, PAGE_SIZE } from "../pagination";
-import { Api, ApiError, type Customer } from "../api";
+import { Api, ApiError, type CompanyLookup, type Customer } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
 import { formatDate, formatDateTime } from "../money";
 import { confirmDialog, modal, reportError, toast } from "../ui";
 import { loadProject, projectLayout } from "./project";
-import { staticCombobox } from "../combobox";
+import { combobox, staticCombobox } from "../combobox";
+import { companySearch, watchVatNumber } from "../company-lookup";
 import { countryName, countryOptions } from "../countries";
 import { normalizeVatNumber, splitVatNumber } from "../../../server/tax";
 import { customerTypeLabel, customerTypeOptions } from "../options";
@@ -62,7 +63,14 @@ async function runVatCheck(uuid: string, customer: Customer): Promise<Customer |
 export function customerForm(uuid: string, existing: Customer | null, onSaved: (customer: Customer) => void, prefill = "", onClosed?: () => void) {
 	const typedEmail = prefill.includes("@") ? prefill : "";
 	const typedName = typedEmail ? "" : prefill;
-	const name = input("text", { value: existing?.name ?? typedName });
+	const lookup = companySearch();
+	const name = combobox({
+		search: (query) => lookup.search(query),
+		selected: existing?.name || typedName ? { value: existing?.name ?? typedName, label: existing?.name ?? typedName } : null,
+		freeText: true,
+		class: "combo-customer",
+		placeholder: t("customers.name_lookup"),
+	});
 	const email = input("email", { value: existing?.email ?? typedEmail, required: true });
 	const phone = input("text", { value: existing?.phone ?? "" });
 	const line1 = input("text", { value: existing?.address_line1 ?? "" });
@@ -123,6 +131,29 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 	country.onChange(refreshVatBox);
 	refreshVatBox();
 
+	const fill = (found: CompanyLookup) => {
+		name.select({ value: found.name, label: found.name });
+		if (found.address_line1) line1.value = found.address_line1;
+		if (found.city) city.value = found.city;
+		if (found.postal_code) postal.value = found.postal_code;
+		if (found.country) country.select(countryOptions().find((option) => option.value === found.country) ?? null);
+		vat.value = found.vat_number ?? "";
+		taxNumber.value = found.tax_number ?? taxNumber.value;
+		if (found.registration_number) {
+			registrationNumber.value = found.registration_number;
+			eInvoicing.open = true;
+		}
+		customerType.value = "business";
+		refreshTaxNumber();
+		refreshVatBox();
+		toast(t("lookup.filled", { source: t(found.source === "furs" ? "lookup.source_furs" : "lookup.source_vies"), name: found.name }));
+	};
+	name.onChange((option) => {
+		const found = lookup.found(option);
+		if (found) fill(found);
+	});
+	watchVatNumber(vat, fill, () => !name.value.trim());
+
 	const save = async (forceCheck: boolean) => {
 		if (!form.reportValidity()) return;
 		submit.disabled = true;
@@ -175,7 +206,7 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 				void save(false);
 			},
 		},
-		el("div", { class: "form-grid" }, field(t("customers.name"), name), field(t("customers.email"), email)),
+		el("div", { class: "form-grid" }, field(t("customers.name"), name.element), field(t("customers.email"), email)),
 		el("div", { class: "form-grid" }, field(t("customers.type"), customerType, t("customers.type_hint")), field(t("customers.phone"), phone)),
 		field(t("customers.address"), line1),
 		el(
@@ -194,7 +225,7 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 	const dialog = modal(existing ? t("customers.edit") : t("customers.new"), form, () => {
 		if (!settled) onClosed?.();
 	});
-	(typedEmail ? email : name).focus();
+	(typedEmail ? email : name.input).focus();
 }
 
 export async function customersView(uuid: string): Promise<HTMLElement> {

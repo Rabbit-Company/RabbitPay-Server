@@ -1,4 +1,5 @@
 import { PageState } from "../../../server/page-state";
+import { companySearch } from "../company-lookup";
 import { pagedTable, pagination, PAGE_SIZE } from "../pagination";
 import {
 	Api,
@@ -122,15 +123,16 @@ async function editor(
 	const [known, suppliers] = await Promise.all([currencyRates(), allSupplierOptions(project.uuid)]);
 	const startCurrency = initial?.currency ?? project.currency;
 	const description = input("text", { value: initial?.description ?? "", required: true, maxlength: "240" });
+	const lookup = companySearch(suppliers);
 	const supplier = combobox({
-		options: suppliers,
+		search: (query) => lookup.search(query),
 		selected: initial?.supplier
 			? (suppliers.find((option) => option.value === initial.supplier) ?? { value: initial.supplier, label: initial.supplier })
 			: null,
 		class: "combo-customer",
 		freeText: true,
 		placeholder: t("expenses.supplier_placeholder"),
-		limit: suppliers.length,
+		limit: suppliers.length + 10,
 	});
 	supplier.input.maxLength = 240;
 	const expense = recurring ? null : (initial as Expense | null);
@@ -138,9 +140,14 @@ async function editor(
 	const supplierCountry = select([{ value: "", label: t("ui.none") }, ...countryOptions()], initial?.supplier_country ?? "");
 	supplier.onChange((option) => {
 		const selectedSupplier = suppliers.find((candidate) => candidate === option)?.customer;
-		if (!selectedSupplier) return;
-		supplierTaxNumber.value = selectedSupplier.vat_number ?? selectedSupplier.tax_number ?? "";
-		supplierCountry.value = selectedSupplier.country ?? "";
+		const found = lookup.found(option);
+		if (selectedSupplier) {
+			supplierTaxNumber.value = selectedSupplier.vat_number ?? selectedSupplier.tax_number ?? "";
+			supplierCountry.value = selectedSupplier.country ?? "";
+		} else if (found) {
+			supplierTaxNumber.value = found.vat_number ?? found.tax_number ?? "";
+			supplierCountry.value = found.country ?? "";
+		}
 	});
 	const invoiceNumber = input("text", { value: expense?.invoice_number ?? "", maxlength: "250" });
 	const vatTreatment = select(

@@ -1,5 +1,6 @@
 import { pagination, PAGE_SIZE } from "../pagination";
-import { Api, type Company, type NumberSeries, type ProformaSettlement, type Project } from "../api";
+import { Api, type CompanyLookup, type Company, type NumberSeries, type ProformaSettlement, type Project } from "../api";
+import { companySearch, watchVatNumber } from "../company-lookup";
 import { el, field, input, select, table } from "../dom";
 import { navigate } from "../router";
 import { confirmDialog, modal, reportError, secretReveal, toast } from "../ui";
@@ -14,7 +15,7 @@ import { ACCENT_PRESETS, BRAND_BLUE } from "../../../server/colors";
 import { applyAccent } from "../theme";
 import { countryCodeFor, countryOptions } from "../countries";
 import { defaultExemptionNote, defaultTaxCurrency, isEuCountry, splitVatNumber } from "../../../server/tax";
-import { staticCombobox } from "../combobox";
+import { combobox, staticCombobox } from "../combobox";
 import { can, Permission } from "../access";
 import {
 	DEFAULT_INVOICE_FORMAT,
@@ -104,10 +105,44 @@ function companySection(uuid: string, vatStatus: string | null): HTMLElement {
 			emptyText: t("country.no_match"),
 		});
 
+		const lookup = companySearch();
+		const legalName = combobox({
+			search: (query) => lookup.search(query),
+			selected: company.legal_name ? { value: company.legal_name, label: company.legal_name } : null,
+			freeText: true,
+			placeholder: t("customers.name_lookup"),
+		});
+		const fill = (found: CompanyLookup) => {
+			legalName.select({ value: found.name, label: found.name });
+			const values: Partial<Record<keyof Company, string | null>> = {
+				address_line1: found.address_line1,
+				postal_code: found.postal_code,
+				city: found.city,
+				vat_number: found.vat_number,
+				tax_number: found.tax_number,
+				registration_number: found.registration_number,
+			};
+			for (const [key, value] of Object.entries(values) as [keyof Company, string | null][]) {
+				const control = inputs.get(key);
+				if (control && value) control.value = value;
+			}
+			if (found.country) country.select(countryOptions().find((option) => option.value === found.country) ?? null);
+			toast(t("lookup.filled", { source: t(found.source === "furs" ? "lookup.source_furs" : "lookup.source_vies"), name: found.name }));
+		};
+		legalName.onChange((option) => {
+			const found = lookup.found(option);
+			if (found) fill(found);
+		});
+
 		const controls = companyFields(vatStatus).map((definition) => {
 			if (definition.key === "country") return field(definition.label, country.element, definition.hint);
+			if (definition.key === "legal_name") {
+				inputs.set("legal_name", legalName.input);
+				return field(definition.label, legalName.element, definition.hint);
+			}
 			const control = input("text", { value: company[definition.key] ?? "" });
 			inputs.set(definition.key, control);
+			if (definition.key === "vat_number" || definition.key === "tax_number") watchVatNumber(control, fill, () => !legalName.value.trim());
 			return field(definition.label, control, definition.hint);
 		});
 

@@ -1,4 +1,5 @@
 import { Api, type ImportColumn, type ImportResult, type Project, type RecordedInvoice, type RecordedInvoiceInput } from "../api";
+import { companySearch } from "../company-lookup";
 import { csvImportDialog } from "../csv-import";
 import { combobox } from "../combobox";
 import { el, field, input, saveFile, select } from "../dom";
@@ -49,8 +50,9 @@ async function recordDialog(project: Project, existing: RecordedInvoice | null, 
 		hint: [buyer.vat_number, buyer.country].filter(Boolean).join(" | ") || undefined,
 		keywords: buyer.vat_number ?? undefined,
 	}));
+	const lookup = companySearch(buyerOptions);
 	const buyerName = combobox({
-		options: buyerOptions,
+		search: (query) => lookup.search(query),
 		selected: existing ? { value: existing.buyer_name, label: existing.buyer_name } : null,
 		class: "combo-customer",
 		freeText: true,
@@ -61,6 +63,12 @@ async function recordDialog(project: Project, existing: RecordedInvoice | null, 
 	const buyerVat = input("text", { maxlength: "80", placeholder: "SI12345678", value: existing?.buyer_vat_number ?? "" });
 	const buyerCountry = select([{ value: "", label: t("ui.none") }, ...countryOptions()], existing?.buyer_country ?? project.tax_country ?? "");
 	buyerName.onChange((option) => {
+		const found = lookup.found(option);
+		if (found) {
+			buyerVat.value = found.vat_number ?? found.tax_number ?? "";
+			buyerCountry.value = found.country ?? "";
+			return;
+		}
 		const known = option ? buyers[Number(option.value)] : undefined;
 		if (!known || known.name !== option?.label) return;
 		buyerVat.value = known.vat_number ?? "";

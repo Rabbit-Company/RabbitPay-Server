@@ -27,6 +27,7 @@ import "./v1/processors";
 import "./v1/projects";
 import "./v1/public";
 import "./v1/recurring";
+import "./v1/registry";
 import "./v1/reports";
 import "./v1/transactions";
 import "./v1/expenses";

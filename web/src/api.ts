@@ -909,6 +909,8 @@ import type {
 	RevaluationPreview,
 } from "../../server/accounting/types";
 export type { OpenItem, OpenItemsKind, OpenItemsReport, PartnerOpenItems };
+import type { CompanyLookup } from "../../server/registry/lookup";
+export type { CompanyLookup };
 import type { BankStatementRow, BankTransactionMatchRow, BankTransactionRow } from "../../server/database/models";
 
 export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[]; matches: BankTransactionMatchRow[] };
@@ -2235,6 +2237,14 @@ export const Api = {
 
 	exportOpenItems(uuid: string, options: { date: number; kind: OpenItemsKind }) {
 		return requestFile(`/projects/${uuid}/accounting/open-items/export${listQuery(options)}`, "odprte-postavke.csv");
+	},
+
+	registrySearch(query: string) {
+		return request<{ results: CompanyLookup[] }>("GET", `/registry/companies${listQuery({ q: query })}`);
+	},
+
+	registryVat(number: string) {
+		return request<{ result: CompanyLookup | null }>("GET", `/registry/vat/${encodeURIComponent(number)}`);
 	},
 
 	accountingPartners(uuid: string) {

@@ -34,6 +34,8 @@ const ID_COLUMNS = new Set([
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
+	registry_tax_number: 16,
+	registry_registration_number: 16,
 	username: 30,
 	account_username: 30,
 	account: 30,
