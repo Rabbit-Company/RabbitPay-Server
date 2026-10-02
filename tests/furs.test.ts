@@ -209,6 +209,7 @@ describe("amounts sent to FURS", () => {
 
 	test("report everything as not taxable for a seller outside the VAT system", () => {
 		expect(taxesFor([{ rate: 0, treatment: "small_business", net: 1250, tax: 0 }], "small_business", same)).toEqual({ NontaxableAmount: 12.5 });
+		expect(taxesFor([{ rate: 0, treatment: "domestic_reverse_charge", net: 25000, tax: 0 }], "registered", same)).toEqual({ ReverseVATTaxableAmount: 250 });
 	});
 
 	test("give ten working days, skipping the weekend", () => {

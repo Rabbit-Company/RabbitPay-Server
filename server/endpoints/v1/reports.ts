@@ -94,6 +94,7 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 		const oss = new Map<string, RateLine & { country: string }>();
 		const zeroRated = new Map<ZeroRated, number>();
 		const salesList = new Map<string, { vat_number: string; country: string; goods: number; services: number }>();
+		const domesticReverse = new Map<string, number>();
 		const missingRates: { invoice: string; reference: string; currency: string; issued_at: number | null }[] = [];
 		const missingDetails: { invoice: string; reference: string; reason: string }[] = [];
 		let counted = 0;
@@ -136,6 +137,16 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 				}
 
 				zeroRated.set(treatment, addIntegers(zeroRated.get(treatment) ?? 0, net));
+
+				if (treatment === "domestic_reverse_charge") {
+					const parts = splitVatNumber(invoice.buyer_vat_number, invoice.buyer_country);
+					if (!parts) {
+						missingDetails.push({ invoice: invoice.uuid, reference, reason: "Domestic reverse charge sale without a VAT number for the customer" });
+						continue;
+					}
+					const key = `${parts.prefix}${parts.number}`;
+					domesticReverse.set(key, addIntegers(domesticReverse.get(key) ?? 0, net));
+				}
 
 				if (treatment === "reverse_charge" || treatment === "intra_eu_goods") {
 					const parts = splitVatNumber(invoice.buyer_vat_number, invoice.buyer_country);
@@ -244,6 +255,9 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 			oss: ossRows,
 			zero_rated: zeroRows,
 			ec_sales_list: listRows,
+			domestic_reverse_list: [...domesticReverse.entries()]
+				.map(([vat_number, net]) => ({ vat_number, net }))
+				.sort((a, b) => a.vat_number.localeCompare(b.vat_number)),
 			totals: {
 				net: addIntegers(sum(domesticRows, "net"), sum(ossRows, "net"), sum(zeroRows, "net")),
 				domestic_vat: sum(domesticRows, "vat"),

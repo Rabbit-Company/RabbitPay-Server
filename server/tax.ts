@@ -120,8 +120,17 @@ export function splitVatNumber(raw: string | null | undefined, fallbackCountry: 
 }
 
 export type SupplyType = "goods" | "services" | "digital";
-export type TaxCategory = "standard" | "reduced" | "exempt";
-export type TaxTreatment = "domestic" | "small_business" | "reverse_charge" | "intra_eu_goods" | "export" | "outside_scope" | "oss" | "exempt";
+export type TaxCategory = "standard" | "reduced" | "exempt" | "domestic_reverse";
+export type TaxTreatment =
+	| "domestic"
+	| "small_business"
+	| "reverse_charge"
+	| "domestic_reverse_charge"
+	| "intra_eu_goods"
+	| "export"
+	| "outside_scope"
+	| "oss"
+	| "exempt";
 
 export const SUPPLY_TYPES: { value: SupplyType; label: string; hint: string }[] = [
 	{ value: "services", label: "Service", hint: "Work, consulting, support" },
@@ -133,12 +142,14 @@ export const TAX_CATEGORIES: { value: TaxCategory; label: string }[] = [
 	{ value: "standard", label: "Standard rate" },
 	{ value: "reduced", label: "Reduced rate" },
 	{ value: "exempt", label: "Exempt from VAT" },
+	{ value: "domestic_reverse", label: "Domestic reverse charge" },
 ];
 
 export const TAX_TREATMENTS: { value: TaxTreatment; label: string; zeroRated: boolean }[] = [
 	{ value: "domestic", label: "Your VAT", zeroRated: false },
 	{ value: "oss", label: "Customer country VAT (OSS)", zeroRated: false },
 	{ value: "reverse_charge", label: "Reverse charge", zeroRated: true },
+	{ value: "domestic_reverse_charge", label: "Domestic reverse charge", zeroRated: true },
 	{ value: "intra_eu_goods", label: "Intra-EU supply of goods", zeroRated: true },
 	{ value: "export", label: "Export", zeroRated: true },
 	{ value: "outside_scope", label: "Outside the scope of EU VAT", zeroRated: true },
@@ -261,7 +272,8 @@ export type TaxWarning =
 	| "reduced_rate"
 	| "export_proof"
 	| "business_proof"
-	| "digital_consumer";
+	| "digital_consumer"
+	| "domestic_reverse_buyer";
 
 export interface TaxSuggestion {
 	treatment: TaxTreatment | null;
@@ -285,15 +297,27 @@ export function suggestTax(seller: SellerTax, buyer: BuyerTax | null, line: Line
 
 	const domestic = (): TaxSuggestion => ({ treatment: "domestic", rate: line.rate, warnings });
 	const country = buyer?.country ?? null;
+	const reversible = line.category === "domestic_reverse";
 
-	if (!buyer) return domestic();
-	if (!country) {
-		if (buyer.type === "business" || buyer.vatNumber) warnings.push("customer_country");
+	if (!buyer) {
+		if (reversible) warnings.push("domestic_reverse_buyer");
 		return domestic();
 	}
-	if (country === seller.country) return domestic();
+	if (!country) {
+		if (buyer.type === "business" || buyer.vatNumber) warnings.push("customer_country");
+		else if (reversible) warnings.push("domestic_reverse_buyer");
+		return domestic();
+	}
 
 	const business = buyer.type === "business" || (buyer.type === null && Boolean(buyer.vatNumber));
+
+	if (country === seller.country) {
+		if (!reversible) return domestic();
+		if (!business || !buyer.vatNumber) warnings.push("domestic_reverse_buyer");
+		else if (buyer.vatValid === true) return { treatment: "domestic_reverse_charge", rate: 0, warnings };
+		else warnings.push(buyer.vatValid === false ? "vies_invalid" : "vies_check");
+		return domestic();
+	}
 
 	if (isEuCountry(country)) {
 		if (business && buyer.vatValid === true) {

@@ -238,6 +238,7 @@ function keysDialog(uuid: string, item: CatalogItem, onChanged: () => void) {
 function describeTax(item: CatalogItem): string {
 	const supply = supplyTypeLabel(item.supply_type);
 	if (item.tax_category === "exempt") return `${supply}, ${t("items.tax_exempt")}`;
+	if (item.tax_category === "domestic_reverse") return `${supply}, ${item.tax_rate}% ${t("items.tax_domestic_reverse")}`;
 	return `${supply}, ${item.tax_rate}%${item.tax_category === "reduced" ? ` ${t("items.tax_reduced")}` : ""}`;
 }
 
@@ -281,6 +282,11 @@ async function itemForm(uuid: string, project: Project, existing: CatalogItem | 
 				standardRate !== undefined
 					? t("items.rate_hint_standard", { country: project.tax_country ?? "", rate: standardRate })
 					: t("items.rate_hint_no_country");
+			return;
+		}
+		if (category.value === "domestic_reverse") {
+			if (fromUser && standardRate !== undefined) taxRate.value = String(standardRate);
+			rateHint.textContent = t("items.rate_hint_domestic_reverse");
 			return;
 		}
 		if (fromUser && reducedRate !== undefined) taxRate.value = String(reducedRate);

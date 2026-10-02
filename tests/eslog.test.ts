@@ -140,6 +140,7 @@ describe("VAT categories", () => {
 		expect(vatCategory("domestic", 22, "registered")).toBe("S");
 		expect(vatCategory("oss", 19, "registered")).toBe("S");
 		expect(vatCategory("reverse_charge", 0, "registered")).toBe("AE");
+		expect(vatCategory("domestic_reverse_charge", 0, "registered")).toBe("AE");
 		expect(vatCategory("intra_eu_goods", 0, "registered")).toBe("K");
 		expect(vatCategory("export", 0, "registered")).toBe("G");
 		expect(vatCategory("exempt", 0, "registered")).toBe("E");

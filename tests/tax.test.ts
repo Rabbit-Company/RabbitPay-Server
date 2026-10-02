@@ -165,6 +165,30 @@ describe("tax defaults", () => {
 	});
 });
 
+describe("the domestic reverse charge", () => {
+	const seller = { country: "SI", vatStatus: "registered", ossRegistered: false };
+	const line = { supplyType: "services" as const, category: "domestic_reverse" as const, rate: 22 };
+	const buyer = { country: "SI", type: "business", vatNumber: "SI87654321", vatValid: true as boolean | null };
+
+	test("is suggested for a business in the seller's country whose VAT number is confirmed", () => {
+		expect(suggestTax(seller, buyer, line)).toEqual({ treatment: "domestic_reverse_charge", rate: 0, warnings: [] });
+	});
+
+	test("charges VAT and says why when the VAT number is missing, unchecked or invalid", () => {
+		for (const other of [null, { ...buyer, vatNumber: null }, { ...buyer, type: "individual" }, { ...buyer, country: null, type: null, vatNumber: null }]) {
+			expect(suggestTax(seller, other, line)).toEqual({ treatment: "domestic", rate: 22, warnings: ["domestic_reverse_buyer"] });
+		}
+		expect(suggestTax(seller, { ...buyer, vatValid: null }, line)).toEqual({ treatment: "domestic", rate: 22, warnings: ["vies_check"] });
+		expect(suggestTax(seller, { ...buyer, vatValid: false }, line)).toEqual({ treatment: "domestic", rate: 22, warnings: ["vies_invalid"] });
+	});
+
+	test("does not change how ordinary lines or foreign customers are taxed", () => {
+		expect(suggestTax(seller, buyer, { ...line, category: "standard" })).toEqual({ treatment: "domestic", rate: 22, warnings: [] });
+		expect(suggestTax(seller, { country: "DE", type: "business", vatNumber: "DE123456789", vatValid: true }, line).treatment).toBe("reverse_charge");
+		expect(suggestTax({ ...seller, vatStatus: "small_business" }, buyer, line).treatment).toBe("small_business");
+	});
+});
+
 describe("a project's tax profile", () => {
 	test("starts empty", async () => {
 		const res = await call("GET", base(), { token: ownerToken });

@@ -70,6 +70,7 @@ export function taxesFor(lines: TaxLine[], vatStatus: string | null, euro: Euro)
 		}
 		switch (line.treatment) {
 			case "reverse_charge":
+			case "domestic_reverse_charge":
 				reverse += line.net;
 				break;
 			case "exempt":

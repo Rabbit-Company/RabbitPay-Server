@@ -183,4 +183,37 @@ describe("official FURS DDV evidence", () => {
 		const [audit] = (await Database`SELECT COUNT(*) AS count FROM audit_log WHERE action = 'accounting_period.unlocked'`) as { count: number }[];
 		expect(Number(audit.count)).toBe(1);
 	});
+	test("books a domestic reverse charge sale in field 8 of the issued invoice book", async () => {
+		const base = `/api/v1/projects/${project}`;
+		const customer = await call("POST", `${base}/customers`, {
+			email: "gradnje@example.com",
+			name: "Gradnje d.o.o.",
+			address_line1: "Cesta 1",
+			postal_code: "2000",
+			city: "Maribor",
+			country: "SI",
+			vat_number: "SI87654321",
+			customer_type: "business",
+		});
+		const invoice = await call("POST", `${base}/invoices`, {
+			customer: customer.data.uuid,
+			currency: "EUR",
+			due_date: Date.UTC(2026, 1, 28),
+			supply_date: Date.UTC(2026, 1, 10),
+			status: "open",
+			items: [{ description: "Gradbena dela", quantity: 1, unit_price: 25000, tax_rate: 0, tax_treatment: "domestic_reverse_charge" }],
+		});
+		expect(invoice.data.issued_at).toBeGreaterThan(0);
+		await Database`UPDATE invoices SET issued_at = ${Date.UTC(2026, 1, 10)} WHERE uuid = ${invoice.data.uuid}`;
+
+		const february = { from: startOfLocalDate("2026-02-01", timezone), to: endOfLocalDate("2026-02-28", timezone) };
+		const options = { ...february, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const preview = await call("GET", `${base}/reports/ddv-evidence?${query(options)}`);
+		const kir = preview.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR;
+		expect(preview.data.errors).toEqual([]);
+		expect(kir).toHaveLength(1);
+		expect(kir[0]).toMatchObject({ P8: 250, OBRAVNAVA: "1" });
+		expect(kir[0].P7).toBeUndefined();
+		expect(kir[0].P10).toBeUndefined();
+	});
 });

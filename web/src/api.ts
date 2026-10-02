@@ -1747,6 +1747,7 @@ export interface VatReport {
 	oss: { country: string; rate: number; net: number; vat: number }[];
 	zero_rated: { treatment: string; net: number }[];
 	ec_sales_list: { vat_number: string; country: string; goods: number; services: number }[];
+	domestic_reverse_list: { vat_number: string; net: number }[];
 	totals: { net: number; domestic_vat: number; oss_vat: number };
 	missing_rates: { invoice: string; reference: string; currency: string; issued_at: number | null }[];
 	missing_details: { invoice: string; reference: string; reason: string }[];

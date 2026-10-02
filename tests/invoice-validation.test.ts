@@ -177,6 +177,90 @@ describe("mandatory Slovenian invoice data", () => {
 		expect(reverse.data.issues.map((issue: { code: string }) => issue.code)).toContain("buyer_vat_number");
 	});
 
+	test("issues a domestic reverse charge invoice only to a Slovenian customer with a VAT ID", async () => {
+		const projectId = await project("validation-76a");
+		await company(projectId);
+		const buyer = (country: string, vatNumber: string | null) =>
+			call("POST", `/api/v1/projects/${projectId}/customers`, {
+				email: `${country.toLowerCase()}-${vatNumber ?? "none"}@example.com`,
+				name: "Gradnje d.o.o.",
+				address_line1: "Cesta 1",
+				postal_code: "2000",
+				city: "Maribor",
+				country,
+				vat_number: vatNumber,
+				customer_type: "business",
+			});
+		const issue = (customer: string, treatment: string) =>
+			call(
+				"POST",
+				`/api/v1/projects/${projectId}/invoices`,
+				invoice({ status: "open", customer, items: [{ description: "Gradbena dela", quantity: 1, unit_price: 10000, tax_rate: 0, tax_treatment: treatment }] })
+			);
+		const codes = (response: ApiResponse) => response.data.issues.map((entry: { code: string }) => entry.code);
+		const slovenian = (await buyer("SI", "SI87654321")).data.uuid;
+
+		const withoutVat = await issue((await buyer("SI", null)).data.uuid, "domestic_reverse_charge");
+		expect(withoutVat.error).toBe(ErrorCode.INVOICE_DATA_INCOMPLETE);
+		expect(codes(withoutVat)).toContain("domestic_reverse_buyer");
+
+		const foreign = await issue((await buyer("DE", "DE123456789")).data.uuid, "domestic_reverse_charge");
+		expect(codes(foreign)).toContain("domestic_reverse_buyer");
+
+		const asEuSale = await issue(slovenian, "reverse_charge");
+		expect(codes(asEuSale)).toContain("reverse_charge_domestic_buyer");
+
+		const withVat = await call(
+			"POST",
+			`/api/v1/projects/${projectId}/invoices`,
+			invoice({
+				status: "open",
+				customer: slovenian,
+				items: [{ description: "Gradbena dela", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic_reverse_charge" }],
+			})
+		);
+		expect(withVat.error).toBe(ErrorCode.INVALID_INVOICE_ITEMS);
+
+		const issued = await issue(slovenian, "domestic_reverse_charge");
+		expect(issued.error).toBe(0);
+		expect(issued.data).toMatchObject({ status: "open", tax_amount: 0, total_amount: 10000 });
+
+		const document = await call("GET", `/api/v1/projects/${projectId}/invoices/${issued.data.uuid}/document`);
+		expect(document.data.tax.notes).toEqual([
+			"Reverse charge: VAT is to be accounted for by the recipient under Article 76.a of the Slovenian VAT Act (ZDDV-1).",
+		]);
+
+		const report = await call("POST", `/api/v1/projects/${projectId}/reports/vat`);
+		expect(report.data.zero_rated).toEqual([{ treatment: "domestic_reverse_charge", net: 10000 }]);
+		expect(report.data.domestic_reverse_list).toEqual([{ vat_number: "SI87654321", net: 10000 }]);
+		expect(report.data.ec_sales_list).toEqual([]);
+	});
+
+	test("refuses the domestic reverse charge from a seller that is not VAT registered", async () => {
+		const projectId = await project("validation-76a-small", "small_business");
+		await company(projectId, null);
+		const customer = await call("POST", `/api/v1/projects/${projectId}/customers`, {
+			email: "kupec@example.com",
+			name: "Kupec d.o.o.",
+			address_line1: "Cesta 1",
+			postal_code: "2000",
+			city: "Maribor",
+			country: "SI",
+			vat_number: "SI87654321",
+			customer_type: "business",
+		});
+		const refused = await call(
+			"POST",
+			`/api/v1/projects/${projectId}/invoices`,
+			invoice({
+				status: "open",
+				customer: customer.data.uuid,
+				items: [{ description: "Gradbena dela", quantity: 1, unit_price: 10000, tax_rate: 0, tax_treatment: "domestic_reverse_charge" }],
+			})
+		);
+		expect(refused.data.issues.map((entry: { code: string }) => entry.code)).toContain("domestic_reverse_seller");
+	});
+
 	test("prevents a small business from charging VAT", async () => {
 		const projectId = await project("validation-small-business", "small_business");
 		await company(projectId, null);

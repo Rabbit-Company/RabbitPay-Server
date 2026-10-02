@@ -390,6 +390,17 @@ function vatSection(uuid: string, project: Project): HTMLElement {
 			);
 		}
 
+		if (report.domestic_reverse_list.length > 0) {
+			blocks.push(
+				el("h3", { class: "toolbar-title" }, t("stats.domestic_reverse_title")),
+				el("p", { class: "muted intro" }, t("stats.domestic_reverse_intro")),
+				pagedTable(
+					[t("stats.column_customer_vat"), t("stats.column_net")],
+					report.domestic_reverse_list.map((row) => el("tr", {}, el("td", { class: "mono" }, row.vat_number), el("td", { class: "mono" }, money(row.net))))
+				)
+			);
+		}
+
 		if (report.ec_sales_list.length > 0) {
 			blocks.push(
 				el("h3", { class: "toolbar-title" }, t("stats.ec_title")),

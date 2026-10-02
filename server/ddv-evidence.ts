@@ -233,6 +233,7 @@ function kirInvoiceRecord(
 			else if (mapping) add(record, mapping.output, vat);
 		} else if (treatment === "export") add(record, "P7", net);
 		else if (treatment === "exempt" || treatment === "small_business") add(record, "P9", net);
+		else if (treatment === "domestic_reverse_charge") add(record, "P8", net);
 		else if (treatment === "reverse_charge" || treatment === "intra_eu_goods") add(record, "P10", net);
 		else if (treatment === "outside_scope") add(record, "P27", net);
 	}

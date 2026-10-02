@@ -232,6 +232,47 @@ FURS test environment, request a test certificate at sd.fu@gov.si and run:
 FURS_TEST_P12=/path/to/test.p12 FURS_TEST_PASSWORD=secret bun test tests/furs-live.test.ts
 ```
 
+## Domestic reverse charge (76.a člen ZDDV-1)
+
+For some supplies between two Slovenian VAT payers, such as construction work,
+staff hired out for it, scrap and waste, the buyer accounts for the VAT and the
+invoice carries none. These lines use the tax treatment
+`domestic_reverse_charge` with a tax rate of 0.
+
+There are two ways to get it on an invoice:
+
+- Catalog item. Set the item's tax category to Domestic reverse charge
+  (`domestic_reverse`) and keep its normal VAT rate. When the customer is a
+  business in the seller's country whose VAT ID was confirmed in VIES, the line
+  is suggested at 0% with the reverse charge. Any other customer is charged the
+  item's rate, and the editor says why. The terminal and the online store
+  always sell the item with VAT, because the buyer's VAT ID is not confirmed
+  there.
+- By hand. A line with 0% VAT that has no legal basis yet shows Why no VAT is
+  charged under it. Choose Domestic reverse charge there. The same choice covers
+  exempt supplies and the other treatments without VAT.
+
+Issuing is checked. The seller must be VAT registered and the customer must be
+Slovenian with a Slovenian VAT ID, or error `1132` returns the issue
+`domestic_reverse_seller` or `domestic_reverse_buyer`. A Slovenian customer can
+also no longer be invoiced with the EU treatments `reverse_charge` or
+`intra_eu_goods`, which returns `reverse_charge_domestic_buyer`.
+
+What the treatment changes:
+
+| Where                    | Result                                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| PDF, emails, pay page    | The note reads Obrnjena davčna obveznost: DDV obračuna prejemnik v skladu s 76.a členom ZDDV-1.          |
+| e-SLOG                   | VAT category `AE` with the same note as the exemption reason.                                            |
+| FURS fiscal verification | The net amount is sent as `ReverseVATTaxableAmount`.                                                     |
+| DDV evidence (KIR)       | The net amount is booked in field 8, which feeds box 11a of the DDV-O return.                            |
+| VAT report               | Listed under sales without VAT and, per customer VAT ID, in `domestic_reverse_list` for the PD-O report. |
+| Accounting               | Posted to domestic revenue with no output VAT.                                                           |
+
+The PD-O report itself is not generated. The list in the VAT report holds the
+figures to enter in eDavki. A project outside Slovenia gets the same treatment
+with a note that cites Article 199 of Directive 2006/112/EC.
+
 ## VAT on invoices in another currency
 
 VAT has to be reported in euros, and ZDDV-1 names the rate to use: the ECB

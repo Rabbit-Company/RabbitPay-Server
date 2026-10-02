@@ -21,6 +21,11 @@ export async function partiesFor(project: ProjectRow, invoice: InvoiceRow, saved
 	};
 }
 
+export function taxNoteKey(treatment: string, country: string | null): TranslationKey {
+	if (treatment === "domestic_reverse_charge" && country === "SI") return "tax.note.domestic_reverse_charge.SI";
+	return `tax.note.${treatment}` as TranslationKey;
+}
+
 export function taxDetailsFor(
 	project: Pick<ProjectRow, "vat_status" | "tax_country" | "vat_exemption_note" | "language">,
 	invoice: InvoiceRow,
@@ -44,6 +49,6 @@ export function taxDetailsFor(
 		notes: TAX_TREATMENTS.filter(
 			(entry) =>
 				entry.value !== "domestic" && entry.value !== "small_business" && treatments.some((treatment) => isTaxTreatment(treatment) && treatment === entry.value)
-		).map((entry) => t(project.language, `tax.note.${entry.value}` as TranslationKey)),
+		).map((entry) => t(project.language, taxNoteKey(entry.value, project.tax_country))),
 	};
 }

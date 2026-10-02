@@ -82,6 +82,22 @@ function validateSlovenianInvoice(
 		const vat = splitVatNumber(customer?.vat_number, customer?.country);
 		if (!customer || !vat) add("buyer_vat_number", "customer.vat_number", "Add a valid customer VAT ID for reverse-charge or intra-EU supplies.");
 	}
+	if (requiresBuyerVat && customer?.country === "SI") {
+		add(
+			"reverse_charge_domestic_buyer",
+			"invoice.items.tax_treatment",
+			"A Slovenian customer cannot be invoiced as an EU sale. Use the domestic reverse charge instead."
+		);
+	}
+	if (items.some((item) => item.tax_treatment === "domestic_reverse_charge")) {
+		const vat = splitVatNumber(customer?.vat_number, customer?.country);
+		if (project.vat_status !== "registered") {
+			add("domestic_reverse_seller", "project.vat_status", "Only a VAT registered seller can invoice with the domestic reverse charge.");
+		}
+		if (!customer || customer.country !== "SI" || vat?.prefix !== "SI") {
+			add("domestic_reverse_buyer", "customer.vat_number", "The domestic reverse charge needs a Slovenian customer with a Slovenian VAT ID.");
+		}
+	}
 	if (items.some((item) => item.tax_treatment === "oss") && !present(customer?.country)) {
 		add("oss_buyer_country", "customer.country", "Add the customer's country for an OSS supply.");
 	}

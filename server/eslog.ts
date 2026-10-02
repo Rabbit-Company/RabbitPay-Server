@@ -44,6 +44,7 @@ const REFERENCE_QUALIFIERS: Record<ReferenceDocumentType, string> = {
 
 const EXEMPTION_NOTES: Partial<Record<string, TranslationKey>> = {
 	reverse_charge: "tax.note.reverse_charge",
+	domestic_reverse_charge: "tax.note.domestic_reverse_charge.SI",
 	intra_eu_goods: "tax.note.intra_eu_goods",
 	export: "tax.note.export",
 	outside_scope: "tax.note.outside_scope",
@@ -195,6 +196,7 @@ export function vatCategory(treatment: string | null, rate: number, vatStatus: s
 		case "outside_scope":
 			return "O";
 		case "reverse_charge":
+		case "domestic_reverse_charge":
 			return "AE";
 		case "intra_eu_goods":
 			return "K";

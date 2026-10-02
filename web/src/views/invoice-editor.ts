@@ -6,10 +6,12 @@ import { calculateTotals } from "../../../server/invoicing";
 import { convertAmount, currencyOptions, currencyRates } from "../currencies";
 import { combobox, staticCombobox, type Combobox, type ComboOption } from "../combobox";
 import { customerForm } from "./customers";
-import { taxTreatmentName, taxWarning, unitOptions } from "../options";
+import { taxTreatmentName, taxTreatmentOptions, taxWarning, unitOptions } from "../options";
 import { t } from "../i18n";
 import {
 	STANDARD_RATES,
+	isTaxTreatment,
+	isZeroRated,
 	suggestTax,
 	type BuyerTax,
 	type LineTax,
@@ -28,6 +30,8 @@ interface ItemRow {
 	taxRate: HTMLInputElement;
 	item: string | null;
 	treatment: TaxTreatment | null;
+	chosenTreatment: TaxTreatment | null;
+	zeroBasis: HTMLSelectElement;
 	ownRate: number;
 	manualTax: boolean;
 	taxNote: HTMLElement;
@@ -184,6 +188,9 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 		);
 	};
 
+	const isManualBasis = (value: unknown): value is TaxTreatment => isTaxTreatment(value) && isZeroRated(value) && value !== "small_business";
+	const zeroBasisOptions = taxTreatmentOptions().filter((option) => isManualBasis(option.value));
+
 	const applyTax = () => {
 		const warnings = new Set<string>();
 
@@ -191,12 +198,11 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 			const suggestion = suggestTax(seller, buyerTax(), lineTax(row));
 			for (const warning of suggestion.warnings) warnings.add(warning);
 
-			if (!row.manualTax) {
-				row.taxRate.value = String(suggestion.rate);
-				row.treatment = suggestion.treatment;
-			} else {
-				row.treatment = Number(row.taxRate.value) === suggestion.rate ? suggestion.treatment : null;
-			}
+			if (!row.manualTax) row.taxRate.value = String(suggestion.rate);
+			const rate = Number(row.taxRate.value) || 0;
+			const suggested = rate === suggestion.rate ? suggestion.treatment : null;
+			const needsBasis = seller.vatStatus === "registered" && rate === 0 && (suggested === null || suggested === "domestic");
+			row.treatment = needsBasis ? row.chosenTreatment : suggested;
 
 			const parts: (string | HTMLElement)[] = [];
 			if (suggestion.treatment && suggestion.treatment !== "domestic") {
@@ -219,6 +225,10 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 						t("editor.use_suggestion")
 					)
 				);
+			}
+			if (needsBasis) {
+				row.zeroBasis.value = row.chosenTreatment ?? "";
+				parts.push(`${parts.length > 0 ? " " : ""}${t("editor.zero_basis")} `, row.zeroBasis);
 			}
 			row.taxNote.replaceChildren(...parts);
 			row.taxNote.hidden = parts.length === 0;
@@ -277,6 +287,7 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 		});
 		const taxRate = input("number", { value: String(preset?.tax_rate ?? sellerStandardRate), min: "0", step: "0.01" });
 		const taxNote = el("p", { class: "line-tax muted" });
+		const zeroBasis = select([{ value: "", label: t("editor.zero_basis_choose") }, ...zeroBasisOptions]);
 
 		const remove = el(
 			"button",
@@ -303,6 +314,8 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 			taxRate,
 			item: preset?.item ?? null,
 			treatment: null,
+			chosenTreatment: preset && isManualBasis(preset.tax_treatment) ? preset.tax_treatment : null,
+			zeroBasis,
 			ownRate: preset && !preset.item ? preset.tax_rate : sellerStandardRate,
 			manualTax: false,
 			taxNote,
@@ -314,6 +327,11 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 			const suggestion = suggestTax(seller, buyerTax(), lineTax(row));
 			row.manualTax = suggestion.rate !== preset.tax_rate;
 		}
+
+		zeroBasis.addEventListener("change", () => {
+			row.chosenTreatment = isManualBasis(zeroBasis.value) ? zeroBasis.value : null;
+			applyTax();
+		});
 
 		description.onChange((option) => {
 			const item = option ? catalogById.get(option.value) : undefined;
