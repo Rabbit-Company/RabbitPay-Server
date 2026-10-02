@@ -762,7 +762,11 @@ export const en = {
 	"items.license_days_min": "Fewest days",
 	"items.license_days_max": "Most days",
 	"items.license_minimum": "Minimum price",
-	"items.license_minimum_hint": "Charged when the calculated price is lower.",
+	"items.license_below": "When a choice costs less than the minimum",
+	"items.license_below_charge": "Charge the minimum price",
+	"items.license_below_refuse": "Do not allow it",
+	"items.license_below_hint":
+		"Not allowing it means every buyer pays exactly the rate. The product page then starts at the smallest choice that reaches the minimum.",
 	"items.license_hint":
 		"Prices are before VAT and are calculated from what the buyer chooses. The key is signed for the buyer's Server ID when they give one, and created as soon as the invoice is marked as paid.",
 	"items.license_invalid": "Check the license settings. Every limit needs a whole number, and the lowest value cannot be above the highest.",
@@ -1844,6 +1848,7 @@ export const en = {
 	"shop.license_amount_employees": "Employees",
 	"shop.license_days": "Days",
 	"shop.license_range": "From {min} to {max}",
+	"shop.license_below_minimum": "The smallest order is {price}. Choose a larger amount or a longer period.",
 	"shop.license_server_id": "Server ID",
 	"shop.license_server_hint":
 		"Leave empty to use the key on rabbitpay.net. For your own server, enter the Server ID shown under Admin, Overview. The key only works on that server.",

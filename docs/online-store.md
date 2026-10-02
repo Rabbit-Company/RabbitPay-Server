@@ -88,6 +88,11 @@ license type with a rate and a minimum price, both before VAT:
 | Workforce      | Per 30 days              | Days               |
 | Employee seats | Per employee for 30 days | Employees and days |
 
+A choice that costs less than the minimum price is either charged the minimum
+or not allowed, as set on the item. When it is not allowed, the product page
+starts at the smallest choice that reaches the minimum, and a smaller choice
+cannot be added to the cart.
+
 The item also sets the lowest and highest amount and number of days a buyer can
 choose. The product page asks for these values and an optional Server ID, and
 shows the price as they change. Through the API, such a cart line carries

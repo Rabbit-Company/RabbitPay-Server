@@ -763,7 +763,11 @@ export const sl: UiDictionary = {
 	"items.license_days_min": "Najmanj dni",
 	"items.license_days_max": "Največ dni",
 	"items.license_minimum": "Najnižja cena",
-	"items.license_minimum_hint": "Zaračuna se, kadar je izračunana cena nižja.",
+	"items.license_below": "Ko izbira stane manj od najnižje cene",
+	"items.license_below_charge": "Zaračunaj najnižjo ceno",
+	"items.license_below_refuse": "Ne dovoli",
+	"items.license_below_hint":
+		"Če tega ne dovolite, vsak kupec plača natanko po ceniku. Stran izdelka se takrat začne z najmanjšo izbiro, ki doseže najnižjo ceno.",
 	"items.license_hint":
 		"Cene so brez DDV in se izračunajo iz kupčeve izbire. Če kupec navede ID strežnika, je ključ podpisan zanj. Ključ se ustvari takoj, ko je račun označen kot plačan.",
 	"items.license_invalid": "Preverite nastavitve licence. Vse meje morajo biti cela števila, najnižja vrednost pa ne sme biti višja od najvišje.",
@@ -1844,6 +1848,7 @@ export const sl: UiDictionary = {
 	"shop.license_amount_employees": "Zaposleni",
 	"shop.license_days": "Dnevi",
 	"shop.license_range": "Od {min} do {max}",
+	"shop.license_below_minimum": "Najmanjše naročilo je {price}. Izberite večjo količino ali daljše obdobje.",
 	"shop.license_server_id": "ID strežnika",
 	"shop.license_server_hint":
 		"Pustite prazno za uporabo ključa na rabbitpay.net. Za lasten strežnik vpišite ID strežnika, ki je prikazan v skrbništvu pod Admin, Overview. Ključ deluje samo na tem strežniku.",

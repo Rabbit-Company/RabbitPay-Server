@@ -1,7 +1,7 @@
 import { el, field } from "../dom";
 import { processorLabel, t, tn, type UiKey } from "../i18n";
 import { reportError } from "../ui";
-import { readLicenseChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
+import { belowMinimum, readLicenseChoice, smallestChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
 import { navigate, onLeave } from "../router";
 import { openLightbox } from "../lightbox";
 import { renderMarkdown } from "../../../server/markdown";
@@ -533,10 +533,11 @@ function licenseOptions(
 	license: LicenseProduct,
 	onChange: (choice: LicenseChoice | null, price: number | null) => void
 ) {
-	const numberInput = (min: number, max: number) =>
-		el("input", { type: "number", min: String(min), max: String(max), step: "1", value: String(min), required: true }) as HTMLInputElement;
-	const amount = license.min_amount !== null ? numberInput(license.min_amount, license.max_amount!) : null;
-	const days = license.min_days !== null ? numberInput(license.min_days, license.max_days!) : null;
+	const numberInput = (min: number, max: number, value: number | null) =>
+		el("input", { type: "number", min: String(min), max: String(max), step: "1", value: String(value ?? min), required: true }) as HTMLInputElement;
+	const smallest = smallestChoice(license);
+	const amount = license.min_amount !== null ? numberInput(license.min_amount, license.max_amount!, smallest.amount) : null;
+	const days = license.min_days !== null ? numberInput(license.min_days, license.max_days!, smallest.days) : null;
 	const server = el("input", { type: "text", placeholder: "RPS-XXXXX-XXXXX-XXXXX-XXXXX", maxlength: "27", autocomplete: "off" });
 	const problem = el("p", { class: "sf-warning" });
 	problem.hidden = true;
@@ -545,13 +546,15 @@ function licenseOptions(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const update = async () => {
 		const current = ++round;
-		const choice = readLicenseChoice(license, {
-			amount: amount ? Number(amount.value) : null,
-			days: days ? Number(days.value) : null,
-			server_id: server.value.trim() || null,
-		});
+		const entered = { amount: amount ? Number(amount.value) : null, days: days ? Number(days.value) : null };
+		const choice = readLicenseChoice(license, { ...entered, server_id: server.value.trim() || null });
+		const tooSmall = readLicenseChoice({ ...license, below_minimum: "charge" }, { ...entered, server_id: null }) !== null && belowMinimum(license, entered);
 		problem.hidden = choice !== null;
-		problem.textContent = choice ? "" : t("shop.license_invalid");
+		problem.textContent = choice
+			? ""
+			: tooSmall
+				? t("shop.license_below_minimum", { price: money(product.price, product.currency) })
+				: t("shop.license_invalid");
 		onChange(choice, null);
 		if (!choice) return;
 		const quote = await StoreApi.quote(slug, { lines: [{ product: product.uuid, quantity: 1, license: choice }] });

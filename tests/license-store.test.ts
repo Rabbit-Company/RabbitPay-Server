@@ -13,7 +13,7 @@ const { generateLicenseCode } = await import("../server/licensing");
 const { deliverPendingKeys } = await import("../server/key-delivery");
 const { issuePaidDraft } = await import("../server/paid-drafts");
 const { serverId } = await import("../server/server-identity");
-const { licensePrice } = await import("../server/license-pricing");
+const { belowMinimum, licensePrice, readLicenseChoice, readLicenseProduct, smallestChoice } = await import("../server/license-pricing");
 
 interface Result {
 	status: number;
@@ -43,8 +43,9 @@ let order = "";
 const slug = "rabbitpay-licenses";
 const base = () => `/projects/${project}`;
 
-const SEATS = { type: "employees", rate: 150, minimum: 1000, min_amount: 1, max_amount: 10000, min_days: 30, max_days: 3650 };
-const PAYMENTS = { type: "transactions", rate: 2900, minimum: 500, min_amount: 1000, max_amount: 100000 };
+const SEATS = { type: "employees", rate: 150, minimum: 1000, below_minimum: "charge", min_amount: 1, max_amount: 10000, min_days: 30, max_days: 3650 };
+const PAYMENTS = { type: "transactions", rate: 2900, minimum: 500, below_minimum: "charge", min_amount: 1000, max_amount: 100000 };
+const STORAGE = { type: "storage", rate: 50, minimum: 500, below_minimum: "refuse", min_amount: 1, max_amount: 1000, min_days: 30, max_days: 3650 };
 
 async function account(username: string, admin: boolean): Promise<string> {
 	const now = Date.now();
@@ -288,6 +289,32 @@ describe("license products", () => {
 		expect(seatsRedeemed.data).toMatchObject({ employees_licensed: 20 });
 		const paymentsRedeemed = await call("POST", `/projects/${target}/license/redeem`, tokens.admin, { code: keys[1].code });
 		expect(paymentsRedeemed.data.paid_balance).toBe(5000);
+	});
+
+	test("a choice below the minimum price is charged the minimum or not allowed, as the item says", async () => {
+		const charged = { ...STORAGE, below_minimum: "charge" };
+		expect(readLicenseProduct({ ...STORAGE, below_minimum: undefined })).toMatchObject({ below_minimum: "charge" });
+		expect(readLicenseProduct({ ...STORAGE, below_minimum: "sometimes" })).toBeNull();
+		expect(readLicenseChoice(charged as never, { amount: 1, days: 30 })).toEqual({ amount: 1, days: 30, server_id: null });
+		expect(licensePrice(charged as never, { amount: 1, days: 30 })).toBe(500);
+
+		expect(belowMinimum(STORAGE as never, { amount: 1, days: 30 })).toBe(true);
+		expect(readLicenseChoice(STORAGE as never, { amount: 1, days: 30 })).toBeNull();
+		expect(readLicenseChoice(STORAGE as never, { amount: 9, days: 30 })).toBeNull();
+		expect(readLicenseChoice(STORAGE as never, { amount: 10, days: 30 })).toEqual({ amount: 10, days: 30, server_id: null });
+		expect(licensePrice(STORAGE as never, { amount: 1, days: 365 })).toBe(608);
+
+		expect(smallestChoice(charged as never)).toEqual({ amount: 1, days: 30, server_id: null });
+		expect(smallestChoice(STORAGE as never)).toEqual({ amount: 1, days: 300, server_id: null });
+		expect(smallestChoice({ ...SEATS, below_minimum: "refuse" } as never)).toEqual({ amount: 1, days: 210, server_id: null });
+		expect(smallestChoice(readLicenseProduct({ ...PAYMENTS, minimum: 5800, below_minimum: "refuse" })!)).toEqual({ amount: 2000, days: null, server_id: null });
+		expect(smallestChoice({ ...STORAGE, max_days: 90 } as never)).toEqual({ amount: 4, days: 90, server_id: null });
+
+		const item = { name: "Document storage", unit_price: 0, currency: "EUR", tax_rate: 22, supply_type: "services", license: STORAGE };
+		const unreachable = { ...STORAGE, max_amount: 1, max_days: 90 };
+		expect((await call("POST", `${base()}/items`, tokens.admin, { ...item, license: unreachable })).error).toBe(1066);
+		const created = await call("POST", `${base()}/items`, tokens.admin, item);
+		expect(created.data).toMatchObject({ license: STORAGE, unit_price: 500 });
 	});
 
 	test("stop selling when no owner of the store project is a server administrator", async () => {

@@ -11,7 +11,7 @@ import { t, tn } from "../i18n";
 import { can, Permission } from "../access";
 import { ErrorCode } from "../../../server/errors";
 import { DEFAULT_REDUCED_RATES, STANDARD_RATES } from "../../../server/tax";
-import { readLicenseProduct, usesAmount, usesDays, type LicenseProduct } from "../../../server/license-pricing";
+import { readLicenseProduct, usesAmount, usesDays, type BelowMinimum, type LicenseProduct } from "../../../server/license-pricing";
 import type { UiKey } from "../i18n";
 
 const LICENSE_TYPES: { value: LicenseProduct["type"]; label: UiKey; rate: UiKey; amount: UiKey | null }[] = [
@@ -39,6 +39,13 @@ function licenseSection(existing: LicenseProduct | null, currency: () => string)
 		input("number", { min: "1", step: "1", value: value === null || value === undefined ? "" : String(value) });
 	const rate = money(existing?.rate);
 	const minimum = money(existing?.minimum ?? 0);
+	const belowMinimum = select(
+		[
+			{ value: "charge", label: t("items.license_below_charge") },
+			{ value: "refuse", label: t("items.license_below_refuse") },
+		],
+		existing?.below_minimum ?? "charge"
+	);
 	const minAmount = whole(existing?.min_amount);
 	const maxAmount = whole(existing?.max_amount);
 	const minDays = whole(existing?.min_days ?? 30);
@@ -50,7 +57,8 @@ function licenseSection(existing: LicenseProduct | null, currency: () => string)
 	const details = el(
 		"div",
 		{ class: "stack" },
-		el("div", { class: "form-grid" }, rateField, field(t("items.license_minimum"), minimum, t("items.license_minimum_hint"))),
+		el("div", { class: "form-grid" }, rateField, field(t("items.license_minimum"), minimum)),
+		field(t("items.license_below"), belowMinimum, t("items.license_below_hint")),
 		amountRow,
 		daysRow,
 		el("p", { class: "muted" }, t("items.license_hint"))
@@ -88,6 +96,7 @@ function licenseSection(existing: LicenseProduct | null, currency: () => string)
 					type: kind,
 					rate: toMinor(rate),
 					minimum: toMinor(minimum),
+					below_minimum: belowMinimum.value as BelowMinimum,
 					min_amount: usesAmount(kind) ? wholeValue(minAmount) : null,
 					max_amount: usesAmount(kind) ? wholeValue(maxAmount) : null,
 					min_days: usesDays(kind) ? wholeValue(minDays) : null,
