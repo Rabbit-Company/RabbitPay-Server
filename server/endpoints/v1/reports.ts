@@ -50,16 +50,16 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 		const invoices = (await Database`
 			SELECT * FROM invoices
 			WHERE project = ${project.uuid} AND status <> 'draft' AND issued_at IS NOT NULL
-				AND tax_point_date >= ${from} AND tax_point_date <= ${to}
+				AND vat_period_date >= ${from} AND vat_period_date <= ${to}
 				AND (status <> 'canceled' OR EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice = invoices.uuid))
-			ORDER BY tax_point_date ASC, issued_at ASC
+			ORDER BY vat_period_date ASC, issued_at ASC
 		`) as InvoiceRow[];
 
 		const invoiceLines = invoices.length
 			? ((await Database`
 					SELECT ii.* FROM invoice_items ii JOIN invoices i ON i.uuid = ii.invoice
 					WHERE i.project = ${project.uuid} AND i.status <> 'draft' AND i.issued_at IS NOT NULL
-						AND i.tax_point_date >= ${from} AND i.tax_point_date <= ${to}
+						AND i.vat_period_date >= ${from} AND i.vat_period_date <= ${to}
 				`) as InvoiceItemRow[])
 			: [];
 
@@ -208,7 +208,8 @@ reportRoutes("/api/v1/projects/:uuid/reports/vat", "vat", (ctx) => {
 		}
 
 		const recorded = (await Database`
-			SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND issued_at >= ${from} AND issued_at <= ${to} ORDER BY issued_at ASC
+			SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND tax_point_date >= ${from} AND tax_point_date <= ${to}
+			ORDER BY tax_point_date ASC, issued_at ASC
 		`) as RecordedInvoiceRow[];
 		const recordedLines = recorded.length
 			? ((await Database`

@@ -491,6 +491,34 @@ describe("invoices issued in other systems", () => {
 		expect((await call("POST", `${base()}/accounting/sync`)).data).toMatchObject({ posted: 0, reversed: 2 });
 		expect((await trialBalance())["1000"].closing).toBe(0);
 	});
+
+	test("are reported for VAT in the period of their supply date", async () => {
+		const created = await call(
+			"POST",
+			`${base()}/recorded-invoices`,
+			record({ reference: "2027-00001", issued_at: Date.UTC(2027, 6, 5, 10), supply_date: Date.UTC(2027, 5, 28, 10), paid_at: null })
+		);
+		expect(created.status).toBe(201);
+		expect(created.data.tax_point_date).toBe(Date.UTC(2027, 5, 28, 10));
+
+		const flags = "refund=false&deductible_share=false&insolvency=false&tax_authority_order=false";
+		const reported = async (from: number, to: number) => {
+			const evidence = await call("GET", `${base()}/reports/ddv-evidence?from=${from}&to=${to}&${flags}`);
+			return (evidence.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR as Record<string, string | number>[]).some((row) => row.P3 === "2027-00001");
+		};
+		const june = [Date.UTC(2027, 4, 31, 22), Date.UTC(2027, 5, 30, 21, 59, 59, 999)] as const;
+		const july = [Date.UTC(2027, 5, 30, 22), Date.UTC(2027, 6, 31, 21, 59, 59, 999)] as const;
+		expect(await reported(...june)).toBe(true);
+		expect(await reported(...july)).toBe(false);
+
+		const moved = await call("PATCH", `${base()}/recorded-invoices/${created.data.uuid}`, { supply_date: null });
+		expect(moved.data.tax_point_date).toBe(Date.UTC(2027, 6, 5, 10));
+		expect(await reported(...june)).toBe(false);
+		expect(await reported(...july)).toBe(true);
+
+		expect((await call("DELETE", `${base()}/recorded-invoices/${created.data.uuid}`)).error).toBe(0);
+		await call("POST", `${base()}/accounting/sync`);
+	});
 });
 
 describe("importing invoices issued elsewhere from CSV", () => {

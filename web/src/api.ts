@@ -1505,6 +1505,9 @@ export interface Invoice extends ReferenceDocumentColumns {
 	tax_rate_source: string | null;
 	tax_rate_date: number | null;
 	tax_point_date: number | null;
+	vat_period_date: number | null;
+	vat_handling: string;
+	vat_correction_period: string | null;
 	buyer_country: string | null;
 	buyer_vat_number: string | null;
 	created: number;
@@ -2892,6 +2895,7 @@ export const Api = {
 			discount_amount: number;
 			notes: string | null;
 			tax_exchange_rate?: number | null;
+			late_vat_report?: boolean;
 			status?: "draft" | "open";
 		},
 		requestKey?: string
@@ -2907,8 +2911,8 @@ export const Api = {
 		return request<Invoice>("PATCH", `/projects/${uuid}/invoices/${invoice}`, changes);
 	},
 
-	openInvoice(uuid: string, invoice: string) {
-		return request<Invoice>("POST", `/projects/${uuid}/invoices/${invoice}/open`);
+	openInvoice(uuid: string, invoice: string, lateVatReport = false) {
+		return request<Invoice>("POST", `/projects/${uuid}/invoices/${invoice}/open`, lateVatReport ? { late_vat_report: true } : undefined);
 	},
 
 	createProforma(uuid: string, invoice: string, settlement?: ProformaSettlement) {

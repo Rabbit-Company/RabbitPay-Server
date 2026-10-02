@@ -1155,6 +1155,11 @@ export const sl: UiDictionary = {
 	"invoices.vat_in": "DDV v {reporting}:",
 	"invoices.vat_rate_line": "1 {currency} = {rate} {reporting}, {source}{on}.",
 	"invoices.vat_rate_on": " na dan {date}",
+	"invoices.late_report_title": "Zamujeno poročanje DDV",
+	"invoices.late_report_body":
+		"Datum dobave spada v davčno obdobje, ki je bilo že oddano. Račun lahko izdate zdaj in ga poročate v tekočem obdobju kot popravek prejšnjega (88.b člen ZDDV-1). Od njegovega DDV se za zamudo obračunajo obresti.",
+	"invoices.late_report_confirm": "Izdaj kot zamujeno poročanje",
+	"invoices.late_report_note": "Poročan v obdobju izdaje kot popravek obdobja {period} po 88.b členu ZDDV-1. Od njegovega DDV se obračunajo obresti.",
 	"invoices.rate_manual": "vnesen ročno",
 	"invoices.rate_locked": "Ta tečaj je natisnjen na izdanem računu in ga ni mogoče spremeniti. Za popravek izdajte dobropis in nov račun.",
 	"invoices.rate_from": "iz {source}",

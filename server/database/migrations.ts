@@ -417,6 +417,23 @@ export const MIGRATIONS: Migration[] = [
 			await run(sql, dialect, [`CREATE INDEX IF NOT EXISTS idx_invoices_tax_point ON invoices(project, tax_point_date)`]);
 		},
 	},
+	{
+		version: 43,
+		name: "VAT reporting periods and late corrections",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE invoices ADD COLUMN vat_period_date ${types.int64}`);
+			await sql.unsafe(`ALTER TABLE invoices ADD COLUMN vat_handling ${types.text("status")} NOT NULL DEFAULT '1'`);
+			await sql.unsafe(`ALTER TABLE invoices ADD COLUMN vat_correction_period ${types.text("status")}`);
+			await sql`UPDATE invoices SET vat_period_date = tax_point_date WHERE tax_point_date IS NOT NULL`;
+			await sql.unsafe(`ALTER TABLE recorded_invoices ADD COLUMN tax_point_date ${types.int64}`);
+			await sql`UPDATE recorded_invoices SET tax_point_date = CASE WHEN document_type = 'invoice' THEN COALESCE(supply_date, issued_at) ELSE issued_at END`;
+			await run(sql, dialect, [
+				`CREATE INDEX IF NOT EXISTS idx_invoices_vat_period ON invoices(project, vat_period_date)`,
+				`CREATE INDEX IF NOT EXISTS idx_recorded_invoices_tax_point ON recorded_invoices(project, tax_point_date)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

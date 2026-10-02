@@ -271,6 +271,9 @@ export interface InvoiceRow {
 	due_date: number;
 	supply_date: number | null;
 	tax_point_date: number | null;
+	vat_period_date: number | null;
+	vat_handling: string;
+	vat_correction_period: string | null;
 	issued_at: number | null;
 	tax_currency: string | null;
 	tax_exchange_rate: number | null;
@@ -1214,6 +1217,7 @@ export interface RecordedInvoiceRow {
 	tax_rate_date: number | null;
 	issued_at: number;
 	supply_date: number | null;
+	tax_point_date: number;
 	due_date: number | null;
 	paid_at: number | null;
 	payment_account: "bank" | "cash";

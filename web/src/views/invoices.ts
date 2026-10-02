@@ -1,6 +1,7 @@
 import { pagedTable, remoteTable, PAGE_SIZE as HISTORY_PAGE_SIZE } from "../pagination";
 import {
 	Api,
+	ApiError,
 	customerLabel,
 	newRequestKey,
 	outcomeUnknown,
@@ -331,7 +332,13 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 				navigate(back);
 				return;
 			}
-			const invoice = await Api.createInvoice(uuid, action === "issue" ? { ...body, status: "open" } : body, requestKey);
+			const invoice = await issuingLate((late) =>
+				Api.createInvoice(uuid, action === "issue" ? { ...body, status: "open", ...(late ? { late_vat_report: true } : {}) } : body, requestKey)
+			);
+			if (invoice === null) {
+				setSaving(false);
+				return;
+			}
 			if (action === "proforma") {
 				try {
 					await Api.createProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
@@ -749,6 +756,38 @@ function taxRateDialog(uuid: string, invoice: Invoice, reporting: string, onSave
 
 	const dialog = modal(t("invoices.rate_title"), form);
 	rate.focus();
+}
+
+function awaitsLateVatReport(error: unknown): boolean {
+	if (!(error instanceof ApiError) || error.code !== 1132) return false;
+	const issues = (error.data as { issues?: { code: string }[] } | undefined)?.issues ?? [];
+	return issues.length === 1 && issues[0].code === "tax_period_locked";
+}
+
+async function issuingLate<T>(issue: (late: boolean) => Promise<T>): Promise<T | null> {
+	try {
+		return await issue(false);
+	} catch (error) {
+		if (!awaitsLateVatReport(error)) throw error;
+		const confirmed = await confirmDialog({
+			title: t("invoices.late_report_title"),
+			body: t("invoices.late_report_body"),
+			confirmLabel: t("invoices.late_report_confirm"),
+		});
+		return confirmed ? await issue(true) : null;
+	}
+}
+
+function lateReportCard(invoice: Invoice): HTMLElement | null {
+	const period = invoice.vat_correction_period;
+	if (invoice.vat_handling !== "2" || !period || period.length !== 8) return null;
+	const months = period.slice(0, 2) === period.slice(2, 4) ? period.slice(0, 2) : `${period.slice(0, 2)}-${period.slice(2, 4)}`;
+	return el(
+		"div",
+		{ class: "card notice" },
+		el("h3", {}, t("invoices.late_report_title")),
+		el("p", {}, t("invoices.late_report_note", { period: `${months}/${period.slice(4)}` }))
+	);
 }
 
 function vatReportingCard(
@@ -1261,7 +1300,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 					});
 					if (!confirmed) return;
 					try {
-						await Api.openInvoice(uuid, invoiceId);
+						if ((await issuingLate((late) => Api.openInvoice(uuid, invoiceId, late))) === null) return;
 						toast(t("invoices.issued"), "success");
 						void render();
 					} catch (error) {
@@ -1332,7 +1371,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 					type: "button",
 					onClick: async () => {
 						try {
-							await Api.openInvoice(uuid, invoiceId);
+							if ((await issuingLate((late) => Api.openInvoice(uuid, invoiceId, late))) === null) return;
 							toast(t("invoices.issued"), "success");
 							void render();
 						} catch (error) {
@@ -1350,7 +1389,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 					type: "button",
 					onClick: async () => {
 						try {
-							await Api.openInvoice(uuid, invoiceId);
+							if ((await issuingLate((late) => Api.openInvoice(uuid, invoiceId, late))) === null) return;
 							toast(t("invoices.issued"), "success");
 							void render();
 						} catch (error) {
@@ -1533,6 +1572,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 			keysCard(uuid, invoice, keys, project, () => void render()),
 			creditNotesCard(uuid, project, invoice, customer, credits, () => void render()),
 			eslogVersionsCard(uuid, project, invoice, eslogVersions),
+			lateReportCard(invoice),
 			vatReportingCard(
 				uuid,
 				invoice,

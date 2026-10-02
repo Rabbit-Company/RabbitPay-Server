@@ -15,6 +15,7 @@ import { documentStorage } from "../../document-storage";
 import { hasStorageCapacity } from "../../licensing";
 import {
 	insertRecordedInvoice,
+	recordedTaxPoint,
 	loadRecordedInvoice,
 	recordedInvoiceInput,
 	referenceTaken,
@@ -101,7 +102,10 @@ async function importPlan(project: ProjectRow, content: string): Promise<ImportR
 			result.errors.push({ row: document.rows[0], column: "number", reference: document.input.reference, code: "already_recorded" });
 			continue;
 		}
-		if (await accountingPeriodLocked(project.uuid, document.input.issued_at)) {
+		if (
+			(await accountingPeriodLocked(project.uuid, document.input.issued_at)) ||
+			(await accountingPeriodLocked(project.uuid, recordedTaxPoint(project, document.input)))
+		) {
 			result.errors.push({ row: document.rows[0], column: "issue_date", reference: document.input.reference, code: "period_locked" });
 			continue;
 		}
@@ -175,7 +179,9 @@ Server.app.post(base, Auth.required(), Permissions.require(Permission.LEDGER_EDI
 	if (!raw) return Utils.fail(ctx, ErrorCode.INVALID_RECORDED_INVOICE);
 	const data = recordedInvoiceInput({ currency: project.tax_currency ?? project.currency, ...raw });
 	if (!validRecordedInvoice(data, project.tax_currency ?? project.currency)) return Utils.fail(ctx, ErrorCode.INVALID_RECORDED_INVOICE);
-	if (await accountingPeriodLocked(project.uuid, data.issued_at)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	if ((await accountingPeriodLocked(project.uuid, data.issued_at)) || (await accountingPeriodLocked(project.uuid, recordedTaxPoint(project, data)))) {
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	}
 	if (await referenceTaken(project.uuid, data)) return Utils.fail(ctx, ErrorCode.RECORDED_INVOICE_EXISTS);
 	const uuid = await Database.begin(async (tx) => insertRecordedInvoice(tx, project, data, Auth.account(ctx).username));
 	const created = await loadRecordedInvoice(project.uuid, uuid);
@@ -192,8 +198,9 @@ Server.app.patch(`${base}/:record`, Auth.required(), Permissions.require(Permiss
 	if (!raw) return Utils.fail(ctx, ErrorCode.INVALID_RECORDED_INVOICE);
 	const data = recordedInvoiceInput(raw, previous);
 	if (!validRecordedInvoice(data, project.tax_currency ?? project.currency)) return Utils.fail(ctx, ErrorCode.INVALID_RECORDED_INVOICE);
-	if ((await accountingPeriodLocked(project.uuid, previous.issued_at)) || (await accountingPeriodLocked(project.uuid, data.issued_at)))
-		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	for (const date of [previous.issued_at, previous.tax_point_date, data.issued_at, recordedTaxPoint(project, data)]) {
+		if (await accountingPeriodLocked(project.uuid, date)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	}
 	if (await referenceTaken(project.uuid, data, previous.uuid)) return Utils.fail(ctx, ErrorCode.RECORDED_INVOICE_EXISTS);
 	await Database.begin(async (tx) => replaceRecordedInvoice(tx, project, previous.uuid, data));
 	const updated = await loadRecordedInvoice(project.uuid, previous.uuid);
@@ -206,7 +213,9 @@ Server.app.delete(`${base}/:record`, Auth.required(), Permissions.require(Permis
 	if (!accountingActive(project)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_LICENSE_REQUIRED);
 	const previous = await loadRecordedInvoice(project.uuid, ctx.params.record);
 	if (!previous) return Utils.fail(ctx, ErrorCode.RECORDED_INVOICE_NOT_FOUND);
-	if (await accountingPeriodLocked(project.uuid, previous.issued_at)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	if ((await accountingPeriodLocked(project.uuid, previous.issued_at)) || (await accountingPeriodLocked(project.uuid, previous.tax_point_date))) {
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	}
 	const [attachment] = (await Database`SELECT * FROM recorded_invoice_attachments WHERE recorded_invoice = ${previous.uuid}`) as RecordedInvoiceAttachmentRow[];
 	await Database`DELETE FROM recorded_invoices WHERE uuid = ${previous.uuid}`;
 	if (attachment) await documentStorage().remove(attachment.storage_key);
@@ -222,7 +231,9 @@ Server.app.put(`${base}/:record/attachment`, importBody, Auth.required(), Permis
 	if (!accountingActive(project)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_LICENSE_REQUIRED);
 	const record = await loadRecordedInvoice(project.uuid, ctx.params.record);
 	if (!record) return Utils.fail(ctx, ErrorCode.RECORDED_INVOICE_NOT_FOUND);
-	if (await accountingPeriodLocked(project.uuid, record.issued_at)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	if ((await accountingPeriodLocked(project.uuid, record.issued_at)) || (await accountingPeriodLocked(project.uuid, record.tax_point_date))) {
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	}
 	const raw = await body(ctx);
 	const name = typeof raw?.name === "string" ? raw.name.trim() : "";
 	const type = raw?.type;
@@ -272,7 +283,9 @@ Server.app.delete(`${base}/:record/attachment`, Auth.required(), Permissions.req
 	if (!accountingActive(project)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_LICENSE_REQUIRED);
 	const record = await loadRecordedInvoice(project.uuid, ctx.params.record);
 	if (!record) return Utils.fail(ctx, ErrorCode.RECORDED_INVOICE_NOT_FOUND);
-	if (await accountingPeriodLocked(project.uuid, record.issued_at)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	if ((await accountingPeriodLocked(project.uuid, record.issued_at)) || (await accountingPeriodLocked(project.uuid, record.tax_point_date))) {
+		return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	}
 	const [attachment] = (await Database`SELECT * FROM recorded_invoice_attachments WHERE recorded_invoice = ${record.uuid}`) as RecordedInvoiceAttachmentRow[];
 	if (!attachment) return Utils.fail(ctx, ErrorCode.RECORDED_ATTACHMENT_NOT_FOUND);
 	await Database`DELETE FROM recorded_invoice_attachments WHERE recorded_invoice = ${record.uuid}`;

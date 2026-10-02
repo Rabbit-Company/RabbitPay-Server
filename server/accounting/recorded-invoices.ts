@@ -3,6 +3,7 @@ import Database from "../database/database";
 import Validate from "../validate";
 import { addIntegers } from "../database/numbers";
 import { isTaxTreatment } from "../tax";
+import { taxPointDate } from "../tax-reporting";
 import type { ProjectRow, RecordedInvoiceLineRow, RecordedInvoiceRow } from "../database/models";
 import type { RecordedInvoiceInput, RecordedInvoiceLineInput } from "./types";
 
@@ -134,17 +135,23 @@ export async function referenceTaken(project: string, data: RecordedInvoiceInput
 	return row !== undefined && row.uuid !== except;
 }
 
+export function recordedTaxPoint(project: Pick<ProjectRow, "timezone">, data: RecordedInvoiceInput): number {
+	if (data.document_type === "credit_note") return data.issued_at;
+	return taxPointDate(project.timezone, data.supply_date, data.issued_at, data.lines);
+}
+
 export async function insertRecordedInvoice(sql: SQL, project: ProjectRow, data: RecordedInvoiceInput, author: string): Promise<string> {
 	const uuid = crypto.randomUUID();
 	const now = Date.now();
 	const totals = totalsOf(data.lines);
 	await sql`
 		INSERT INTO recorded_invoices(uuid, project, document_type, reference, buyer_name, buyer_vat_number, buyer_country, currency, tax_currency,
-			tax_exchange_rate, tax_rate_date, issued_at, supply_date, due_date, paid_at, payment_account, subtotal, tax_amount, total_amount, notes,
-			created_by, created, updated)
+			tax_exchange_rate, tax_rate_date, issued_at, supply_date, tax_point_date, due_date, paid_at, payment_account, subtotal, tax_amount,
+			total_amount, notes, created_by, created, updated)
 		VALUES(${uuid}, ${project.uuid}, ${data.document_type}, ${data.reference}, ${data.buyer_name}, ${data.buyer_vat_number}, ${data.buyer_country},
 			${data.currency}, ${project.tax_currency ?? project.currency}, ${data.tax_exchange_rate}, ${data.tax_rate_date}, ${data.issued_at},
-			${data.supply_date}, ${data.due_date}, ${data.paid_at}, ${data.payment_account}, ${totals.subtotal}, ${totals.tax_amount},
+			${data.supply_date}, ${recordedTaxPoint(project, data)}, ${data.due_date}, ${data.paid_at}, ${data.payment_account}, ${totals.subtotal},
+			${totals.tax_amount},
 			${totals.total_amount}, ${data.notes}, ${author}, ${now}, ${now})
 	`;
 	await writeLines(sql, uuid, data.lines);
@@ -157,7 +164,8 @@ export async function replaceRecordedInvoice(sql: SQL, project: ProjectRow, uuid
 		UPDATE recorded_invoices SET document_type = ${data.document_type}, reference = ${data.reference}, buyer_name = ${data.buyer_name},
 			buyer_vat_number = ${data.buyer_vat_number}, buyer_country = ${data.buyer_country}, currency = ${data.currency},
 			tax_currency = ${project.tax_currency ?? project.currency}, tax_exchange_rate = ${data.tax_exchange_rate}, tax_rate_date = ${data.tax_rate_date},
-			issued_at = ${data.issued_at}, supply_date = ${data.supply_date}, due_date = ${data.due_date}, paid_at = ${data.paid_at},
+			issued_at = ${data.issued_at}, supply_date = ${data.supply_date}, tax_point_date = ${recordedTaxPoint(project, data)},
+			due_date = ${data.due_date}, paid_at = ${data.paid_at},
 			payment_account = ${data.payment_account}, subtotal = ${totals.subtotal}, tax_amount = ${totals.tax_amount},
 			total_amount = ${totals.total_amount}, notes = ${data.notes}, updated = ${Date.now()}
 		WHERE uuid = ${uuid} AND project = ${project.uuid}

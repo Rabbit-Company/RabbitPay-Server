@@ -20,6 +20,7 @@ export interface InvoiceInput extends ReferenceDocumentInput {
 	currency?: string;
 	supply_date?: number | null;
 	tax_exchange_rate?: number | null;
+	late_vat_report?: boolean;
 	items?: InvoiceItemInput[];
 	discount_amount?: number;
 	due_date?: number;
@@ -127,7 +128,8 @@ export async function stampIssue(
 	const recipient = invoiceRecipient(customer, snapshot.buyer_vat_number);
 	await sql`
 		UPDATE invoices SET
-			issued_at = ${snapshot.issued_at}, tax_point_date = ${snapshot.tax_point_date}, tax_currency = ${snapshot.tax_currency}, tax_exchange_rate = ${snapshot.tax_exchange_rate},
+			issued_at = ${snapshot.issued_at}, tax_point_date = ${snapshot.tax_point_date}, vat_period_date = ${snapshot.vat_period_date},
+			vat_handling = ${snapshot.vat_handling}, vat_correction_period = ${snapshot.vat_correction_period}, tax_currency = ${snapshot.tax_currency}, tax_exchange_rate = ${snapshot.tax_exchange_rate},
 			tax_rate_source = ${snapshot.tax_rate_source}, tax_rate_date = ${snapshot.tax_rate_date},
 			buyer_country = ${snapshot.buyer_country}, buyer_vat_number = ${snapshot.buyer_vat_number},
 			buyer_email = ${recipient?.email?.trim().toLowerCase() || null}, buyer_details = ${recipient ? JSON.stringify(recipient) : null},
@@ -171,6 +173,7 @@ export async function createInvoice(projectId: string, data: InvoiceInput, optio
 					tax_amount: totals.tax_amount,
 					tax_exchange_rate: manualRate,
 					tax_rate_source: manualRate === null ? null : MANUAL_RATE_SOURCE,
+					late_vat_report: data.late_vat_report === true,
 				},
 				totals.items,
 				timestamp

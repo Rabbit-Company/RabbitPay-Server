@@ -1154,6 +1154,12 @@ export const en = {
 	"invoices.vat_in": "VAT in {reporting}:",
 	"invoices.vat_rate_line": "1 {currency} = {rate} {reporting}, {source}{on}.",
 	"invoices.vat_rate_on": " on {date}",
+	"invoices.late_report_title": "Late VAT report",
+	"invoices.late_report_body":
+		"The supply date falls in a VAT period that was already submitted. The invoice can be issued now and reported in the current period as a correction of the earlier one (Article 88.b of ZDDV-1). Interest is charged on its VAT for the delay.",
+	"invoices.late_report_confirm": "Issue as a late report",
+	"invoices.late_report_note":
+		"Reported in the period it was issued in, as a correction of period {period} under Article 88.b of ZDDV-1. Interest is charged on its VAT.",
 	"invoices.rate_manual": "entered by hand",
 	"invoices.rate_locked": "This rate is printed on the issued invoice and cannot be changed. To correct it, credit the invoice and issue a new one.",
 	"invoices.rate_from": "from {source}",

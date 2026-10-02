@@ -144,6 +144,7 @@ export interface IssueOptions {
 	issuedAt?: number;
 	supplyDate?: number;
 	channel?: "invoice" | "pos";
+	lateVatReport?: boolean;
 }
 
 export async function issueDraft(project: ProjectRow, invoice: InvoiceRow, options: IssueOptions): Promise<string | null> {
@@ -154,7 +155,7 @@ export async function issueDraft(project: ProjectRow, invoice: InvoiceRow, optio
 	const deductedTax = deductions.reduce((sum, line) => sum + line.tax, 0);
 	const issue = await prepareInvoiceIssue(
 		project,
-		{ ...invoice, supply_date: supplyDate, tax_amount: invoice.tax_amount - deductedTax },
+		{ ...invoice, supply_date: supplyDate, tax_amount: invoice.tax_amount - deductedTax, late_vat_report: options.lateVatReport === true },
 		[...items, ...deductions.map((line) => ({ description: line.description, quantity: 1, tax_rate: line.rate, tax_treatment: line.treatment }))],
 		issuedAt
 	);

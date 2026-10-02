@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
 import { prepareTest } from "./environment";
-import { endOfLocalDate, startOfLocalDate } from "../server/timezone";
+import { endOfLocalDate, localDate, shiftLocalDate, startOfLocalDate } from "../server/timezone";
 
 await prepareTest(`sqlite://${import.meta.dir}/.ddv-evidence.sqlite`);
 
@@ -216,12 +216,13 @@ describe("official FURS DDV evidence", () => {
 		expect(kir[0].P7).toBeUndefined();
 		expect(kir[0].P10).toBeUndefined();
 	});
-	test("reports an invoice in the period of its supply date and refuses one for a locked period", async () => {
+	test("reports an invoice in the period of its supply date and a late one in the current period as a correction", async () => {
 		const base = `/api/v1/projects/${project}`;
 		const march = { from: startOfLocalDate("2026-03-01", timezone), to: endOfLocalDate("2026-03-31", timezone) };
 		const options = { ...march, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
-		const issue = (supplied: string | null) =>
+		const issue = (supplied: string | null, extra: Record<string, unknown> = {}) =>
 			call("POST", `${base}/invoices`, {
+				...extra,
 				currency: "EUR",
 				due_date: Date.now() + 86400000,
 				supply_date: supplied === null ? null : startOfLocalDate(supplied, timezone),
@@ -251,9 +252,39 @@ describe("official FURS DDV evidence", () => {
 		expect(refused.info).toContain("2026-03-25");
 		expect((await issue(null)).error).toBe(0);
 
-		const locks = await call("GET", `${base}/reports/ddv-evidence/locks`);
-		const active = locks.data.find((lock: { active: boolean }) => lock.active);
-		await call("POST", `${base}/reports/ddv-evidence/locks/${active.uuid}/unlock`, { reason: "Late invoice for March" });
-		expect((await issue("2026-03-25")).error).toBe(0);
+		const reported = await issue("2026-03-25", { late_vat_report: true });
+		expect(reported.error).toBe(0);
+		expect(reported.data).toMatchObject({
+			tax_point_date: startOfLocalDate("2026-03-25", timezone),
+			vat_period_date: reported.data.issued_at,
+			vat_handling: "2",
+			vat_correction_period: "03032026",
+		});
+
+		const draft = await call("POST", `${base}/invoices`, {
+			currency: "EUR",
+			due_date: Date.now() + 86400000,
+			supply_date: startOfLocalDate("2026-03-26", timezone),
+			items: [{ description: "Export", quantity: 1, unit_price: 5000, tax_rate: 0, tax_treatment: "export" }],
+		});
+		expect((await call("POST", `${base}/invoices/${draft.data.uuid}/open`)).error).toBe(1132);
+		const untaxed = await call("POST", `${base}/invoices/${draft.data.uuid}/open`, { late_vat_report: true });
+		expect(untaxed.data).toMatchObject({ vat_handling: "1", vat_correction_period: null, vat_period_date: untaxed.data.issued_at });
+
+		const again = await call("GET", `${base}/reports/ddv-evidence?${query(options)}`);
+		expect(again.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR).toHaveLength(1);
+
+		const currentMonth = localDate(Date.now(), timezone).slice(0, 7);
+		const current = {
+			...options,
+			from: startOfLocalDate(`${currentMonth}-01`, timezone),
+			to: startOfLocalDate(`${shiftLocalDate(`${currentMonth}-28`, 4).slice(0, 7)}-01`, timezone) - 1,
+		};
+		const currentPreview = await call("GET", `${base}/reports/ddv-evidence?${query(current)}`);
+		const records = currentPreview.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR as Record<string, unknown>[];
+		const lateRecord = records.find((record) => record.P3 === reported.data.reference)!;
+		expect(lateRecord).toMatchObject({ OBRAVNAVA: "2", OBDOBJE88: "03032026", DAVEK88: 66, P7: 300, P14: 66 });
+		expect(records.find((record) => record.P3 === untaxed.data.reference)).toMatchObject({ OBRAVNAVA: "1", P7: 50 });
+		expect(records.find((record) => record.P3 === untaxed.data.reference)!.OBDOBJE88).toBeUndefined();
 	});
 });

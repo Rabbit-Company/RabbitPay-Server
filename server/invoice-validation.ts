@@ -2,11 +2,11 @@ import type { Context } from "@rabbit-company/web";
 import Database from "./database/database";
 import { ErrorCode } from "./errors";
 import { prepareIssuePresentation, type PreparedIssuePresentation } from "./invoice-snapshot";
-import { issueSnapshot, type IssueSnapshot } from "./tax-reporting";
+import { issueSnapshot, taxPointDate, vatPeriodCode, type IssueSnapshot, type LateVatReport } from "./tax-reporting";
 import { DOMESTIC_VAT_RATES, isTaxTreatment, isZeroRated, splitVatNumber } from "./tax";
 import Utils from "./utils";
-import { accountingPeriodLocked } from "./accounting-periods";
-import { localDate } from "./timezone";
+import { accountingPeriodLock, accountingPeriodLocked } from "./accounting-periods";
+import { localDate, shiftLocalDate, startOfLocalDate } from "./timezone";
 import type { CustomerRow, InvoiceItemRow, InvoiceRow, ProjectRow } from "./database/models";
 
 export interface InvoiceDataIssue {
@@ -25,7 +25,7 @@ export class InvoiceDataIncomplete extends Error {
 }
 
 type InvoiceSubject = Pick<InvoiceRow, "currency" | "customer" | "due_date" | "supply_date" | "tax_amount"> &
-	Partial<Pick<InvoiceRow, "tax_exchange_rate" | "tax_rate_source">>;
+	Partial<Pick<InvoiceRow, "tax_exchange_rate" | "tax_rate_source">> & { late_vat_report?: boolean };
 type InvoiceLine = Pick<InvoiceItemRow, "description" | "quantity" | "tax_rate" | "tax_treatment">;
 
 function present(value: string | null | undefined): boolean {
@@ -136,23 +136,35 @@ function validateSlovenianInvoice(
 	return issues;
 }
 
+async function lateVatReport(project: ProjectRow, taxPoint: number): Promise<LateVatReport> {
+	const lock = await accountingPeriodLock(project.uuid, taxPoint);
+	if (lock) return { period: vatPeriodCode(Number(lock.period_from), Number(lock.period_to), project.timezone) };
+
+	const month = localDate(taxPoint, project.timezone).slice(0, 7);
+	const from = startOfLocalDate(`${month}-01`, project.timezone);
+	const following = startOfLocalDate(shiftLocalDate(`${month}-28`, 4).slice(0, 7) + "-01", project.timezone);
+	return { period: vatPeriodCode(from, following - 1, project.timezone) };
+}
+
 export async function prepareInvoiceIssue(
 	project: ProjectRow,
 	invoice: InvoiceSubject,
 	items: InvoiceLine[],
 	issuedAt: number
 ): Promise<{ snapshot: IssueSnapshot; presentation: PreparedIssuePresentation }> {
-	const snapshot = await issueSnapshot(project, invoice, issuedAt, items);
-	const presentation = await prepareIssuePresentation(project);
-	if (await accountingPeriodLocked(project.uuid, snapshot.tax_point_date)) {
+	const taxPoint = taxPointDate(project.timezone, invoice.supply_date, issuedAt, items);
+	const late = (await accountingPeriodLocked(project.uuid, taxPoint)) ? await lateVatReport(project, taxPoint) : null;
+	if (late && invoice.late_vat_report !== true) {
 		throw new InvoiceDataIncomplete([
 			{
 				code: "tax_period_locked",
 				field: "invoice.supply_date",
-				message: `The supply date ${localDate(snapshot.tax_point_date, project.timezone)} falls in a VAT period that is locked after a DDV submission or a year end close. Unlock that period to issue the invoice, then file a correction for it.`,
+				message: `The supply date ${localDate(taxPoint, project.timezone)} falls in a VAT period that was already submitted. The invoice can be issued as a late report, which puts it in the current VAT period as a correction of the earlier one under Article 88.b of ZDDV-1, with interest on its VAT.`,
 			},
 		]);
 	}
+	const snapshot = await issueSnapshot(project, invoice, issuedAt, items, late ? { ...late, taxed: invoice.tax_amount !== 0 } : null);
+	const presentation = await prepareIssuePresentation(project);
 	const unrated: InvoiceDataIssue[] =
 		snapshot.tax_exchange_rate === null && invoice.tax_amount !== 0
 			? [

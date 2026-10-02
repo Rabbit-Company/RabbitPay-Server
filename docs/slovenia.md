@@ -388,8 +388,38 @@ The VAT report and the DDV evidence select invoices by this date, and the
 exchange rate of an invoice in another currency is the rate for this date. In
 the DDV evidence the document date stays the issue date and only the period
 follows the tax point. Credit notes are reported in the period they are issued
-in. Recorded invoices that were issued in another system are still selected by
-their issue date.
+in. Invoices recorded from another system follow the same rule: their
+`tax_point_date` is worked out from the supply date and the issue date whenever
+they are saved.
+
+### An invoice for a period that was already submitted
+
+Sometimes an invoice is issued after the DDV evidence for its tax point was
+exported, for example in November for a supply in September. Article 88.b of
+ZDDV-1 lets the seller correct this in the return for the period in which the
+omission was found, with interest on the VAT, instead of resubmitting the old
+period.
+
+Issuing such an invoice is refused at first, with error `1132` and the issue
+`tax_period_locked`, so that nobody does this by accident. The invoice form and
+the Issue button then ask whether to issue it as a late report. Through the API,
+send `"late_vat_report": true` when creating the invoice with `"status": "open"`
+or in the body of `POST .../invoices/:invoice/open`. The invoice then:
+
+- keeps its real `tax_point_date`, which still decides the exchange rate,
+- gets a `vat_period_date` equal to its issue time, so the VAT report and the
+  DDV evidence include it in the current period,
+- when it carries VAT, gets `vat_handling` `2` and `vat_correction_period`, the
+  period that should have contained it, written as first month, last month and
+  year, such as `09092026` or `07092026` for a quarter.
+
+In the DDV evidence that record has `OBRAVNAVA` `2`, the period in `OBDOBJE88`
+and its VAT in `DAVEK88`, the amount the interest is worked out on. An invoice
+without VAT is reported in the current period as a regular record, since no
+interest is due. The invoice page shows a Late VAT report notice.
+
+This path is only offered for invoices RabbitPay issues. An invoice recorded
+from another system for a locked period still needs the period unlocked.
 
 Only the ordinary rules are covered. Cash accounting, where VAT is due when the
 invoice is paid, the margin scheme, self-billing and the travel agent scheme are
@@ -405,10 +435,11 @@ Creating a valid FURS DDV export locks the covered period. RabbitPay then blocks
 changes to expenses and their attachments in that period, manual exchange-rate
 changes on covered invoices, and creation of new invoices or credit notes whose
 issue time falls inside the lock. An invoice whose tax point falls inside the
-lock is refused as well, even when it is issued later: issuing in October for a
-supply in a locked September returns error `1132` with the issue
-`tax_period_locked`. Unlock the period, issue the invoice, and file a correction
-for that period. Existing documents remain readable and another
+lock is refused as well, even when it is issued later, unless it is issued as a
+late report as described under
+[An invoice for a period that was already submitted](#an-invoice-for-a-period-that-was-already-submitted).
+Recorded invoices are checked against both their issue date and their tax
+point. Existing documents remain readable and another
 export revision can be downloaded without changing the records.
 
 An authorized report exporter can explicitly unlock the period from the DDV

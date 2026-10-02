@@ -11,9 +11,25 @@ export const MANUAL_RATE_SOURCE = "manual";
 export const MARKET_RATE_SOURCE = "RabbitForex";
 export const ECB_REPORTING_CURRENCY = "EUR";
 
+export const REGULAR_VAT_HANDLING = "1";
+export const LATE_VAT_HANDLING = "2";
+
+export interface LateVatReport {
+	period: string;
+}
+
+export function vatPeriodCode(from: number, to: number, timezone: string): string {
+	const [year, first] = localDate(from, timezone).split("-");
+	const last = localDate(to, timezone).split("-")[1];
+	return `${first}${last}${year}`;
+}
+
 export interface IssueSnapshot {
 	issued_at: number;
 	tax_point_date: number;
+	vat_period_date: number;
+	vat_handling: string;
+	vat_correction_period: string | null;
 	tax_currency: string;
 	tax_exchange_rate: number | null;
 	tax_rate_source: string | null;
@@ -95,7 +111,8 @@ export async function issueSnapshot(
 	project: Pick<ProjectRow, "tax_currency" | "currency" | "timezone">,
 	invoice: RatedInvoice & { customer: string | null },
 	issuedAt: number,
-	lines: TaxPointLine[] = []
+	lines: TaxPointLine[] = [],
+	late: (LateVatReport & { taxed: boolean }) | null = null
 ): Promise<IssueSnapshot> {
 	const taxPoint = taxPointDate(project.timezone, invoice.supply_date, issuedAt, lines);
 	const rate = await taxRateFor(project, invoice, issuedAt, taxPoint);
@@ -107,6 +124,9 @@ export async function issueSnapshot(
 	return {
 		issued_at: issuedAt,
 		tax_point_date: taxPoint,
+		vat_period_date: late ? issuedAt : taxPoint,
+		vat_handling: late?.taxed ? LATE_VAT_HANDLING : REGULAR_VAT_HANDLING,
+		vat_correction_period: late?.taxed ? late.period : null,
 		tax_currency: reportingCurrency(project),
 		tax_exchange_rate: rate?.rate ?? null,
 		tax_rate_source: rate?.source ?? null,

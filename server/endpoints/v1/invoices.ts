@@ -38,6 +38,7 @@ interface CreateInvoiceBody extends ReferenceDocumentInput {
 	status?: "draft" | "open";
 	supply_date?: number | null;
 	tax_exchange_rate?: number | null;
+	late_vat_report?: boolean;
 }
 
 interface UpdateInvoiceBody extends ReferenceDocumentInput {
@@ -381,9 +382,11 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/open", Auth.required()
 	const short = await stockShortage(project.uuid, items);
 	if (short !== null) return Utils.fail(ctx, short);
 
+	const options = await ctx.body<{ late_vat_report?: boolean }>().catch(() => null);
+
 	let reference: string | null;
 	try {
-		reference = await issueDraft(project, invoice, { issuedBy: Auth.account(ctx).username });
+		reference = await issueDraft(project, invoice, { issuedBy: Auth.account(ctx).username, lateVatReport: options?.late_vat_report === true });
 	} catch (err) {
 		if (err instanceof InvoiceDataIncomplete) return invoiceDataErrorResponse(ctx, err);
 		if (err instanceof OutOfStock) return Utils.fail(ctx, ErrorCode.OUT_OF_STOCK);

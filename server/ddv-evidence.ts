@@ -13,7 +13,7 @@ import type {
 	RecordedInvoiceLineRow,
 	RecordedInvoiceRow,
 } from "./database/models";
-import { convertMinor } from "./tax-reporting";
+import { convertMinor, LATE_VAT_HANDLING } from "./tax-reporting";
 import { canSubmitSlovenianDdvEvidence, isTaxTreatment, splitVatNumber, type TaxTreatment } from "./tax";
 import type { InvoiceRecipient } from "./invoice-recipient";
 import { DEFAULT_TIMEZONE, isCompleteLocalVatPeriod, localDate, zonedParts } from "./timezone";
@@ -350,12 +350,12 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 
 	const invoices = (await Database`
 		SELECT * FROM invoices WHERE project = ${project.uuid} AND status <> 'draft' AND issued_at IS NOT NULL
-			AND tax_point_date BETWEEN ${options.from} AND ${options.to}
-			AND (status <> 'canceled' OR EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice = invoices.uuid)) ORDER BY tax_point_date, issued_at, reference
+			AND vat_period_date BETWEEN ${options.from} AND ${options.to}
+			AND (status <> 'canceled' OR EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice = invoices.uuid)) ORDER BY vat_period_date, issued_at, reference
 	`) as InvoiceRow[];
 	const invoiceLines = (await Database`
 		SELECT ii.* FROM invoice_items ii JOIN invoices i ON i.uuid = ii.invoice
-		WHERE i.project = ${project.uuid} AND i.status <> 'draft' AND i.issued_at IS NOT NULL AND i.tax_point_date BETWEEN ${options.from} AND ${options.to}
+		WHERE i.project = ${project.uuid} AND i.status <> 'draft' AND i.issued_at IS NOT NULL AND i.vat_period_date BETWEEN ${options.from} AND ${options.to}
 	`) as InvoiceItemRow[];
 	const notes = (await Database`
 		SELECT cn.uuid AS note_uuid, cn.reference AS note_reference, cn.issued_at AS note_issued_at, i.*
@@ -381,7 +381,8 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 	`) as ExpenseAttachmentRow[];
 
 	const recorded = (await Database`
-		SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND issued_at BETWEEN ${options.from} AND ${options.to} ORDER BY issued_at, reference
+		SELECT * FROM recorded_invoices WHERE project = ${project.uuid} AND tax_point_date BETWEEN ${options.from} AND ${options.to}
+		ORDER BY tax_point_date, issued_at, reference
 	`) as RecordedInvoiceRow[];
 	const recordedLines = recorded.length
 		? ((await Database`
@@ -419,6 +420,11 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 			"invoice",
 			project.timezone
 		);
+		if (invoice.vat_handling === LATE_VAT_HANDLING && invoice.vat_correction_period && built.vat !== 0) {
+			built.record.OBRAVNAVA = LATE_VAT_HANDLING;
+			built.record.OBDOBJE88 = invoice.vat_correction_period;
+			built.record.DAVEK88 = amount(built.vat);
+		}
 		if (!built.omitted) {
 			kir.push(built.record);
 			kirSourceBase = addIntegers(kirSourceBase, built.base);
