@@ -998,6 +998,7 @@ export const sl: UiDictionary = {
 	"invoices.create_and_issue": "Ustvari in izdaj",
 	"invoices.create_proforma": "Ustvari predračun",
 	"invoices.proforma_created": "Predračun je ustvarjen",
+	"invoices.proforma_kept_as_draft": "Račun je shranjen kot osnutek. Predračun ustvarite iz osnutka, ko odpravite težavo.",
 	"invoices.proforma_options": "Predračun",
 	"invoices.proforma_options_hint":
 		"S predračunom kupca prosite za plačilo, preden izdate račun. Dobi svojo številko, ne sporoča se FURS, ob plačilu pa postane račun.",

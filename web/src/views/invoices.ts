@@ -275,11 +275,19 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("invoices.create_draft"));
 	const back = existing ? `/projects/${uuid}/invoices/${existing.uuid}` : `/projects/${uuid}/invoices`;
 
+	const proformaButton = el("button", { class: "button secondary", type: "button", onClick: () => void save("proforma") }, t("invoices.create_proforma"));
+	const issueButton = el("button", { class: "button secondary", type: "button", onClick: () => void save("issue") }, t("invoices.create_and_issue"));
+	const actions = [submit, proformaButton, issueButton];
+	const setSaving = (saving: boolean) => {
+		for (const button of actions) button.disabled = saving;
+	};
+
 	const save = async (action: "draft" | "issue" | "proforma") => {
+		if (submit.disabled) return;
 		const values = editor.values();
 		if (!values) return;
 
-		submit.disabled = true;
+		setSaving(true);
 		const body = {
 			...values,
 			...reference.values(),
@@ -294,14 +302,22 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 				navigate(back);
 				return;
 			}
-			const invoice = await Api.createInvoice(uuid, body);
-			if (action === "issue") await Api.openInvoice(uuid, invoice.uuid);
-			if (action === "proforma") await Api.createProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
+			const invoice = await Api.createInvoice(uuid, action === "issue" ? { ...body, status: "open" } : body);
+			if (action === "proforma") {
+				try {
+					await Api.createProforma(uuid, invoice.uuid, settlement.value as ProformaSettlement);
+				} catch (error) {
+					reportError(error);
+					toast(t("invoices.proforma_kept_as_draft"), "info");
+					navigate(`/projects/${uuid}/invoices/${invoice.uuid}`);
+					return;
+				}
+			}
 			toast(action === "issue" ? t("invoices.issued") : action === "proforma" ? t("invoices.proforma_created") : t("invoices.draft_created"), "success");
 			navigate(`/projects/${uuid}/invoices/${invoice.uuid}`);
 		} catch (error) {
 			reportError(error);
-			submit.disabled = false;
+			setSaving(false);
 		}
 	};
 
@@ -350,8 +366,8 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 			{ class: "form-actions" },
 			el("a", { class: "button ghost", href: back }, t("ui.cancel")),
 			submit,
-			existing ? null : el("button", { class: "button secondary", type: "button", onClick: () => void save("proforma") }, t("invoices.create_proforma")),
-			existing ? null : el("button", { class: "button secondary", type: "button", onClick: () => void save("issue") }, t("invoices.create_and_issue"))
+			existing ? null : proformaButton,
+			existing ? null : issueButton
 		)
 	);
 	form.dataset.pageAutofocus = "";

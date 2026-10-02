@@ -23,6 +23,8 @@ import { fiscalDocumentFor } from "../../fiscal/documents";
 import { resolveReferenceDocument, type ReferenceDocumentInput } from "../../reference-document";
 import { awaitsStorePayment, isProformaDraft } from "../../payments/recorded";
 import { documentDetails, issueDraft } from "../../proformas";
+import { applyBalance } from "../../payments/ledger";
+import { enqueueLater } from "../../webhooks/events";
 
 interface CreateInvoiceBody extends ReferenceDocumentInput {
 	customer?: string | null;
@@ -119,6 +121,10 @@ Server.app.post("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
+	if (data.status === "open" && !Permissions.has(Permissions.member(ctx), Permission.INVOICE_SEND)) {
+		return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
+	}
+
 	const invalid = await validateInvoiceInput(project.uuid, data);
 	if (invalid !== null) return Utils.fail(ctx, invalid);
 	if (data.status === "open" && !(await hasCapacity(project.uuid))) return Utils.fail(ctx, ErrorCode.TRANSACTION_LIMIT_REACHED);
@@ -134,6 +140,12 @@ Server.app.post("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.
 		throw err;
 	}
 
+	const issued = invoice.status === "open";
+	if (issued) {
+		await Database.begin(async (tx) => await applyBalance(tx, invoice.uuid));
+		invoice = (await loadInvoice(project.uuid, invoice.uuid))!;
+	}
+
 	await Audit.record(ctx, {
 		project: project.uuid,
 		action: "invoice.created",
@@ -142,6 +154,17 @@ Server.app.post("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.
 		newValue: { reference: invoice.reference, status: invoice.status, total_amount: invoice.total_amount, currency: invoice.currency },
 	});
 	Logger.audit(`[INVOICES] Created ${invoice.reference} on ${project.uuid}`);
+
+	if (issued) {
+		enqueueLater(project.uuid, "invoice.issued", {
+			invoice: invoice.uuid,
+			reference: invoice.reference,
+			status: invoice.status,
+			currency: invoice.currency,
+			total_amount: invoice.total_amount,
+			due_date: invoice.due_date,
+		});
+	}
 
 	return Utils.ok(ctx, present(invoice, await loadItems(invoice.uuid)), 201);
 });

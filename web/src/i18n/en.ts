@@ -997,6 +997,7 @@ export const en = {
 	"invoices.create_and_issue": "Create and issue",
 	"invoices.create_proforma": "Create pro forma invoice",
 	"invoices.proforma_created": "Pro forma invoice created",
+	"invoices.proforma_kept_as_draft": "The invoice was saved as a draft. Create the pro forma from the draft once the problem is fixed.",
 	"invoices.proforma_options": "Pro forma invoice",
 	"invoices.proforma_options_hint":
 		"A pro forma invoice (predračun) asks the customer to pay before you invoice. It gets its own number, is not reported to FURS, and becomes an invoice when it is paid.",

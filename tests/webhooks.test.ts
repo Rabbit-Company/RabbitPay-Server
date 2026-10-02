@@ -321,6 +321,21 @@ describe("delivering events", () => {
 		expect(body.data.total_amount).toBe(10000);
 	});
 
+	test("sends invoice.issued for an invoice created already open", async () => {
+		received = [];
+		const created = await call("POST", `/api/v1/projects/${projectUuid}/invoices`, {
+			token: sessionToken,
+			body: { customer: customerUuid, currency: "EUR", status: "open", due_date: dueDate(), items: [{ description: "Work", quantity: 1, unit_price: 4200 }] },
+		});
+		expect(created.error).toBe(0);
+		expect(created.data.status).toBe("open");
+		await flush();
+
+		const issued = received.filter((entry) => entry.event === "invoice.issued");
+		expect(issued).toHaveLength(1);
+		expect(JSON.parse(issued[0].body).data).toMatchObject({ invoice: created.data.uuid, reference: created.data.reference, total_amount: 4200 });
+	});
+
 	test("signs the delivery with the project secret", async () => {
 		received = [];
 		await makeInvoice(10000);

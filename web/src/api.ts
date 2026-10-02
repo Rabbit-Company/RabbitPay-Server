@@ -2868,6 +2868,7 @@ export const Api = {
 			items: ItemInput[];
 			discount_amount: number;
 			notes: string | null;
+			status?: "draft" | "open";
 		}
 	) {
 		return request<Invoice>("POST", `/projects/${uuid}/invoices`, invoice);

@@ -249,8 +249,10 @@ total       = subtotal - discount_amount + tax_amount
 A discount larger than the subtotal is clamped to the subtotal, so a total never
 goes negative.
 
-Invoices are created as `draft` unless `"status": "open"` is passed. The
-lifecycle is:
+Invoices are created as `draft` unless `"status": "open"` is passed. With
+`"status": "open"` the invoice is created and issued in one step, so a failed
+request leaves no draft behind. It also needs the `invoice.send` permission and
+sends the `invoice.issued` webhook. The lifecycle is:
 
 | Status           | Meaning                                  |
 | ---------------- | ---------------------------------------- |
