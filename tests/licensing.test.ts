@@ -84,12 +84,12 @@ async function issue(status: "open" | "draft" = "open") {
 	});
 }
 
-async function pay() {
+async function pay(status: "confirmed" | "completed" = "completed") {
 	const invoice = await issue();
 	if (invoice.error !== 0) throw new Error(invoice.info);
 	const res = await call("POST", `${base()}/transactions`, {
 		token: ownerToken,
-		body: { invoice: invoice.data.uuid, processor: "bank_transfer", amount: 1000 },
+		body: { invoice: invoice.data.uuid, processor: "bank_transfer", amount: 1000, status },
 	});
 	if (res.error !== 0) throw new Error(res.info);
 }
@@ -335,10 +335,10 @@ describe("transaction limits", () => {
 		expect((await call("PATCH", `/api/v1/admin/projects/${projectUuid}`, { token: adminToken, body: { free_transactions: -1 } })).error).toBe(1099);
 	});
 
-	test("completed payments use the free allowance first, pending ones are not counted", async () => {
+	test("completed and confirmed payments use the free allowance first, pending ones are not counted", async () => {
 		const unpaid = (await issue()).data.uuid;
 		await pay();
-		await pay();
+		await pay("confirmed");
 		const pending = await call("POST", `${base()}/transactions`, {
 			token: ownerToken,
 			body: { invoice: unpaid, processor: "bank_transfer", amount: 500, status: "pending" },
