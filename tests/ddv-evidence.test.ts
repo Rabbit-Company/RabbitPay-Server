@@ -216,4 +216,44 @@ describe("official FURS DDV evidence", () => {
 		expect(kir[0].P7).toBeUndefined();
 		expect(kir[0].P10).toBeUndefined();
 	});
+	test("reports an invoice in the period of its supply date and refuses one for a locked period", async () => {
+		const base = `/api/v1/projects/${project}`;
+		const march = { from: startOfLocalDate("2026-03-01", timezone), to: endOfLocalDate("2026-03-31", timezone) };
+		const options = { ...march, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const issue = (supplied: string | null) =>
+			call("POST", `${base}/invoices`, {
+				currency: "EUR",
+				due_date: Date.now() + 86400000,
+				supply_date: supplied === null ? null : startOfLocalDate(supplied, timezone),
+				status: "open",
+				items: [{ description: "Consulting", quantity: 1, unit_price: 30000, tax_rate: 22, tax_treatment: "domestic" }],
+			});
+
+		const late = await issue("2026-03-20");
+		expect(late.error).toBe(0);
+		expect(late.data.tax_point_date).toBe(startOfLocalDate("2026-03-20", timezone));
+		expect(late.data.issued_at).toBeGreaterThan(march.to);
+
+		const preview = await call("GET", `${base}/reports/ddv-evidence?${query(options)}`);
+		const kir = preview.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR;
+		expect(kir).toHaveLength(1);
+		expect(kir[0]).toMatchObject({ OBDOBJE: "0303", P3: late.data.reference, P7: 300, P14: 66 });
+		const report = await call("POST", `${base}/reports/vat?from=${march.from}&to=${march.to}`);
+		expect(report.data.invoices).toBe(1);
+		expect(report.data.domestic).toEqual([{ rate: 22, net: 30000, vat: 6600 }]);
+
+		const exported = await call("POST", `${base}/reports/ddv-evidence/exports`, options);
+		expect(exported.status).toBe(201);
+
+		const refused = await issue("2026-03-25");
+		expect(refused.error).toBe(1132);
+		expect(refused.data.issues.map((entry: { code: string }) => entry.code)).toEqual(["tax_period_locked"]);
+		expect(refused.info).toContain("2026-03-25");
+		expect((await issue(null)).error).toBe(0);
+
+		const locks = await call("GET", `${base}/reports/ddv-evidence/locks`);
+		const active = locks.data.find((lock: { active: boolean }) => lock.active);
+		await call("POST", `${base}/reports/ddv-evidence/locks/${active.uuid}/unlock`, { reason: "Late invoice for March" });
+		expect((await issue("2026-03-25")).error).toBe(0);
+	});
 });

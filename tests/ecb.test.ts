@@ -7,7 +7,7 @@ const { default: Database, initialize: initializeDatabase } = await import("../s
 const { default: Cache } = await import("../server/cache");
 const { ECB_TIMEZONE, ecbRatesAge, ecbReferenceRate, forgetEcbAttempts, parseEcbRates, refreshEcbRates, storeEcbRates, storedEcbRate } =
 	await import("../server/rates/ecb");
-const { taxRateFor } = await import("../server/tax-reporting");
+const { taxPointDate, taxRateFor } = await import("../server/tax-reporting");
 const { localDate, shiftLocalDate, startOfLocalDate } = await import("../server/timezone");
 
 const TODAY = localDate(Date.now(), ECB_TIMEZONE);
@@ -203,5 +203,27 @@ describe("the rate an invoice is taxed at", () => {
 		await storeEcbRates([{ day: "2026-09-25", currency: "USD", rate: 1.25 }]);
 
 		expect(await taxRateFor(project, { currency: "RSD", supply_date: supplied }, issued)).toBeNull();
+	});
+});
+
+describe("the day VAT becomes due on an invoice", () => {
+	const zone = "Europe/Ljubljana";
+	const day = (value: string) => startOfLocalDate(value, zone);
+	const taxed = [{ tax_rate: 22, tax_treatment: "domestic" }];
+	const goods = [{ tax_rate: 0, tax_treatment: "intra_eu_goods" }];
+
+	test("is the supply date, or the issue date when no supply date was entered", () => {
+		expect(taxPointDate(zone, day("2026-09-28"), day("2026-10-05"), taxed)).toBe(day("2026-09-28"));
+		expect(taxPointDate(zone, day("2026-10-20"), day("2026-10-05"), taxed)).toBe(day("2026-10-20"));
+		expect(taxPointDate(zone, null, day("2026-10-05"), taxed)).toBe(day("2026-10-05"));
+		expect(taxPointDate(zone, day("2026-09-28"), day("2026-10-05"), [{ tax_rate: 0, tax_treatment: "reverse_charge" }])).toBe(day("2026-09-28"));
+	});
+
+	test("is the issue date for goods supplied to another EU country, at the latest the 15th of the following month", () => {
+		expect(taxPointDate(zone, day("2026-09-28"), day("2026-10-05"), goods)).toBe(day("2026-10-05"));
+		expect(taxPointDate(zone, day("2026-09-28"), day("2026-09-20"), goods)).toBe(day("2026-09-20"));
+		expect(localDate(taxPointDate(zone, day("2026-09-28"), day("2026-11-03"), goods), zone)).toBe("2026-10-15");
+		expect(localDate(taxPointDate(zone, day("2026-12-10"), day("2027-02-01"), goods), zone)).toBe("2027-01-15");
+		expect(taxPointDate(zone, day("2026-09-28"), day("2026-10-05"), [...goods, ...taxed])).toBe(day("2026-09-28"));
 	});
 });

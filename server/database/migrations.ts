@@ -408,6 +408,15 @@ export const MIGRATIONS: Migration[] = [
 			else await sql.unsafe("ALTER TABLE customers ALTER COLUMN email DROP NOT NULL");
 		},
 	},
+	{
+		version: 42,
+		name: "VAT tax point dates",
+		up: async (sql, dialect) => {
+			await sql.unsafe(`ALTER TABLE invoices ADD COLUMN tax_point_date ${schemaTypes(dialect).int64}`);
+			await sql`UPDATE invoices SET tax_point_date = COALESCE(supply_date, issued_at) WHERE issued_at IS NOT NULL`;
+			await run(sql, dialect, [`CREATE INDEX IF NOT EXISTS idx_invoices_tax_point ON invoices(project, tax_point_date)`]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

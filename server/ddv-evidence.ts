@@ -349,12 +349,13 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 		issue(errors, "header", null, null, "invalid_currency", "Slovenian DDV evidence must be reported in EUR.");
 
 	const invoices = (await Database`
-		SELECT * FROM invoices WHERE project = ${project.uuid} AND status <> 'draft' AND issued_at BETWEEN ${options.from} AND ${options.to}
-			AND (status <> 'canceled' OR EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice = invoices.uuid)) ORDER BY issued_at, reference
+		SELECT * FROM invoices WHERE project = ${project.uuid} AND status <> 'draft' AND issued_at IS NOT NULL
+			AND tax_point_date BETWEEN ${options.from} AND ${options.to}
+			AND (status <> 'canceled' OR EXISTS (SELECT 1 FROM credit_notes cn WHERE cn.invoice = invoices.uuid)) ORDER BY tax_point_date, issued_at, reference
 	`) as InvoiceRow[];
 	const invoiceLines = (await Database`
 		SELECT ii.* FROM invoice_items ii JOIN invoices i ON i.uuid = ii.invoice
-		WHERE i.project = ${project.uuid} AND i.status <> 'draft' AND i.issued_at BETWEEN ${options.from} AND ${options.to}
+		WHERE i.project = ${project.uuid} AND i.status <> 'draft' AND i.issued_at IS NOT NULL AND i.tax_point_date BETWEEN ${options.from} AND ${options.to}
 	`) as InvoiceItemRow[];
 	const notes = (await Database`
 		SELECT cn.uuid AS note_uuid, cn.reference AS note_reference, cn.issued_at AS note_issued_at, i.*

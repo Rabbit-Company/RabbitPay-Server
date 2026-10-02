@@ -270,6 +270,7 @@ export interface InvoiceRow {
 	metadata: string | null;
 	due_date: number;
 	supply_date: number | null;
+	tax_point_date: number | null;
 	issued_at: number | null;
 	tax_currency: string | null;
 	tax_exchange_rate: number | null;

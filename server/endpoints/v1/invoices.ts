@@ -427,9 +427,10 @@ Server.app.put("/api/v1/projects/:uuid/invoices/:invoice/tax-rate", Auth.require
 	const dateValid = data.date === undefined || (typeof data.date === "number" && Number.isSafeInteger(data.date) && data.date > 0);
 	if (!rateValid || !dateValid || taxCurrency === invoice.currency) return Utils.fail(ctx, ErrorCode.INVALID_TAX_EXCHANGE_RATE);
 	if (taxRatePrinted(invoice)) return Utils.fail(ctx, ErrorCode.TAX_EXCHANGE_RATE_LOCKED);
-	if (invoice.issued_at !== null && (await accountingPeriodLocked(project.uuid, invoice.issued_at))) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	const taxPoint = invoice.tax_point_date ?? invoice.issued_at;
+	if (taxPoint !== null && (await accountingPeriodLocked(project.uuid, taxPoint))) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
 
-	const rateDate = data.date ?? invoice.supply_date ?? invoice.issued_at ?? Date.now();
+	const rateDate = data.date ?? taxPoint ?? Date.now();
 
 	await Database`
 		UPDATE invoices SET tax_currency = ${taxCurrency}, tax_exchange_rate = ${data.rate!}, tax_rate_source = 'manual',

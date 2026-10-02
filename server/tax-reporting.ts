@@ -2,7 +2,7 @@ import Database from "./database/database";
 import { convertMinor } from "./invoicing";
 import { isEnabled as ratesEnabled, rateProvider } from "./rates/forex";
 import { ECB_SOURCE, ecbReferenceRate } from "./rates/ecb";
-import { localDate, startOfLocalDate } from "./timezone";
+import { localDate, startOfLocalDate, endOfLocalDate } from "./timezone";
 import type { CustomerRow, InvoiceRow, ProjectRow } from "./database/models";
 
 export { convertMinor };
@@ -13,6 +13,7 @@ export const ECB_REPORTING_CURRENCY = "EUR";
 
 export interface IssueSnapshot {
 	issued_at: number;
+	tax_point_date: number;
 	tax_currency: string;
 	tax_exchange_rate: number | null;
 	tax_rate_source: string | null;
@@ -28,6 +29,24 @@ export interface TaxRate {
 }
 
 export type RatedInvoice = Pick<InvoiceRow, "currency" | "supply_date"> & Partial<Pick<InvoiceRow, "tax_exchange_rate" | "tax_rate_source">>;
+
+export interface TaxPointLine {
+	tax_rate: number;
+	tax_treatment: string | null;
+}
+
+const INTRA_EU_INVOICE_DAY = 15;
+
+export function taxPointDate(timezone: string, supplyDate: number | null, issuedAt: number, lines: TaxPointLine[]): number {
+	const supplied = supplyDate ?? issuedAt;
+	const intraEuGoods = lines.some((line) => line.tax_treatment === "intra_eu_goods") && lines.every((line) => line.tax_rate === 0);
+	if (!intraEuGoods) return supplied;
+
+	const [year, month] = localDate(supplied, timezone).split("-").map(Number);
+	const following = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
+	const latest = endOfLocalDate(`${following}-${INTRA_EU_INVOICE_DAY}`, timezone);
+	return Math.min(issuedAt, latest);
+}
 
 export function reportingCurrency(project: Pick<ProjectRow, "tax_currency" | "currency">): string {
 	return project.tax_currency ?? project.currency;
@@ -53,12 +72,12 @@ export async function marketRate(from: string, to: string): Promise<number | nul
 export async function taxRateFor(
 	project: Pick<ProjectRow, "tax_currency" | "currency" | "timezone">,
 	invoice: RatedInvoice,
-	issuedAt: number
+	issuedAt: number,
+	taxPoint: number = invoice.supply_date ?? issuedAt
 ): Promise<TaxRate | null> {
 	const taxCurrency = reportingCurrency(project);
 	if (invoice.currency === taxCurrency) return { rate: 1, source: "same", date: issuedAt };
 
-	const taxPoint = invoice.supply_date ?? issuedAt;
 	if (invoice.tax_rate_source === MANUAL_RATE_SOURCE && validTaxExchangeRate(invoice.tax_exchange_rate)) {
 		return { rate: invoice.tax_exchange_rate, source: MANUAL_RATE_SOURCE, date: taxPoint };
 	}
@@ -75,9 +94,11 @@ export async function taxRateFor(
 export async function issueSnapshot(
 	project: Pick<ProjectRow, "tax_currency" | "currency" | "timezone">,
 	invoice: RatedInvoice & { customer: string | null },
-	issuedAt: number
+	issuedAt: number,
+	lines: TaxPointLine[] = []
 ): Promise<IssueSnapshot> {
-	const rate = await taxRateFor(project, invoice, issuedAt);
+	const taxPoint = taxPointDate(project.timezone, invoice.supply_date, issuedAt, lines);
+	const rate = await taxRateFor(project, invoice, issuedAt, taxPoint);
 
 	const [customer] = invoice.customer
 		? ((await Database`SELECT country, vat_number FROM customers WHERE uuid = ${invoice.customer}`) as Pick<CustomerRow, "country" | "vat_number">[])
@@ -85,6 +106,7 @@ export async function issueSnapshot(
 
 	return {
 		issued_at: issuedAt,
+		tax_point_date: taxPoint,
 		tax_currency: reportingCurrency(project),
 		tax_exchange_rate: rate?.rate ?? null,
 		tax_rate_source: rate?.source ?? null,

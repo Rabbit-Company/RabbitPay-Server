@@ -1504,6 +1504,7 @@ export interface Invoice extends ReferenceDocumentColumns {
 	tax_exchange_rate: number | null;
 	tax_rate_source: string | null;
 	tax_rate_date: number | null;
+	tax_point_date: number | null;
 	buyer_country: string | null;
 	buyer_vat_number: string | null;
 	created: number;

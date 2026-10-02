@@ -127,7 +127,7 @@ export async function stampIssue(
 	const recipient = invoiceRecipient(customer, snapshot.buyer_vat_number);
 	await sql`
 		UPDATE invoices SET
-			issued_at = ${snapshot.issued_at}, tax_currency = ${snapshot.tax_currency}, tax_exchange_rate = ${snapshot.tax_exchange_rate},
+			issued_at = ${snapshot.issued_at}, tax_point_date = ${snapshot.tax_point_date}, tax_currency = ${snapshot.tax_currency}, tax_exchange_rate = ${snapshot.tax_exchange_rate},
 			tax_rate_source = ${snapshot.tax_rate_source}, tax_rate_date = ${snapshot.tax_rate_date},
 			buyer_country = ${snapshot.buyer_country}, buyer_vat_number = ${snapshot.buyer_vat_number},
 			buyer_email = ${recipient?.email?.trim().toLowerCase() || null}, buyer_details = ${recipient ? JSON.stringify(recipient) : null},

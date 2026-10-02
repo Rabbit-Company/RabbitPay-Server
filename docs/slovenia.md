@@ -329,7 +329,8 @@ reference rate that applies on the day the tax liability arises, as published by
 Banka Slovenije. When the project's reporting currency is EUR, an invoice in
 another currency is therefore converted like this at the moment it is issued:
 
-- The day is the supply date, in the project's timezone. An invoice issued on
+- The day is the invoice's tax point, normally the supply date, in the project's
+  timezone, as described under [The VAT period of an invoice](#the-vat-period-of-an-invoice). An invoice issued on
   5 October for a supply on 28 September uses the rate for 28 September.
 - The rate is the latest ECB reference rate published on or before that day, at
   most six days back, which covers weekends and bank holidays. It is saved on
@@ -367,6 +368,33 @@ to the VAT in euros, so it can no longer be changed and
 the invoice and issue a new one. The rate of an invoice without VAT is not
 printed and can still be set or corrected.
 
+## The VAT period of an invoice
+
+VAT is due when the goods are supplied or the service is performed, under
+Article 33 of ZDDV-1, not when the invoice is written. Every issued invoice
+therefore carries a `tax_point_date`, saved at the moment of issuing:
+
+- For an ordinary supply it is the supply date, or the issue date when no supply
+  date was entered. An invoice issued on 5 October for a supply on 28 September
+  belongs to September.
+- For goods supplied to a business in another EU country it is the issue date,
+  and at the latest the 15th of the month after the supply. This applies when
+  the invoice has a line with the treatment `intra_eu_goods` and no line that
+  carries VAT.
+- An advance invoice is created with the day the payment arrived as its supply
+  date, so it is reported in the period of the payment.
+
+The VAT report and the DDV evidence select invoices by this date, and the
+exchange rate of an invoice in another currency is the rate for this date. In
+the DDV evidence the document date stays the issue date and only the period
+follows the tax point. Credit notes are reported in the period they are issued
+in. Recorded invoices that were issued in another system are still selected by
+their issue date.
+
+Only the ordinary rules are covered. Cash accounting, where VAT is due when the
+invoice is paid, the margin scheme, self-billing and the travel agent scheme are
+not supported, and a seller using one of them should not rely on these reports.
+
 ## DDV periods and accounting locks
 
 DDV month and quarter boundaries use the project's accounting timezone. For
@@ -376,7 +404,11 @@ the correct daylight saving offset instead of at UTC midnight.
 Creating a valid FURS DDV export locks the covered period. RabbitPay then blocks
 changes to expenses and their attachments in that period, manual exchange-rate
 changes on covered invoices, and creation of new invoices or credit notes whose
-issue time falls inside the lock. Existing documents remain readable and another
+issue time falls inside the lock. An invoice whose tax point falls inside the
+lock is refused as well, even when it is issued later: issuing in October for a
+supply in a locked September returns error `1132` with the issue
+`tax_period_locked`. Unlock the period, issue the invoice, and file a correction
+for that period. Existing documents remain readable and another
 export revision can be downloaded without changing the records.
 
 An authorized report exporter can explicitly unlock the period from the DDV

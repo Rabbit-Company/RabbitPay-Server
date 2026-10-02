@@ -1070,7 +1070,7 @@ export const en = {
 	"invoices.summary_totals": "{billed} billed, {paid} paid, {outstanding} outstanding",
 	"invoices.due_date": "Due date",
 	"invoices.supply_date": "Supply date",
-	"invoices.supply_date_hint": "When the goods or service were delivered, if that is not the invoice date",
+	"invoices.supply_date_hint": "When the goods or service were delivered, if that is not the invoice date. VAT is reported in the period of this date",
 	"invoices.reference_document": "Reference document",
 	"invoices.reference_hint": "Public sector buyers require the number of their order or contract on e-invoices.",
 	"invoices.reference_archive_note":

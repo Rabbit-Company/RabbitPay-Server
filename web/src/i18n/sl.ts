@@ -1071,7 +1071,7 @@ export const sl: UiDictionary = {
 	"invoices.summary_totals": "obračunano {billed}, plačano {paid}, za plačilo {outstanding}",
 	"invoices.due_date": "Rok plačila",
 	"invoices.supply_date": "Datum dobave",
-	"invoices.supply_date_hint": "Kdaj je bilo blago ali storitev opravljena, če to ni datum računa",
+	"invoices.supply_date_hint": "Kdaj je bilo blago ali storitev opravljena, če to ni datum računa. DDV se poroča v obdobju tega datuma",
 	"invoices.reference_document": "Referenčni dokument",
 	"invoices.reference_hint": "Proračunski uporabniki na e-računu zahtevajo številko svojega naročila ali pogodbe.",
 	"invoices.reference_archive_note":

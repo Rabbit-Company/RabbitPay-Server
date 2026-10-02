@@ -5,6 +5,8 @@ import { prepareIssuePresentation, type PreparedIssuePresentation } from "./invo
 import { issueSnapshot, type IssueSnapshot } from "./tax-reporting";
 import { DOMESTIC_VAT_RATES, isTaxTreatment, isZeroRated, splitVatNumber } from "./tax";
 import Utils from "./utils";
+import { accountingPeriodLocked } from "./accounting-periods";
+import { localDate } from "./timezone";
 import type { CustomerRow, InvoiceItemRow, InvoiceRow, ProjectRow } from "./database/models";
 
 export interface InvoiceDataIssue {
@@ -140,8 +142,17 @@ export async function prepareInvoiceIssue(
 	items: InvoiceLine[],
 	issuedAt: number
 ): Promise<{ snapshot: IssueSnapshot; presentation: PreparedIssuePresentation }> {
-	const snapshot = await issueSnapshot(project, invoice, issuedAt);
+	const snapshot = await issueSnapshot(project, invoice, issuedAt, items);
 	const presentation = await prepareIssuePresentation(project);
+	if (await accountingPeriodLocked(project.uuid, snapshot.tax_point_date)) {
+		throw new InvoiceDataIncomplete([
+			{
+				code: "tax_period_locked",
+				field: "invoice.supply_date",
+				message: `The supply date ${localDate(snapshot.tax_point_date, project.timezone)} falls in a VAT period that is locked after a DDV submission or a year end close. Unlock that period to issue the invoice, then file a correction for it.`,
+			},
+		]);
+	}
 	const unrated: InvoiceDataIssue[] =
 		snapshot.tax_exchange_rate === null && invoice.tax_amount !== 0
 			? [
