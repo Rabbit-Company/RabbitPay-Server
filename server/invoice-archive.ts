@@ -1,5 +1,5 @@
 import Database from "./database/database";
-import { documentStorage } from "./document-storage";
+import { DocumentArchiveDamaged, documentStorage } from "./document-storage";
 import { invoiceDocument } from "./invoice-document";
 import { invoiceFilename, renderInvoicePdf } from "./invoice-pdf";
 import { issueSnapshotFor, snapshotLogo } from "./invoice-snapshot";
@@ -26,6 +26,22 @@ async function rowFor(invoiceId: string): Promise<InvoiceDocumentRow> {
 	return row;
 }
 
+async function readStored(invoice: InvoiceRow, row: InvoiceDocumentRow): Promise<Uint8Array> {
+	let damage: string;
+	try {
+		const data = await documentStorage().get(row.storage_key);
+		if (data.byteLength === Number(row.byte_size) && hash(data) === row.sha256) {
+			if (row.last_error !== null) await Database`UPDATE invoice_documents SET last_error = NULL, updated = ${Date.now()} WHERE invoice = ${invoice.uuid}`;
+			return data;
+		}
+		damage = "does not match the checksum recorded when it was archived";
+	} catch (err) {
+		damage = `could not be read from the document storage: ${err instanceof Error ? err.message : String(err)}`;
+	}
+	await Database`UPDATE invoice_documents SET last_error = ${damage.slice(0, 500)}, updated = ${Date.now()} WHERE invoice = ${invoice.uuid}`;
+	throw new DocumentArchiveDamaged(`The archived PDF of invoice ${invoice.reference} ${damage}`);
+}
+
 async function generate(project: ProjectRow, invoice: InvoiceRow, row: InvoiceDocumentRow): Promise<{ name: string; data: Uint8Array }> {
 	const snapshot = await issueSnapshotFor(invoice.uuid);
 	if (!snapshot) throw new Error("Issued invoice snapshot is missing");
@@ -43,25 +59,13 @@ async function generate(project: ProjectRow, invoice: InvoiceRow, row: InvoiceDo
 }
 
 async function loadOrGenerate(project: ProjectRow, invoice: InvoiceRow): Promise<{ name: string; data: Uint8Array }> {
-	let row = await rowFor(invoice.uuid);
+	const row = await rowFor(invoice.uuid);
 	const snapshot = await issueSnapshotFor(invoice.uuid);
 	if (!snapshot) throw new Error("Issued invoice snapshot is missing");
 
 	if (row.status === "ready" && row.sha256) {
-		try {
-			const data = await documentStorage().get(row.storage_key);
-			if (data.byteLength !== row.byte_size || hash(data) !== row.sha256) throw new Error("Stored invoice failed its integrity check");
-			return { name: invoiceFilename(invoice.reference, snapshot.settings.language, "pdf", invoice.document_type), data };
-		} catch (err) {
-			const timestamp = Date.now();
-			const storageKey = `invoices/${invoice.project}/${invoice.uuid}/${crypto.randomUUID()}.pdf`;
-			await Database`
-				UPDATE invoice_documents SET storage_key = ${storageKey}, status = 'pending', byte_size = NULL, sha256 = NULL,
-					last_error = ${err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500)}, next_attempt_at = ${timestamp}, updated = ${timestamp}
-				WHERE invoice = ${invoice.uuid}
-			`;
-			row = await rowFor(invoice.uuid);
-		}
+		const data = await readStored(invoice, row);
+		return { name: invoiceFilename(invoice.reference, snapshot.settings.language, "pdf", invoice.document_type), data };
 	}
 
 	try {

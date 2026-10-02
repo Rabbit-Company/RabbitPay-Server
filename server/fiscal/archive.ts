@@ -1,5 +1,5 @@
 import Database from "../database/database";
-import { documentStorage } from "../document-storage";
+import { DocumentArchiveDamaged, documentStorage } from "../document-storage";
 import { renderFiscalCreditNotePdf, renderFiscalInvoicePdf } from "../invoice-pdf";
 import { Logger } from "../logger";
 import type { CreditNoteRow, FiscalDocumentRow, InvoiceRow, ProjectRow } from "../database/models";
@@ -48,14 +48,19 @@ export async function archiveVerifiedCopy(document: FiscalDocumentRow): Promise<
 
 export async function verifiedCopy(document: FiscalDocumentRow): Promise<Uint8Array | null> {
 	if (!document.archive_key) return null;
+	const label = `${document.premise_id}-${document.device_id}-${document.invoice_number}`;
+	let data: Uint8Array;
 	try {
-		const data = await documentStorage().get(document.archive_key);
-		if (data.byteLength !== document.archive_size || hash(data) !== document.archive_sha256) throw new Error("it failed its integrity check");
-		return data;
+		data = await documentStorage().get(document.archive_key);
 	} catch (err) {
-		Logger.error(`[DOCUMENTS] The verified copy of ${document.premise_id}-${document.device_id}-${document.invoice_number} cannot be read: ${err}`);
-		return null;
+		throw new DocumentArchiveDamaged(
+			`The verified copy of ${label} could not be read from the document storage: ${err instanceof Error ? err.message : String(err)}`
+		);
 	}
+	if (data.byteLength !== Number(document.archive_size) || hash(data) !== document.archive_sha256) {
+		throw new DocumentArchiveDamaged(`The verified copy of ${label} does not match the checksum recorded when it was archived`);
+	}
+	return data;
 }
 
 export async function archivePendingVerifiedCopies(): Promise<{ attempted: number; archived: number }> {

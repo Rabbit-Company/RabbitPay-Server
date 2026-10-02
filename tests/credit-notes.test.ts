@@ -417,20 +417,27 @@ describe("a credit note document", () => {
 		expect(archive.sha256).toBe(checksum);
 		expect((await storageFor(projectUuid)).storage_used - storageBeforeCredit.storage_used).toBe(archive.byte_size);
 		await documentStorage().put(archive.storage_key, new Uint8Array([1, 2, 3]), "application/pdf");
-		const repairedPdf = await Server.app.handle(
-			new Request(`http://127.0.0.1${base()}/credit-notes/${note.uuid}/pdf`, { headers: { Authorization: `Bearer ${ownerToken}` } })
-		);
-		const repairedBytes = new Uint8Array(await repairedPdf.arrayBuffer());
-		const [repaired] = (await Database`SELECT * FROM credit_note_documents WHERE credit_note = ${note.uuid}`) as {
+		const damaged = await call("GET", `${base()}/credit-notes/${note.uuid}/pdf`, { token: ownerToken });
+		const [kept] = (await Database`SELECT * FROM credit_note_documents WHERE credit_note = ${note.uuid}`) as {
 			storage_key: string;
 			status: string;
-			byte_size: number;
 			sha256: string;
+			last_error: string | null;
 		}[];
-		expect(repaired.storage_key).not.toBe(archive.storage_key);
-		expect(repaired.status).toBe("ready");
-		expect(repaired.byte_size).toBe(repairedBytes.byteLength);
-		expect(repaired.sha256).toBe(new Bun.CryptoHasher("sha256").update(repairedBytes).digest("hex"));
+		expect(damaged.error).toBe(1283);
+		expect(kept.storage_key).toBe(archive.storage_key);
+		expect(kept.status).toBe("ready");
+		expect(kept.sha256).toBe(checksum);
+		expect(kept.last_error).toContain("checksum");
+
+		await documentStorage().put(archive.storage_key, firstBytes, "application/pdf");
+		const restoredPdf = await Server.app.handle(
+			new Request(`http://127.0.0.1${base()}/credit-notes/${note.uuid}/pdf`, { headers: { Authorization: `Bearer ${ownerToken}` } })
+		);
+		const restoredBytes = new Uint8Array(await restoredPdf.arrayBuffer());
+		const [restored] = (await Database`SELECT last_error FROM credit_note_documents WHERE credit_note = ${note.uuid}`) as { last_error: string | null }[];
+		expect(new Bun.CryptoHasher("sha256").update(restoredBytes).digest("hex")).toBe(checksum);
+		expect(restored.last_error).toBeNull();
 
 		await call("PUT", `${base()}/company`, {
 			token: ownerToken,

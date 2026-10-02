@@ -3,6 +3,8 @@ import { dirname, join, resolve } from "node:path";
 import { S3Client } from "bun";
 import { documentContext, isSealed, seal, unseal } from "./crypto/sealed-file";
 
+export class DocumentArchiveDamaged extends Error {}
+
 export interface DocumentStorage {
 	put(key: string, data: Uint8Array, contentType: string): Promise<void>;
 	get(key: string): Promise<Uint8Array>;

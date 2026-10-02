@@ -159,6 +159,7 @@ export enum Error {
 	INVALID_REVALUATION = 1280,
 	REVALUATION_EXISTS = 1281,
 	CONNECTION_TEST_FAILED = 1282,
+	DOCUMENT_ARCHIVE_DAMAGED = 1283,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -666,6 +667,10 @@ namespace Errors {
 		1280: { message: "Enter a 31 December exchange rate above zero for every currency with open items.", httpCode: 400 },
 		1281: { message: "Foreign currency items for this year are already revalued. Reverse that entry before revaluing again.", httpCode: 409 },
 		1282: { message: "The connection test failed.", httpCode: 502 },
+		1283: {
+			message: "The stored document failed its integrity check and was not replaced. Restore it from a backup of the document storage.",
+			httpCode: 500,
+		},
 		1275: { message: "This date is in a closed business year. Reopen the year before posting to it.", httpCode: 409 },
 		1268: { message: "Upload a camt.053 bank statement in XML with at least one booked entry.", httpCode: 400 },
 		1269: { message: "This bank statement line does not exist.", httpCode: 404 },

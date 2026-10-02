@@ -390,6 +390,42 @@ describe("the printable document", () => {
 		await setProcessor(projectUuid, "bank_transfer", true, { iban: SLOVENIAN_IBAN, account_holder: "" });
 	});
 
+	test("refuses to replace an archived invoice that fails its integrity check", async () => {
+		const { documentStorage } = await import("../server/document-storage");
+		const invoice = await issueInvoice(10000);
+		const pdf = () =>
+			Server.app.handle(
+				new Request(`http://127.0.0.1/api/v1/projects/${projectUuid}/invoices/${invoice}/pdf`, { headers: { Authorization: `Bearer ${ownerToken}` } })
+			);
+		const original = new Uint8Array(await (await pdf()).arrayBuffer());
+		const archiveRow = async () =>
+			(
+				(await Database`SELECT storage_key, status, sha256, last_error FROM invoice_documents WHERE invoice = ${invoice}`) as {
+					storage_key: string;
+					status: string;
+					sha256: string;
+					last_error: string | null;
+				}[]
+			)[0];
+		const archived = await archiveRow();
+
+		await documentStorage().put(archived.storage_key, new Uint8Array([1, 2, 3]), "application/pdf");
+		const tampered = await call("GET", `/api/v1/projects/${projectUuid}/invoices/${invoice}/pdf`, { token: ownerToken });
+		expect(tampered.error).toBe(ErrorCode.DOCUMENT_ARCHIVE_DAMAGED);
+		expect(await archiveRow()).toMatchObject({ storage_key: archived.storage_key, status: "ready", sha256: archived.sha256 });
+		expect((await archiveRow()).last_error).toContain("checksum");
+
+		await documentStorage().remove(archived.storage_key);
+		const missing = await call("GET", `/api/v1/projects/${projectUuid}/invoices/${invoice}/pdf`, { token: ownerToken });
+		expect(missing.error).toBe(ErrorCode.DOCUMENT_ARCHIVE_DAMAGED);
+		expect(await archiveRow()).toMatchObject({ storage_key: archived.storage_key, status: "ready", sha256: archived.sha256 });
+
+		await documentStorage().put(archived.storage_key, original, "application/pdf");
+		const restored = new Uint8Array(await (await pdf()).arrayBuffer());
+		expect(new Bun.CryptoHasher("sha256").update(restored).digest("hex")).toBe(archived.sha256);
+		expect((await archiveRow()).last_error).toBeNull();
+	});
+
 	test("asks the customer for what is still owed, not the whole invoice", async () => {
 		const invoice = await issueInvoice(10000);
 		await call("POST", `/api/v1/projects/${projectUuid}/transactions`, {

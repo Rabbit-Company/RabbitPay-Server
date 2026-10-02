@@ -1,7 +1,7 @@
 import Database from "./database/database";
 import { creditNoteDocument } from "./credit-note-document";
 import { creditNoteSnapshotFor, creditNoteSnapshotLogo } from "./credit-note-snapshot";
-import { documentStorage } from "./document-storage";
+import { DocumentArchiveDamaged, documentStorage } from "./document-storage";
 import { creditNoteFilename, renderCreditNotePdf } from "./invoice-pdf";
 import { Logger } from "./logger";
 import type { CreditNoteDocumentRow, CreditNoteRow, ProjectRow } from "./database/models";
@@ -26,6 +26,22 @@ async function rowFor(noteId: string): Promise<CreditNoteDocumentRow> {
 	return row;
 }
 
+async function readStored(note: CreditNoteRow, row: CreditNoteDocumentRow): Promise<Uint8Array> {
+	let damage: string;
+	try {
+		const data = await documentStorage().get(row.storage_key);
+		if (data.byteLength === Number(row.byte_size) && hash(data) === row.sha256) {
+			if (row.last_error !== null) await Database`UPDATE credit_note_documents SET last_error = NULL, updated = ${Date.now()} WHERE credit_note = ${note.uuid}`;
+			return data;
+		}
+		damage = "does not match the checksum recorded when it was archived";
+	} catch (err) {
+		damage = `could not be read from the document storage: ${err instanceof Error ? err.message : String(err)}`;
+	}
+	await Database`UPDATE credit_note_documents SET last_error = ${damage.slice(0, 500)}, updated = ${Date.now()} WHERE credit_note = ${note.uuid}`;
+	throw new DocumentArchiveDamaged(`The archived PDF of credit note ${note.reference} ${damage}`);
+}
+
 async function generate(project: ProjectRow, note: CreditNoteRow, row: CreditNoteDocumentRow): Promise<{ name: string; data: Uint8Array }> {
 	const snapshot = await creditNoteSnapshotFor(note.uuid);
 	if (!snapshot) throw new Error("Credit note issue snapshot is missing");
@@ -43,25 +59,13 @@ async function generate(project: ProjectRow, note: CreditNoteRow, row: CreditNot
 }
 
 async function loadOrGenerate(project: ProjectRow, note: CreditNoteRow): Promise<{ name: string; data: Uint8Array }> {
-	let row = await rowFor(note.uuid);
+	const row = await rowFor(note.uuid);
 	const snapshot = await creditNoteSnapshotFor(note.uuid);
 	if (!snapshot) throw new Error("Credit note issue snapshot is missing");
 
 	if (row.status === "ready" && row.sha256) {
-		try {
-			const data = await documentStorage().get(row.storage_key);
-			if (data.byteLength !== row.byte_size || hash(data) !== row.sha256) throw new Error("Stored credit note failed its integrity check");
-			return { name: creditNoteFilename(note.reference, snapshot.settings.language), data };
-		} catch (err) {
-			const timestamp = Date.now();
-			const storageKey = `credit-notes/${note.project}/${note.uuid}/${crypto.randomUUID()}.pdf`;
-			await Database`
-				UPDATE credit_note_documents SET storage_key = ${storageKey}, status = 'pending', byte_size = NULL, sha256 = NULL,
-					last_error = ${err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500)}, next_attempt_at = ${timestamp}, updated = ${timestamp}
-				WHERE credit_note = ${note.uuid}
-			`;
-			row = await rowFor(note.uuid);
-		}
+		const data = await readStored(note, row);
+		return { name: creditNoteFilename(note.reference, snapshot.settings.language), data };
 	}
 
 	try {

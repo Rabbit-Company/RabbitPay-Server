@@ -183,7 +183,7 @@ A bucket that already holds unencrypted documents from an older version must be 
 bun run documents:encrypt
 ```
 
-Failed archives are retried in the background. Downloads verify the stored size and SHA-256 hash before returning the PDF.
+Failed archives are retried in the background. Downloads verify the stored size and SHA-256 hash before returning the PDF. A stored PDF that is missing, unreadable, or no longer matches is never replaced with a newly generated one, because that file would not be the original. The download, the customer page and the email attachment fail with error `1283`, the reason is saved in `last_error` on the document record, and the record keeps its storage key and hash. Restore the file from a backup of the document storage and the next download returns it again. The same applies to credit notes and to the verified copies kept for FURS.
 
 Issued PDFs and their storage keys are immutable during normal operation. Changes to company details, VAT settings, language, bank account, logo, issuer visibility, or signatures affect only later invoices. The database and document archive must be backed up as one dataset.
 

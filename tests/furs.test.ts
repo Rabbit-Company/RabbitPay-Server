@@ -550,6 +550,12 @@ describe("emailed documents", () => {
 		expect(Buffer.from(await download()).equals(Buffer.from(stored))).toBe(true);
 		expect(Buffer.from(await download()).equals(Buffer.from(stored))).toBe(true);
 
+		await documentStorage().put(fiscal.archive_key!, new Uint8Array([1, 2, 3]), "application/pdf");
+		const damaged = await call("GET", `${base()}/invoices/${sale.data.uuid}/pdf`, { token });
+		expect(damaged.error).toBe(1283);
+		await documentStorage().put(fiscal.archive_key!, stored, "application/pdf");
+		expect(Buffer.from(await download()).equals(Buffer.from(stored))).toBe(true);
+
 		const archivedAtIssue = await Database`SELECT byte_size FROM invoice_documents WHERE invoice = ${sale.data.uuid}`;
 		expect((await storageFor(projectUuid)).storage_used - before).toBe(Number(archivedAtIssue[0].byte_size) + fiscal.archive_size!);
 	});

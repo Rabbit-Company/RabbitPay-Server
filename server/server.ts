@@ -10,6 +10,7 @@ import { ErrorCode } from "./errors";
 import * as WebInterface from "./web";
 import { clientIpMiddleware } from "./client-ip";
 import { NumberingExhausted } from "./invoice-numbers";
+import { DocumentArchiveDamaged } from "./document-storage";
 import type { AppState } from "./database/models";
 
 const STORE_IMAGE_UPLOAD = /^\/api\/v1\/projects\/[^/]+\/store\/(?:images\/(?:logo|hero)|products\/[^/]+\/images)$/;
@@ -37,6 +38,10 @@ export namespace Server {
 				await next();
 			} catch (err) {
 				if (err instanceof NumberingExhausted) return Utils.jsonError(ErrorCode.INVOICE_NUMBERS_EXHAUSTED);
+				if (err instanceof DocumentArchiveDamaged) {
+					Logger.error(`[DOCUMENTS] ${err.message}`);
+					return Utils.jsonError(ErrorCode.DOCUMENT_ARCHIVE_DAMAGED);
+				}
 				Logger.error(`[GENERAL] ${err}`);
 				return Utils.jsonError(ErrorCode.UNKNOWN_ERROR);
 			}
@@ -99,6 +104,10 @@ export namespace Server {
 
 		app.onError((err) => {
 			if (err instanceof NumberingExhausted) return Utils.jsonError(ErrorCode.INVOICE_NUMBERS_EXHAUSTED);
+			if (err instanceof DocumentArchiveDamaged) {
+				Logger.error(`[DOCUMENTS] ${err.message}`);
+				return Utils.jsonError(ErrorCode.DOCUMENT_ARCHIVE_DAMAGED);
+			}
 			Logger.error(`[GENERAL] Unhandled error: ${err?.stack || err}`);
 			return Utils.jsonError(ErrorCode.UNKNOWN_ERROR);
 		});
