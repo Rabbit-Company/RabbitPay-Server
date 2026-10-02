@@ -265,6 +265,29 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 	});
 	const supplyDate = input("date", { value: existing?.supply_date ? toDateInput(existing.supply_date, project.timezone) : "" });
 	const reference = referenceDocumentFields(existing, project.timezone);
+	const reporting = project.tax_currency ?? project.currency;
+	const taxRate = input("number", {
+		min: "0",
+		step: "any",
+		value: existing?.tax_rate_source === "manual" && existing.tax_exchange_rate ? String(existing.tax_exchange_rate) : "",
+	});
+	const taxRateBox = el("div", {});
+	const refreshTaxRate = () => {
+		const currency = editor.currency();
+		taxRateBox.hidden = currency === reporting;
+		taxRateBox.replaceChildren(
+			field(
+				t("invoices.rate_field", { reporting, currency }),
+				taxRate,
+				t(reporting === "EUR" ? "invoices.rate_draft_hint_ecb" : "invoices.rate_draft_hint_market")
+			)
+		);
+	};
+	editor.onCurrencyChange(() => {
+		taxRate.value = "";
+		refreshTaxRate();
+	});
+	refreshTaxRate();
 	const settlement = select(
 		[
 			{ value: "invoice", label: t("settings.settlement_invoice") },
@@ -293,6 +316,7 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 			...reference.values(),
 			due_date: fromDateInput(dueDate.value, project.timezone),
 			supply_date: supplyDate.value ? dayStartFromDateInput(supplyDate.value, project.timezone) : null,
+			tax_exchange_rate: values.currency !== reporting && Number(taxRate.value) > 0 ? Number(taxRate.value) : null,
 		};
 
 		try {
@@ -342,6 +366,7 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 				field(t("invoices.supply_date"), supplyDate, t("invoices.supply_date_hint")),
 				editor.discountField
 			),
+			taxRateBox,
 			el(
 				"details",
 				{ class: "form-more" },
@@ -668,6 +693,10 @@ function taxRateDialog(uuid: string, invoice: Invoice, reporting: string, onSave
 	const save = el("button", { class: "button primary", type: "submit" }, t("invoices.save_rate"));
 
 	void currencyRates().then((known) => {
+		if (reporting === "EUR") {
+			suggestion.textContent = t("invoices.rate_ecb_hint");
+			return;
+		}
 		const market = known.live ? convertAmount(1, invoice.currency, reporting, known.rates) : null;
 		if (market === null) {
 			suggestion.textContent = t("invoices.rate_manual_hint");

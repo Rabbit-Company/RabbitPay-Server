@@ -11,7 +11,7 @@ import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { calculateTotals, isCancelable, isEditable, type InvoiceItemInput } from "../../invoicing";
 import { createInvoice, loadInvoice, loadItems, present, replaceItems, validateCatalogLinks, validateInvoiceInput, validateItems } from "../../invoice-service";
-import { reportingCurrency } from "../../tax-reporting";
+import { MANUAL_RATE_SOURCE, reportingCurrency, validTaxExchangeRate } from "../../tax-reporting";
 import { InvoiceDataIncomplete, invoiceDataErrorResponse } from "../../invoice-validation";
 import { OutOfStock, stockShortage } from "../../item-keys";
 import { cancelInvoice } from "../../invoice-cancel";
@@ -36,6 +36,7 @@ interface CreateInvoiceBody extends ReferenceDocumentInput {
 	metadata?: Record<string, unknown> | null;
 	status?: "draft" | "open";
 	supply_date?: number | null;
+	tax_exchange_rate?: number | null;
 }
 
 interface UpdateInvoiceBody extends ReferenceDocumentInput {
@@ -45,6 +46,7 @@ interface UpdateInvoiceBody extends ReferenceDocumentInput {
 	discount_amount?: number;
 	due_date?: number;
 	supply_date?: number | null;
+	tax_exchange_rate?: number | null;
 	notes?: string | null;
 	metadata?: Record<string, unknown> | null;
 }
@@ -213,6 +215,9 @@ Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Pe
 	if (data.supply_date !== undefined && data.supply_date !== null && (!Number.isSafeInteger(data.supply_date) || data.supply_date <= 0)) {
 		return Utils.fail(ctx, ErrorCode.INVALID_SUPPLY_DATE);
 	}
+	if (data.tax_exchange_rate !== undefined && data.tax_exchange_rate !== null && !validTaxExchangeRate(data.tax_exchange_rate)) {
+		return Utils.fail(ctx, ErrorCode.INVALID_TAX_EXCHANGE_RATE);
+	}
 	if (!Validate.optionalText(data.notes, 5000)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	const referenceDocument = resolveReferenceDocument(data, invoice);
 	if (referenceDocument === null) return Utils.fail(ctx, ErrorCode.INVALID_REFERENCE_DOCUMENT);
@@ -249,6 +254,8 @@ Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Pe
 		notes: data.notes === undefined ? invoice.notes : data.notes,
 		metadata: data.metadata === undefined ? invoice.metadata : data.metadata === null ? null : JSON.stringify(data.metadata),
 	};
+	const keptRate = invoice.tax_rate_source === MANUAL_RATE_SOURCE && merged.currency === invoice.currency ? invoice.tax_exchange_rate : null;
+	const manualRate = data.tax_exchange_rate === undefined ? keptRate : data.tax_exchange_rate;
 
 	await Database.begin(async (tx) => {
 		await tx`
@@ -258,7 +265,8 @@ Server.app.patch("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Pe
 				notes = ${merged.notes}, metadata = ${merged.metadata}, due_date = ${merged.due_date},
 				reference_document_type = ${referenceDocument.reference_document_type},
 				reference_document_number = ${referenceDocument.reference_document_number},
-				reference_document_date = ${referenceDocument.reference_document_date}, updated = ${Date.now()}
+				reference_document_date = ${referenceDocument.reference_document_date},
+				tax_exchange_rate = ${manualRate}, tax_rate_source = ${manualRate === null ? null : MANUAL_RATE_SOURCE}, updated = ${Date.now()}
 			WHERE uuid = ${invoiceId}
 		`;
 
@@ -392,12 +400,12 @@ Server.app.put("/api/v1/projects/:uuid/invoices/:invoice/tax-rate", Auth.require
 	}
 
 	const taxCurrency = invoice.tax_currency ?? reportingCurrency(project);
-	const rateValid = typeof data.rate === "number" && Number.isFinite(data.rate) && data.rate > 0 && data.rate < 1e9;
+	const rateValid = validTaxExchangeRate(data.rate);
 	const dateValid = data.date === undefined || (typeof data.date === "number" && Number.isSafeInteger(data.date) && data.date > 0);
 	if (!rateValid || !dateValid || taxCurrency === invoice.currency) return Utils.fail(ctx, ErrorCode.INVALID_TAX_EXCHANGE_RATE);
 	if (invoice.issued_at !== null && (await accountingPeriodLocked(project.uuid, invoice.issued_at))) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
 
-	const rateDate = data.date ?? invoice.issued_at ?? Date.now();
+	const rateDate = data.date ?? invoice.supply_date ?? invoice.issued_at ?? Date.now();
 
 	await Database`
 		UPDATE invoices SET tax_currency = ${taxCurrency}, tax_exchange_rate = ${data.rate!}, tax_rate_source = 'manual',

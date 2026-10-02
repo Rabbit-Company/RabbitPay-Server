@@ -2868,6 +2868,7 @@ export const Api = {
 			items: ItemInput[];
 			discount_amount: number;
 			notes: string | null;
+			tax_exchange_rate?: number | null;
 			status?: "draft" | "open";
 		}
 	) {

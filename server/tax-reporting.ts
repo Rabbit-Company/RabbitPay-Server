@@ -1,9 +1,15 @@
 import Database from "./database/database";
 import { convertMinor } from "./invoicing";
 import { isEnabled as ratesEnabled, rateProvider } from "./rates/forex";
-import type { CustomerRow, ProjectRow } from "./database/models";
+import { ECB_SOURCE, ecbReferenceRate } from "./rates/ecb";
+import { localDate, startOfLocalDate } from "./timezone";
+import type { CustomerRow, InvoiceRow, ProjectRow } from "./database/models";
 
 export { convertMinor };
+
+export const MANUAL_RATE_SOURCE = "manual";
+export const MARKET_RATE_SOURCE = "RabbitForex";
+export const ECB_REPORTING_CURRENCY = "EUR";
 
 export interface IssueSnapshot {
 	issued_at: number;
@@ -15,8 +21,20 @@ export interface IssueSnapshot {
 	buyer_vat_number: string | null;
 }
 
+export interface TaxRate {
+	rate: number;
+	source: string;
+	date: number;
+}
+
+export type RatedInvoice = Pick<InvoiceRow, "currency" | "supply_date"> & Partial<Pick<InvoiceRow, "tax_exchange_rate" | "tax_rate_source">>;
+
 export function reportingCurrency(project: Pick<ProjectRow, "tax_currency" | "currency">): string {
 	return project.tax_currency ?? project.currency;
+}
+
+export function validTaxExchangeRate(rate: unknown): rate is number {
+	return typeof rate === "number" && Number.isFinite(rate) && rate > 0 && rate < 1e9;
 }
 
 export async function marketRate(from: string, to: string): Promise<number | null> {
@@ -28,13 +46,34 @@ export async function marketRate(from: string, to: string): Promise<number | nul
 	return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : null;
 }
 
+export async function taxRateFor(
+	project: Pick<ProjectRow, "tax_currency" | "currency" | "timezone">,
+	invoice: RatedInvoice,
+	issuedAt: number
+): Promise<TaxRate | null> {
+	const taxCurrency = reportingCurrency(project);
+	if (invoice.currency === taxCurrency) return { rate: 1, source: "same", date: issuedAt };
+
+	const taxPoint = invoice.supply_date ?? issuedAt;
+	if (invoice.tax_rate_source === MANUAL_RATE_SOURCE && validTaxExchangeRate(invoice.tax_exchange_rate)) {
+		return { rate: invoice.tax_exchange_rate, source: MANUAL_RATE_SOURCE, date: taxPoint };
+	}
+
+	if (taxCurrency === ECB_REPORTING_CURRENCY) {
+		const reference = await ecbReferenceRate(invoice.currency, localDate(taxPoint, project.timezone));
+		return reference ? { rate: 1 / reference.rate, source: ECB_SOURCE, date: startOfLocalDate(reference.day, project.timezone) } : null;
+	}
+
+	const rate = await marketRate(invoice.currency, taxCurrency);
+	return rate === null ? null : { rate, source: MARKET_RATE_SOURCE, date: issuedAt };
+}
+
 export async function issueSnapshot(
-	project: Pick<ProjectRow, "tax_currency" | "currency">,
-	invoice: { currency: string; customer: string | null },
+	project: Pick<ProjectRow, "tax_currency" | "currency" | "timezone">,
+	invoice: RatedInvoice & { customer: string | null },
 	issuedAt: number
 ): Promise<IssueSnapshot> {
-	const taxCurrency = reportingCurrency(project);
-	const rate = await marketRate(invoice.currency, taxCurrency);
+	const rate = await taxRateFor(project, invoice, issuedAt);
 
 	const [customer] = invoice.customer
 		? ((await Database`SELECT country, vat_number FROM customers WHERE uuid = ${invoice.customer}`) as Pick<CustomerRow, "country" | "vat_number">[])
@@ -42,10 +81,10 @@ export async function issueSnapshot(
 
 	return {
 		issued_at: issuedAt,
-		tax_currency: taxCurrency,
-		tax_exchange_rate: rate,
-		tax_rate_source: rate === null ? null : invoice.currency === taxCurrency ? "same" : "RabbitForex",
-		tax_rate_date: rate === null ? null : issuedAt,
+		tax_currency: reportingCurrency(project),
+		tax_exchange_rate: rate?.rate ?? null,
+		tax_rate_source: rate?.source ?? null,
+		tax_rate_date: rate?.date ?? null,
 		buyer_country: customer?.country ?? null,
 		buyer_vat_number: customer?.vat_number ?? null,
 	};

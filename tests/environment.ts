@@ -39,6 +39,7 @@ export const TEST_SETTINGS: Record<string, string | number | boolean> = {
 	"paypal.enabled": true,
 	"paypal.api_url": UNREACHABLE,
 	"rates.api_url": UNREACHABLE,
+	"rates.ecb_url": UNREACHABLE,
 	"vies.api_url": UNREACHABLE,
 	"vies.timeout": 2,
 	"registry.enabled": false,

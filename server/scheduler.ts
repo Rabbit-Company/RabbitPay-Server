@@ -20,6 +20,7 @@ import TaskAccessLogs from "./tasks/access-logs";
 import TaskDomains from "./tasks/domains";
 import TaskLedger from "./tasks/ledger";
 import TaskRegistry from "./tasks/registry";
+import TaskRates from "./tasks/rates";
 import { isEnabled as emailEnabled } from "./email/mailer";
 import { isEnabled as bitcoinEnabled } from "./payments/bitcoin";
 import { isEnabled as ethereumEnabled } from "./payments/ethereum";
@@ -32,6 +33,7 @@ const ACCESS_LOG_MAINTENANCE_MS = 60 * 60 * 1000;
 const DOMAIN_CHECK_MS = 5 * 60 * 1000;
 const LEDGER_POSTING_MS = 15 * 60 * 1000;
 const REGISTRY_CHECK_MS = 60 * 60 * 1000;
+const REFERENCE_RATE_CHECK_MS = 60 * 60 * 1000;
 
 function bitcoinSource(): string {
 	return bitcoinBackend() === "rpc" ? `node RPC at ${Settings.btc?.rpc_url}` : (Settings.btc?.api_url ?? "");
@@ -108,6 +110,8 @@ namespace Scheduler {
 		every(LEDGER_POSTING_MS, () => TaskLedger.run());
 
 		every(REGISTRY_CHECK_MS, () => TaskRegistry.run(), true);
+
+		every(REFERENCE_RATE_CHECK_MS, () => TaskRates.run(), true);
 
 		const emailInterval = Math.max(Settings.email?.poll_interval || 15, 5);
 		every(emailInterval * 1000, () => TaskEmail.run(), true);

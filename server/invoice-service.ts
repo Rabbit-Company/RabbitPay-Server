@@ -7,7 +7,7 @@ import { calculateTotals, type InvoiceItemInput } from "./invoicing";
 import { isTaxTreatment, isZeroRated } from "./tax";
 import { isUnitCode } from "./measure-units";
 import { reserveKeys, stockShortage } from "./item-keys";
-import type { IssueSnapshot } from "./tax-reporting";
+import { MANUAL_RATE_SOURCE, validTaxExchangeRate, type IssueSnapshot } from "./tax-reporting";
 import { invoiceRecipient } from "./invoice-recipient";
 import { resolveInvoiceIssuer } from "./invoice-issuer";
 import { saveIssuePresentation, type PreparedIssuePresentation } from "./invoice-snapshot";
@@ -19,6 +19,7 @@ export interface InvoiceInput extends ReferenceDocumentInput {
 	customer?: string | null;
 	currency?: string;
 	supply_date?: number | null;
+	tax_exchange_rate?: number | null;
 	items?: InvoiceItemInput[];
 	discount_amount?: number;
 	due_date?: number;
@@ -75,6 +76,9 @@ export async function validateInvoiceInput(projectId: string, data: InvoiceInput
 	if (typeof data.due_date !== "number" || !Number.isSafeInteger(data.due_date) || data.due_date <= 0) return ErrorCode.INVALID_DUE_DATE;
 	if (data.supply_date !== undefined && data.supply_date !== null) {
 		if (typeof data.supply_date !== "number" || !Number.isSafeInteger(data.supply_date) || data.supply_date <= 0) return ErrorCode.INVALID_SUPPLY_DATE;
+	}
+	if (data.tax_exchange_rate !== undefined && data.tax_exchange_rate !== null && !validTaxExchangeRate(data.tax_exchange_rate)) {
+		return ErrorCode.INVALID_TAX_EXCHANGE_RATE;
 	}
 	if (!Validate.optionalText(data.notes, 5000)) return ErrorCode.REQUIRED_DATA_MISSING;
 	if (resolveReferenceDocument(data) === null) return ErrorCode.INVALID_REFERENCE_DOCUMENT;
@@ -153,6 +157,7 @@ export async function createInvoice(projectId: string, data: InvoiceInput, optio
 	const status = data.status === "open" ? "open" : "draft";
 	const supplyDate = data.supply_date ?? (status === "open" ? timestamp : null);
 	const referenceDocument = resolveReferenceDocument(data) ?? NO_REFERENCE_DOCUMENT;
+	const manualRate = data.tax_exchange_rate ?? null;
 	const [project] = status === "open" ? ((await Database`SELECT * FROM projects WHERE uuid = ${projectId}`) as ProjectRow[]) : [];
 	const issue = project
 		? await prepareInvoiceIssue(
@@ -163,6 +168,8 @@ export async function createInvoice(projectId: string, data: InvoiceInput, optio
 					due_date: data.due_date!,
 					supply_date: supplyDate,
 					tax_amount: totals.tax_amount,
+					tax_exchange_rate: manualRate,
+					tax_rate_source: manualRate === null ? null : MANUAL_RATE_SOURCE,
 				},
 				totals.items,
 				timestamp
@@ -187,6 +194,7 @@ export async function createInvoice(projectId: string, data: InvoiceInput, optio
 		`;
 
 		await replaceItems(tx, uuid, totals.items);
+		if (manualRate !== null) await tx`UPDATE invoices SET tax_exchange_rate = ${manualRate}, tax_rate_source = ${MANUAL_RATE_SOURCE} WHERE uuid = ${uuid}`;
 		if (issue) await stampIssue(tx, uuid, issue.snapshot, data.created_by, issue.presentation);
 		if (status === "open" || options.holdKeys) await reserveKeys(tx, uuid);
 	});

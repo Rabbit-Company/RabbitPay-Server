@@ -1145,10 +1145,15 @@ export const en = {
 	"invoices.rate_saved": "Exchange rate saved",
 	"invoices.rate_title": "Exchange rate for VAT",
 	"invoices.rate_field": "{reporting} for 1 {currency}",
-	"invoices.rate_manual_hint": "Use the rate of your central bank, the ECB, or your bank on the day the invoice was issued.",
+	"invoices.rate_manual_hint": "Use the rate of your central bank or your bank on the supply date.",
+	"invoices.rate_ecb_hint":
+		"Use the ECB reference rate that applied on the supply date. For a currency the ECB does not quote, use the rate your central bank publishes.",
+	"invoices.rate_draft_hint_ecb":
+		"Leave empty to use the ECB reference rate for the supply date. Enter a rate only when the ECB does not publish one for this currency.",
+	"invoices.rate_draft_hint_market": "Leave empty to use the market rate at the moment the invoice is issued.",
 	"invoices.rate_today": "Today's market rate is {rate}.",
 	"invoices.rate_use_it": "Use it",
-	"invoices.rate_vat_note": ". For VAT, use the rate from the day the invoice was issued.",
+	"invoices.rate_vat_note": ". For VAT, use the rate from the supply date.",
 	"email_kind.invoice": "Invoice",
 	"email_kind.reminder_before": "Reminder",
 	"email_kind.reminder_after": "Overdue reminder",

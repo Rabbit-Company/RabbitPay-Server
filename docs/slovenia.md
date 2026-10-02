@@ -232,6 +232,42 @@ FURS test environment, request a test certificate at sd.fu@gov.si and run:
 FURS_TEST_P12=/path/to/test.p12 FURS_TEST_PASSWORD=secret bun test tests/furs-live.test.ts
 ```
 
+## VAT on invoices in another currency
+
+VAT has to be reported in euros, and ZDDV-1 names the rate to use: the ECB
+reference rate that applies on the day the tax liability arises, as published by
+Banka Slovenije. When the project's reporting currency is EUR, an invoice in
+another currency is therefore converted like this at the moment it is issued:
+
+- The day is the supply date, in the project's timezone. An invoice issued on
+  5 October for a supply on 28 September uses the rate for 28 September.
+- The rate is the latest ECB reference rate published on or before that day, at
+  most six days back, which covers weekends and bank holidays. It is saved on
+  the invoice as `tax_exchange_rate` with `tax_rate_source` `ECB`, and
+  `tax_rate_date` is the day the ECB published it.
+- The ECB quotes the foreign currency per euro, and the invoice stores the
+  reciprocal, euros for one unit of the invoice currency.
+
+The server downloads the ECB rates of the last 90 days every few hours and keeps
+them in the `ecb_rates` table, so a rate that was used can be looked up later.
+When an invoice needs a day that is not stored yet, the server asks the ECB at
+that moment, and for a supply date older than 90 days it reads the full history
+file. The address is under Admin, Settings, Payments, and turning off Look up
+exchange rates stops the downloads.
+
+An invoice that charges VAT cannot be issued without a rate. The request fails
+with error `1132` and the issue `tax_exchange_rate`. This happens for a currency
+the ECB does not quote, such as RSD or BAM, or when the rates could not be
+downloaded. Enter the rate in the invoice form, or send `tax_exchange_rate` when
+creating or updating the draft. A rate entered this way always wins over the ECB
+rate, is saved with `tax_rate_source` `manual`, and is removed when the invoice
+currency changes. An invoice without VAT, such as a reverse charge or export
+invoice, is still issued without a rate and stays out of the VAT report until
+one is set on the invoice page.
+
+A project whose reporting currency is not EUR keeps using the market rate from
+RabbitForex at the moment of issuing.
+
 ## DDV periods and accounting locks
 
 DDV month and quarter boundaries use the project's accounting timezone. For

@@ -22,7 +22,8 @@ export class InvoiceDataIncomplete extends Error {
 	}
 }
 
-type InvoiceSubject = Pick<InvoiceRow, "currency" | "customer" | "due_date" | "supply_date" | "tax_amount">;
+type InvoiceSubject = Pick<InvoiceRow, "currency" | "customer" | "due_date" | "supply_date" | "tax_amount"> &
+	Partial<Pick<InvoiceRow, "tax_exchange_rate" | "tax_rate_source">>;
 type InvoiceLine = Pick<InvoiceItemRow, "description" | "quantity" | "tax_rate" | "tax_treatment">;
 
 function present(value: string | null | undefined): boolean {
@@ -106,12 +107,25 @@ export async function prepareInvoiceIssue(
 ): Promise<{ snapshot: IssueSnapshot; presentation: PreparedIssuePresentation }> {
 	const snapshot = await issueSnapshot(project, invoice, issuedAt);
 	const presentation = await prepareIssuePresentation(project);
-	if (project.tax_country !== "SI") return { snapshot, presentation };
+	const unrated: InvoiceDataIssue[] =
+		snapshot.tax_exchange_rate === null && invoice.tax_amount !== 0
+			? [
+					{
+						code: "tax_exchange_rate",
+						field: "invoice.tax_exchange_rate",
+						message: `No exchange rate from ${invoice.currency} to ${snapshot.tax_currency} is available for the supply date. Enter the VAT exchange rate on the invoice.`,
+					},
+				]
+			: [];
+	if (project.tax_country !== "SI") {
+		if (unrated.length > 0) throw new InvoiceDataIncomplete(unrated);
+		return { snapshot, presentation };
+	}
 
 	const [customer] = invoice.customer
 		? ((await Database`SELECT * FROM customers WHERE uuid = ${invoice.customer} AND project = ${project.uuid}`) as CustomerRow[])
 		: [];
-	const issues = validateSlovenianInvoice(project, invoice, items, customer, presentation);
+	const issues = [...validateSlovenianInvoice(project, invoice, items, customer, presentation), ...unrated];
 	if (issues.length > 0) throw new InvoiceDataIncomplete(issues);
 	return { snapshot, presentation };
 }

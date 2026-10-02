@@ -66,6 +66,8 @@ export interface InvoiceEditor {
 	notesField: HTMLElement;
 	itemsCard: HTMLElement;
 	values(): EditorValues | null;
+	currency(): string;
+	onCurrencyChange(listener: () => void): void;
 }
 
 export function customerOption(customer: Customer): ComboOption {
@@ -423,5 +425,7 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 		notesField: field(t("payments.notes"), notes),
 		itemsCard,
 		values,
+		currency: code,
+		onCurrencyChange: (listener) => currency.onChange(listener),
 	};
 }

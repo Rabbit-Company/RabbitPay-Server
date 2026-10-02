@@ -353,6 +353,22 @@ export const MIGRATIONS: Migration[] = [
 			await dropIndex(sql, dialect, "transactions", "idx_tx_processor");
 		},
 	},
+	{
+		version: 38,
+		name: "ECB reference rates",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS ecb_rates(
+					day ${types.text("day")} NOT NULL,
+					currency ${types.text("currency")} NOT NULL,
+					rate ${types.float} NOT NULL,
+					fetched ${types.int64} NOT NULL,
+					PRIMARY KEY (day, currency)
+				)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

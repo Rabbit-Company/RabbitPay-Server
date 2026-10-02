@@ -252,7 +252,15 @@ goes negative.
 Invoices are created as `draft` unless `"status": "open"` is passed. With
 `"status": "open"` the invoice is created and issued in one step, so a failed
 request leaves no draft behind. It also needs the `invoice.send` permission and
-sends the `invoice.issued` webhook. The lifecycle is:
+sends the `invoice.issued` webhook.
+
+An invoice in another currency than the project's reporting currency takes an
+optional `tax_exchange_rate`, the reporting currency for one unit of the invoice
+currency. Leave it out to let the server pick the rate when the invoice is
+issued. [VAT on invoices in another currency](slovenia.md#vat-on-invoices-in-another-currency)
+explains which rate that is and when issuing is refused without one.
+
+The lifecycle is:
 
 | Status           | Meaning                                  |
 | ---------------- | ---------------------------------------- |

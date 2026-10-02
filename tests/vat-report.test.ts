@@ -9,7 +9,10 @@ await prepareTest(`sqlite://${import.meta.dir}/.vat-report.sqlite`);
 const { Server } = await import("../server/server");
 const { default: Database, initialize: initializeDatabase } = await import("../server/database/database");
 const { default: Cache } = await import("../server/cache");
+const { ErrorCode } = await import("../server/errors");
 const { setRateProvider } = await import("../server/rates/forex");
+const { storeEcbRates } = await import("../server/rates/ecb");
+const { DEFAULT_TIMEZONE, localDate, startOfLocalDate } = await import("../server/timezone");
 const { createInvoice } = await import("../server/invoice-service");
 
 await Server.configure();
@@ -45,7 +48,7 @@ const base = () => `/api/v1/projects/${projectUuid}`;
 const customers: Record<string, string> = {};
 const ids: Record<string, string> = {};
 
-async function issue(items: unknown[], options: { customer?: string; currency?: string; discount?: number } = {}) {
+async function issue(items: unknown[], options: { customer?: string; currency?: string; discount?: number; rate?: number } = {}) {
 	const created = await call("POST", `${base()}/invoices`, {
 		token: ownerToken,
 		body: {
@@ -54,6 +57,7 @@ async function issue(items: unknown[], options: { customer?: string; currency?: 
 			discount_amount: options.discount ?? 0,
 			due_date: Date.now() + 86400000,
 			supply_date: Date.now(),
+			tax_exchange_rate: options.rate ?? null,
 			items,
 		},
 	});
@@ -76,6 +80,7 @@ beforeAll(async () => {
 	const { updateSettings } = await import("../server/settings");
 	await updateSettings({ "reports.cooldown_minutes": 0 });
 	await initializeDatabase();
+	await storeEcbRates([{ day: localDate(Date.now(), DEFAULT_TIMEZONE), currency: "USD", rate: 1 / 0.9 }]);
 
 	await call("POST", "/api/v1/auth/register", { body: { username: "vat-owner", email: "vat@example.com", password: password("vat-owner") } });
 	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "vat-owner", password: password("vat-owner") } })).data.token;
@@ -140,7 +145,10 @@ beforeAll(async () => {
 	ids.oss = (await issue([{ description: "App", quantity: 1, unit_price: 1000, tax_rate: 20, tax_treatment: "oss" }], { customer: customers.fr })).uuid;
 	ids.export = (await issue([{ description: "Parcel", quantity: 1, unit_price: 7000, tax_rate: 0, tax_treatment: "export" }], { customer: customers.us })).uuid;
 	ids.usd = (await issue([{ description: "Hour", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }], { currency: "USD" })).uuid;
-	ids.gbp = (await issue([{ description: "Hour", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }], { currency: "GBP" })).uuid;
+	ids.gbp = (
+		await issue([{ description: "Hour", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }], { currency: "GBP", rate: 1.2 })
+	).uuid;
+	await Database`UPDATE invoices SET tax_exchange_rate = NULL, tax_rate_source = NULL, tax_rate_date = NULL WHERE uuid = ${ids.gbp}`;
 	ids.noVat = (
 		await issue([{ description: "Unchecked", quantity: 1, unit_price: 100, tax_rate: 0, tax_treatment: "reverse_charge" }], { customer: customers.it })
 	).uuid;
@@ -179,15 +187,15 @@ describe("issuing an invoice", () => {
 		expect(invoice.tax_rate_source).toBe("same");
 	});
 
-	test("records the market rate for an invoice in another currency", async () => {
+	test("records the ECB reference rate of the supply date for an invoice in another currency", async () => {
 		const invoice = (await call("GET", `${base()}/invoices/${ids.usd}`, { token: ownerToken })).data;
 
-		expect(invoice.tax_exchange_rate).toBe(0.9);
-		expect(invoice.tax_rate_source).toBe("RabbitForex");
-		expect(invoice.tax_rate_date).toBe(invoice.issued_at);
+		expect(invoice.tax_exchange_rate).toBeCloseTo(0.9, 12);
+		expect(invoice.tax_rate_source).toBe("ECB");
+		expect(invoice.tax_rate_date).toBe(startOfLocalDate(localDate(invoice.supply_date, DEFAULT_TIMEZONE), DEFAULT_TIMEZONE));
 	});
 
-	test("records no rate when none is available", async () => {
+	test("keeps an invoice issued before a rate was required without one", async () => {
 		const invoice = (await call("GET", `${base()}/invoices/${ids.gbp}`, { token: ownerToken })).data;
 
 		expect(invoice.tax_currency).toBe("EUR");
@@ -216,7 +224,7 @@ describe("issuing an invoice", () => {
 		});
 
 		expect(invoice.issued_at).toBe(invoice.created);
-		expect(invoice.tax_exchange_rate).toBe(0.9);
+		expect(invoice.tax_exchange_rate).toBeCloseTo(0.9, 12);
 		expect(invoice.buyer_vat_number).toBe("DE123456789");
 
 		await call("POST", `${base()}/invoices/${invoice.uuid}/cancel`, { token: ownerToken });
@@ -224,7 +232,8 @@ describe("issuing an invoice", () => {
 
 	test("prints VAT in the reporting currency when the invoice is in another one", async () => {
 		const usd = await call("GET", `${base()}/invoices/${ids.usd}/document`, { token: ownerToken });
-		expect(usd.data.tax.reporting).toMatchObject({ currency: "EUR", rate: 0.9, tax_amount: 1980 });
+		expect(usd.data.tax.reporting).toMatchObject({ currency: "EUR", tax_amount: 1980 });
+		expect(usd.data.tax.reporting.rate).toBeCloseTo(0.9, 12);
 
 		const eur = await call("GET", `${base()}/invoices/${ids.domestic}/document`, { token: ownerToken });
 		expect(eur.data.tax.reporting).toBeNull();
@@ -293,7 +302,7 @@ describe("the VAT report", () => {
 		const set = await call("PUT", `${base()}/invoices/${ids.gbp}/tax-rate`, { token: ownerToken, body: { rate: 1.2 } });
 		expect(set.error).toBe(0);
 		expect(set.data.tax_rate_source).toBe("manual");
-		expect(set.data.tax_rate_date).toBe(set.data.issued_at);
+		expect(set.data.tax_rate_date).toBe(set.data.supply_date);
 
 		const data = await report();
 		expect(data.missing_rates).toEqual([]);
@@ -343,6 +352,79 @@ describe("setting an exchange rate by hand", () => {
 		const res = await call("PUT", `${base()}/invoices/${ids.usd}/tax-rate`, { token: ownerToken, body: { rate: 0.91, date: 1767225600000 } });
 		expect(res.data.tax_exchange_rate).toBe(0.91);
 		expect(res.data.tax_rate_date).toBe(1767225600000);
+	});
+});
+
+describe("the rate an invoice is issued with", () => {
+	test("refuses to issue an invoice with VAT in a currency that has no rate", async () => {
+		const body = {
+			currency: "GBP",
+			due_date: Date.now() + 86400000,
+			supply_date: Date.now(),
+			items: [{ description: "Hour", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }],
+		};
+		const atOnce = await call("POST", `${base()}/invoices`, { token: ownerToken, body: { ...body, status: "open" } });
+		expect(atOnce.error).toBe(ErrorCode.INVOICE_DATA_INCOMPLETE);
+		expect(atOnce.data.issues.map((issue: any) => issue.code)).toEqual(["tax_exchange_rate"]);
+
+		const draft = await call("POST", `${base()}/invoices`, { token: ownerToken, body });
+		const opened = await call("POST", `${base()}/invoices/${draft.data.uuid}/open`, { token: ownerToken });
+		expect(opened.error).toBe(ErrorCode.INVOICE_DATA_INCOMPLETE);
+		expect((await call("GET", `${base()}/invoices/${draft.data.uuid}`, { token: ownerToken })).data.status).toBe("draft");
+
+		const rated = await call("PATCH", `${base()}/invoices/${draft.data.uuid}`, { token: ownerToken, body: { tax_exchange_rate: 1.15 } });
+		expect(rated.data.tax_exchange_rate).toBe(1.15);
+		const issued = await call("POST", `${base()}/invoices/${draft.data.uuid}/open`, { token: ownerToken });
+		expect(issued.error).toBe(0);
+		expect(issued.data).toMatchObject({ tax_exchange_rate: 1.15, tax_rate_source: "manual", tax_rate_date: issued.data.supply_date });
+		await call("POST", `${base()}/invoices/${draft.data.uuid}/cancel`, { token: ownerToken });
+	});
+
+	test("prefers a rate entered by hand over the ECB rate and drops it when the currency changes", async () => {
+		const draft = await call("POST", `${base()}/invoices`, {
+			token: ownerToken,
+			body: {
+				currency: "USD",
+				tax_exchange_rate: 0.85,
+				due_date: Date.now() + 86400000,
+				supply_date: Date.now(),
+				items: [{ description: "Hour", quantity: 1, unit_price: 10000, tax_rate: 22, tax_treatment: "domestic" }],
+			},
+		});
+		expect(draft.data).toMatchObject({ tax_exchange_rate: 0.85, tax_rate_source: "manual", issued_at: null });
+
+		const changed = await call("PATCH", `${base()}/invoices/${draft.data.uuid}`, { token: ownerToken, body: { currency: "GBP" } });
+		expect(changed.data).toMatchObject({ tax_exchange_rate: null, tax_rate_source: null });
+
+		await call("PATCH", `${base()}/invoices/${draft.data.uuid}`, { token: ownerToken, body: { currency: "USD", tax_exchange_rate: 0.85 } });
+		const issued = await call("POST", `${base()}/invoices/${draft.data.uuid}/open`, { token: ownerToken });
+		expect(issued.data).toMatchObject({ tax_exchange_rate: 0.85, tax_rate_source: "manual" });
+		await call("POST", `${base()}/invoices/${draft.data.uuid}/cancel`, { token: ownerToken });
+
+		for (const rate of [0, -1, "0.9"]) {
+			const refused = await call("POST", `${base()}/invoices`, {
+				token: ownerToken,
+				body: { currency: "USD", tax_exchange_rate: rate, due_date: Date.now() + 86400000, items: [{ description: "Hour", quantity: 1, unit_price: 1 }] },
+			});
+			expect(refused.error).toBe(ErrorCode.INVALID_TAX_EXCHANGE_RATE);
+		}
+	});
+
+	test("issues an invoice without VAT even when no rate is available", async () => {
+		const invoice = await call("POST", `${base()}/invoices`, {
+			token: ownerToken,
+			body: {
+				customer: customers.us,
+				currency: "GBP",
+				status: "open",
+				due_date: Date.now() + 86400000,
+				supply_date: Date.now(),
+				items: [{ description: "Parcel", quantity: 1, unit_price: 7000, tax_rate: 0, tax_treatment: "export" }],
+			},
+		});
+		expect(invoice.error).toBe(0);
+		expect(invoice.data).toMatchObject({ status: "open", tax_currency: "EUR", tax_exchange_rate: null, tax_rate_source: null });
+		await call("POST", `${base()}/invoices/${invoice.data.uuid}/cancel`, { token: ownerToken });
 	});
 });
 

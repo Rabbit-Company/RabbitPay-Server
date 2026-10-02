@@ -143,6 +143,7 @@ export interface ServerSettings {
 		enabled: boolean;
 		api_url: string;
 		cache_seconds: number;
+		ecb_url: string;
 	};
 	vies: {
 		enabled: boolean;
@@ -261,7 +262,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		reminder_interval: 900,
 	},
 	webhooks: { poll_interval: 15, timeout: 10, max_attempts: 5, allow_private_targets: false },
-	rates: { enabled: true, api_url: "https://forex.rabbitmonitor.com", cache_seconds: 60 },
+	rates: { enabled: true, api_url: "https://forex.rabbitmonitor.com", cache_seconds: 60, ecb_url: "https://www.ecb.europa.eu/stats/eurofxref" },
 	vies: { enabled: true, api_url: "https://ec.europa.eu/taxation_customs/vies/rest-api", timeout: 20 },
 	registry: { enabled: true },
 	stripe: { enabled: false, api_url: "https://api.stripe.com", checkout_expiry: 86400 },
@@ -662,6 +663,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{ key: "rates.enabled", label: "Look up exchange rates", kind: "boolean" },
 			{ key: "rates.api_url", label: "RabbitForex API", kind: "text" },
 			{ key: "rates.cache_seconds", label: "Rate cache", hint: "Seconds a fetched rate is reused", kind: "number", min: 1 },
+			{
+				key: "rates.ecb_url",
+				label: "ECB reference rates",
+				hint: "Folder holding the ECB euro reference rate files. These rates convert VAT on foreign currency invoices into euros.",
+				kind: "text",
+			},
 			{ key: "vies.enabled", label: "Check VAT numbers with VIES", kind: "boolean" },
 			{ key: "vies.api_url", label: "VIES API", kind: "text" },
 			{ key: "vies.timeout", label: "VIES timeout", hint: "Seconds", kind: "number", min: 1 },

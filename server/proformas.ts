@@ -11,6 +11,7 @@ import { archiveIssuedInvoice } from "./invoice-archive";
 import { reserveKeys } from "./item-keys";
 import { applyBalance, SETTLED_PAYMENT_STATUSES } from "./payments/ledger";
 import { enqueueLater } from "./webhooks/events";
+import { MANUAL_RATE_SOURCE } from "./tax-reporting";
 import type { InvoiceItemRow, InvoiceRow, ProformaRow, ProformaSettlement, ProjectRow } from "./database/models";
 
 import type { DocumentKind } from "./document-kind";
@@ -223,6 +224,7 @@ export async function issueAdvance(project: ProjectRow, proformaInvoice: Invoice
 		discount_amount: 0,
 		due_date: now,
 		supply_date: now,
+		tax_exchange_rate: proformaInvoice.tax_rate_source === MANUAL_RATE_SOURCE ? proformaInvoice.tax_exchange_rate : null,
 		notes: null,
 		metadata: { proforma: proforma.reference },
 		status: "draft",
