@@ -315,6 +315,14 @@ describe("license products", () => {
 		expect((await call("POST", `${base()}/items`, tokens.admin, { ...item, license: unreachable })).error).toBe(1066);
 		const created = await call("POST", `${base()}/items`, tokens.admin, item);
 		expect(created.data).toMatchObject({ license: STORAGE, unit_price: 500 });
+
+		expect((await publish(created.data.uuid, "document-storage")).error).toBe(0);
+		const quoted = async (license: Record<string, unknown>) =>
+			(await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: created.data.uuid, quantity: 1, license }] })).data.lines[0];
+		expect(await quoted({ amount: 1, days: 30 })).toMatchObject({ issue: "configuration", unit_price: 61, license: null });
+		expect(await quoted({ amount: 6, days: 30 })).toMatchObject({ issue: "configuration", unit_price: 366 });
+		expect(await quoted({ amount: 10, days: 30 })).toMatchObject({ issue: null, unit_price: 610 });
+		expect(await quoted({ amount: 0, days: 30 })).toMatchObject({ issue: "configuration", unit_price: 610 });
 	});
 
 	test("stop selling when no owner of the store project is a server administrator", async () => {

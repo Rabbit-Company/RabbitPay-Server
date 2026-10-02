@@ -1,7 +1,7 @@
 import { el, field } from "../dom";
 import { processorLabel, t, tn, type UiKey } from "../i18n";
 import { reportError } from "../ui";
-import { belowMinimum, readLicenseChoice, smallestChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
+import { readEnteredChoice, readLicenseChoice, smallestChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
 import { navigate, onLeave } from "../router";
 import { openLightbox } from "../lightbox";
 import { renderMarkdown } from "../../../server/markdown";
@@ -548,7 +548,7 @@ function licenseOptions(
 		const current = ++round;
 		const entered = { amount: amount ? Number(amount.value) : null, days: days ? Number(days.value) : null };
 		const choice = readLicenseChoice(license, { ...entered, server_id: server.value.trim() || null });
-		const tooSmall = readLicenseChoice({ ...license, below_minimum: "charge" }, { ...entered, server_id: null }) !== null && belowMinimum(license, entered);
+		const tooSmall = choice ? null : readEnteredChoice(license, { ...entered, server_id: null });
 		problem.hidden = choice !== null;
 		problem.textContent = choice
 			? ""
@@ -556,8 +556,9 @@ function licenseOptions(
 				? t("shop.license_below_minimum", { price: money(product.price, product.currency) })
 				: t("shop.license_invalid");
 		onChange(choice, null);
-		if (!choice) return;
-		const quote = await StoreApi.quote(slug, { lines: [{ product: product.uuid, quantity: 1, license: choice }] });
+		const priced = choice ?? tooSmall;
+		if (!priced) return;
+		const quote = await StoreApi.quote(slug, { lines: [{ product: product.uuid, quantity: 1, license: priced }] });
 		if (current === round) onChange(choice, quote.lines[0]?.unit_price ?? null);
 	};
 	const schedule = () => {

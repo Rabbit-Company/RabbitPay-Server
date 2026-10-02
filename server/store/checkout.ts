@@ -10,7 +10,16 @@ import { imagePath, type LoadedStore } from "./store";
 import { couponIssue, grossDiscountOf, type CouponIssue } from "./coupons";
 import type { StoreShippingOption } from "./config";
 import { t } from "../i18n";
-import { grantOf, licensePrice, parseLicenseProduct, readLicenseChoice, type LicenseChoice, type LicenseProduct } from "../license-pricing";
+import {
+	calculatedPrice,
+	grantOf,
+	licensePrice,
+	parseLicenseProduct,
+	readEnteredChoice,
+	readLicenseChoice,
+	type LicenseChoice,
+	type LicenseProduct,
+} from "../license-pricing";
 import { licenseSalesOpen, type OrderedLicense } from "../license-orders";
 import type { CustomerProfileRow, CustomerRow, StoreCouponKind, StoreCouponRow } from "../database/models";
 
@@ -241,7 +250,8 @@ export async function quoteCart(
 		const row = products.get(line.product)!;
 		const license = parseLicenseProduct(row.license);
 		const choice = license ? readLicenseChoice(license, line.license) : null;
-		const basePrice = license && choice ? licensePrice(license, choice) : row.unit_price;
+		const tooSmall = license && !choice ? readEnteredChoice(license, line.license) : null;
+		const basePrice = license && choice ? licensePrice(license, choice) : license && tooSmall ? calculatedPrice(license, tooSmall) : row.unit_price;
 		const net = convertedPrice({ ...row, unit_price: basePrice }, pricing.currency, pricing.rates);
 		if (net === null) rateMissing = true;
 		const suggestion = taxRateFor(store, row, tax);

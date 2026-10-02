@@ -105,7 +105,7 @@ export function parseLicenseProduct(stored: string | null): LicenseProduct | nul
 	}
 }
 
-export function readLicenseChoice(product: LicenseProduct, value: unknown): LicenseChoice | null {
+export function readEnteredChoice(product: LicenseProduct, value: unknown): LicenseChoice | null {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
 	const data = value as Record<string, unknown>;
 
@@ -118,8 +118,12 @@ export function readLicenseChoice(product: LicenseProduct, value: unknown): Lice
 	const server = wantsServer ? normalizeServerId(data.server_id) : null;
 	if (wantsServer && server === null) return null;
 
-	const choice = { amount: amount as number | null, days: days as number | null, server_id: server };
-	return belowMinimum(product, choice) ? null : choice;
+	return { amount: amount as number | null, days: days as number | null, server_id: server };
+}
+
+export function readLicenseChoice(product: LicenseProduct, value: unknown): LicenseChoice | null {
+	const choice = readEnteredChoice(product, value);
+	return choice === null || belowMinimum(product, choice) ? null : choice;
 }
 
 export function defaultChoice(product: LicenseProduct): LicenseChoice {
@@ -142,7 +146,7 @@ export function smallestChoice(product: LicenseProduct): LicenseChoice {
 	return choice;
 }
 
-function calculatedPrice(product: LicenseProduct, choice: Pick<LicenseChoice, "amount" | "days">): number {
+export function calculatedPrice(product: LicenseProduct, choice: Pick<LicenseChoice, "amount" | "days">): number {
 	const amount = choice.amount ?? 0;
 	const days = choice.days ?? 0;
 	const price =
