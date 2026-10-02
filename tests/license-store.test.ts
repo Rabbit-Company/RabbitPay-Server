@@ -216,6 +216,8 @@ describe("license products", () => {
 		for (const license of [undefined, { amount: 0, days: 365 }, { amount: 20, days: 5 }, { amount: 20, days: 365, server_id: "not-a-server" }]) {
 			const refused = await call("POST", `/store/${slug}/quote`, undefined, { lines: [{ product: seats, quantity: 1, license }] });
 			expect(refused.data.lines[0].issue).toBe("configuration");
+			expect(refused.data.lines[0].license).toBeNull();
+			expect(refused.data.lines[0].requested).toEqual(license ? { amount: license.amount, days: license.days, server_id: license.server_id ?? null } : null);
 			expect(refused.data.ready).toBe(false);
 		}
 	});

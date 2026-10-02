@@ -130,6 +130,7 @@ export interface QuoteLine {
 	delivery: { min_days: number; max_days: number };
 	digital: boolean;
 	license: (LicenseChoice & { type: LicenseProduct["type"] }) | null;
+	requested: LicenseChoice | null;
 	issue: "unavailable" | "insufficient" | "configuration" | null;
 }
 

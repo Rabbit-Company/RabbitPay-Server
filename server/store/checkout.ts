@@ -84,6 +84,7 @@ export interface QuotedLine {
 	delivery: { min_days: number; max_days: number };
 	digital: boolean;
 	license: (LicenseChoice & { type: LicenseProduct["type"] }) | null;
+	requested: LicenseInput | null;
 	issue: LineIssue;
 }
 
@@ -278,6 +279,7 @@ export async function quoteCart(
 			},
 			digital: !needsShipping(row),
 			license: license && choice ? { ...choice, type: license.type } : null,
+			requested: line.license,
 			issue,
 		});
 

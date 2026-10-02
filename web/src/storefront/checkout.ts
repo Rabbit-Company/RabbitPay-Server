@@ -88,6 +88,7 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 		}
 		const rows = quote.lines.map((line) => {
 			const max = line.availability === "backorder" || line.available === null ? null : Math.max(line.available, line.quantity);
+			const cartKey = lineKey({ product: line.product, license: line.requested });
 			return el(
 				"div",
 				{ class: `sf-cart-line${line.issue ? " sf-cart-line-issue" : ""}` },
@@ -101,7 +102,7 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 					lineIssue(line)
 				),
 				quantityStepper(line.quantity, max, (value) => {
-					setQuantity(slug, lineKey(line), value);
+					setQuantity(slug, cartKey, value);
 					void render().catch(reportError);
 				}),
 				el("strong", { class: "sf-cart-total" }, money(line.total, quote.currency)),
@@ -112,7 +113,7 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 						type: "button",
 						title: t("shop.remove"),
 						onClick: () => {
-							removeFromCart(slug, lineKey(line));
+							removeFromCart(slug, cartKey);
 							void render().catch(reportError);
 						},
 					},
