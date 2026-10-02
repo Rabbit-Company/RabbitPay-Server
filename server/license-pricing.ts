@@ -46,7 +46,7 @@ export function usesAmount(type: LicenseType): boolean {
 }
 
 export function usesDays(type: LicenseType): boolean {
-	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting";
+	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting" || type === "storage";
 }
 
 export function amountLimit(type: LicenseType): number {
@@ -122,11 +122,9 @@ export function licensePrice(product: LicenseProduct, choice: Pick<LicenseChoice
 	const price =
 		product.type === "transactions"
 			? (amount * product.rate) / RATE_PAYMENTS
-			: product.type === "storage"
-				? amount * product.rate
-				: product.type === "employees"
-					? (amount * days * product.rate) / RATE_DAYS
-					: (days * product.rate) / RATE_DAYS;
+			: usesAmount(product.type)
+				? (amount * days * product.rate) / RATE_DAYS
+				: (days * product.rate) / RATE_DAYS;
 	return Math.max(product.minimum, Math.round(price));
 }
 

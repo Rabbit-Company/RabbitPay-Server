@@ -13,7 +13,7 @@ import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsa
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
-export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting"];
+export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage"];
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -196,6 +196,7 @@ export interface ProjectUsage {
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
+	storage_grants: StorageGrant[];
 }
 
 export interface EmployeeSeatGrant {
@@ -248,16 +249,33 @@ export async function hasEmployeeSeatFor(projectId: string, member: string | nul
 	return seats.employees_used + (await pendingTimeTrackers(projectId, member)) < (seats.employees_limit ?? 0);
 }
 
+export interface StorageGrant {
+	storage_gb: number;
+	until: number;
+}
+
 export interface ProjectStorageUsage {
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
+	storage_grants: StorageGrant[];
 }
 
-export async function storageFor(projectId: string): Promise<ProjectStorageUsage> {
-	const [project] = (await Database`SELECT paid_storage_bytes FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "paid_storage_bytes">[];
+export async function storageGrants(projectId: string, now = Date.now()): Promise<StorageGrant[]> {
+	const keys = (await Database`
+		SELECT storage_gb, duration_days, redeemed_at FROM license_keys
+		WHERE redeemed_project = ${projectId} AND type = 'storage' AND status = 'redeemed'
+	`) as Pick<LicenseKeyRow, "storage_gb" | "duration_days" | "redeemed_at">[];
+	return keys
+		.map((key) => ({ storage_gb: Number(key.storage_gb ?? 0), until: Number(key.redeemed_at ?? 0) + Number(key.duration_days ?? 0) * DAY }))
+		.filter((grant) => grant.until > now)
+		.sort((first, second) => first.until - second.until);
+}
+
+export async function storageFor(projectId: string, now = Date.now()): Promise<ProjectStorageUsage> {
+	const grants = await storageGrants(projectId, now);
 	const [totals] = (await Database`
 		SELECT
 			(SELECT COALESCE(SUM(d.byte_size), 0) FROM invoice_documents d JOIN invoices i ON i.uuid = d.invoice
@@ -283,7 +301,7 @@ export async function storageFor(projectId: string): Promise<ProjectStorageUsage
 		einvoices: number;
 	}[];
 	const included = includedStorageGb() * STORAGE_GB_BYTES;
-	const licensed = project.paid_storage_bytes;
+	const licensed = grants.reduce((total, grant) => total + grant.storage_gb, 0) * STORAGE_GB_BYTES;
 	const used =
 		safeStorageBytes(totals.invoices) +
 		safeStorageBytes(totals.credit_notes) +
@@ -300,6 +318,7 @@ export async function storageFor(projectId: string): Promise<ProjectStorageUsage
 		storage_used: used,
 		storage_limit: licensingEnforced() ? limit : null,
 		storage_remaining: licensingEnforced() ? limit - used : null,
+		storage_grants: grants,
 	};
 }
 
@@ -321,7 +340,7 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 	const enforced = licensingEnforced();
 	const allowance = freeAllowance(project);
 	const freeUsed = usage?.free_used ?? 0;
-	const storage = await storageFor(projectId);
+	const storage = await storageFor(projectId, now);
 
 	return {
 		enforced,
@@ -521,9 +540,6 @@ export async function redeemLicense(
 			const [project] = (await tx`SELECT accounting_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "accounting_until">[];
 			const until = extendWhiteLabel(project.accounting_until, license.duration_days ?? 0, timestamp);
 			await tx`UPDATE projects SET accounting_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else if (license.type === "storage") {
-			const bytes = (license.storage_gb ?? 0) * STORAGE_GB_BYTES;
-			await tx`UPDATE projects SET paid_storage_bytes = paid_storage_bytes + ${bytes}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 		}
 		return true;
 	});

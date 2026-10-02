@@ -101,7 +101,9 @@ describe("license issuer", () => {
 		expect(local.data[0].signed_key).toBeNull();
 		localCode = local.data[0].code;
 
-		expect((await call("POST", "/api/v1/admin/licenses", { token, body: { type: "storage", storage_gb: 1, server_id: "not-a-server" } })).error).toBe(1095);
+		expect(
+			(await call("POST", "/api/v1/admin/licenses", { token, body: { type: "storage", storage_gb: 1, duration_days: 30, server_id: "not-a-server" } })).error
+		).toBe(1095);
 	});
 });
 

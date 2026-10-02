@@ -10,7 +10,7 @@ const { default: Cache } = await import("../server/cache");
 const { Settings, reloadSettings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { deliverPendingEmails } = await import("../server/email/outbox");
-const { generateLicenseCode, normalizeLicenseCode, extendWhiteLabel, periodOf, DAY } = await import("../server/licensing");
+const { generateLicenseCode, normalizeLicenseCode, extendWhiteLabel, periodOf, storageFor, DAY } = await import("../server/licensing");
 const { readLogo } = await import("../server/branding");
 
 await Server.configure();
@@ -265,8 +265,10 @@ describe("license keys", () => {
 			{ type: "transactions", transactions: 1.5 },
 			{ type: "white_label", duration_days: 0 },
 			{ type: "storage" },
-			{ type: "storage", storage_gb: 0 },
-			{ type: "storage", storage_gb: 1.5 },
+			{ type: "storage", storage_gb: 10 },
+			{ type: "storage", storage_gb: 0, duration_days: 30 },
+			{ type: "storage", storage_gb: 1.5, duration_days: 30 },
+			{ type: "storage", storage_gb: 10, duration_days: 0 },
 			{ type: "white_label", duration_days: 5, quantity: 101 },
 			{ type: "white_label", duration_days: 5, price: 1000 },
 			{ type: "white_label", duration_days: 5, price: 1000, currency: "EURO" },
@@ -423,11 +425,25 @@ describe("storage limits", () => {
 		expect(state.storage_remaining).toBe(1_000_000_000 - state.storage_used);
 	});
 
-	test("a storage license permanently adds capacity", async () => {
-		const created = await createLicense({ type: "storage", storage_gb: 10 });
+	test("a storage license adds capacity for a number of days", async () => {
+		const created = await createLicense({ type: "storage", storage_gb: 10, duration_days: 30 });
 		const redeemed = await call("POST", `${base()}/license/redeem`, { token: ownerToken, body: { code: created.code } });
 		expect(redeemed.data).toMatchObject({ storage_included: 1_000_000_000, storage_licensed: 10_000_000_000, storage_limit: 11_000_000_000 });
-		expect(redeemed.data.licenses[0]).toMatchObject({ type: "storage", storage_gb: 10, transactions: null, duration_days: null });
+		expect(redeemed.data.licenses[0]).toMatchObject({ type: "storage", storage_gb: 10, transactions: null, duration_days: 30 });
+		expect(redeemed.data.storage_grants).toHaveLength(1);
+		expect(redeemed.data.storage_grants[0].storage_gb).toBe(10);
+		expect(redeemed.data.storage_grants[0].until).toBeGreaterThan(Date.now() + 29 * DAY);
+	});
+
+	test("storage keys run on their own and stop counting when they end", async () => {
+		const created = await createLicense({ type: "storage", storage_gb: 5, duration_days: 60 });
+		const redeemed = await call("POST", `${base()}/license/redeem`, { token: ownerToken, body: { code: created.code } });
+		expect(redeemed.data).toMatchObject({ storage_licensed: 15_000_000_000, storage_limit: 16_000_000_000 });
+
+		expect(await storageFor(projectUuid, Date.now() + 31 * DAY)).toMatchObject({ storage_licensed: 5_000_000_000, storage_limit: 6_000_000_000 });
+		const ended = await storageFor(projectUuid, Date.now() + 61 * DAY);
+		expect(ended).toMatchObject({ storage_licensed: 0, storage_limit: 1_000_000_000, storage_grants: [] });
+		expect(ended.storage_used).toBeGreaterThan(0);
 	});
 
 	test("blocks issued documents at the limit until a storage key is redeemed", async () => {
@@ -444,7 +460,7 @@ describe("storage limits", () => {
 		expect(draft.error).toBe(0);
 		expect((await call("POST", `${limitedBase}/invoices/${draft.data.uuid}/open`, { token: ownerToken })).error).toBe(1126);
 
-		const created = await createLicense({ type: "storage", storage_gb: 1 });
+		const created = await createLicense({ type: "storage", storage_gb: 1, duration_days: 30 });
 		const redeemed = await call("POST", `${limitedBase}/license/redeem`, { token: ownerToken, body: { code: created.code } });
 		expect(redeemed.data.storage_licensed).toBe(1_000_000_000);
 		expect((await call("POST", `${limitedBase}/invoices/${draft.data.uuid}/open`, { token: ownerToken })).error).toBe(0);

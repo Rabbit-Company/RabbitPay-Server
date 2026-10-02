@@ -29,7 +29,7 @@ License keys add to a project:
 | Type         | What it adds                                                               |
 | ------------ | -------------------------------------------------------------------------- |
 | Transactions | Payments added to the paid balance. They never expire.                     |
-| Storage      | Document storage added permanently.                                        |
+| Storage      | More document storage for a number of days.                                |
 | White label  | Your own branding for a number of days.                                    |
 | Online store | A web store for a number of days (see [Online store](online-store.md)).    |
 | Workforce    | Timesheets, absences, tickets, employees and payroll for a number of days. |
@@ -46,7 +46,8 @@ counts, while they are an active or suspended member. Pending invitations for
 those roles hold a place too. An employee seat key adds a number of people for a
 number of days. Unlike the other timed keys, seat keys do not add up in time:
 each one runs from its own redemption, and the seats of all running keys are
-added together.
+added together. Storage keys work the same way: each one adds its GB from its
+own redemption until it ends.
 
 Inviting someone who would log time, giving a member such a role, or creating an
 employee record past the limit is refused with error `1243` (HTTP 402). If
@@ -64,7 +65,9 @@ key covers them first.
 Invoice and credit note PDFs, original expense attachments, stored e-invoices,
 FURS export packages and store photos count toward storage. When it is full,
 existing documents stay available, but new issued invoices, attachments and
-exports are refused with error `1126` until storage is added.
+exports are refused with error `1126` until storage is added. The same applies
+when a storage key ends and the project holds more than what is left. Nothing is
+deleted.
 
 ### The issuing server and licensed servers
 

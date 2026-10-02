@@ -1204,6 +1204,7 @@ export interface ProjectLicense extends LicenseIdentity {
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
+	storage_grants: { storage_gb: number; until: number }[];
 	logo: string | null;
 	licenses: License[];
 }
@@ -1296,6 +1297,7 @@ export interface AdminProject {
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
+	storage_grants: { storage_gb: number; until: number }[];
 }
 
 export type RegistrationMode = "open" | "invite" | "closed";

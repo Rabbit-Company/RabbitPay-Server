@@ -136,8 +136,8 @@ function statCard(label: string, value: string): HTMLElement {
 
 export function describeLicense(license: Pick<License, "type" | "transactions" | "duration_days" | "storage_gb" | "employees">): string {
 	if (license.type === "transactions") return `${(license.transactions ?? 0).toLocaleString()} payments`;
-	if (license.type === "storage") return `${(license.storage_gb ?? 0).toLocaleString()} GB storage`;
 	const days = license.duration_days ?? 0;
+	if (license.type === "storage") return `${(license.storage_gb ?? 0).toLocaleString()} GB storage for ${days} ${days === 1 ? "day" : "days"}`;
 	if (license.type === "employees") {
 		const employees = license.employees ?? 0;
 		return `${employees.toLocaleString()} ${employees === 1 ? "employee" : "employees"} for ${days} ${days === 1 ? "day" : "days"}`;
@@ -285,15 +285,24 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 	const submit = el("button", { class: "button primary", type: "submit" }, "Create keys");
 
 	const transactionsField = field("Payments", transactions, "Added to the project's paid balance. They never expire.");
-	const daysField = field("Days", days, "Starts when the key is redeemed. Add-on keys add to any time left, and each employee seat key runs on its own.");
-	const storageField = field("Storage in GB", storage, "Added permanently to the project's document storage capacity.");
+	const daysField = field(
+		"Days",
+		days,
+		"Starts when the key is redeemed. Add-on keys add to any time left, and each employee seat or storage key runs on its own."
+	);
+	const storageField = field("Storage in GB", storage, "Added to the project's document storage capacity, for the days below.");
 	const employeesField = field("Employees", employees, "Added to the people the workforce license covers, for the days below.");
 
 	const sync = () => {
 		const transactionsSelected = type.value === "transactions";
-		const white =
-			type.value === "white_label" || type.value === "store" || type.value === "workforce" || type.value === "employees" || type.value === "accounting";
 		const storageSelected = type.value === "storage";
+		const white =
+			type.value === "white_label" ||
+			type.value === "store" ||
+			type.value === "workforce" ||
+			type.value === "employees" ||
+			type.value === "accounting" ||
+			storageSelected;
 		const employeesSelected = type.value === "employees";
 		transactionsField.hidden = !transactionsSelected;
 		daysField.hidden = !white;
@@ -327,8 +336,8 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 					server_id: server.value.trim() || null,
 				};
 				if (body.type === "transactions") body.transactions = Number(transactions.value);
-				else if (body.type === "storage") body.storage_gb = Number(storage.value);
 				else body.duration_days = Number(days.value);
+				if (body.type === "storage") body.storage_gb = Number(storage.value);
 				if (body.type === "employees") body.employees = Number(employees.value);
 
 				try {

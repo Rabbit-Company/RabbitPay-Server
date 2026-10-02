@@ -13,7 +13,9 @@ export function describeLicense(
 	license: Pick<ProjectLicense["licenses"][number], "type" | "transactions" | "duration_days" | "storage_gb" | "employees">
 ): string {
 	if (license.type === "transactions") return t("license.grants_payments", { count: (license.transactions ?? 0).toLocaleString() });
-	if (license.type === "storage") return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB` });
+	if (license.type === "storage") {
+		return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB`, days: tn("count.days", license.duration_days ?? 0) });
+	}
 	if (license.type === "store") return t("license.grants_store", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "workforce") return t("license.grants_workforce", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "accounting") return t("license.grants_accounting", { days: tn("count.days", license.duration_days ?? 0) });
@@ -104,11 +106,13 @@ function storageCard(state: ProjectLicense): HTMLElement {
 							el("span", {}, t("license.storage_included")),
 							el("span", { class: "mono" }, formatBytes(state.storage_included))
 						),
-						el(
-							"div",
-							{ class: "totals-row" },
-							el("span", {}, t("license.storage_licensed")),
-							el("span", { class: "mono" }, formatBytes(state.storage_licensed))
+						...state.storage_grants.map((grant) =>
+							el(
+								"div",
+								{ class: "totals-row" },
+								el("span", {}, t("license.storage_key_until", { date: formatDate(grant.until) })),
+								el("span", { class: "mono" }, `${grant.storage_gb.toLocaleString()} GB`)
+							)
 						),
 						usageMeter(state.storage_used, limit),
 						el(

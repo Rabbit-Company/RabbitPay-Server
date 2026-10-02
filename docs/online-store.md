@@ -82,7 +82,7 @@ license type with a rate and a minimum price, both before VAT:
 | Type           | Rate                     | Buyer chooses      |
 | -------------- | ------------------------ | ------------------ |
 | Payments       | Per 1,000 payments       | Payments           |
-| Storage        | Per GB                   | GB                 |
+| Storage        | Per GB for 30 days       | GB and days        |
 | White label    | Per 30 days              | Days               |
 | Online store   | Per 30 days              | Days               |
 | Workforce      | Per 30 days              | Days               |

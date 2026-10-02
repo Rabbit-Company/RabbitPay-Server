@@ -165,6 +165,7 @@ async function presentProject(project: ProjectRow) {
 		storage_used: usage.storage_used,
 		storage_limit: usage.storage_limit,
 		storage_remaining: usage.storage_remaining,
+		storage_grants: usage.storage_grants,
 	};
 }
 

@@ -503,7 +503,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{
 				key: "licensing.free_storage_gb",
 				label: "Included storage in GB",
-				hint: "Default document storage included with every project. Storage license keys add to it permanently.",
+				hint: "Default document storage included with every project. Storage license keys add more for a number of days.",
 				kind: "number",
 				min: 0,
 			},
