@@ -37,6 +37,10 @@ export function validTaxExchangeRate(rate: unknown): rate is number {
 	return typeof rate === "number" && Number.isFinite(rate) && rate > 0 && rate < 1e9;
 }
 
+export function taxRatePrinted(invoice: Pick<InvoiceRow, "currency" | "tax_currency" | "tax_exchange_rate" | "tax_amount">): boolean {
+	return invoice.tax_amount !== 0 && invoice.tax_exchange_rate !== null && invoice.tax_currency !== null && invoice.tax_currency !== invoice.currency;
+}
+
 export async function marketRate(from: string, to: string): Promise<number | null> {
 	if (from === to) return 1;
 	if (!ratesEnabled()) return null;

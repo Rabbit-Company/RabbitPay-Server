@@ -160,6 +160,7 @@ export enum Error {
 	REVALUATION_EXISTS = 1281,
 	CONNECTION_TEST_FAILED = 1282,
 	DOCUMENT_ARCHIVE_DAMAGED = 1283,
+	TAX_EXCHANGE_RATE_LOCKED = 1284,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -667,6 +668,10 @@ namespace Errors {
 		1280: { message: "Enter a 31 December exchange rate above zero for every currency with open items.", httpCode: 400 },
 		1281: { message: "Foreign currency items for this year are already revalued. Reverse that entry before revaluing again.", httpCode: 409 },
 		1282: { message: "The connection test failed.", httpCode: 502 },
+		1284: {
+			message: "The exchange rate is printed on the issued invoice and can no longer be changed. Credit the invoice and issue a new one instead.",
+			httpCode: 409,
+		},
 		1283: {
 			message: "The stored document failed its integrity check and was not replaced. Restore it from a backup of the document storage.",
 			httpCode: 500,

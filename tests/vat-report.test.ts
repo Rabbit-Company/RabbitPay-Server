@@ -348,10 +348,38 @@ describe("setting an exchange rate by hand", () => {
 		expect((await call("PUT", `${base()}/invoices/${ids.usd}/tax-rate`, { token: viewerToken, body: { rate: 1 } })).error).toBe(9999);
 	});
 
-	test("keeps the date given", async () => {
-		const res = await call("PUT", `${base()}/invoices/${ids.usd}/tax-rate`, { token: ownerToken, body: { rate: 0.91, date: 1767225600000 } });
+	test("keeps the date given and can be corrected while the invoice carries no VAT", async () => {
+		const unrated = await call("POST", `${base()}/invoices`, {
+			token: ownerToken,
+			body: {
+				customer: customers.us,
+				currency: "GBP",
+				status: "open",
+				due_date: Date.now() + 86400000,
+				supply_date: Date.now(),
+				items: [{ description: "Parcel", quantity: 1, unit_price: 7000, tax_rate: 0, tax_treatment: "export" }],
+			},
+		});
+		const res = await call("PUT", `${base()}/invoices/${unrated.data.uuid}/tax-rate`, { token: ownerToken, body: { rate: 0.91, date: 1767225600000 } });
 		expect(res.data.tax_exchange_rate).toBe(0.91);
 		expect(res.data.tax_rate_date).toBe(1767225600000);
+
+		const corrected = await call("PUT", `${base()}/invoices/${unrated.data.uuid}/tax-rate`, { token: ownerToken, body: { rate: 0.92 } });
+		expect(corrected.data.tax_exchange_rate).toBe(0.92);
+		await call("POST", `${base()}/invoices/${unrated.data.uuid}/cancel`, { token: ownerToken });
+	});
+
+	test("is refused once the rate is printed next to the VAT on the issued invoice", async () => {
+		const before = (await call("GET", `${base()}/invoices/${ids.usd}`, { token: ownerToken })).data;
+		const refused = await call("PUT", `${base()}/invoices/${ids.usd}/tax-rate`, { token: ownerToken, body: { rate: 0.91 } });
+		expect(refused.error).toBe(ErrorCode.TAX_EXCHANGE_RATE_LOCKED);
+		expect((await call("PUT", `${base()}/invoices/${ids.gbp}/tax-rate`, { token: ownerToken, body: { rate: 1.3 } })).error).toBe(
+			ErrorCode.TAX_EXCHANGE_RATE_LOCKED
+		);
+
+		const after = (await call("GET", `${base()}/invoices/${ids.usd}`, { token: ownerToken })).data;
+		expect(after.tax_exchange_rate).toBe(before.tax_exchange_rate);
+		expect(after.tax_rate_source).toBe("ECB");
 	});
 });
 

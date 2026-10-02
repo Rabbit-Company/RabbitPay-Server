@@ -16,7 +16,7 @@ import { displayNameOf } from "../../company";
 import { isDateFormat, isTimeFormat } from "../../formats";
 import { isLanguage } from "../../i18n";
 import { isAccentColor } from "../../colors";
-import { isVatStatus } from "../../tax";
+import { isVatStatus, requiredTaxCurrency } from "../../tax";
 import { isCountryCode } from "../../countries";
 import { canEmail } from "../../email/mailer";
 import { accountingActive, storeActive, whiteLabelActive, workforceActive } from "../../licensing";
@@ -324,7 +324,11 @@ Server.app.patch("/api/v1/projects/:uuid", Auth.required(), Permissions.require(
 	const taxCountry = data.tax_country === undefined ? project.tax_country : data.tax_country;
 	const vatStatus = data.vat_status === undefined ? project.vat_status : data.vat_status;
 	const ossRegistered = data.oss_registered === undefined ? project.oss_registered : data.oss_registered ? 1 : 0;
-	const taxCurrency = data.tax_currency === undefined ? project.tax_currency : data.tax_currency;
+	const requiredCurrency = requiredTaxCurrency(taxCountry);
+	if (requiredCurrency !== null && data.tax_currency !== undefined && data.tax_currency !== null && data.tax_currency !== requiredCurrency) {
+		return Utils.failWithReason(ctx, ErrorCode.INVALID_TAX_PROFILE, `A seller in ${taxCountry} reports VAT in ${requiredCurrency}.`);
+	}
+	const taxCurrency = requiredCurrency ?? (data.tax_currency === undefined ? project.tax_currency : data.tax_currency);
 	const exemptionNote =
 		data.vat_exemption_note === undefined
 			? project.vat_exemption_note

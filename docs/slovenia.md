@@ -119,10 +119,17 @@ generated file would not be the original. Restore it from a backup of the
 document storage. An unknown version returns error `1178`. Stored files count
 toward the project's document storage like archived PDFs.
 
-### Delivering e-invoices
+### Handing over e-invoices
 
-The e-SLOG file reaches the buyer in three ways, and all of them use the same
-stored version described above:
+RabbitPay creates the e-SLOG file and hands it over by email or download. It
+does not submit it to an e-invoice network. A public sector buyer only accepts
+e-invoices through UJP, so the file has to be uploaded to UJPnet or sent through
+a bank or another UJP provider. From 1 January 2028 e-invoices between Slovenian
+businesses must also travel through a registered provider, PEPPOL or a direct
+system connection, and an email attachment will not count as delivery.
+
+The file is handed over in three ways, and all of them use the same stored
+version described above:
 
 - Email. The invoice and credit note email dialogs have an Attach the
   e-invoice switch, and the API takes `attach_eslog: true` on
@@ -285,6 +292,21 @@ Slovenian with a Slovenian VAT ID, or error `1132` returns the issue
 also no longer be invoiced with the EU treatments `reverse_charge` or
 `intra_eu_goods`, which returns `reverse_charge_domestic_buyer`.
 
+Reverse charge supplies cannot share an invoice with supplies that carry VAT.
+Slovenian rules require such a mixed invoice to show, per VAT rate, the tax base
+and the VAT the buyer owes under the reverse charge, and RabbitPay does not keep
+that rate on a reverse charge line. Issuing a mixed invoice returns the issue
+`domestic_reverse_mixed`, so the two kinds of supply go on separate invoices.
+
+## VAT rates on domestic supplies
+
+A VAT registered Slovenian seller can only issue a domestic line at 22%, 9.5%
+or 5%, the rates the DDV evidence can report. Any other rate on a line with the
+treatment `domestic`, or with no treatment, returns error `1132` with the issue
+`domestic_vat_rate`. Lines taxed in another country under OSS keep that
+country's rate, and a line without VAT needs one of the treatments that carry no
+VAT. Drafts are not checked, only issuing is.
+
 What the treatment changes:
 
 | Where                    | Result                                                                                                   |
@@ -333,8 +355,17 @@ currency changes. An invoice without VAT, such as a reverse charge or export
 invoice, is still issued without a rate and stays out of the VAT report until
 one is set on the invoice page.
 
-A project whose reporting currency is not EUR keeps using the market rate from
-RabbitForex at the moment of issuing.
+A project with the tax country Slovenia always reports in EUR. The server
+sets the reporting currency to EUR whenever the tax country is `SI`, whatever
+the project's own currency is, and refuses any other value with error `1068`.
+A project in another country whose reporting currency is not EUR keeps using the
+market rate from RabbitForex at the moment of issuing.
+
+Once an invoice with VAT is issued, its rate is printed on the archived PDF next
+to the VAT in euros, so it can no longer be changed and
+`PUT .../invoices/:invoice/tax-rate` returns error `1284`. To correct it, credit
+the invoice and issue a new one. The rate of an invoice without VAT is not
+printed and can still be set or corrected.
 
 ## DDV periods and accounting locks
 

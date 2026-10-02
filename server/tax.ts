@@ -41,6 +41,16 @@ export function viesPrefixFor(country: string): string | null {
 	return EU.has(country) ? country : null;
 }
 
+export const DOMESTIC_VAT_RATES_REVIEWED = "2026-10-02";
+
+export const DOMESTIC_VAT_RATES: Record<string, number[]> = {
+	SI: [22, 9.5, 5],
+};
+
+export function requiredTaxCurrency(country: string | null | undefined): string | null {
+	return country === "SI" ? "EUR" : null;
+}
+
 export function defaultTaxCurrency(country: string | null | undefined): string | null {
 	if (!isEuCountry(country)) return null;
 	return NATIONAL_CURRENCIES[country!] ?? "EUR";

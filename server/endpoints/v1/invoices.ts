@@ -11,7 +11,7 @@ import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { calculateTotals, isCancelable, isEditable, type InvoiceItemInput } from "../../invoicing";
 import { createInvoice, loadInvoice, loadItems, present, replaceItems, validateCatalogLinks, validateInvoiceInput, validateItems } from "../../invoice-service";
-import { MANUAL_RATE_SOURCE, reportingCurrency, validTaxExchangeRate } from "../../tax-reporting";
+import { MANUAL_RATE_SOURCE, reportingCurrency, taxRatePrinted, validTaxExchangeRate } from "../../tax-reporting";
 import { InvoiceDataIncomplete, invoiceDataErrorResponse } from "../../invoice-validation";
 import { OutOfStock, stockShortage } from "../../item-keys";
 import { cancelInvoice } from "../../invoice-cancel";
@@ -403,6 +403,7 @@ Server.app.put("/api/v1/projects/:uuid/invoices/:invoice/tax-rate", Auth.require
 	const rateValid = validTaxExchangeRate(data.rate);
 	const dateValid = data.date === undefined || (typeof data.date === "number" && Number.isSafeInteger(data.date) && data.date > 0);
 	if (!rateValid || !dateValid || taxCurrency === invoice.currency) return Utils.fail(ctx, ErrorCode.INVALID_TAX_EXCHANGE_RATE);
+	if (taxRatePrinted(invoice)) return Utils.fail(ctx, ErrorCode.TAX_EXCHANGE_RATE_LOCKED);
 	if (invoice.issued_at !== null && (await accountingPeriodLocked(project.uuid, invoice.issued_at))) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
 
 	const rateDate = data.date ?? invoice.supply_date ?? invoice.issued_at ?? Date.now();

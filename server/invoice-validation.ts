@@ -3,7 +3,7 @@ import Database from "./database/database";
 import { ErrorCode } from "./errors";
 import { prepareIssuePresentation, type PreparedIssuePresentation } from "./invoice-snapshot";
 import { issueSnapshot, type IssueSnapshot } from "./tax-reporting";
-import { isTaxTreatment, isZeroRated, splitVatNumber } from "./tax";
+import { DOMESTIC_VAT_RATES, isTaxTreatment, isZeroRated, splitVatNumber } from "./tax";
 import Utils from "./utils";
 import type { CustomerRow, InvoiceItemRow, InvoiceRow, ProjectRow } from "./database/models";
 
@@ -102,9 +102,28 @@ function validateSlovenianInvoice(
 		add("oss_buyer_country", "customer.country", "Add the customer's country for an OSS supply.");
 	}
 
+	if (items.some((item) => item.tax_treatment === "domestic_reverse_charge") && items.some((item) => item.tax_rate !== 0)) {
+		add(
+			"domestic_reverse_mixed",
+			"invoice.items.tax_treatment",
+			"Supplies under the domestic reverse charge cannot share an invoice with supplies that carry VAT. Issue them on separate invoices."
+		);
+	}
+
 	if (project.vat_status === "registered") {
 		if (items.some((item) => item.tax_rate === 0 && (!isTaxTreatment(item.tax_treatment) || !isZeroRated(item.tax_treatment)))) {
 			add("zero_vat_basis", "invoice.items.tax_treatment", "Choose the legal tax treatment for every line with a zero VAT rate.");
+		}
+		const allowed = DOMESTIC_VAT_RATES.SI;
+		const unknown = items.find(
+			(item) => item.tax_rate !== 0 && (item.tax_treatment === null || item.tax_treatment === "domestic") && !allowed.includes(item.tax_rate)
+		);
+		if (unknown) {
+			add(
+				"domestic_vat_rate",
+				"invoice.items.tax_rate",
+				`${unknown.tax_rate}% is not a Slovenian VAT rate. Domestic supplies are taxed at ${allowed.join("%, ")}%.`
+			);
 		}
 	} else if (project.vat_status === "small_business" || project.vat_status === "not_registered") {
 		if (invoice.tax_amount !== 0 || items.some((item) => item.tax_rate !== 0)) {

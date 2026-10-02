@@ -369,6 +369,13 @@ export const MIGRATIONS: Migration[] = [
 			]);
 		},
 	},
+	{
+		version: 39,
+		name: "euro reporting for Slovenian sellers",
+		up: async (sql) => {
+			await sql`UPDATE projects SET tax_currency = 'EUR' WHERE tax_country = 'SI' AND (tax_currency IS NULL OR tax_currency <> 'EUR')`;
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

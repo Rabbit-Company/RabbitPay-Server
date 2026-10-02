@@ -229,6 +229,22 @@ describe("a project's tax profile", () => {
 	test("cannot be changed by a viewer", async () => {
 		expect((await call("PATCH", base(), { token: viewerToken, body: { vat_status: "not_registered" } })).error).toBe(9999);
 	});
+
+	test("always reports in euros for a Slovenian seller", async () => {
+		const created = await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "usd-in-slovenia", currency: "USD" } });
+		const path = `/api/v1/projects/${created.data.uuid}`;
+
+		const refused = await call("PATCH", path, { token: ownerToken, body: { tax_country: "SI", tax_currency: "USD" } });
+		expect(refused.error).toBe(1068);
+
+		const slovenian = await call("PATCH", path, { token: ownerToken, body: { tax_country: "SI" } });
+		expect(slovenian.data).toMatchObject({ currency: "USD", tax_country: "SI", tax_currency: "EUR" });
+		expect((await call("PATCH", path, { token: ownerToken, body: { tax_currency: "USD" } })).error).toBe(1068);
+		expect((await call("PATCH", path, { token: ownerToken, body: { tax_currency: null } })).data.tax_currency).toBe("EUR");
+
+		const moved = await call("PATCH", path, { token: ownerToken, body: { tax_country: "US", tax_currency: "USD" } });
+		expect(moved.data).toMatchObject({ tax_country: "US", tax_currency: "USD" });
+	});
 });
 
 describe("the exemption note on an invoice", () => {

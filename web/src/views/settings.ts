@@ -15,7 +15,7 @@ import { vatStatusHint, vatStatusOptions } from "../options";
 import { ACCENT_PRESETS, BRAND_BLUE } from "../../../server/colors";
 import { applyAccent } from "../theme";
 import { countryCodeFor, countryOptions } from "../countries";
-import { defaultExemptionNote, defaultTaxCurrency, isEuCountry, splitVatNumber } from "../../../server/tax";
+import { defaultExemptionNote, defaultTaxCurrency, isEuCountry, requiredTaxCurrency, splitVatNumber } from "../../../server/tax";
 import { combobox, staticCombobox } from "../combobox";
 import { can, Permission } from "../access";
 import {
@@ -539,6 +539,7 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 	const ossBox = el("div", { class: "field" }, ossField, el("span", { class: "field-hint" }, t("settings.oss_hint")));
 	const noteBox = field(t("settings.exemption_note"), note, t("settings.exemption_note_hint"));
 	const advice = el("div", {});
+	const currencyHint = el("span", { class: "field-hint" });
 
 	const refresh = () => {
 		const code = country.value || null;
@@ -549,7 +550,11 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 		noteBox.hidden = chosen !== "small_business";
 		note.placeholder = defaultExemptionNote(code, project.language);
 
-		if (!currencyTouched) {
+		const required = requiredTaxCurrency(code);
+		currencyHint.textContent = required ? t("settings.reporting_currency_required", { currency: required }) : t("settings.reporting_currency_hint");
+		if (required && currency.value !== required) currency.select({ value: required, label: currencyLabel(required) });
+
+		if (!currencyTouched && !required) {
 			const suggested = defaultTaxCurrency(code);
 			if (suggested)
 				currency.select(currency.selected && currency.selected.value === suggested ? currency.selected : { value: suggested, label: currencyLabel(suggested) });
@@ -570,6 +575,7 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 
 	status.addEventListener("change", refresh);
 	country.onChange(refresh);
+	currency.onChange(refresh);
 	refresh();
 
 	const save = el("button", { class: "button primary", type: "submit" }, t("settings.save_tax"));
@@ -605,7 +611,12 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 			field(t("settings.tax_country"), country.element, t("settings.tax_country_hint")),
 			el("label", { class: "field" }, el("span", { class: "field-label" }, t("settings.vat_status")), status, statusHint)
 		),
-		el("div", { class: "form-grid" }, field(t("settings.reporting_currency"), currency.element, t("settings.reporting_currency_hint")), ossBox),
+		el(
+			"div",
+			{ class: "form-grid" },
+			el("label", { class: "field" }, el("span", { class: "field-label" }, t("settings.reporting_currency")), currency.element, currencyHint),
+			ossBox
+		),
 		noteBox,
 		advice,
 		el("div", { class: "form-actions" }, save)

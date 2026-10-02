@@ -236,6 +236,39 @@ describe("mandatory Slovenian invoice data", () => {
 		expect(report.data.ec_sales_list).toEqual([]);
 	});
 
+	test("refuses a domestic VAT rate that Slovenia does not have and mixing reverse charge lines with taxed ones", async () => {
+		const projectId = await project("validation-rates");
+		await company(projectId);
+		const customer = await call("POST", `/api/v1/projects/${projectId}/customers`, {
+			email: "gradnje@example.com",
+			name: "Gradnje d.o.o.",
+			address_line1: "Cesta 1",
+			postal_code: "2000",
+			city: "Maribor",
+			country: "SI",
+			vat_number: "SI87654321",
+			customer_type: "business",
+		});
+		const issue = (items: unknown[], extra: Record<string, unknown> = {}) =>
+			call("POST", `/api/v1/projects/${projectId}/invoices`, invoice({ status: "open", items, ...extra }));
+		const line = (rate: number, treatment?: string) => ({ description: "Line", quantity: 1, unit_price: 10000, tax_rate: rate, tax_treatment: treatment });
+
+		for (const items of [[line(7, "domestic")], [line(22, "domestic"), line(15)]]) {
+			const refused = await issue(items);
+			expect(refused.error).toBe(ErrorCode.INVOICE_DATA_INCOMPLETE);
+			expect(refused.data.issues.map((entry: { code: string }) => entry.code)).toEqual(["domestic_vat_rate"]);
+		}
+		expect((await issue([line(22, "domestic"), line(9.5, "domestic"), line(5)])).error).toBe(0);
+
+		const french = await call("POST", `/api/v1/projects/${projectId}/customers`, { email: "fr@example.fr", country: "FR", customer_type: "individual" });
+		expect((await issue([line(20, "oss")], { customer: french.data.uuid })).error).toBe(0);
+
+		const mixed = await issue([line(0, "domestic_reverse_charge"), line(22, "domestic")], { customer: customer.data.uuid });
+		expect(mixed.error).toBe(ErrorCode.INVOICE_DATA_INCOMPLETE);
+		expect(mixed.data.issues.map((entry: { code: string }) => entry.code)).toEqual(["domestic_reverse_mixed"]);
+		expect((await issue([line(0, "domestic_reverse_charge"), line(0, "domestic_reverse_charge")], { customer: customer.data.uuid })).error).toBe(0);
+	});
+
 	test("refuses the domestic reverse charge from a seller that is not VAT registered", async () => {
 		const projectId = await project("validation-76a-small", "small_business");
 		await company(projectId, null);

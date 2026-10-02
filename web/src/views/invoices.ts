@@ -757,13 +757,16 @@ function vatReportingCard(
 	if (invoice.status === "draft" || invoice.currency === reporting) return null;
 
 	const recorded = invoice.tax_currency === reporting && invoice.tax_exchange_rate !== null ? invoice.tax_exchange_rate : null;
-	const change = editable
-		? el(
-				"button",
-				{ class: "button ghost small", type: "button", onClick: () => taxRateDialog(uuid, invoice, reporting, onChanged) },
-				recorded === null ? t("invoices.set_rate") : t("invoices.change_rate")
-			)
-		: null;
+	const printed = recorded !== null && invoice.tax_amount !== 0;
+	const change = printed
+		? el("p", { class: "muted" }, t("invoices.rate_locked"))
+		: editable
+			? el(
+					"button",
+					{ class: "button ghost small", type: "button", onClick: () => taxRateDialog(uuid, invoice, reporting, onChanged) },
+					recorded === null ? t("invoices.set_rate") : t("invoices.change_rate")
+				)
+			: null;
 
 	if (recorded === null) {
 		return el(
