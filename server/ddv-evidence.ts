@@ -221,9 +221,12 @@ function kirInvoiceRecord(
 		const net = sign * convertedNet;
 		const vat = sign * convertedVat;
 		const treatment: TaxTreatment = isTaxTreatment(line.treatment) ? line.treatment : "domestic";
-		if (treatment === "oss") continue;
 		included = true;
 		sourceBase = addIntegers(sourceBase, net);
+		if (treatment === "oss") {
+			add(record, "P27", net);
+			continue;
+		}
 		sourceVat = addIntegers(sourceVat, vat);
 		if (treatment === "domestic") {
 			add(record, "P7", net);
@@ -429,7 +432,7 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 			kir.push(built.record);
 			kirSourceBase = addIntegers(kirSourceBase, built.base);
 			kirSourceVat = addIntegers(kirSourceVat, built.vat);
-		} else issue(warnings, "invoice", invoice.uuid, invoice.reference, "oss_omitted", "OSS transactions are not reported in KIR under the Union OSS scheme.");
+		}
 	}
 	for (const note of notes) {
 		const built = kirInvoiceRecord(
@@ -477,8 +480,7 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 			kir.push(built.record);
 			kirSourceBase = addIntegers(kirSourceBase, built.base);
 			kirSourceVat = addIntegers(kirSourceVat, built.vat);
-		} else
-			issue(warnings, "recorded_invoice", record.uuid, record.reference, "oss_omitted", "OSS transactions are not reported in KIR under the Union OSS scheme.");
+		}
 	}
 	for (const expense of expenses) {
 		const lines = expenseGroups.get(expense.uuid) ?? [];

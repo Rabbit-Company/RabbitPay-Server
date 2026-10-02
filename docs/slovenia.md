@@ -428,6 +428,13 @@ Only the ordinary rules are covered. Cash accounting, where VAT is due when the
 invoice is paid, the margin scheme, self-billing and the travel agent scheme are
 not supported, and a seller using one of them should not rely on these reports.
 
+### Sales under OSS in the DDV evidence
+
+A line taxed in another EU country under the Union OSS scheme is reported in the
+evidence of charged VAT by its net value in field P27, the field for supplies
+whose place of supply is outside Slovenia. The foreign VAT is not reported
+there, since it is declared in the OSS return.
+
 ## DDV periods and accounting locks
 
 DDV month and quarter boundaries use the project's accounting timezone. For

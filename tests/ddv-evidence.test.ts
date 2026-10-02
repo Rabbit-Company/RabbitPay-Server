@@ -287,4 +287,31 @@ describe("official FURS DDV evidence", () => {
 		expect(records.find((record) => record.P3 === untaxed.data.reference)).toMatchObject({ OBRAVNAVA: "1", P7: 50 });
 		expect(records.find((record) => record.P3 === untaxed.data.reference)!.OBDOBJE88).toBeUndefined();
 	});
+	test("reports sales taxed in another EU country under OSS by their net value, without the foreign VAT", async () => {
+		const base = `/api/v1/projects/${project}`;
+		const customer = await call("POST", `${base}/customers`, { name: "Marie Dupont", country: "FR", customer_type: "individual" });
+		const invoice = await call("POST", `${base}/invoices`, {
+			customer: customer.data.uuid,
+			currency: "EUR",
+			due_date: Date.now() + 86400000,
+			supply_date: startOfLocalDate("2026-04-10", timezone),
+			status: "open",
+			items: [
+				{ description: "App subscription", quantity: 1, unit_price: 10000, tax_rate: 20, tax_treatment: "oss" },
+				{ description: "Setup", quantity: 1, unit_price: 5000, tax_rate: 22, tax_treatment: "domestic" },
+			],
+		});
+		expect(invoice.error).toBe(0);
+
+		const april = { from: startOfLocalDate("2026-04-01", timezone), to: endOfLocalDate("2026-04-30", timezone) };
+		const options = { ...april, refund: false, deductible_share: false, late_submission: null, insolvency: false, tax_authority_order: false, note: null };
+		const preview = await call("GET", `${base}/reports/ddv-evidence?${query(options)}`);
+		const kir = preview.data.evidence.DDV_KIR_KPR.Lista_KIR.KIR;
+		expect(preview.data.errors).toEqual([]);
+		expect(preview.data.warnings).toEqual([]);
+		expect(kir).toHaveLength(1);
+		expect(kir[0]).toMatchObject({ P3: invoice.data.reference, P27: 100, P7: 50, P14: 11 });
+		expect(preview.data.reconciliation.kir).toMatchObject({ source_base: 15000, evidence_base: 15000, source_vat: 1100, evidence_vat: 1100 });
+		expect(preview.data.reconciliation.balanced).toBe(true);
+	});
 });
