@@ -24,6 +24,16 @@ import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema } from
 import { createRegistrySchema } from "./registry-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
+async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string) {
+	if (dialect !== "mysql") {
+		await sql.unsafe(`DROP INDEX IF EXISTS ${name}`);
+		return;
+	}
+	const rows =
+		await sql`SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND INDEX_NAME = ${name}`;
+	if (rows.length) await sql.unsafe(`DROP INDEX ${name} ON ${table}`);
+}
+
 export interface Migration {
 	version: number;
 	name: string;
@@ -318,6 +328,29 @@ export const MIGRATIONS: Migration[] = [
 			const types = schemaTypes(dialect);
 			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN starts_at ${types.int64}`);
 			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN activated_at ${types.int64}`);
+		},
+	},
+	{
+		version: 37,
+		name: "query indexes",
+		up: async (sql, dialect) => {
+			const long = (column: string, length: number) => (dialect === "mysql" ? `${column}(${length})` : column);
+			await run(sql, dialect, [
+				`CREATE INDEX IF NOT EXISTS idx_item_keys_reserved ON item_keys(status, reserved_at)`,
+				`CREATE INDEX IF NOT EXISTS idx_invoices_status_due ON invoices(status, due_date)`,
+				`CREATE INDEX IF NOT EXISTS idx_invoices_created ON invoices(project, created)`,
+				`CREATE INDEX IF NOT EXISTS idx_tx_unbilled ON transactions(${long("license_billing", 16)}, project)`,
+				`CREATE INDEX IF NOT EXISTS idx_tx_processor_id ON transactions(processor, ${long("processor_tx_id", 191)})`,
+				`CREATE INDEX IF NOT EXISTS idx_tx_project_created ON transactions(project, created)`,
+				`CREATE INDEX IF NOT EXISTS idx_session_external ON payment_sessions(processor, ${long("processor_session_id", 191)})`,
+				`CREATE INDEX IF NOT EXISTS idx_session_invoice ON payment_sessions(invoice)`,
+				`CREATE INDEX IF NOT EXISTS idx_customers_created ON customers(project, created)`,
+				`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(project, created)`,
+				`CREATE INDEX IF NOT EXISTS idx_tickets_updated ON tickets(project, updated)`,
+			]);
+			await dropIndex(sql, dialect, "invoices", "idx_invoices_status");
+			await dropIndex(sql, dialect, "transactions", "idx_tx_license_billing");
+			await dropIndex(sql, dialect, "transactions", "idx_tx_processor");
 		},
 	},
 ];

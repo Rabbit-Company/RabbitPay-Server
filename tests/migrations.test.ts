@@ -33,6 +33,36 @@ describe("schema migrations", () => {
 		await sql.close();
 	});
 
+	test("the query indexes replace the ones they cover", async () => {
+		const sql = memory();
+		await migrate(sql, "sqlite");
+		const names = ((await sql`SELECT name FROM sqlite_master WHERE type = 'index'`) as { name: string }[]).map((row) => row.name);
+		for (const added of [
+			"idx_item_keys_reserved",
+			"idx_invoices_status_due",
+			"idx_invoices_created",
+			"idx_tx_unbilled",
+			"idx_tx_processor_id",
+			"idx_tx_project_created",
+			"idx_session_external",
+			"idx_session_invoice",
+			"idx_customers_created",
+			"idx_webhook_deliveries_created",
+			"idx_tickets_updated",
+		]) {
+			expect(names).toContain(added);
+		}
+		for (const replaced of ["idx_invoices_status", "idx_tx_license_billing", "idx_tx_processor"]) expect(names).not.toContain(replaced);
+
+		const plan = (query: string) => sql.unsafe(`EXPLAIN QUERY PLAN ${query}`).then((rows: { detail: string }[]) => rows.map((row) => row.detail).join(" | "));
+		expect(await plan("SELECT uuid FROM invoices WHERE status = 'open' AND due_date < 1 ORDER BY due_date ASC LIMIT 100")).toBe(
+			"SEARCH invoices USING INDEX idx_invoices_status_due (status=? AND due_date<?)"
+		);
+		expect(await plan("SELECT DISTINCT project FROM transactions WHERE type = 'payment' AND license_billing IS NULL LIMIT 1000")).toContain("idx_tx_unbilled");
+		expect(await plan("SELECT * FROM payment_sessions WHERE processor = 'stripe' AND processor_session_id = 's'")).toContain("idx_session_external");
+		await sql.close();
+	});
+
 	test("later migrations only run on databases that have not seen them", async () => {
 		const sql = memory();
 		await migrate(sql, "sqlite");
