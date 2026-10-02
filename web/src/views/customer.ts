@@ -1,4 +1,4 @@
-import { Api, type Customer, type CustomerStats } from "../api";
+import { Api, customerLabel, type Customer, type CustomerStats } from "../api";
 import { el, emptyState, table } from "../dom";
 import { formatDate, formatMoney } from "../money";
 import { loadProject, projectLayout } from "./project";
@@ -120,7 +120,16 @@ function contactDetails(customer: Customer): HTMLElement {
 		"div",
 		{ class: "card" },
 		el("h3", {}, t("customer.details")),
-		el("p", {}, el("a", { href: `mailto:${customer.email}` }, customer.email), customer.phone ? `, ${customer.phone}` : null),
+		customer.email || customer.phone
+			? el(
+					"p",
+					{},
+					customer.email ? el("a", { href: `mailto:${customer.email}` }, customer.email) : null,
+					customer.email && customer.phone ? ", " : null,
+					customer.phone
+				)
+			: null,
+		customer.email ? null : el("p", { class: "muted" }, t("customers.no_email")),
 		address.length > 0 ? el("p", {}, address.join(", ")) : null,
 		type ? el("p", { class: "muted" }, type) : null,
 		customer.vat_number ? el("p", {}, `${t("customers.vat_number")}: `, el("span", { class: "mono" }, customer.vat_number), " ", vatBadge(customer)) : null,
@@ -182,7 +191,7 @@ export async function customerView(uuid: string, customerId: string): Promise<HT
 				el(
 					"div",
 					{},
-					el("h2", {}, customer.name || customer.email),
+					el("h2", {}, customerLabel(customer)),
 					el("p", { class: "muted" }, t("customer.since", { date: formatDate(customer.created, dateFormat, project.timezone) }))
 				),
 				el(

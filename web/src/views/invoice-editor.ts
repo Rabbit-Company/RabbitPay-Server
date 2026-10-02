@@ -1,4 +1,4 @@
-import { Api, type CatalogItem, type Customer, type ItemInput, type Project } from "../api";
+import { Api, customerLabel, type CatalogItem, type Customer, type ItemInput, type Project } from "../api";
 import { el, field, input, select } from "../dom";
 import { formatMoney, minorUnitDigits, toMajorUnits } from "../money";
 import { toast } from "../ui";
@@ -78,7 +78,7 @@ export function customerOption(customer: Customer): ComboOption {
 	const details = [customer.name ? customer.email : null, customer.vat_number].filter(Boolean).join("\n");
 	return {
 		value: customer.uuid,
-		label: customer.name || customer.email,
+		label: customerLabel(customer),
 		hint: details || undefined,
 		keywords: customer.vat_number ?? undefined,
 	};

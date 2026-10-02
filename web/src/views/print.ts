@@ -61,7 +61,7 @@ function parties(
 		buyer
 			? partyBlock(
 					t("invoice.to"),
-					buyer.name || buyer.email,
+					buyer.name || buyer.email || "",
 					addressLines(buyer, language),
 					partyTaxIds(buyer, null).map((id) => `${t(id.key)}: ${id.value}`)
 				)

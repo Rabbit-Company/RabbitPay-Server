@@ -1,6 +1,7 @@
 import { pagedTable, remoteTable, PAGE_SIZE as HISTORY_PAGE_SIZE } from "../pagination";
 import {
 	Api,
+	customerLabel,
 	newRequestKey,
 	outcomeUnknown,
 	type CurrencyTotal,
@@ -1410,7 +1411,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 					? el(
 							"p",
 							{},
-							el("a", { href: `/projects/${uuid}/customers/${customer.uuid}` }, el("strong", {}, customer.name || customer.email)),
+							el("a", { href: `/projects/${uuid}/customers/${customer.uuid}` }, el("strong", {}, customerLabel(customer))),
 							el("br", {}),
 							customer.email
 						)

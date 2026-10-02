@@ -1,5 +1,5 @@
 import { pagination, PAGE_SIZE } from "../pagination";
-import { Api, ApiError, type CompanyLookup, type Customer } from "../api";
+import { Api, customerLabel, ApiError, type CompanyLookup, type Customer } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
 import { formatDate, formatDateTime } from "../money";
 import { confirmDialog, modal, reportError, toast } from "../ui";
@@ -49,7 +49,7 @@ function vatStatus(customer: Customer): HTMLElement {
 async function runVatCheck(uuid: string, customer: Customer): Promise<Customer | null> {
 	try {
 		const checked = await Api.checkCustomerVat(uuid, customer.uuid);
-		const label = customer.name || customer.email;
+		const label = customerLabel(customer);
 		if (checked.vat_valid) toast(t("vat.toast_valid", { customer: label }), "success");
 		else toast(t("vat.toast_invalid", { customer: label }), "error");
 		return checked;
@@ -71,7 +71,7 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 		class: "combo-customer",
 		placeholder: t("customers.name_lookup"),
 	});
-	const email = input("email", { value: existing?.email ?? typedEmail, required: true });
+	const email = input("email", { value: existing?.email ?? typedEmail });
 	const phone = input("text", { value: existing?.phone ?? "" });
 	const line1 = input("text", { value: existing?.address_line1 ?? "" });
 	const city = input("text", { value: existing?.city ?? "" });
@@ -105,6 +105,9 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("customers.create"));
 	const checkButton = el("button", { class: "button ghost", type: "button" }, t("customers.save_and_check"));
 	const vatBox = el("div", { class: "vat-box" });
+	const duplicateBox = el("div", { class: "stack" });
+	duplicateBox.hidden = true;
+	let acceptedNumbers = "";
 	let settled = false;
 
 	const refreshVatBox = () => {
@@ -156,12 +159,16 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 
 	const save = async (forceCheck: boolean) => {
 		if (!form.reportValidity()) return;
+		if (!name.value.trim() && !email.value.trim()) {
+			toast(t("customers.need_name_or_email"), "error");
+			return;
+		}
 		submit.disabled = true;
 		checkButton.disabled = true;
 
 		const payload = {
 			name: name.value.trim() || null,
-			email: email.value.trim(),
+			email: email.value.trim() || null,
 			phone: phone.value.trim() || null,
 			address_line1: line1.value.trim() || null,
 			city: city.value.trim() || null,
@@ -176,6 +183,41 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 		};
 
 		try {
+			const numbers = `${payload.vat_number ?? ""}|${payload.tax_number ?? ""}|${payload.country ?? ""}`;
+			const unchanged = existing && existing.vat_number === payload.vat_number && existing.tax_number === payload.tax_number;
+			if ((payload.vat_number || payload.tax_number) && !unchanged && numbers !== acceptedNumbers) {
+				const { customers: matches } = await Api.customerDuplicates(uuid, {
+					vat_number: payload.vat_number,
+					tax_number: payload.tax_number,
+					country: payload.country,
+					exclude: existing?.uuid,
+				});
+				if (matches.length > 0) {
+					acceptedNumbers = numbers;
+					duplicateBox.replaceChildren(
+						el("p", { class: "warn" }, t("customers.duplicate_found")),
+						el(
+							"ul",
+							{},
+							...matches.map((match) =>
+								el(
+									"li",
+									{},
+									el("a", { href: `/projects/${uuid}/customers/${match.uuid}`, target: "_blank" }, customerLabel(match)),
+									` | ${[match.vat_number, match.tax_number].filter(Boolean).join(" | ")}`
+								)
+							)
+						),
+						el("p", { class: "muted" }, t("customers.duplicate_save_again"))
+					);
+					duplicateBox.hidden = false;
+					submit.disabled = false;
+					checkButton.disabled = false;
+					return;
+				}
+			}
+			duplicateBox.hidden = true;
+
 			const saved = existing ? await Api.updateCustomer(uuid, existing.uuid, payload) : await Api.createCustomer(uuid, payload);
 
 			settled = true;
@@ -206,7 +248,7 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 				void save(false);
 			},
 		},
-		el("div", { class: "form-grid" }, field(t("customers.name"), name.element), field(t("customers.email"), email)),
+		el("div", { class: "form-grid" }, field(t("customers.name"), name.element), field(t("customers.email"), email, t("customers.email_hint"))),
 		el("div", { class: "form-grid" }, field(t("customers.type"), customerType, t("customers.type_hint")), field(t("customers.phone"), phone)),
 		field(t("customers.address"), line1),
 		el(
@@ -219,6 +261,7 @@ export function customerForm(uuid: string, existing: Customer | null, onSaved: (
 		el("div", { class: "form-grid" }, field(t("customers.vat_number"), vat, t("customers.vat_number_hint")), taxNumberField),
 		vatBox,
 		eInvoicing,
+		duplicateBox,
 		el("div", { class: "dialog-actions" }, checkButton, submit)
 	);
 
@@ -285,7 +328,7 @@ export async function customersView(uuid: string): Promise<HTMLElement> {
 										onClick: async () => {
 											const confirmed = await confirmDialog({
 												title: t("customers.delete_title"),
-												body: t("customers.delete_body", { customer: customer.name || customer.email }),
+												body: t("customers.delete_body", { customer: customerLabel(customer) }),
 												confirmLabel: t("ui.delete"),
 												destructive: true,
 											});

@@ -346,7 +346,7 @@ export async function sendDueReminders(now = Date.now()): Promise<number> {
 		SELECT i.*, c.email AS customer_email FROM invoices i
 		JOIN projects p ON p.uuid = i.project
 		JOIN customers c ON c.uuid = i.customer
-		WHERE p.email_reminders = 1 AND p.status != 'deleted' AND i.source = 'invoice' AND i.issued_at IS NOT NULL
+		WHERE p.email_reminders = 1 AND p.status != 'deleted' AND i.source = 'invoice' AND i.issued_at IS NOT NULL AND c.email IS NOT NULL
 			AND i.status IN ('open', 'overdue', 'partially_paid') AND i.due_date <= ${now + MAX_DAYS_BEFORE * DAY}
 		ORDER BY i.due_date ASC LIMIT ${REMINDER_BATCH}
 	`) as (InvoiceRow & { customer_email: string })[];

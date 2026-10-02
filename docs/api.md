@@ -157,7 +157,15 @@ curl -X POST localhost:8085/api/v1/projects/$UUID/keys/rotate \
 | `PATCH`  | `/api/v1/projects/:uuid/customers/:customer` | `customer.edit`   |
 | `DELETE` | `/api/v1/projects/:uuid/customers/:customer` | `customer.delete` |
 
-Email is required and must be unique within a project. `country` is an ISO
+A customer needs a name or an email, and a request with neither returns error
+`1287`. Email is optional, so a customer who has none can still be invoiced and
+the invoice is printed or downloaded instead of emailed. An email that is given
+must be unique within a project. Any number of customers can be saved without
+one. Send `"email": null` to remove it. Sending an email to such a customer
+needs an explicit `to` address, otherwise it returns error `1084`. Automatic
+emails, meaning recurring invoices set to send themselves and payment reminders,
+skip a customer without an email. The customer portal identifies customers by
+email, so a customer without one cannot sign in to it. `country` is an ISO
 3166-1 alpha-2 code. `metadata` is stored as JSON and returned parsed.
 `vat_number` is the VAT ID of a VAT registered customer and is stored with its
 country prefix, so `12345678` for a Slovenian customer becomes `SI12345678`.
@@ -165,6 +173,15 @@ country prefix, so `12345678` for a Slovenian customer becomes `SI12345678`.
 ID, and the tax number only when it is a different number. The list endpoint
 takes `limit`, `offset` and `search`, where `search` matches email, name, VAT
 ID or tax number. A customer referenced by any invoice cannot be deleted.
+
+`GET /api/v1/projects/:uuid/customer-duplicates` finds customers that share a
+VAT ID or tax number, and needs `customer.view`. It takes `vat_number`,
+`tax_number`, an optional `country` used when the VAT ID has no prefix, and an
+optional `exclude` with the UUID of the customer being edited. Spaces, dots and
+the country prefix are ignored, and a VAT ID matches a tax number with the same
+digits, so `SI12345678` finds a customer whose tax number is `12345678`. It
+returns up to ten customers. Saving a duplicate is never refused. The customer
+form uses this to warn before it saves a second customer with the same number.
 
 `registration_number`, `iban` and `bic` are optional and only used in e-SLOG
 invoices, where public sector buyers need them. The IBAN is stored without spaces
@@ -320,7 +337,8 @@ Invoices raised this way are issued immediately rather than left as drafts,
 since an integration raising one intends to be paid. Pass `"status":"draft"` to
 override that. `POST /pay/customers` returns the existing customer with `200`
 when the email is already known, rather than failing, so an integration can call
-it every time without tracking what it has already created.
+it every time without tracking what it has already created. The email
+stays required on this endpoint because it is what identifies the customer.
 
 `GET /pay/invoices/:invoice` is the polling endpoint. It adds `outstanding` to
 the invoice, which is the total minus what has been paid net of refunds.

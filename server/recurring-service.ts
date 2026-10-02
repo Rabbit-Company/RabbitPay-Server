@@ -209,7 +209,7 @@ export async function generateNext(project: ProjectRow, template: RecurringInvoi
 				recurring: template.uuid,
 			});
 
-			if (template.auto_send && canEmail(project)) {
+			if (template.auto_send && canEmail(project) && customer.email) {
 				await queueInvoiceEmail(project, invoice, { to: customer.email, kind: "invoice", message: null, sentBy: null }).catch((err) =>
 					Logger.error(`[RECURRING] Could not email ${invoice.reference}: ${err}`)
 				);

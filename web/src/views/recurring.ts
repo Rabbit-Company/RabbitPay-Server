@@ -1,6 +1,6 @@
 import { PageState } from "../../../server/page-state";
 import { pagedTable, remoteTable, PAGE_SIZE } from "../pagination";
-import { Api, type IntervalUnit, type RecurringDetail, type RecurringInput, type RecurringStatus, type RecurringSummary } from "../api";
+import { Api, customerLabel, type IntervalUnit, type RecurringDetail, type RecurringInput, type RecurringStatus, type RecurringSummary } from "../api";
 import { el, emptyState, field, input, select, statusPill, table } from "../dom";
 import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, toDateInput } from "../money";
 import { navigate } from "../router";
@@ -533,7 +533,7 @@ export async function recurringView(uuid: string, recurringId: string): Promise<
 			);
 		}
 
-		const customerName = recurring.customer_detail ? recurring.customer_detail.name || recurring.customer_detail.email : t("recurring.unknown_customer");
+		const customerName = recurring.customer_detail ? customerLabel(recurring.customer_detail) : t("recurring.unknown_customer");
 
 		const scheduleCard = el(
 			"div",

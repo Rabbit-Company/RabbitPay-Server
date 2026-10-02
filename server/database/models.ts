@@ -223,7 +223,7 @@ export interface CustomerRow {
 	uuid: string;
 	project: string;
 	name: string | null;
-	email: string;
+	email: string | null;
 	phone: string | null;
 	address_line1: string | null;
 	address_line2: string | null;

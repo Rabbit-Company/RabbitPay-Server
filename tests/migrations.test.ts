@@ -140,6 +140,47 @@ describe("schema migrations", () => {
 		await sql.close();
 	});
 
+	test("customers can lose their email without their invoices and tickets losing the customer", async () => {
+		const sql = memory();
+		await sql`PRAGMA foreign_keys = ON`;
+		const optional = MIGRATIONS.findIndex((migration) => migration.name === "customers without an email address");
+		await migrate(sql, "sqlite", MIGRATIONS.slice(0, optional));
+		await sql`INSERT INTO accounts(username, email, password, created, updated, accessed) VALUES('ana', 'ana@example.com', 'x', 1, 1, 1)`;
+		await sql`INSERT INTO projects(uuid, name, apikey, apikey2, currency, created, updated, created_by) VALUES('p', 'shop', 'k1', 'k2', 'EUR', 1, 1, 'ana')`;
+		await sql`INSERT INTO customers(uuid, project, name, email, registration_number, created, updated) VALUES('c', 'p', 'Acme', 'acme@example.com', '1234567000', 1, 1)`;
+		await sql`
+			INSERT INTO invoices(uuid, project, customer, reference, status, currency, subtotal, discount_amount, tax_amount, total_amount, paid_amount,
+				refunded_amount, due_date, created, updated)
+			VALUES('i', 'p', 'c', 'R-1', 'draft', 'EUR', 100, 0, 0, 100, 0, 0, 1, 1, 1)
+		`;
+		await sql`INSERT INTO ticket_portal_access(customer, project, kinds, updated) VALUES('c', 'p', 'support', 1)`;
+		const missingEmail = async () => await sql`INSERT INTO customers(uuid, project, name, created, updated) VALUES('x', 'p', 'Nobody', 1, 1)`;
+		await expect(missingEmail()).rejects.toThrow();
+
+		expect(await migrate(sql, "sqlite")).toContain(MIGRATIONS[optional].version);
+
+		const [invoice] = await sql`SELECT customer FROM invoices WHERE uuid = 'i'`;
+		expect(invoice.customer).toBe("c");
+		expect(await sql`SELECT customer FROM ticket_portal_access`).toHaveLength(1);
+		const [kept] = await sql`SELECT name, email, registration_number FROM customers WHERE uuid = 'c'`;
+		expect(kept).toMatchObject({ name: "Acme", email: "acme@example.com", registration_number: "1234567000" });
+
+		await sql`INSERT INTO customers(uuid, project, name, created, updated) VALUES('n1', 'p', 'No email', 1, 1)`;
+		await sql`INSERT INTO customers(uuid, project, name, created, updated) VALUES('n2', 'p', 'No email either', 1, 1)`;
+		const duplicate = async () =>
+			await sql`INSERT INTO customers(uuid, project, name, email, created, updated) VALUES('d', 'p', 'Copy', 'acme@example.com', 1, 1)`;
+		await expect(duplicate()).rejects.toThrow();
+
+		const indexes = await sql`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'customers' AND sql IS NOT NULL`;
+		expect(indexes.map((row: { name: string }) => row.name)).toEqual(expect.arrayContaining(["idx_customers_project", "idx_customers_email"]));
+		const [enforced] = await sql`PRAGMA foreign_keys`;
+		expect(Number(enforced.foreign_keys)).toBe(1);
+		expect(await sql`PRAGMA foreign_key_check`).toHaveLength(0);
+		await sql`DELETE FROM customers WHERE uuid = 'c'`;
+		expect((await sql`SELECT customer FROM invoices WHERE uuid = 'i'`)[0].customer).toBeNull();
+		await sql.close();
+	});
+
 	test("store domains saved before verification stay active", async () => {
 		const sql = memory();
 		const domains = MIGRATIONS.findIndex((migration) => migration.name === "store domains");

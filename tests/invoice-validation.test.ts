@@ -329,3 +329,78 @@ describe("mandatory Slovenian invoice data", () => {
 		expect(issued.data.status).toBe("open");
 	});
 });
+
+describe("customers without an email address", () => {
+	test("can be saved with only a name, more than once, and still need a name or an email", async () => {
+		const projectId = await project("validation-no-email");
+		const base = `/api/v1/projects/${projectId}/customers`;
+
+		const first = await call("POST", base, { name: "Kmetija Novak", country: "SI", customer_type: "individual" });
+		const second = await call("POST", base, { name: "Kmetija Kranjc", email: "  ", country: "SI" });
+		expect(first.error).toBe(0);
+		expect(first.data.email).toBeNull();
+		expect(second.data.email).toBeNull();
+
+		expect((await call("POST", base, { phone: "041 123 456" })).error).toBe(ErrorCode.CUSTOMER_IDENTITY_MISSING);
+		expect((await call("POST", base, { name: "  " })).error).toBe(ErrorCode.CUSTOMER_IDENTITY_MISSING);
+		expect((await call("POST", base, { name: "Bad", email: "not an email" })).error).toBe(ErrorCode.INVALID_EMAIL);
+
+		const withEmail = await call("POST", base, { email: "shared@example.com" });
+		expect((await call("POST", base, { name: "Same address", email: "shared@example.com" })).error).toBe(ErrorCode.CUSTOMER_ALREADY_EXISTS);
+		expect((await call("PATCH", `${base}/${withEmail.data.uuid}`, { email: null })).error).toBe(ErrorCode.CUSTOMER_IDENTITY_MISSING);
+
+		const cleared = await call("PATCH", `${base}/${withEmail.data.uuid}`, { name: "Now named", email: null });
+		expect(cleared.data).toMatchObject({ name: "Now named", email: null });
+		const added = await call("PATCH", `${base}/${first.data.uuid}`, { email: "novak@example.com" });
+		expect(added.data.email).toBe("novak@example.com");
+
+		const found = await call("GET", `${base}?search=Kranjc`);
+		expect(found.data.customers.map((customer: { uuid: string }) => customer.uuid)).toEqual([second.data.uuid]);
+	});
+
+	test("are reported as possible duplicates when the VAT or tax number matches another customer", async () => {
+		const projectId = await project("validation-duplicates");
+		const base = `/api/v1/projects/${projectId}`;
+		const acme = (await call("POST", `${base}/customers`, { name: "Acme d.o.o.", country: "SI", vat_number: "SI12345678" })).data;
+		const farm = (await call("POST", `${base}/customers`, { name: "Kmetija Novak", country: "SI", tax_number: "876 543 21" })).data;
+		await call("POST", `${base}/customers`, { name: "Unrelated", country: "SI", tax_number: "11112222" });
+		const matches = async (query: string) =>
+			(await call("GET", `${base}/customer-duplicates?${query}`)).data.customers.map((customer: { uuid: string }) => customer.uuid);
+
+		expect(await matches("vat_number=SI12345678")).toEqual([acme.uuid]);
+		expect(await matches("vat_number=12345678&country=SI")).toEqual([acme.uuid]);
+		expect(await matches("tax_number=12345678")).toEqual([acme.uuid]);
+		expect(await matches("tax_number=si%2012.345.678")).toEqual([acme.uuid]);
+		expect(await matches("tax_number=87654321")).toEqual([farm.uuid]);
+		expect(await matches("vat_number=SI87654321")).toEqual([farm.uuid]);
+		expect(await matches(`vat_number=SI12345678&exclude=${acme.uuid}`)).toEqual([]);
+		expect(await matches("tax_number=345678")).toEqual([]);
+		expect(await matches("tax_number=99999999")).toEqual([]);
+		expect(await matches("")).toEqual([]);
+		expect((await call("GET", `${base}/customer-duplicates?vat_number=SI12345678&exclude=nope`)).error).toBe(ErrorCode.INVALID_CUSTOMER_ID);
+
+		const twin = await call("POST", `${base}/customers`, { name: "Acme, second site", country: "SI", vat_number: "SI12345678" });
+		expect(twin.error).toBe(0);
+		expect(await matches("tax_number=12345678")).toEqual([acme.uuid, twin.data.uuid]);
+	});
+
+	test("can be invoiced, and the invoice is printed instead of emailed", async () => {
+		const projectId = await project("validation-no-email-invoice");
+		await company(projectId);
+		const customer = await call("POST", `/api/v1/projects/${projectId}/customers`, { name: "Janez Novak", country: "SI", customer_type: "individual" });
+		const issued = await call("POST", `/api/v1/projects/${projectId}/invoices`, invoice({ status: "open", customer: customer.data.uuid }));
+		expect(issued.error).toBe(0);
+		expect(issued.data.buyer_email).toBeNull();
+
+		const document = await call("GET", `/api/v1/projects/${projectId}/invoices/${issued.data.uuid}/document`);
+		expect(document.data.buyer).toMatchObject({ name: "Janez Novak", email: null });
+
+		const pdf = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1/projects/${projectId}/invoices/${issued.data.uuid}/pdf`, { headers: { Authorization: `Bearer ${token}` } })
+		);
+		expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
+
+		const emailed = await call("POST", `/api/v1/projects/${projectId}/invoices/${issued.data.uuid}/email`, {});
+		expect([ErrorCode.EMAIL_RECIPIENT_MISSING, ErrorCode.EMAIL_NOT_CONFIGURED]).toContain(emailed.error);
+	});
+});

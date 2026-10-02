@@ -353,6 +353,10 @@ export function clearSession() {
 
 const SESSION_ERRORS = new Set([1000, 1016, 1017, 1026]);
 
+export function customerLabel(customer: { name: string | null; email: string | null }): string {
+	return customer.name || customer.email || "";
+}
+
 export function newRequestKey(): string {
 	return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -1437,7 +1441,7 @@ export interface Customer {
 	uuid: string;
 	project: string;
 	name: string | null;
-	email: string;
+	email: string | null;
 	phone: string | null;
 	address_line1: string | null;
 	address_line2: string | null;
@@ -2699,6 +2703,15 @@ export const Api = {
 
 	customer(uuid: string, customer: string) {
 		return request<Customer>("GET", `/projects/${uuid}/customers/${customer}`);
+	},
+
+	customerDuplicates(uuid: string, numbers: { vat_number: string | null; tax_number: string | null; country: string | null; exclude?: string }) {
+		const query = new URLSearchParams();
+		if (numbers.vat_number) query.set("vat_number", numbers.vat_number);
+		if (numbers.tax_number) query.set("tax_number", numbers.tax_number);
+		if (numbers.country) query.set("country", numbers.country);
+		if (numbers.exclude) query.set("exclude", numbers.exclude);
+		return request<{ customers: Customer[] }>("GET", `/projects/${uuid}/customer-duplicates?${query}`);
 	},
 
 	createCustomer(uuid: string, customer: Partial<Customer>) {

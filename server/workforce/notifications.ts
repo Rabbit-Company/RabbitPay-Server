@@ -81,8 +81,8 @@ async function customerOf(ticket: TicketRow): Promise<{ email: string; name: str
 	if (!ticket.customer || !ticket.customer_visible) return null;
 	const [customer] = (await Database`
 		SELECT c.email, c.name FROM customers c JOIN ticket_portal_access a ON a.customer = c.uuid WHERE c.uuid = ${ticket.customer}
-	`) as { email: string; name: string | null }[];
-	return customer ? { email: customer.email, name: customer.name?.trim() || customer.email } : null;
+	`) as { email: string | null; name: string | null }[];
+	return customer?.email ? { email: customer.email, name: customer.name?.trim() || customer.email } : null;
 }
 
 export function notifyCustomerReply(ticket: TicketRow, author: string, body: string, actor: string) {

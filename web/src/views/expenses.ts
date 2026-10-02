@@ -3,6 +3,7 @@ import { companySearch } from "../company-lookup";
 import { pagedTable, pagination, PAGE_SIZE } from "../pagination";
 import {
 	Api,
+	customerLabel,
 	type Customer,
 	type Expense,
 	type ExpenseImportPreview,
@@ -41,8 +42,8 @@ type SupplierOption = ComboOption & { customer: Customer };
 function supplierOption(customer: Customer): SupplierOption {
 	const details = [customer.name ? customer.email : null, customer.vat_number].filter(Boolean).join("\n");
 	return {
-		value: customer.name || customer.email,
-		label: customer.name || customer.email,
+		value: customerLabel(customer),
+		label: customerLabel(customer),
 		hint: details || undefined,
 		keywords: customer.vat_number ?? undefined,
 		customer,

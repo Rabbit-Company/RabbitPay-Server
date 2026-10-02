@@ -12,9 +12,9 @@ export const LICENSE_TYPES_WITH_SEATS = "CHECK (type IN ('transactions', 'white_
 const ENTRY_KINDS_BEFORE = "CHECK (kind IN ('regular', 'overtime'))";
 const ENTRY_KINDS_AFTER = "CHECK (kind IN ('regular', 'overtime', 'break'))";
 
-async function rebuildSqliteTable(sql: SQL, table: string, before: string, after: string) {
+export async function rebuildSqliteTable(sql: SQL, table: string, before: string, after: string) {
 	const [definition] = (await sql`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ${table}`) as { sql: string }[];
-	if (!definition?.sql.includes(before)) throw new Error(`The ${table} table does not have the expected check constraint`);
+	if (!definition?.sql.includes(before)) throw new Error(`The ${table} table does not have the expected definition`);
 
 	const indexes = (await sql`SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ${table} AND sql IS NOT NULL`) as { sql: string }[];
 	const columns = ((await sql.unsafe(`PRAGMA table_info(${table})`)) as { name: string }[]).map((column) => column.name).join(", ");

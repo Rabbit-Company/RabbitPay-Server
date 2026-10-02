@@ -19,6 +19,7 @@ import {
 	allowBreakEntries,
 	createPayrollSchema,
 	createWorkforceSchema,
+	rebuildSqliteTable,
 } from "./workforce-schema";
 import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema } from "./accounting-schema";
 import { createRegistrySchema } from "./registry-schema";
@@ -37,6 +38,7 @@ async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string
 export interface Migration {
 	version: number;
 	name: string;
+	rebuildsSqliteTables?: boolean;
 	up(sql: SQL, dialect: Dialect): Promise<void>;
 }
 
@@ -395,6 +397,17 @@ export const MIGRATIONS: Migration[] = [
 			]);
 		},
 	},
+	{
+		version: 41,
+		name: "customers without an email address",
+		rebuildsSqliteTables: true,
+		up: async (sql, dialect) => {
+			const column = `email ${schemaTypes(dialect).text("email")}`;
+			if (dialect === "sqlite") return rebuildSqliteTable(sql, "customers", `${column} NOT NULL`, column);
+			if (dialect === "mysql") await sql.unsafe(`ALTER TABLE customers MODIFY ${column} NULL`);
+			else await sql.unsafe("ALTER TABLE customers ALTER COLUMN email DROP NOT NULL");
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {
@@ -436,10 +449,20 @@ export async function migrate(sql: SQL, dialect: Dialect, migrations: Migration[
 	const ran: number[] = [];
 	for (const migration of migrations) {
 		if (applied.has(migration.version)) continue;
-		await sql.begin(async (tx) => {
-			await migration.up(tx as unknown as SQL, dialect);
-			await tx`INSERT INTO schema_migrations(version, name, applied) VALUES(${migration.version}, ${migration.name}, ${Date.now()})`;
-		});
+		const withoutForeignKeys = dialect === "sqlite" && migration.rebuildsSqliteTables === true;
+		if (withoutForeignKeys) await sql`PRAGMA foreign_keys = OFF`;
+		try {
+			await sql.begin(async (tx) => {
+				await migration.up(tx as unknown as SQL, dialect);
+				if (withoutForeignKeys) {
+					const broken = await tx.unsafe("PRAGMA foreign_key_check");
+					if (broken.length > 0) throw new Error(`Migration ${migration.name} left ${broken.length} rows pointing at missing records`);
+				}
+				await tx`INSERT INTO schema_migrations(version, name, applied) VALUES(${migration.version}, ${migration.name}, ${Date.now()})`;
+			});
+		} finally {
+			if (withoutForeignKeys) await sql`PRAGMA foreign_keys = ON`;
+		}
 		ran.push(migration.version);
 	}
 	return ran;

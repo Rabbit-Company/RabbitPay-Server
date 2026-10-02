@@ -9,7 +9,7 @@ import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { Logger } from "../../logger";
 import { companyFor } from "../../company";
-import { isCustomerType, normalizeVatNumber, splitVatNumber } from "../../tax";
+import { isCustomerType, normalizeVatNumber, splitVatNumber, taxIdentityKeys } from "../../tax";
 import { isPlausibleIban, normalizeIban } from "../../payments/bank";
 import { checkVatNumber, isEnabled as viesEnabled, ViesUnavailable } from "../../vies";
 import { customerStats, type CustomerInvoiceFacts } from "../../customer-stats";
@@ -17,7 +17,7 @@ import type { CustomerRow } from "../../database/models";
 
 interface CustomerBody {
 	name?: string | null;
-	email?: string;
+	email?: string | null;
 	phone?: string | null;
 	address_line1?: string | null;
 	address_line2?: string | null;
@@ -42,6 +42,15 @@ function cleanIban(value: string | null | undefined): string | null {
 function cleanBic(value: string | null | undefined): string | null {
 	const bic = (value ?? "").replace(/\s+/g, "").toUpperCase();
 	return bic === "" ? null : bic;
+}
+
+function cleanEmail(value: string | null | undefined): string | null {
+	const email = (value ?? "").trim();
+	return email === "" ? null : email;
+}
+
+function identified(name: string | null | undefined, email: string | null): boolean {
+	return email !== null || (name ?? "").trim() !== "";
 }
 
 function present(customer: CustomerRow) {
@@ -117,6 +126,35 @@ Server.app.get("/api/v1/projects/:uuid/customers", Auth.required(), Permissions.
 	return Utils.ok(ctx, { customers: customers.map(present), total: total.count, limit, offset });
 });
 
+Server.app.get("/api/v1/projects/:uuid/customer-duplicates", Auth.required(), Permissions.require(Permission.CUSTOMER_VIEW), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const query = ctx.query();
+
+	const exclude = query.get("exclude");
+	if (exclude !== null && !Validate.uuid(exclude)) return Utils.fail(ctx, ErrorCode.INVALID_CUSTOMER_ID);
+	const country = query.get("country");
+	const keys = taxIdentityKeys(normalizeVatNumber(query.get("vat_number"), country) ?? query.get("vat_number"), query.get("tax_number"));
+	if (keys.length === 0) return Utils.ok(ctx, { customers: [] });
+
+	const compactVat = Database`REPLACE(REPLACE(REPLACE(REPLACE(UPPER(COALESCE(vat_number, '')), ' ', ''), '.', ''), '-', ''), '/', '')`;
+	const compactTax = Database`REPLACE(REPLACE(REPLACE(REPLACE(UPPER(COALESCE(tax_number, '')), ' ', ''), '.', ''), '-', ''), '/', '')`;
+	const found = new Map<string, CustomerRow>();
+	for (const key of keys) {
+		const pattern = `%${key}%`;
+		const rows = (await Database`
+			SELECT * FROM customers
+			WHERE project = ${project.uuid} AND (${compactVat} LIKE ${pattern} OR ${compactTax} LIKE ${pattern})
+			ORDER BY created ASC LIMIT 50
+		`) as CustomerRow[];
+		for (const row of rows) {
+			if (row.uuid === exclude) continue;
+			if (taxIdentityKeys(row.vat_number, row.tax_number).includes(key)) found.set(row.uuid, row);
+		}
+	}
+
+	return Utils.ok(ctx, { customers: [...found.values()].slice(0, 10).map(present) });
+});
+
 Server.app.post("/api/v1/projects/:uuid/customers", Auth.required(), Permissions.require(Permission.CUSTOMER_CREATE), async (ctx) => {
 	const project = Permissions.project(ctx);
 
@@ -127,15 +165,18 @@ Server.app.post("/api/v1/projects/:uuid/customers", Auth.required(), Permissions
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
-	if (!Validate.email(data.email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	if (data.email !== undefined && data.email !== null && typeof data.email !== "string") return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	const email = cleanEmail(data.email);
+	if (email !== null && !Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
 
 	const invalid = validateOptionalFields(data);
 	if (invalid !== null) return Utils.fail(ctx, invalid);
+	if (!identified(data.name, email)) return Utils.fail(ctx, ErrorCode.CUSTOMER_IDENTITY_MISSING);
 
-	const email = data.email!;
-
-	const existing = (await Database`SELECT uuid FROM customers WHERE project = ${project.uuid} AND email = ${email}`) as CustomerRow[];
-	if (existing.length > 0) return Utils.fail(ctx, ErrorCode.CUSTOMER_ALREADY_EXISTS);
+	if (email !== null) {
+		const existing = (await Database`SELECT uuid FROM customers WHERE project = ${project.uuid} AND email = ${email}`) as CustomerRow[];
+		if (existing.length > 0) return Utils.fail(ctx, ErrorCode.CUSTOMER_ALREADY_EXISTS);
+	}
 
 	const uuid = crypto.randomUUID();
 	const timestamp = Date.now();
@@ -196,14 +237,15 @@ Server.app.patch("/api/v1/projects/:uuid/customers/:customer", Auth.required(), 
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
-	if (data.email !== undefined && !Validate.email(data.email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	if (data.email !== undefined && data.email !== null && typeof data.email !== "string") return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	const email = data.email === undefined ? customer.email : cleanEmail(data.email);
+	if (email !== null && email !== customer.email && !Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
 
 	const invalid = validateOptionalFields(data);
 	if (invalid !== null) return Utils.fail(ctx, invalid);
+	if (!identified(data.name === undefined ? customer.name : data.name, email)) return Utils.fail(ctx, ErrorCode.CUSTOMER_IDENTITY_MISSING);
 
-	const email = data.email ?? customer.email;
-
-	if (email !== customer.email) {
+	if (email !== null && email !== customer.email) {
 		const clash = (await Database`SELECT uuid FROM customers WHERE project = ${project.uuid} AND email = ${email}`) as CustomerRow[];
 		if (clash.length > 0) return Utils.fail(ctx, ErrorCode.CUSTOMER_ALREADY_EXISTS);
 	}

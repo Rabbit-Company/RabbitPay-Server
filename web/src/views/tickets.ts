@@ -1,5 +1,6 @@
 import {
 	Api,
+	customerLabel,
 	type Customer,
 	type Member,
 	type Project,
@@ -66,7 +67,7 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 	const status = select(statusOptions(), ticket?.status ?? "open");
 	const customerOptions = [
 		{ value: "", label: t("ticket.no_customer") },
-		...customers.map((customer) => ({ value: customer.uuid, label: customer.name ?? customer.email })),
+		...customers.map((customer) => ({ value: customer.uuid, label: customerLabel(customer) })),
 	];
 	if (ticket?.customer && !customers.some((customer) => customer.uuid === ticket.customer)) {
 		customerOptions.push({ value: ticket.customer, label: ticket.customer_name ?? ticket.customer });

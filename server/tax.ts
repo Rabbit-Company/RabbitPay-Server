@@ -129,6 +129,16 @@ export function splitVatNumber(raw: string | null | undefined, fallbackCountry: 
 	return /^[A-Z0-9]{2,12}$/.test(compact) ? { prefix, country: fallbackCountry, number: compact } : null;
 }
 
+export function taxIdentityKeys(...numbers: (string | null | undefined)[]): string[] {
+	const keys = new Set<string>();
+	for (const raw of numbers) {
+		const compact = (raw ?? "").toUpperCase().replace(/[\s.\-/]/g, "");
+		const bare = /^[A-Z]{2}/.test(compact) && compact.length >= 6 ? compact.slice(2) : compact;
+		if (bare.length >= 4) keys.add(bare);
+	}
+	return [...keys];
+}
+
 export type SupplyType = "goods" | "services" | "digital";
 export type TaxCategory = "standard" | "reduced" | "exempt" | "domestic_reverse";
 export type TaxTreatment =
