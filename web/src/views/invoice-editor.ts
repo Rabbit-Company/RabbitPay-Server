@@ -131,6 +131,10 @@ export async function invoiceEditor(uuid: string, project: Project, options: Edi
 						(customer) => {
 							customersById.set(customer.uuid, customer);
 							resolve(customerOption(customer));
+							if (buyer?.uuid === customer.uuid) {
+								buyer = customer;
+								applyTax();
+							}
 						},
 						query,
 						() => resolve(null)
