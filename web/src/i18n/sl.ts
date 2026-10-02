@@ -111,6 +111,7 @@ export const sl: UiDictionary = {
 	"expenses.vat_handling_assessment": "2, obračun in obresti",
 	"expenses.vat_handling_interest": "3, samo obresti",
 	"expenses.assessment_period": "Prvotno davčno obdobje",
+	"expenses.assessment_period_hint": "Prvi mesec, zadnji mesec in leto, na primer 03032026 za marec 2026 ali 07092026 za julij do september",
 	"expenses.assessment_tax": "Popravljeni DDV",
 	"expenses.exchange_rate": "Menjalni tečaj v EUR",
 	"expenses.exchange_rate_hint": "Vnesite, koliko EUR ustreza 1 {currency} za poročanje DDV.",

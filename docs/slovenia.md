@@ -414,7 +414,10 @@ or in the body of `POST .../invoices/:invoice/open`. The invoice then:
   year, such as `09092026` or `07092026` for a quarter.
 
 In the DDV evidence that record has `OBRAVNAVA` `2`, the period in `OBDOBJE88`
-and its VAT in `DAVEK88`, the amount the interest is worked out on. An invoice
+and its VAT in `DAVEK88`, as the FURS field description for the evidence of
+charged VAT prescribes. RabbitPay does not calculate the interest. eDavki works
+it out from these two fields in section V of the pre-filled DDV return once the
+evidence is submitted. An invoice
 without VAT is reported in the current period as a regular record, since no
 interest is due. The invoice page shows a Late VAT report notice.
 

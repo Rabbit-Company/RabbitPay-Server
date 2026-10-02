@@ -111,6 +111,7 @@ export const en = {
 	"expenses.vat_handling_assessment": "2, return and interest",
 	"expenses.vat_handling_interest": "3, interest only",
 	"expenses.assessment_period": "Original tax period",
+	"expenses.assessment_period_hint": "First month, last month and year, such as 03032026 for March 2026 or 07092026 for July to September",
 	"expenses.assessment_tax": "Corrected DDV",
 	"expenses.exchange_rate": "Exchange rate to EUR",
 	"expenses.exchange_rate_hint": "Enter how many EUR equal 1 {currency} for DDV reporting.",

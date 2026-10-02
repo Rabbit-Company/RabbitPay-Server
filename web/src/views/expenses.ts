@@ -287,7 +287,7 @@ async function editor(
 		],
 		expense?.vat_handling ?? "1"
 	);
-	const assessmentPeriod = input("text", { value: expense?.self_assessment_period ?? "", maxlength: "8", placeholder: "MMDDYYYY" });
+	const assessmentPeriod = input("text", { value: expense?.self_assessment_period ?? "", maxlength: "8", placeholder: "03032026" });
 	const assessmentTax = amountInput(expense?.self_assessment_tax ?? 0);
 	const exchangeRate = input("number", { value: expense?.tax_exchange_rate ? String(expense.tax_exchange_rate) : "", min: "0", step: "any" });
 	const exchangeRateDate = input("date", { value: expense?.tax_rate_date ? toDateInput(expense.tax_rate_date, project.timezone) : issueDate.value });
@@ -391,7 +391,7 @@ async function editor(
 	const assessmentFields = el(
 		"div",
 		{ class: "grid" },
-		field(t("expenses.assessment_period"), assessmentPeriod),
+		field(t("expenses.assessment_period"), assessmentPeriod, t("expenses.assessment_period_hint")),
 		field(t("expenses.assessment_tax"), assessmentTax)
 	);
 	const ddvFields = el(
