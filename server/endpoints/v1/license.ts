@@ -9,7 +9,7 @@ import Vault from "../../crypto/vault";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
-import { presentLicense, redeemLicense, usageFor, whiteLabelActive } from "../../licensing";
+import { LICENSE_TYPES, presentLicense, readLicenseStart, previewLicense, redeemLicense, usageFor, whiteLabelActive } from "../../licensing";
 import { isLicenseIssuer } from "../../license-signing";
 import { serverId } from "../../server-identity";
 import { logoPath, readLogo, removeLogo, saveLogo } from "../../branding";
@@ -25,6 +25,7 @@ import type { LicenseKeyRow, ProjectRow } from "../../database/models";
 
 interface RedeemBody {
 	code?: string;
+	starts_at?: unknown;
 }
 
 interface LogoBody {
@@ -67,6 +68,23 @@ Server.app.get("/api/v1/projects/:uuid/license", Auth.required(), Permissions.re
 	return Utils.ok(ctx, await licenseState(Permissions.project(ctx)));
 });
 
+Server.app.post("/api/v1/projects/:uuid/license/preview", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+
+	let data: RedeemBody;
+	try {
+		data = await ctx.body<RedeemBody>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	if (typeof data.code !== "string" || data.code.trim() === "" || data.code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
+
+	const result = await previewLicense(project.uuid, data.code.trim());
+	if (typeof result === "number") return Utils.fail(ctx, result);
+	return Utils.ok(ctx, result);
+});
+
 Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
@@ -79,8 +97,10 @@ Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permis
 	}
 
 	if (typeof data.code !== "string" || data.code.trim() === "" || data.code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
+	const startsAt = readLicenseStart(data.starts_at);
+	if (startsAt === undefined) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 
-	const result = await redeemLicense(project.uuid, data.code.trim(), account.username);
+	const result = await redeemLicense(project.uuid, data.code.trim(), account.username, LICENSE_TYPES, startsAt);
 	if (typeof result === "number") return Utils.fail(ctx, result);
 
 	await Audit.record(ctx, {
@@ -94,6 +114,7 @@ Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permis
 			duration_days: result.duration_days,
 			storage_gb: result.storage_gb,
 			employees: result.employees,
+			starts_at: result.starts_at,
 		},
 	});
 	Logger.audit(`[LICENSE] ${account.username} redeemed a ${result.type} license on ${project.uuid}`);

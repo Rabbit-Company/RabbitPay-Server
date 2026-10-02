@@ -311,6 +311,15 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 33, name: "bank line matches", up: createBankMatchSchema },
 	{ version: 34, name: "expense due dates", up: addExpenseDueDate },
 	{ version: 35, name: "company registry", up: createRegistrySchema },
+	{
+		version: 36,
+		name: "license start dates",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN starts_at ${types.int64}`);
+			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN activated_at ${types.int64}`);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

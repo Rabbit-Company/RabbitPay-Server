@@ -16,6 +16,7 @@ import { combobox, staticCombobox, type Combobox, type ComboOption } from "../co
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { invalidateProject, loadProject, projectLayout } from "./project";
+import { redeemFlow } from "./license";
 import { currentPath, navigate } from "../router";
 import { expenseCategoryLabel } from "../expense-categories";
 import type { DateFormat } from "../../../server/formats";
@@ -292,29 +293,19 @@ function journalFilterControls(accounts: LedgerAccount[], currency: string, onCh
 function redeemForm(project: Project): HTMLElement | null {
 	if (!can(project, Permission.LEDGER_EDIT)) return null;
 	const code = input("text", { placeholder: "RPAY-", autocomplete: "off", required: true });
-	const submit = el("button", { class: "button primary", type: "submit" }, t("accounting.redeem"));
-	return el(
-		"form",
-		{
-			class: "toolbar",
-			onSubmit: async (event) => {
-				event.preventDefault();
-				submit.disabled = true;
-				try {
-					await Api.redeemAccountingLicense(project.uuid, code.value.trim());
-					invalidateProject(project.uuid);
-					toast(t("accounting.redeemed"));
-					navigate(currentPath(), true);
-				} catch (error) {
-					reportError(error);
-				} finally {
-					submit.disabled = false;
-				}
-			},
-		},
+	const check = el("button", { class: "button primary", type: "submit" }, t("license.check"));
+	const { panel, onSubmit } = redeemFlow(
 		code,
-		submit
+		check,
+		(value) => Api.previewAccountingLicense(project.uuid, value),
+		async (value, startsAt) => {
+			const redeemed = await Api.redeemAccountingLicense(project.uuid, value, startsAt);
+			invalidateProject(project.uuid);
+			toast(redeemed.starts_at === null ? t("accounting.redeemed") : t("accounting.redeemed_later", { date: formatDate(redeemed.starts_at) }));
+			navigate(currentPath(), true);
+		}
 	);
+	return el("form", { class: "stack", onSubmit }, el("div", { class: "toolbar" }, code, check), panel);
 }
 
 export function accountLabelOf(account: Pick<LedgerAccount, "code" | "name">): string {

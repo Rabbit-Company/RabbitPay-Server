@@ -10,7 +10,8 @@ const { default: Cache } = await import("../server/cache");
 const { Settings, reloadSettings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { deliverPendingEmails } = await import("../server/email/outbox");
-const { generateLicenseCode, normalizeLicenseCode, extendWhiteLabel, periodOf, storageFor, DAY } = await import("../server/licensing");
+const { generateLicenseCode, normalizeLicenseCode, extendWhiteLabel, periodOf, storageFor, activateScheduledLicenses, DAY } =
+	await import("../server/licensing");
 const { readLogo } = await import("../server/branding");
 
 await Server.configure();
@@ -465,6 +466,101 @@ describe("storage limits", () => {
 		expect(redeemed.data.storage_licensed).toBe(1_000_000_000);
 		expect((await call("POST", `${limitedBase}/invoices/${draft.data.uuid}/open`, { token: ownerToken })).error).toBe(0);
 		await call("PATCH", "/api/v1/admin/settings", { token: adminToken, body: { values: { "licensing.free_storage_gb": 5 } } });
+	});
+});
+
+describe("start dates", () => {
+	let planned = "";
+	const plannedBase = () => `/api/v1/projects/${planned}`;
+	const state = async () => (await call("GET", `${plannedBase()}/license`, { token: ownerToken })).data;
+	const redeem = async (code: string, startsAt?: unknown) =>
+		await call("POST", `${plannedBase()}/license/redeem`, { token: ownerToken, body: { code, starts_at: startsAt } });
+
+	test("checking a key shows what it adds without redeeming it", async () => {
+		planned = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "planned", currency: "EUR" } })).data.uuid;
+		const created = await createLicense({ type: "storage", storage_gb: 10, duration_days: 30 });
+		const preview = await call("POST", `${plannedBase()}/license/preview`, { token: ownerToken, body: { code: created.code } });
+		expect(preview.data).toMatchObject({ type: "storage", storage_gb: 10, duration_days: 30, timed: true, adds_up: true, running_until: null });
+		expect((await call("POST", `${plannedBase()}/license/preview`, { token: ownerToken, body: { code: "RPAY-00000-00000-00000-00000" } })).error).toBe(1093);
+
+		const redeemed = await redeem(created.code);
+		expect(redeemed.data.storage_licensed).toBe(10_000_000_000);
+		expect(redeemed.data.licenses[0].starts_at).toBeNull();
+		expect((await call("POST", `${plannedBase()}/license/preview`, { token: ownerToken, body: { code: created.code } })).error).toBe(1094);
+	});
+
+	test("a storage key can start when the running one ends", async () => {
+		const created = await createLicense({ type: "storage", storage_gb: 5, duration_days: 30 });
+		const preview = await call("POST", `${plannedBase()}/license/preview`, { token: ownerToken, body: { code: created.code } });
+		const runningUntil = preview.data.running_until as number;
+		expect(runningUntil).toBeGreaterThan(Date.now() + 29 * DAY);
+
+		const redeemed = await redeem(created.code, runningUntil);
+		expect(redeemed.data.storage_licensed).toBe(10_000_000_000);
+		expect(redeemed.data.storage_grants).toHaveLength(2);
+		expect(redeemed.data.storage_grants[1]).toMatchObject({ storage_gb: 5, from: runningUntil, until: runningUntil + 30 * DAY });
+		expect(redeemed.data.licenses[0]).toMatchObject({ starts_at: runningUntil, ends_at: runningUntil + 30 * DAY });
+
+		expect((await storageFor(planned, runningUntil + DAY)).storage_licensed).toBe(5_000_000_000);
+		expect((await storageFor(planned, runningUntil + 31 * DAY)).storage_licensed).toBe(0);
+	});
+
+	test("a start less than a day after the last key joins it without a gap", async () => {
+		const last = (await state()).storage_grants[1].until as number;
+		const created = await createLicense({ type: "storage", storage_gb: 1, duration_days: 30 });
+		const redeemed = await redeem(created.code, last + DAY / 2);
+		expect(redeemed.data.storage_grants[2]).toMatchObject({ storage_gb: 1, from: last });
+	});
+
+	test("an add-on key with a later start waits and then runs its full days", async () => {
+		const created = await createLicense({ type: "workforce", duration_days: 30 });
+		const start = Date.now() + 10 * DAY;
+		const redeemed = await redeem(created.code, start);
+		expect(redeemed.data).toMatchObject({ workforce: false, workforce_until: null });
+		expect(redeemed.data.scheduled).toEqual([{ type: "workforce", from: start, until: start + 30 * DAY }]);
+		expect(redeemed.data.licenses[0]).toMatchObject({ type: "workforce", starts_at: start });
+
+		expect(await activateScheduledLicenses(planned, start - 1)).toBe(0);
+		expect(await activateScheduledLicenses(planned, start + 5 * 60 * 1000)).toBe(1);
+		expect(await activateScheduledLicenses(planned, start + 5 * 60 * 1000)).toBe(0);
+		const after = await state();
+		expect(after.workforce_until).toBe(start + 30 * DAY);
+		expect(after.scheduled).toEqual([]);
+	});
+
+	test("an add-on key that starts before the running one ends is added to its end", async () => {
+		const until = (await state()).workforce_until as number;
+		const created = await createLicense({ type: "workforce", duration_days: 30 });
+		const preview = await call("POST", `${plannedBase()}/license/preview`, { token: ownerToken, body: { code: created.code } });
+		expect(preview.data).toMatchObject({ type: "workforce", timed: true, adds_up: false, running_until: until });
+
+		const redeemed = await redeem(created.code, Date.now() + 20 * DAY);
+		expect(redeemed.data.workforce_until).toBe(until + 30 * DAY);
+		expect(redeemed.data.scheduled).toEqual([]);
+		expect(redeemed.data.licenses[0].starts_at).toBeNull();
+	});
+
+	test("an administrator can check a key and apply it with a later start", async () => {
+		const created = await createLicense({ type: "white_label", duration_days: 30 });
+		const path = `/api/v1/admin/projects/${planned}/licenses`;
+		expect((await call("POST", `${path}/preview`, { token: ownerToken, body: { code: created.code } })).error).toBe(1098);
+		const preview = await call("POST", `${path}/preview`, { token: adminToken, body: { code: created.code } });
+		expect(preview.data).toMatchObject({ type: "white_label", duration_days: 30, timed: true, adds_up: false, running_until: null });
+		expect((await call("POST", path, { token: adminToken, body: { code: created.code, starts_at: "later" } })).error).toBe(1095);
+
+		const start = Date.now() + 15 * DAY;
+		const applied = await call("POST", path, { token: adminToken, body: { code: created.code, starts_at: start } });
+		expect(applied.data).toMatchObject({ white_label: false, white_label_until: null });
+		expect((await state()).scheduled).toEqual([{ type: "white_label", from: start, until: start + 30 * DAY }]);
+	});
+
+	test("payments keys start right away and bad start dates are refused", async () => {
+		const payments = await createLicense({ type: "transactions", transactions: 10 });
+		for (const startsAt of ["tomorrow", -5, 1.5, Date.now() + 4000 * DAY]) expect((await redeem(payments.code, startsAt)).error).toBe(1095);
+
+		const redeemed = await redeem(payments.code, Date.now() + 10 * DAY);
+		expect(redeemed.data.paid_balance).toBe(10);
+		expect(redeemed.data.licenses[0].starts_at).toBeNull();
 	});
 });
 

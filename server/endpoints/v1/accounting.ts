@@ -7,7 +7,7 @@ import Permissions from "../../permissions";
 import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
 import { Permission, type ProjectRole } from "../../roles";
-import { accountingActive, redeemLicense } from "../../licensing";
+import { accountingActive, previewLicense, readLicenseStart, redeemLicense } from "../../licensing";
 import { Logger } from "../../logger";
 import { zonedParts } from "../../timezone";
 import { ACCOUNT_CODE, CATEGORY_ACCOUNTS, ensureChart, kindForCode } from "../../accounting/chart";
@@ -347,18 +347,30 @@ Server.app.get(`${base}/ledger/:account/export`, Auth.required(), Permissions.re
 	);
 });
 
+Server.app.post(`${base}/license/preview`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const data = await body(ctx);
+	const code = typeof data?.code === "string" ? data.code.trim() : "";
+	if (!code || code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
+	const result = await previewLicense(project.uuid, code, ["accounting"]);
+	if (typeof result === "number") return Utils.fail(ctx, result);
+	return Utils.ok(ctx, result);
+});
+
 Server.app.post(`${base}/license/redeem`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
 	const data = await body(ctx);
 	const code = typeof data?.code === "string" ? data.code.trim() : "";
 	if (!code || code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
-	const result = await redeemLicense(project.uuid, code, account.username, ["accounting"]);
+	const startsAt = readLicenseStart(data?.starts_at);
+	if (startsAt === undefined) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
+	const result = await redeemLicense(project.uuid, code, account.username, ["accounting"], startsAt);
 	if (typeof result === "number") return Utils.fail(ctx, result);
-	await audit(ctx, "license.redeemed", "license_key", result.uuid, { type: result.type, duration_days: result.duration_days });
+	await audit(ctx, "license.redeemed", "license_key", result.uuid, { type: result.type, duration_days: result.duration_days, starts_at: result.starts_at });
 	Logger.audit(`[LICENSE] ${account.username} redeemed an accounting license on ${project.uuid}`);
 	const [updated] = (await Database`SELECT * FROM projects WHERE uuid = ${project.uuid}`) as ProjectRow[];
-	return Utils.ok(ctx, { accounting: accountingActive(updated), accounting_until: updated.accounting_until });
+	return Utils.ok(ctx, { accounting: accountingActive(updated), accounting_until: updated.accounting_until, starts_at: result.starts_at });
 });
 
 Server.app.get("/api/v1/accounting/clients", Auth.required(), async (ctx) => {

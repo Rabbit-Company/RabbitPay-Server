@@ -393,6 +393,14 @@ describe("accounting firms", () => {
 			expect(refused.error).toBe(1264);
 			const [unused] = await Database`SELECT status FROM license_keys WHERE code = ${store}`;
 			expect(unused.status).toBe("available");
+			expect((await call("POST", `${path}/accounting/license/preview`, { code: store })).error).toBe(1264);
+
+			const later = await key("accounting");
+			const checked = await call("POST", `${path}/accounting/license/preview`, { code: later });
+			expect(checked.data).toMatchObject({ type: "accounting", duration_days: 30, timed: true, adds_up: false, running_until: null });
+			expect((await call("POST", `${path}/accounting/license/redeem`, { code: later, starts_at: "soon" })).error).toBe(1095);
+			const scheduled = await call("POST", `${path}/accounting/license/redeem`, { code: later, starts_at: now + 400 * 86400000 });
+			expect(scheduled.data).toMatchObject({ accounting: false, accounting_until: null, starts_at: now + 400 * 86400000 });
 
 			const redeemed = await call("POST", `${path}/accounting/license/redeem`, { code: await key("accounting") });
 			expect(redeemed.data.accounting).toBe(true);

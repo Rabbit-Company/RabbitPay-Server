@@ -34,10 +34,13 @@ import {
 	meterAll,
 	periodOf,
 	presentLicense,
+	previewLicense,
+	readLicenseStart,
 	redeemLicense,
 	storageFor,
 	usageFor,
 	storeActive,
+	LICENSE_TYPES,
 	TIMED_LICENSE_TYPES,
 	workforceActive,
 	whiteLabelActive,
@@ -568,7 +571,7 @@ Server.app.patch("/api/v1/admin/projects/:project", ...guard, async (ctx) => {
 	return Utils.ok(ctx, await presentProject((await findProject(project.uuid))!));
 });
 
-Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx) => {
+Server.app.post("/api/v1/admin/projects/:project/licenses/preview", ...guard, async (ctx) => {
 	const project = await findProject(ctx.params["project"]);
 	if (!project) return Utils.fail(ctx, ErrorCode.PROJECT_NOT_FOUND);
 
@@ -581,8 +584,28 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 
 	if (typeof data.code !== "string" || data.code.trim() === "" || data.code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
 
+	const result = await previewLicense(project.uuid, data.code.trim());
+	if (typeof result === "number") return Utils.fail(ctx, result);
+	return Utils.ok(ctx, result);
+});
+
+Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx) => {
+	const project = await findProject(ctx.params["project"]);
+	if (!project) return Utils.fail(ctx, ErrorCode.PROJECT_NOT_FOUND);
+
+	let data: { code?: unknown; starts_at?: unknown };
+	try {
+		data = await ctx.body<{ code?: unknown; starts_at?: unknown }>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	if (typeof data.code !== "string" || data.code.trim() === "" || data.code.length > 2000) return Utils.fail(ctx, ErrorCode.LICENSE_NOT_FOUND);
+	const startsAt = readLicenseStart(data.starts_at);
+	if (startsAt === undefined) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
+
 	const account = Auth.account(ctx);
-	const result = await redeemLicense(project.uuid, data.code.trim(), account.username);
+	const result = await redeemLicense(project.uuid, data.code.trim(), account.username, LICENSE_TYPES, startsAt);
 	if (typeof result === "number") return Utils.fail(ctx, result);
 
 	await Audit.record(ctx, {
@@ -596,6 +619,7 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 			duration_days: result.duration_days,
 			storage_gb: result.storage_gb,
 			employees: result.employees,
+			starts_at: result.starts_at,
 		},
 	});
 	Logger.audit(`[ADMIN] ${account.username} applied a ${result.type} license to ${project.uuid}`);

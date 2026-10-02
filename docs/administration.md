@@ -35,10 +35,19 @@ License keys add to a project:
 | Workforce    | Timesheets, absences, tickets, employees and payroll for a number of days. |
 | Employees    | More people in the workforce for a number of days.                         |
 
-Keys with a duration start when they are redeemed, and a second key adds its days
-to whatever is left. Several keys of any type can be redeemed on one project. A
-project owner redeems keys under License in the project, and an administrator can
-apply one under Admin, Projects.
+Keys with a duration start when they are redeemed unless a later start is chosen,
+and a second add-on key adds its days to whatever is left. Several keys of any
+type can be redeemed on one project. A project owner redeems keys under License
+in the project, and an administrator can apply one under Admin, Projects.
+
+Before redeeming, the License page checks the key and shows what it adds. For a
+key with a duration the owner picks the start: today, when the current one ends,
+or a chosen date. The days count from that start, so a renewal can be redeemed
+as soon as it is bought. An add-on key whose start falls before the running
+license ends, or within a day after it, is added to its end. Otherwise it waits
+and starts on the chosen day, within about five minutes. Payments keys are added
+right away. The timeline on the License page shows what is running, what is
+scheduled, and the total seats and storage over time.
 
 A workforce license covers 5 people. Everyone who can log their own working time
 (owners, administrators, supervisors and employees) or has an employee record
@@ -207,33 +216,34 @@ accounts accepted each version.
 
 All of these need an administrator session.
 
-| Method   | Path                                          | Purpose                                      |
-| -------- | --------------------------------------------- | -------------------------------------------- |
-| `GET`    | `/api/v1/admin/overview`                      | Totals, Server ID and issuer status.         |
-| `GET`    | `/api/v1/admin/settings`                      | Every setting. Secrets only say whether set. |
-| `PATCH`  | `/api/v1/admin/settings`                      | Change settings.                             |
-| `POST`   | `/api/v1/admin/settings/:group/test`          | Test the connection for `btc` or `eth`.      |
-| `GET`    | `/api/v1/admin/backups`                       | Backup destinations and the newest backups.  |
-| `POST`   | `/api/v1/admin/backups`                       | Run a backup now.                            |
-| `GET`    | `/api/v1/admin/licenses`                      | List license keys.                           |
-| `POST`   | `/api/v1/admin/licenses`                      | Create keys (issuer only).                   |
-| `PATCH`  | `/api/v1/admin/licenses/:license`             | Change purchase details.                     |
-| `POST`   | `/api/v1/admin/licenses/:license/revoke`      | Revoke an unused key.                        |
-| `GET`    | `/api/v1/admin/projects`                      | Projects with their usage.                   |
-| `PATCH`  | `/api/v1/admin/projects/:project`             | Set a project's free limit (issuer only).    |
-| `POST`   | `/api/v1/admin/projects/:project/licenses`    | Apply a key to a project.                    |
-| `GET`    | `/api/v1/admin/accounts`                      | List accounts.                               |
-| `PATCH`  | `/api/v1/admin/accounts/:username`            | Change administrator status or suspension.   |
-| `DELETE` | `/api/v1/admin/accounts/:username/two-factor` | Reset two-factor authentication.             |
-| `GET`    | `/api/v1/admin/accounts/:username/export`     | Download the account's personal data.        |
-| `GET`    | `/api/v1/admin/accounts/:username/deletion`   | What deleting the account would do.          |
-| `DELETE` | `/api/v1/admin/accounts/:username`            | Delete the account (`confirm` = username).   |
-| `GET`    | `/api/v1/admin/invites`                       | List invite codes.                           |
-| `POST`   | `/api/v1/admin/invites`                       | Create an invite code.                       |
-| `POST`   | `/api/v1/admin/invites/:invite/revoke`        | Revoke an invite code.                       |
-| `GET`    | `/api/v1/admin/legal`                         | Legal documents with their history.          |
-| `GET`    | `/api/v1/admin/legal/:kind/template`          | A filled template (`?language=en` or `sl`).  |
-| `POST`   | `/api/v1/admin/legal/:kind`                   | Publish a new version.                       |
+| Method   | Path                                               | Purpose                                      |
+| -------- | -------------------------------------------------- | -------------------------------------------- |
+| `GET`    | `/api/v1/admin/overview`                           | Totals, Server ID and issuer status.         |
+| `GET`    | `/api/v1/admin/settings`                           | Every setting. Secrets only say whether set. |
+| `PATCH`  | `/api/v1/admin/settings`                           | Change settings.                             |
+| `POST`   | `/api/v1/admin/settings/:group/test`               | Test the connection for `btc` or `eth`.      |
+| `GET`    | `/api/v1/admin/backups`                            | Backup destinations and the newest backups.  |
+| `POST`   | `/api/v1/admin/backups`                            | Run a backup now.                            |
+| `GET`    | `/api/v1/admin/licenses`                           | List license keys.                           |
+| `POST`   | `/api/v1/admin/licenses`                           | Create keys (issuer only).                   |
+| `PATCH`  | `/api/v1/admin/licenses/:license`                  | Change purchase details.                     |
+| `POST`   | `/api/v1/admin/licenses/:license/revoke`           | Revoke an unused key.                        |
+| `GET`    | `/api/v1/admin/projects`                           | Projects with their usage.                   |
+| `PATCH`  | `/api/v1/admin/projects/:project`                  | Set a project's free limit (issuer only).    |
+| `POST`   | `/api/v1/admin/projects/:project/licenses/preview` | Check a key before applying it.              |
+| `POST`   | `/api/v1/admin/projects/:project/licenses`         | Apply a key to a project.                    |
+| `GET`    | `/api/v1/admin/accounts`                           | List accounts.                               |
+| `PATCH`  | `/api/v1/admin/accounts/:username`                 | Change administrator status or suspension.   |
+| `DELETE` | `/api/v1/admin/accounts/:username/two-factor`      | Reset two-factor authentication.             |
+| `GET`    | `/api/v1/admin/accounts/:username/export`          | Download the account's personal data.        |
+| `GET`    | `/api/v1/admin/accounts/:username/deletion`        | What deleting the account would do.          |
+| `DELETE` | `/api/v1/admin/accounts/:username`                 | Delete the account (`confirm` = username).   |
+| `GET`    | `/api/v1/admin/invites`                            | List invite codes.                           |
+| `POST`   | `/api/v1/admin/invites`                            | Create an invite code.                       |
+| `POST`   | `/api/v1/admin/invites/:invite/revoke`             | Revoke an invite code.                       |
+| `GET`    | `/api/v1/admin/legal`                              | Legal documents with their history.          |
+| `GET`    | `/api/v1/admin/legal/:kind/template`               | A filled template (`?language=en` or `sl`).  |
+| `POST`   | `/api/v1/admin/legal/:kind`                        | Publish a new version.                       |
 
 ```bash
 curl -X POST http://localhost:8085/api/v1/admin/licenses \
@@ -253,6 +263,7 @@ Project owners use these for licensing and branding:
 | Method   | Path                                       | Permission     |
 | -------- | ------------------------------------------ | -------------- |
 | `GET`    | `/api/v1/projects/:uuid/license`           | `project.view` |
+| `POST`   | `/api/v1/projects/:uuid/license/preview`   | `project.edit` |
 | `POST`   | `/api/v1/projects/:uuid/license/redeem`    | `project.edit` |
 | `PUT`    | `/api/v1/projects/:uuid/branding/logo`     | `project.edit` |
 | `DELETE` | `/api/v1/projects/:uuid/branding/logo`     | `project.edit` |

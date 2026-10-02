@@ -1,5 +1,5 @@
 import { Logger } from "../logger";
-import { meterAll } from "../licensing";
+import { activateScheduledLicenses, meterAll } from "../licensing";
 
 namespace TaskLicensing {
 	let running = false;
@@ -11,6 +11,8 @@ namespace TaskLicensing {
 		try {
 			const billed = await meterAll();
 			if (billed > 0) Logger.debug(`[LICENSING] Metered ${billed} completed payments`);
+			const activated = await activateScheduledLicenses();
+			if (activated > 0) Logger.info(`[LICENSING] Started ${activated} scheduled licenses`);
 		} catch (err) {
 			Logger.error(`[LICENSING] Metering failed: ${err}`);
 		} finally {

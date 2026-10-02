@@ -1,17 +1,16 @@
 import { pagedTable } from "../pagination";
 import { LICENSE_VENDOR } from "../../../server/license-vendor";
-import { Api, type EmailServer, type Project, type ProjectLicense } from "../api";
-import { el, field, input } from "../dom";
-import { formatBytes, formatDate } from "../money";
+import { Api, type EmailServer, type LicensePreview, type Project, type ProjectLicense } from "../api";
+import { el, field, input, select } from "../dom";
+import { dayStartFromDateInput, formatBytes, formatDate, toDateInput } from "../money";
+import { timelineCard } from "./license-timeline";
 import { confirmDialog, reportError, toast } from "../ui";
 import { can, Permission } from "../access";
 import { invalidateProject, loadProject, projectLayout } from "./project";
 import { t, tn } from "../i18n";
 import { convertToWebp, ImageTooLargeError, ImageUnreadableError, toBase64 } from "../image";
 
-export function describeLicense(
-	license: Pick<ProjectLicense["licenses"][number], "type" | "transactions" | "duration_days" | "storage_gb" | "employees">
-): string {
+export function describeLicense(license: Pick<LicensePreview, "type" | "transactions" | "duration_days" | "storage_gb" | "employees">): string {
 	if (license.type === "transactions") return t("license.grants_payments", { count: (license.transactions ?? 0).toLocaleString() });
 	if (license.type === "storage") {
 		return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB`, days: tn("count.days", license.duration_days ?? 0) });
@@ -26,6 +25,22 @@ export function describeLicense(
 }
 
 const MAX_LOGO_BYTES = 150 * 1024;
+
+function keyPeriod(
+	running: "license.storage_key_until" | "license.employees_seat_until",
+	scheduled: "license.storage_key_from" | "license.employees_seat_from",
+	grant: { from: number; until: number }
+): string {
+	if (grant.from <= Date.now()) return t(running, { date: formatDate(grant.until) });
+	return t(scheduled, { from: formatDate(grant.from), until: formatDate(grant.until) });
+}
+
+function licensePeriod(license: ProjectLicense["licenses"][number]): string {
+	if (license.ends_at !== null)
+		return t("license.period_range", { from: formatDate(license.starts_at ?? license.redeemed_at), until: formatDate(license.ends_at) });
+	if (license.starts_at !== null) return t("license.period_from", { date: formatDate(license.starts_at) });
+	return "";
+}
 
 function usageMeter(used: number, total: number): HTMLElement {
 	const share = total <= 0 ? 100 : Math.min((used / total) * 100, 100);
@@ -110,7 +125,7 @@ function storageCard(state: ProjectLicense): HTMLElement {
 							el(
 								"div",
 								{ class: "totals-row" },
-								el("span", {}, t("license.storage_key_until", { date: formatDate(grant.until) })),
+								el("span", {}, keyPeriod("license.storage_key_until", "license.storage_key_from", grant)),
 								el("span", { class: "mono" }, `${grant.storage_gb.toLocaleString()} GB`)
 							)
 						),
@@ -128,6 +143,117 @@ function storageCard(state: ProjectLicense): HTMLElement {
 	);
 }
 
+const DAY = 86400000;
+
+type StartChoice = "now" | "after" | "date";
+
+function startOptions(preview: LicensePreview): { value: StartChoice; label: string }[] {
+	const running = preview.running_until;
+	return [
+		running === null || preview.adds_up ? { value: "now" as const, label: running === null ? t("license.start_today") : t("license.start_today_added") } : null,
+		running === null ? null : { value: "after" as const, label: t("license.start_after", { date: formatDate(running) }) },
+		{ value: "date" as const, label: t("license.start_date") },
+	].filter((option) => option !== null);
+}
+
+function previewPanel(preview: LicensePreview, onRedeem: (startsAt: number | null, button: HTMLButtonElement) => void, onCancel: () => void): HTMLElement {
+	const now = Date.now();
+	const running = preview.running_until;
+	const days = preview.duration_days ?? 0;
+	const options = startOptions(preview);
+	const choice = select(options, running === null ? "now" : "after");
+	const earliest = (running ?? now) + DAY;
+	const date = input("date", { min: toDateInput(now + DAY), max: toDateInput(now + 3650 * DAY), value: toDateInput(earliest), required: true });
+	const dateField = field(t("license.start_date_label"), date);
+	const period = el("p", {});
+
+	const startOf = (): number | null => {
+		if (choice.value === "now") return null;
+		if (choice.value === "after") return running;
+		return date.value ? dayStartFromDateInput(date.value) : null;
+	};
+
+	const sync = () => {
+		dateField.hidden = choice.value !== "date";
+		const picked = startOf() ?? now;
+		const joins = running !== null && picked <= running + DAY && (!preview.adds_up || picked > running);
+		const from = joins ? running : picked;
+		period.textContent = t("license.start_period", { from: formatDate(from), until: formatDate(from + days * DAY) });
+	};
+	choice.addEventListener("change", sync);
+	date.addEventListener("change", sync);
+	sync();
+
+	const confirm = el(
+		"button",
+		{
+			class: "button primary",
+			type: "button",
+			onClick: () => {
+				if (choice.value === "date" && !date.reportValidity()) return;
+				onRedeem(startOf(), confirm);
+			},
+		},
+		t("license.redeem")
+	);
+
+	return el(
+		"div",
+		{ class: "license-preview stack" },
+		el("strong", {}, describeLicense(preview)),
+		preview.timed
+			? el("div", { class: "form-grid" }, field(t("license.start"), choice, t("license.start_hint")), dateField)
+			: el("p", { class: "muted" }, t("license.start_payments")),
+		preview.timed ? period : null,
+		el("div", { class: "form-actions" }, confirm, el("button", { class: "button ghost", type: "button", onClick: onCancel }, t("ui.cancel")))
+	);
+}
+
+export function redeemFlow(
+	code: HTMLInputElement,
+	check: HTMLButtonElement,
+	preview: (code: string) => Promise<LicensePreview>,
+	redeem: (code: string, startsAt: number | null) => Promise<void>
+): { panel: HTMLElement; onSubmit: (event: Event) => Promise<void> } {
+	const panel = el("div", {});
+
+	const reset = () => {
+		panel.replaceChildren();
+		code.readOnly = false;
+		check.hidden = false;
+	};
+
+	const confirm = async (startsAt: number | null, button: HTMLButtonElement) => {
+		button.disabled = true;
+		try {
+			await redeem(code.value.trim(), startsAt);
+			code.value = "";
+			reset();
+		} catch (error) {
+			reportError(error);
+			button.disabled = false;
+		}
+	};
+
+	const onSubmit = async (event: Event) => {
+		event.preventDefault();
+		if (check.hidden) return;
+		check.disabled = true;
+		try {
+			const found = await preview(code.value.trim());
+			panel.replaceChildren(previewPanel(found, (startsAt, button) => void confirm(startsAt, button), reset));
+			code.readOnly = true;
+			check.hidden = true;
+		} catch (error) {
+			reportError(error);
+		} finally {
+			check.disabled = false;
+		}
+	};
+
+	return { panel, onSubmit };
+}
+
 function redeemCard(uuid: string, state: ProjectLicense, onRedeemed: (state: ProjectLicense) => void): HTMLElement {
 	const code = input("text", {
 		placeholder: state.license_issuer ? "RPAY-XXXXX-XXXXX-XXXXX-XXXXX" : "RPAY2.",
@@ -135,28 +261,22 @@ function redeemCard(uuid: string, state: ProjectLicense, onRedeemed: (state: Pro
 		autocomplete: "off",
 		maxlength: "2000",
 	});
-	const submit = el("button", { class: "button primary", type: "submit" }, t("license.redeem"));
+	const check = el("button", { class: "button primary", type: "submit" }, t("license.check"));
+	const { panel, onSubmit } = redeemFlow(
+		code,
+		check,
+		(value) => Api.previewLicense(uuid, value),
+		async (value, startsAt) => {
+			const next = await Api.redeemLicense(uuid, value, startsAt);
+			const latest = next.licenses[0];
+			toast(latest ? t("license.redeemed_toast", { grants: describeLicense(latest) }) : t("license.redeemed"), "success");
+			onRedeemed(next);
+		}
+	);
 
 	return el(
 		"form",
-		{
-			class: "card stack",
-			onSubmit: async (event) => {
-				event.preventDefault();
-				submit.disabled = true;
-				try {
-					const state = await Api.redeemLicense(uuid, code.value);
-					const latest = state.licenses[0];
-					toast(latest ? t("license.redeemed_toast", { grants: describeLicense(latest) }) : t("license.redeemed"), "success");
-					code.value = "";
-					onRedeemed(state);
-				} catch (error) {
-					reportError(error);
-				} finally {
-					submit.disabled = false;
-				}
-			},
-		},
+		{ class: "card stack", onSubmit },
 		el("h2", {}, t("license.redeem_title")),
 		el("p", { class: "muted" }, t("license.redeem_hint")),
 		state.license_issuer
@@ -171,7 +291,8 @@ function redeemCard(uuid: string, state: ProjectLicense, onRedeemed: (state: Pro
 					el("a", { href: `mailto:${LICENSE_VENDOR.email}` }, LICENSE_VENDOR.email)
 				),
 		state.license_issuer ? null : el("p", {}, t("license.server_id"), " ", el("code", { class: "mono" }, state.server_id)),
-		el("div", { class: "toolbar redeem-row" }, code, submit)
+		el("div", { class: "toolbar redeem-row" }, code, check),
+		panel
 	);
 }
 
@@ -409,7 +530,9 @@ function seatsSection(state: ProjectLicense): HTMLElement {
 			row(t("license.employees_used"), t("license.of", { used: state.employees_used.toLocaleString(), total: limit.toLocaleString() })),
 			usageMeter(state.employees_used, limit),
 			row(t("license.employees_included"), tn("count.employees", state.employees_included)),
-			...state.employee_seats.map((seat) => row(t("license.employees_seat_until", { date: formatDate(seat.until) }), tn("count.employees", seat.employees)))
+			...state.employee_seats.map((seat) =>
+				row(keyPeriod("license.employees_seat_until", "license.employees_seat_from", seat), tn("count.employees", seat.employees))
+			)
 		),
 		el("p", { class: "muted" }, t("license.employees_hint")),
 		state.employees_used > limit ? el("p", { class: "warn" }, t("license.employees_exceeded")) : null
@@ -468,13 +591,14 @@ function historyCard(state: ProjectLicense): HTMLElement {
 		{ class: "card" },
 		el("h2", {}, t("license.history")),
 		pagedTable(
-			[t("items.column_key"), t("license.column_grants"), t("license.column_redeemed"), t("invoices.email_column_by")],
+			[t("items.column_key"), t("license.column_grants"), t("license.column_period"), t("license.column_redeemed"), t("invoices.email_column_by")],
 			state.licenses.map((license) =>
 				el(
 					"tr",
 					{},
 					el("td", { class: "mono" }, license.code),
 					el("td", {}, describeLicense(license)),
+					el("td", {}, licensePeriod(license)),
 					el("td", {}, formatDate(license.redeemed_at)),
 					el("td", {}, license.redeemed_by ?? "")
 				)
@@ -500,14 +624,15 @@ export async function licenseView(uuid: string): Promise<HTMLElement> {
 
 	const render = (state: ProjectLicense, server: EmailServer | null) => {
 		content.replaceChildren(
-			usageCard(state),
-			storageCard(state),
 			editable
 				? redeemCard(uuid, state, () => {
 						invalidateProject(uuid);
 						void refresh();
 					})
 				: el("div", {}),
+			timelineCard(state) ?? el("div", {}),
+			usageCard(state),
+			storageCard(state),
 			whiteLabelCard(uuid, project, state, server, () => void refresh()),
 			storeCard(uuid, state),
 			workforceCard(uuid, state),

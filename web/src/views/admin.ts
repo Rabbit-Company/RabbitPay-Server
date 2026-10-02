@@ -24,6 +24,7 @@ import { confirmDialog, modal, reportError, toast } from "../ui";
 import { SETTING_GROUPS, type SettingField } from "../../../server/settings-schema";
 import { markdownEditor } from "../markdown-editor";
 import { LICENSE_VENDOR } from "../../../server/license-vendor";
+import { redeemFlow } from "./license";
 
 const PAGE_SIZE = 50;
 
@@ -613,29 +614,25 @@ function freeLimitDialog(project: AdminProject, defaultAllowance: () => number, 
 
 function applyLicenseDialog(project: AdminProject, onApplied: () => void) {
 	const code = input("text", { placeholder: "RPAY-XXXXX-XXXXX-XXXXX-XXXXX", required: true, autocomplete: "off" });
-	const submit = el("button", { class: "button primary", type: "submit" }, "Apply key");
+	const check = el("button", { class: "button primary", type: "submit" }, "Check key");
+	const { panel, onSubmit } = redeemFlow(
+		code,
+		check,
+		(value) => AdminApi.previewLicense(project.uuid, value),
+		async (value, startsAt) => {
+			await AdminApi.applyLicense(project.uuid, value, startsAt);
+			dialog.close();
+			toast("License applied", "success");
+			onApplied();
+		}
+	);
 
 	const form = el(
 		"form",
-		{
-			class: "stack",
-			onSubmit: async (event) => {
-				event.preventDefault();
-				submit.disabled = true;
-				try {
-					await AdminApi.applyLicense(project.uuid, code.value);
-					dialog.close();
-					toast("License applied", "success");
-					onApplied();
-				} catch (error) {
-					reportError(error);
-					submit.disabled = false;
-				}
-			},
-		},
-		el("p", { class: "muted" }, "Redeems an unused key on this project, as if a member had entered it."),
-		field("License key", code),
-		el("div", { class: "dialog-actions" }, submit)
+		{ class: "stack", onSubmit },
+		el("p", { class: "muted" }, "Redeems an unused key on this project, as if a member had entered it. Check the key to choose when it starts."),
+		el("div", { class: "toolbar redeem-row" }, code, check),
+		panel
 	);
 
 	const dialog = modal(`Apply a license to ${project.name}`, form);

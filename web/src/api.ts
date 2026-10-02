@@ -1149,12 +1149,25 @@ export interface License {
 	redeemed_project: string | null;
 	redeemed_by: string | null;
 	redeemed_at: number | null;
+	starts_at: number | null;
+	ends_at: number | null;
 	revoked_at: number | null;
 	server_id: string | null;
 	signed_key: string | null;
 	created: number;
 	updated: number;
 	project_name?: string | null;
+}
+
+export interface LicensePreview {
+	type: LicenseType;
+	transactions: number | null;
+	duration_days: number | null;
+	storage_gb: number | null;
+	employees: number | null;
+	timed: boolean;
+	adds_up: boolean;
+	running_until: number | null;
 }
 
 export interface LicenseInput {
@@ -1198,13 +1211,14 @@ export interface ProjectLicense extends LicenseIdentity {
 	employees_licensed: number;
 	employees_used: number;
 	employees_limit: number | null;
-	employee_seats: { employees: number; until: number }[];
+	employee_seats: { employees: number; from: number; until: number }[];
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
-	storage_grants: { storage_gb: number; until: number }[];
+	storage_grants: { storage_gb: number; from: number; until: number }[];
+	scheduled: { type: LicenseType; from: number; until: number }[];
 	logo: string | null;
 	licenses: License[];
 }
@@ -1297,7 +1311,7 @@ export interface AdminProject {
 	storage_used: number;
 	storage_limit: number | null;
 	storage_remaining: number | null;
-	storage_grants: { storage_gb: number; until: number }[];
+	storage_grants: { storage_gb: number; from: number; until: number }[];
 }
 
 export type RegistrationMode = "open" | "invite" | "closed";
@@ -2195,8 +2209,15 @@ export const Api = {
 		return request<{ clients: AccountingClient[] }>("GET", "/accounting/clients");
 	},
 
-	redeemAccountingLicense(uuid: string, code: string) {
-		return request<{ accounting: boolean; accounting_until: number | null }>("POST", `/projects/${uuid}/accounting/license/redeem`, { code });
+	previewAccountingLicense(uuid: string, code: string) {
+		return request<LicensePreview>("POST", `/projects/${uuid}/accounting/license/preview`, { code });
+	},
+
+	redeemAccountingLicense(uuid: string, code: string, startsAt: number | null = null) {
+		return request<{ accounting: boolean; accounting_until: number | null; starts_at: number | null }>("POST", `/projects/${uuid}/accounting/license/redeem`, {
+			code,
+			starts_at: startsAt,
+		});
 	},
 
 	ledgerAccounts(uuid: string) {
@@ -2940,8 +2961,12 @@ export const Api = {
 		return request<ProjectLicense>("GET", `/projects/${uuid}/license`);
 	},
 
-	redeemLicense(uuid: string, code: string) {
-		return request<ProjectLicense>("POST", `/projects/${uuid}/license/redeem`, { code });
+	previewLicense(uuid: string, code: string) {
+		return request<LicensePreview>("POST", `/projects/${uuid}/license/preview`, { code });
+	},
+
+	redeemLicense(uuid: string, code: string, startsAt: number | null = null) {
+		return request<ProjectLicense>("POST", `/projects/${uuid}/license/redeem`, { code, starts_at: startsAt });
 	},
 
 	uploadLogo(uuid: string, data: string) {
@@ -3396,8 +3421,12 @@ export const AdminApi = {
 		return request<AdminProject>("PATCH", `/admin/projects/${uuid}`, changes);
 	},
 
-	applyLicense(uuid: string, code: string) {
-		return request<AdminProject>("POST", `/admin/projects/${uuid}/licenses`, { code });
+	previewLicense(uuid: string, code: string) {
+		return request<LicensePreview>("POST", `/admin/projects/${uuid}/licenses/preview`, { code });
+	},
+
+	applyLicense(uuid: string, code: string, startsAt: number | null = null) {
+		return request<AdminProject>("POST", `/admin/projects/${uuid}/licenses`, { code, starts_at: startsAt });
 	},
 
 	accounts(options: { search?: string; limit?: number; offset?: number } = {}) {

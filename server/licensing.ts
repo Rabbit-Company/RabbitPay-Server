@@ -14,6 +14,8 @@ import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsa
 export const DAY = 24 * 60 * 60 * 1000;
 export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
 export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage"];
+export const SCHEDULED_LICENSE_TYPES: LicenseType[] = ["employees", "storage"];
+export const ADD_ON_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "accounting"];
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -197,10 +199,12 @@ export interface ProjectUsage {
 	storage_limit: number | null;
 	storage_remaining: number | null;
 	storage_grants: StorageGrant[];
+	scheduled: ScheduledAddOn[];
 }
 
 export interface EmployeeSeatGrant {
 	employees: number;
+	from: number;
 	until: number;
 }
 
@@ -212,21 +216,30 @@ export interface EmployeeSeatUsage {
 	employee_seats: EmployeeSeatGrant[];
 }
 
-export async function employeeSeatGrants(projectId: string, now = Date.now()): Promise<EmployeeSeatGrant[]> {
+export function licensePeriod(key: Pick<LicenseKeyRow, "duration_days" | "redeemed_at" | "starts_at">): { from: number; until: number } {
+	const from = Number(key.starts_at ?? key.redeemed_at ?? 0);
+	return { from, until: from + Number(key.duration_days ?? 0) * DAY };
+}
+
+async function scheduledKeys(projectId: string, type: LicenseType, now: number) {
 	const keys = (await Database`
-		SELECT employees, duration_days, redeemed_at FROM license_keys
-		WHERE redeemed_project = ${projectId} AND type = 'employees' AND status = 'redeemed'
-	`) as Pick<LicenseKeyRow, "employees" | "duration_days" | "redeemed_at">[];
+		SELECT employees, storage_gb, duration_days, redeemed_at, starts_at FROM license_keys
+		WHERE redeemed_project = ${projectId} AND type = ${type} AND status = 'redeemed'
+	`) as Pick<LicenseKeyRow, "employees" | "storage_gb" | "duration_days" | "redeemed_at" | "starts_at">[];
 	return keys
-		.map((key) => ({ employees: Number(key.employees ?? 0), until: Number(key.redeemed_at ?? 0) + Number(key.duration_days ?? 0) * DAY }))
+		.map((key) => ({ employees: Number(key.employees ?? 0), storage_gb: Number(key.storage_gb ?? 0), ...licensePeriod(key) }))
 		.filter((grant) => grant.until > now)
-		.sort((first, second) => first.until - second.until);
+		.sort((first, second) => first.from - second.from || first.until - second.until);
+}
+
+export async function employeeSeatGrants(projectId: string, now = Date.now()): Promise<EmployeeSeatGrant[]> {
+	return (await scheduledKeys(projectId, "employees", now)).map(({ employees, from, until }) => ({ employees, from, until }));
 }
 
 export async function employeeSeatsFor(projectId: string, now = Date.now()): Promise<EmployeeSeatUsage> {
 	const grants = await employeeSeatGrants(projectId, now);
 	const included = includedEmployees();
-	const licensed = grants.reduce((total, grant) => total + grant.employees, 0);
+	const licensed = grants.filter((grant) => grant.from <= now).reduce((total, grant) => total + grant.employees, 0);
 	return {
 		employees_included: included,
 		employees_licensed: licensed,
@@ -251,6 +264,7 @@ export async function hasEmployeeSeatFor(projectId: string, member: string | nul
 
 export interface StorageGrant {
 	storage_gb: number;
+	from: number;
 	until: number;
 }
 
@@ -264,14 +278,7 @@ export interface ProjectStorageUsage {
 }
 
 export async function storageGrants(projectId: string, now = Date.now()): Promise<StorageGrant[]> {
-	const keys = (await Database`
-		SELECT storage_gb, duration_days, redeemed_at FROM license_keys
-		WHERE redeemed_project = ${projectId} AND type = 'storage' AND status = 'redeemed'
-	`) as Pick<LicenseKeyRow, "storage_gb" | "duration_days" | "redeemed_at">[];
-	return keys
-		.map((key) => ({ storage_gb: Number(key.storage_gb ?? 0), until: Number(key.redeemed_at ?? 0) + Number(key.duration_days ?? 0) * DAY }))
-		.filter((grant) => grant.until > now)
-		.sort((first, second) => first.until - second.until);
+	return (await scheduledKeys(projectId, "storage", now)).map(({ storage_gb, from, until }) => ({ storage_gb, from, until }));
 }
 
 export async function storageFor(projectId: string, now = Date.now()): Promise<ProjectStorageUsage> {
@@ -301,7 +308,7 @@ export async function storageFor(projectId: string, now = Date.now()): Promise<P
 		einvoices: number;
 	}[];
 	const included = includedStorageGb() * STORAGE_GB_BYTES;
-	const licensed = grants.reduce((total, grant) => total + grant.storage_gb, 0) * STORAGE_GB_BYTES;
+	const licensed = grants.filter((grant) => grant.from <= now).reduce((total, grant) => total + grant.storage_gb, 0) * STORAGE_GB_BYTES;
 	const used =
 		safeStorageBytes(totals.invoices) +
 		safeStorageBytes(totals.credit_notes) +
@@ -330,6 +337,7 @@ function safeStorageBytes(value: number): number {
 
 export async function usageFor(projectId: string, now = Date.now()): Promise<ProjectUsage> {
 	await meterProject(projectId);
+	await activateScheduledLicenses(projectId, now);
 
 	const period = periodOf(now);
 	const [project] = (await Database`
@@ -361,6 +369,7 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		accounting_until: project.accounting_until,
 		...(await employeeSeatsFor(projectId, now)),
 		...storage,
+		scheduled: await scheduledAddOns(projectId, project, now),
 	};
 }
 
@@ -500,46 +509,173 @@ async function findRedeemable(input: string): Promise<LicenseKeyRow | ErrorCode>
 	return stored ?? ErrorCode.LICENSE_NOT_FOUND;
 }
 
-export async function redeemLicense(
-	projectId: string,
-	input: string,
-	username: string,
-	allowed: LicenseType[] = LICENSE_TYPES
-): Promise<LicenseKeyRow | ErrorCode> {
-	await meterProject(projectId);
-
+async function redeemable(input: string, allowed: LicenseType[]): Promise<LicenseKeyRow | ErrorCode> {
 	const license = await findRedeemable(input);
 	if (typeof license === "number") return license;
 	if (license.status !== "available") return ErrorCode.LICENSE_ALREADY_REDEEMED;
 	if (!allowed.includes(license.type)) return ErrorCode.LICENSE_TYPE_NOT_ALLOWED;
+	return license;
+}
+
+export function isLicenseStart(value: unknown, now = Date.now()): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= now + MAX_LICENSE_DAYS * DAY;
+}
+
+export function readLicenseStart(value: unknown): number | null | undefined {
+	if (value === undefined || value === null) return null;
+	return isLicenseStart(value) ? value : undefined;
+}
+
+type AddOnDates = Pick<ProjectRow, "white_label_until" | "store_until" | "workforce_until" | "accounting_until">;
+
+function addOnUntil(project: AddOnDates, type: LicenseType): number | null {
+	if (type === "white_label") return project.white_label_until;
+	if (type === "store") return project.store_until;
+	if (type === "workforce") return project.workforce_until;
+	if (type === "accounting") return project.accounting_until;
+	return null;
+}
+
+async function addOnDates(sql: SQL, projectId: string): Promise<AddOnDates | null> {
+	const [project] = (await sql`
+		SELECT white_label_until, store_until, workforce_until, accounting_until FROM projects WHERE uuid = ${projectId}
+	`) as AddOnDates[];
+	return project ?? null;
+}
+
+async function extendAddOn(sql: SQL, projectId: string, type: LicenseType, days: number, from: number) {
+	const project = await addOnDates(sql, projectId);
+	if (!project) return;
+	const until = extendWhiteLabel(addOnUntil(project, type), days, from);
+	const timestamp = Date.now();
+	if (type === "white_label") await sql`UPDATE projects SET white_label_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+	else if (type === "store") await sql`UPDATE projects SET store_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+	else if (type === "workforce") await sql`UPDATE projects SET workforce_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+	else if (type === "accounting") await sql`UPDATE projects SET accounting_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+}
+
+async function runningUntil(projectId: string, type: LicenseType, now: number): Promise<number | null> {
+	if (SCHEDULED_LICENSE_TYPES.includes(type)) {
+		const grants = await scheduledKeys(projectId, type, now);
+		return grants.length ? Math.max(...grants.map((grant) => grant.until)) : null;
+	}
+	const project = await addOnDates(Database, projectId);
+	const until = project ? addOnUntil(project, type) : null;
+	return until !== null && until > now ? until : null;
+}
+
+async function plannedStart(projectId: string, type: LicenseType, requested: number | null, now: number): Promise<number | null> {
+	if (requested === null || requested <= now || !TIMED_LICENSE_TYPES.includes(type)) return null;
+	const running = await runningUntil(projectId, type, now);
+	if (running === null || requested > running + DAY) return requested;
+	if (SCHEDULED_LICENSE_TYPES.includes(type)) return Math.min(requested, running);
+	return null;
+}
+
+export interface ScheduledAddOn {
+	type: LicenseType;
+	from: number;
+	until: number;
+}
+
+export async function scheduledAddOns(projectId: string, project: AddOnDates, now = Date.now()): Promise<ScheduledAddOn[]> {
+	const pending = (await Database`
+		SELECT type, duration_days, starts_at FROM license_keys
+		WHERE redeemed_project = ${projectId} AND status = 'redeemed' AND starts_at IS NOT NULL AND activated_at IS NULL
+			AND type IN ${Database(ADD_ON_LICENSE_TYPES)}
+		ORDER BY starts_at ASC
+	`) as Pick<LicenseKeyRow, "type" | "duration_days" | "starts_at">[];
+
+	const cursors = new Map<LicenseType, number>();
+	return pending.map((key) => {
+		const from = Math.max(Number(key.starts_at), cursors.get(key.type) ?? addOnUntil(project, key.type) ?? 0, now);
+		const until = from + Number(key.duration_days ?? 0) * DAY;
+		cursors.set(key.type, until);
+		return { type: key.type, from, until };
+	});
+}
+
+export async function activateScheduledLicenses(projectId: string | null = null, now = Date.now()): Promise<number> {
+	const projectFilter = projectId === null ? Database`` : Database`AND redeemed_project = ${projectId}`;
+	const due = (await Database`
+		SELECT uuid, type, duration_days, starts_at, redeemed_project FROM license_keys
+		WHERE status = 'redeemed' AND starts_at IS NOT NULL AND starts_at <= ${now} AND activated_at IS NULL AND redeemed_project IS NOT NULL
+			AND type IN ${Database(ADD_ON_LICENSE_TYPES)} ${projectFilter}
+		ORDER BY starts_at ASC
+	`) as Pick<LicenseKeyRow, "uuid" | "type" | "duration_days" | "starts_at" | "redeemed_project">[];
+
+	let activated = 0;
+	for (const key of due) {
+		await Database.begin(async (tx) => {
+			const claimed = await tx`UPDATE license_keys SET activated_at = ${now}, updated = ${now} WHERE uuid = ${key.uuid} AND activated_at IS NULL`;
+			if (claimed.count === 0) return;
+			await extendAddOn(tx, key.redeemed_project!, key.type, Number(key.duration_days ?? 0), Number(key.starts_at));
+			activated++;
+		});
+	}
+	return activated;
+}
+
+export interface LicensePreview {
+	type: LicenseType;
+	transactions: number | null;
+	duration_days: number | null;
+	storage_gb: number | null;
+	employees: number | null;
+	timed: boolean;
+	adds_up: boolean;
+	running_until: number | null;
+}
+
+export async function previewLicense(
+	projectId: string,
+	input: string,
+	allowed: LicenseType[] = LICENSE_TYPES,
+	now = Date.now()
+): Promise<LicensePreview | ErrorCode> {
+	const license = await redeemable(input, allowed);
+	if (typeof license === "number") return license;
+
+	const timed = TIMED_LICENSE_TYPES.includes(license.type);
+	return {
+		type: license.type,
+		transactions: license.transactions,
+		duration_days: license.duration_days,
+		storage_gb: license.storage_gb,
+		employees: license.employees,
+		timed,
+		adds_up: SCHEDULED_LICENSE_TYPES.includes(license.type),
+		running_until: timed ? await runningUntil(projectId, license.type, now) : null,
+	};
+}
+
+export async function redeemLicense(
+	projectId: string,
+	input: string,
+	username: string,
+	allowed: LicenseType[] = LICENSE_TYPES,
+	startsAt: number | null = null
+): Promise<LicenseKeyRow | ErrorCode> {
+	await meterProject(projectId);
+	await activateScheduledLicenses(projectId);
+
+	const license = await redeemable(input, allowed);
+	if (typeof license === "number") return license;
+	const starts = await plannedStart(projectId, license.type, startsAt, Date.now());
 
 	const redeemed = await Database.begin(async (tx) => {
 		const timestamp = Date.now();
 		const claimed = await tx`
 			UPDATE license_keys SET status = 'redeemed', redeemed_project = ${projectId}, redeemed_by = ${username},
-				redeemed_at = ${timestamp}, updated = ${timestamp}
+				redeemed_at = ${timestamp}, starts_at = ${starts}, updated = ${timestamp}
 			WHERE uuid = ${license.uuid} AND status = 'available'
 		`;
 		if (claimed.count === 0) return false;
 
 		if (license.type === "transactions") {
 			await tx`UPDATE projects SET paid_transactions = paid_transactions + ${license.transactions ?? 0}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else if (license.type === "white_label") {
-			const [project] = (await tx`SELECT white_label_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "white_label_until">[];
-			const until = extendWhiteLabel(project.white_label_until, license.duration_days ?? 0, timestamp);
-			await tx`UPDATE projects SET white_label_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else if (license.type === "store") {
-			const [project] = (await tx`SELECT store_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "store_until">[];
-			const until = extendWhiteLabel(project.store_until, license.duration_days ?? 0, timestamp);
-			await tx`UPDATE projects SET store_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else if (license.type === "workforce") {
-			const [project] = (await tx`SELECT workforce_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "workforce_until">[];
-			const until = extendWhiteLabel(project.workforce_until, license.duration_days ?? 0, timestamp);
-			await tx`UPDATE projects SET workforce_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
-		} else if (license.type === "accounting") {
-			const [project] = (await tx`SELECT accounting_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "accounting_until">[];
-			const until = extendWhiteLabel(project.accounting_until, license.duration_days ?? 0, timestamp);
-			await tx`UPDATE projects SET accounting_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+		} else if (ADD_ON_LICENSE_TYPES.includes(license.type) && starts === null) {
+			await extendAddOn(tx, projectId, license.type, license.duration_days ?? 0, timestamp);
 		}
 		return true;
 	});
@@ -568,6 +704,8 @@ export function presentLicense(license: LicenseKeyRow, revealCode: boolean) {
 		redeemed_project: license.redeemed_project,
 		redeemed_by: license.redeemed_by,
 		redeemed_at: license.redeemed_at,
+		starts_at: license.starts_at,
+		ends_at: SCHEDULED_LICENSE_TYPES.includes(license.type) && license.redeemed_at !== null ? licensePeriod(license).until : null,
 		revoked_at: license.revoked_at,
 		server_id: license.server_id,
 		signed_key: revealCode ? license.signed_key : null,

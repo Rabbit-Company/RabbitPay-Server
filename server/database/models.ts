@@ -593,6 +593,8 @@ export interface LicenseKeyRow {
 	redeemed_project: string | null;
 	redeemed_by: string | null;
 	redeemed_at: number | null;
+	starts_at: number | null;
+	activated_at: number | null;
 	revoked_at: number | null;
 	server_id: string | null;
 	signed_key: string | null;
