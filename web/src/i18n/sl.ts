@@ -1433,6 +1433,14 @@ export const sl: UiDictionary = {
 	"settings.website": "Spletna stran",
 	"settings.invoice_footer": "Noga računa",
 	"settings.invoice_footer_hint": "Natisnjena na dnu vsakega računa",
+	"settings.disclosure_registration":
+		"ZGD-1 zahteva, da je na dokumentih, ki jih pošiljate, navedena vaša matična številka. Vpišite jo zgoraj, da bo natisnjena na računih.",
+	"settings.disclosure_company":
+		"Družba mora na dokumentih, ki jih pošilja, navesti registrski organ, pri katerem je vpisana (45. člen ZGD-1). V nogi tega podatka še ni.",
+	"settings.disclosure_capital_company":
+		"D.o.o. ali d.d. mora na dokumentih, ki jih pošilja, navesti registrski organ, pri katerem je vpisana, znesek osnovnega kapitala in znesek še nevplačanih vložkov (45. člen ZGD-1). V nogi teh podatkov še ni.",
+	"settings.disclosure_add": "Dodaj predlagano besedilo",
+	"settings.disclosure_unfinished": "Vsak {blank} v nogi zamenjajte s svojimi podatki in nato shranite.",
 	"settings.footer_placeholder": "Na primer klavzula o oprostitvi DDV ali vpis v register",
 	"settings.invoice_intro":
 		"Kako so napisani računi, ki jih natisnete, in stran, na kateri kupec plača. Določeno tukaj in ne pri tistem, ki jih odpre, zato dokument, ki ga izdate, vsem bere enako.",

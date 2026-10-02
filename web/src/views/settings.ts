@@ -9,6 +9,7 @@ import { processorsSection } from "./processors";
 import { currencyLabel, currencyOptions, currencyRates } from "../currencies";
 import { DATE_FORMATS, TIME_FORMATS, formatDate, formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
 import { LANGUAGES, t as documentWord, type Language } from "../../../server/i18n";
+import { DISCLOSURE_BLANK, disclosureGaps } from "../../../server/company-disclosure";
 import { statusLabel, t, type UiKey } from "../i18n";
 import { vatStatusHint, vatStatusOptions } from "../options";
 import { ACCENT_PRESETS, BRAND_BLUE } from "../../../server/colors";
@@ -87,7 +88,7 @@ function companyFields(vatStatus: string | null): { key: keyof Company; label: s
 	];
 }
 
-function companySection(uuid: string, vatStatus: string | null): HTMLElement {
+function companySection(uuid: string, vatStatus: string | null, documentLanguage: Language): HTMLElement {
 	const container = el("div", { class: "stack" });
 
 	const load = async () => {
@@ -150,6 +151,51 @@ function companySection(uuid: string, vatStatus: string | null): HTMLElement {
 		footer.value = company.footer_note ?? "";
 		inputs.set("footer_note", footer);
 
+		const disclosure = el("div", { class: "stack" });
+		const refreshDisclosure = () => {
+			const gaps = disclosureGaps({
+				country: country.value || null,
+				legal_name: legalName.value,
+				registration_number: inputs.get("registration_number")?.value ?? null,
+				footer_note: footer.value,
+			});
+			const notes: HTMLElement[] = [];
+			if (gaps.registrationNumber) notes.push(el("p", { class: "warn" }, t("settings.disclosure_registration")));
+			if (gaps.registerEntry || gaps.shareCapital) {
+				const suggested = [
+					gaps.registerEntry ? documentWord(documentLanguage, "company.disclosure.register") : null,
+					gaps.shareCapital ? documentWord(documentLanguage, "company.disclosure.capital") : null,
+				]
+					.filter(Boolean)
+					.join(" ");
+				notes.push(
+					el("p", { class: "warn" }, t(gaps.form === "capital_company" ? "settings.disclosure_capital_company" : "settings.disclosure_company")),
+					el(
+						"button",
+						{
+							class: "button ghost small",
+							type: "button",
+							onClick: () => {
+								footer.value = [footer.value.trim(), suggested].filter(Boolean).join("\n");
+								refreshDisclosure();
+								footer.focus();
+							},
+						},
+						t("settings.disclosure_add")
+					)
+				);
+			}
+			if (gaps.unfinished) notes.push(el("p", { class: "warn" }, t("settings.disclosure_unfinished", { blank: DISCLOSURE_BLANK })));
+			disclosure.replaceChildren(...notes);
+			disclosure.hidden = notes.length === 0;
+		};
+		footer.addEventListener("input", refreshDisclosure);
+		legalName.input.addEventListener("input", refreshDisclosure);
+		legalName.onChange(refreshDisclosure);
+		country.onChange(refreshDisclosure);
+		inputs.get("registration_number")?.addEventListener("input", refreshDisclosure);
+		refreshDisclosure();
+
 		const save = el("button", { class: "button primary", type: "submit" }, t("settings.save_company"));
 
 		container.replaceChildren(
@@ -176,6 +222,7 @@ function companySection(uuid: string, vatStatus: string | null): HTMLElement {
 				},
 				el("div", { class: "form-grid" }, ...controls),
 				field(t("settings.invoice_footer"), footer, t("settings.invoice_footer_hint")),
+				disclosure,
 				el("div", { class: "form-actions" }, save)
 			)
 		);
@@ -752,7 +799,7 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 	const editable = can(project, Permission.PROJECT_EDIT);
 	const managesKeys = can(project, Permission.API_KEYS);
 	const managesWebhooks = can(project, Permission.API_WEBHOOKS);
-	const companyBox = editable ? companySection(uuid, project.vat_status) : null;
+	const companyBox = editable ? companySection(uuid, project.vat_status, project.language as Language) : null;
 
 	const name = input("text", { value: project.name, required: true });
 	const displayName = input("text", { value: project.display_name ?? "", placeholder: project.name, maxlength: "120" });

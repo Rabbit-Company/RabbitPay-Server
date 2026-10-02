@@ -1432,6 +1432,14 @@ export const en = {
 	"settings.website": "Website",
 	"settings.invoice_footer": "Invoice footer",
 	"settings.invoice_footer_hint": "Printed at the bottom of every invoice",
+	"settings.disclosure_registration":
+		"Slovenian law (ZGD-1) requires your registration number on the documents you send. Add it above so it is printed on invoices.",
+	"settings.disclosure_company":
+		"A Slovenian company must name the register it is entered in on the documents it sends (ZGD-1, Article 45). The footer does not mention it yet.",
+	"settings.disclosure_capital_company":
+		"A d.o.o. or d.d. must name the register it is entered in, its share capital and any contributions not yet paid in on the documents it sends (ZGD-1, Article 45). The footer does not mention them yet.",
+	"settings.disclosure_add": "Add suggested text",
+	"settings.disclosure_unfinished": "Replace every {blank} in the footer with your own details, then save.",
 	"settings.footer_placeholder": "For example a VAT exemption clause or register entry",
 	"settings.invoice_intro":
 		"How invoices you print and the page a customer pays from are written. Fixed here rather than by whoever opens them, so a document you issue reads the same to everyone.",

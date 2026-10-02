@@ -232,6 +232,33 @@ FURS test environment, request a test certificate at sd.fu@gov.si and run:
 FURS_TEST_P12=/path/to/test.p12 FURS_TEST_PASSWORD=secret bun test tests/furs-live.test.ts
 ```
 
+## Company details on invoices (ZGD-1)
+
+Article 45 of ZGD-1 lists what a company must state on every letter it sends,
+and order forms count as letters: the full company name, the registered office,
+the register it is entered in and its registration number (matična številka).
+A d.o.o. and a d.d. must add the amount of share capital and the amount of
+contributions not yet paid in. A sole trader states the name, the registered
+office and the registration number under Article 72. The law does not name
+invoices, but Slovenian companies print these details on them as a matter of
+course, and RabbitPay treats an invoice the same way.
+
+The name, address and registration number come from Company details and are
+printed on every invoice. The register entry and the share capital belong in
+the invoice footer. Company details reads the legal form from the legal name,
+such as d.o.o., d.d., d.n.o., k.d. or s.p., and for a Slovenian seller shows
+what is still missing:
+
+- no registration number,
+- a company whose footer does not mention the register,
+- a d.o.o. or d.d. whose footer does not mention the share capital.
+
+Add suggested text puts the usual sentences in the footer, in the project's
+document language, with `___` where the court and the amount go. A reminder
+stays until every `___` is replaced. These are hints only. Nothing blocks
+issuing, because the legal form is read from the name and a name can be
+misleading.
+
 ## Domestic reverse charge (76.a člen ZDDV-1)
 
 For some supplies between two Slovenian VAT payers, such as construction work,
