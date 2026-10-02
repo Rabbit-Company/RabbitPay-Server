@@ -38,7 +38,7 @@ async function portalTicket(email: string, uuid: string): Promise<PortalTicketRo
 		SELECT t.*, p.display_name AS merchant, p.name AS project_name, p.workforce_until, c.name AS customer_name
 		FROM tickets t JOIN customers c ON c.uuid = t.customer JOIN projects p ON p.uuid = t.project
 		JOIN ticket_portal_access a ON a.customer = t.customer
-		WHERE t.uuid = ${uuid} AND LOWER(c.email) = ${email} AND t.customer_visible = 1 AND p.status != 'deleted'
+		WHERE t.uuid = ${uuid} AND c.email = ${email} AND t.customer_visible = 1 AND p.status != 'deleted'
 	`) as PortalTicketRow[];
 	return ticket ?? null;
 }
@@ -75,7 +75,7 @@ Server.app.get("/api/v1/customer/tickets", CustomerAuth.required(), async (ctx) 
 		SELECT t.*, p.display_name AS merchant, p.name AS project_name, p.workforce_until, c.name AS customer_name
 		FROM tickets t JOIN customers c ON c.uuid = t.customer JOIN projects p ON p.uuid = t.project
 		JOIN ticket_portal_access a ON a.customer = t.customer
-		WHERE LOWER(c.email) = ${email} AND t.customer_visible = 1 AND p.status != 'deleted' ${filter}
+		WHERE c.email = ${email} AND t.customer_visible = 1 AND p.status != 'deleted' ${filter}
 		ORDER BY t.updated DESC, t.uuid ASC LIMIT 200
 	`) as PortalTicketRow[];
 	const assignees = await assigneesOf(rows.map((row) => row.uuid));

@@ -358,6 +358,20 @@ describe("customers without an email address", () => {
 		expect(found.data.customers.map((customer: { uuid: string }) => customer.uuid)).toEqual([second.data.uuid]);
 	});
 
+	test("stores an email in lowercase and treats another spelling of it as the same address", async () => {
+		const projectId = await project("validation-email-case");
+		const base = `/api/v1/projects/${projectId}/customers`;
+
+		const created = await call("POST", base, { email: "  Billing@Acme.Example " });
+		expect(created.data.email).toBe("billing@acme.example");
+		expect((await call("POST", base, { name: "Again", email: "BILLING@ACME.EXAMPLE" })).error).toBe(ErrorCode.CUSTOMER_ALREADY_EXISTS);
+
+		const other = await call("POST", base, { email: "other@acme.example" });
+		expect((await call("PATCH", `${base}/${other.data.uuid}`, { email: "Billing@acme.example" })).error).toBe(ErrorCode.CUSTOMER_ALREADY_EXISTS);
+		expect((await call("PATCH", `${base}/${other.data.uuid}`, { email: "Other@Acme.Example" })).data.email).toBe("other@acme.example");
+		expect((await call("PATCH", `${base}/${other.data.uuid}`, { email: "New@Acme.Example" })).data.email).toBe("new@acme.example");
+	});
+
 	test("are reported as possible duplicates when the VAT or tax number matches another customer", async () => {
 		const projectId = await project("validation-duplicates");
 		const base = `/api/v1/projects/${projectId}`;

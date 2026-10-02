@@ -160,7 +160,8 @@ curl -X POST localhost:8085/api/v1/projects/$UUID/keys/rotate \
 A customer needs a name or an email, and a request with neither returns error
 `1287`. Email is optional, so a customer who has none can still be invoiced and
 the invoice is printed or downloaded instead of emailed. An email that is given
-must be unique within a project. Any number of customers can be saved without
+must be unique within a project. Emails are trimmed and stored in lowercase, so
+`Billing@Acme.com` and `billing@acme.com` are the same address. Any number of customers can be saved without
 one. Send `"email": null` to remove it. Sending an email to such a customer
 needs an explicit `to` address, otherwise it returns error `1084`. Automatic
 emails, meaning recurring invoices set to send themselves and payment reminders,

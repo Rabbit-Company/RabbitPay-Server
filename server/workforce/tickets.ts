@@ -223,7 +223,7 @@ export async function portalAccess(email: string) {
 	return (await Database`
 		SELECT a.*, c.uuid AS customer_id, p.uuid AS project_id, p.display_name AS merchant, p.name AS project_name, p.workforce_until
 		FROM ticket_portal_access a JOIN customers c ON c.uuid = a.customer JOIN projects p ON p.uuid = a.project
-		WHERE LOWER(c.email) = ${email} AND p.status != 'deleted'
+		WHERE c.email = ${email} AND p.status != 'deleted'
 	`) as (TicketPortalAccessRow & {
 		customer_id: string;
 		project_id: string;

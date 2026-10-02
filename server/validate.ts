@@ -78,3 +78,7 @@ export default class Validate {
 		return typeof text === "string" && text.length <= maxLength;
 	}
 }
+
+export function normalizeEmail(value: string): string {
+	return value.trim().toLowerCase();
+}

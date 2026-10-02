@@ -1,5 +1,5 @@
 import Database, { dialect } from "../database/database";
-import Validate from "../validate";
+import Validate, { normalizeEmail } from "../validate";
 import { ErrorCode } from "../errors";
 import { calculateTotals, taxIncluded, type InvoiceItemInput } from "../invoicing";
 import { convertedPrice, customAmountRate, sellerOf } from "../pos-sale";
@@ -402,7 +402,8 @@ export async function returnStock(projectId: string, lines: Pick<CartLineInput, 
 	}
 }
 
-export async function upsertCustomer(projectId: string, email: string, customer: CustomerInput): Promise<string> {
+export async function upsertCustomer(projectId: string, address: string, customer: CustomerInput): Promise<string> {
+	const email = normalizeEmail(address);
 	const now = Date.now();
 	const name = customer.customer_type === "business" ? customer.company! : customer.name;
 	const [existing] = (await Database`SELECT uuid FROM customers WHERE project = ${projectId} AND email = ${email}`) as Pick<CustomerRow, "uuid">[];

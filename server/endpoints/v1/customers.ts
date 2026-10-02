@@ -4,7 +4,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
-import Validate from "../../validate";
+import Validate, { normalizeEmail } from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { Logger } from "../../logger";
@@ -45,7 +45,7 @@ function cleanBic(value: string | null | undefined): string | null {
 }
 
 function cleanEmail(value: string | null | undefined): string | null {
-	const email = (value ?? "").trim();
+	const email = normalizeEmail(value ?? "");
 	return email === "" ? null : email;
 }
 
@@ -246,7 +246,9 @@ Server.app.patch("/api/v1/projects/:uuid/customers/:customer", Auth.required(), 
 	if (!identified(data.name === undefined ? customer.name : data.name, email)) return Utils.fail(ctx, ErrorCode.CUSTOMER_IDENTITY_MISSING);
 
 	if (email !== null && email !== customer.email) {
-		const clash = (await Database`SELECT uuid FROM customers WHERE project = ${project.uuid} AND email = ${email}`) as CustomerRow[];
+		const clash = (await Database`
+			SELECT uuid FROM customers WHERE project = ${project.uuid} AND email = ${email} AND uuid != ${customerId}
+		`) as CustomerRow[];
 		if (clash.length > 0) return Utils.fail(ctx, ErrorCode.CUSTOMER_ALREADY_EXISTS);
 	}
 

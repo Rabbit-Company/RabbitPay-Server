@@ -245,6 +245,10 @@ describe("machine customers", () => {
 		expect(first.status).toBe(201);
 		expect(second.status).toBe(200);
 		expect(second.data.uuid).toBe(first.data.uuid);
+
+		const respelled = await call("POST", "/api/v1/pay/customers", { token: primaryKey, body: { email: "Repeat@Example.COM" } });
+		expect(respelled.status).toBe(200);
+		expect(respelled.data).toMatchObject({ uuid: first.data.uuid, email: "repeat@example.com" });
 	});
 
 	test("rejects an invalid email", async () => {

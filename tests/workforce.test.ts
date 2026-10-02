@@ -118,7 +118,7 @@ beforeAll(async () => {
 	members.colleague = await member("wf-colleague", "employee", "Cene Colleague");
 	customer = crypto.randomUUID();
 	const now = Date.now();
-	await Database`INSERT INTO customers(uuid, project, name, email, created, updated) VALUES(${customer}, ${project}, 'Acme d.o.o.', 'Client@Acme.test', ${now}, ${now})`;
+	await Database`INSERT INTO customers(uuid, project, name, email, created, updated) VALUES(${customer}, ${project}, 'Acme d.o.o.', 'client@acme.test', ${now}, ${now})`;
 	const [row] = await Database`SELECT timezone FROM projects WHERE uuid = ${project}`;
 	today = localDate(Date.now(), row.timezone);
 });
@@ -661,10 +661,10 @@ describe("the workforce module", () => {
 
 		expect(sent("ticket_assigned").map((row) => row.recipient)).toContain("wf-employee@team.test");
 		expect(sent("ticket_assigned")[0].subject).toContain("#1");
-		expect(sent("ticket_reply").map((row) => row.recipient)).toEqual(["Client@Acme.test"]);
+		expect(sent("ticket_reply").map((row) => row.recipient)).toEqual(["client@acme.test"]);
 		expect(sent("ticket_reply")[0].body_text).toContain("We will switch over on Friday.");
 		expect(rows.some((row) => row.body_text.includes("DNS needs a new MX record"))).toBe(false);
-		expect(sent("ticket_status").every((row) => row.recipient === "Client@Acme.test")).toBe(true);
+		expect(sent("ticket_status").every((row) => row.recipient === "client@acme.test")).toBe(true);
 		expect(sent("ticket_status").length).toBeGreaterThan(0);
 		expect(sent("ticket_customer").map((row) => row.recipient)).toContain("wf-employee@team.test");
 		expect(sent("ticket_customer").some((row) => row.body_text.includes("Friday works for us."))).toBe(true);

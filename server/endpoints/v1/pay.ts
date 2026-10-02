@@ -3,7 +3,7 @@ import Database from "../../database/database";
 import ApiKey from "../../apikey";
 import Audit from "../../audit";
 import Utils from "../../utils";
-import Validate from "../../validate";
+import Validate, { normalizeEmail } from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { createInvoice, loadInvoice, loadItems, present, validateInvoiceInput, type InvoiceInput } from "../../invoice-service";
@@ -121,7 +121,7 @@ Server.app.post("/api/v1/pay/customers", ApiKey.required(), async (ctx) => {
 		return Utils.fail(ctx, ErrorCode.INVALID_CUSTOMER_TYPE);
 	}
 
-	const email = data.email!;
+	const email = normalizeEmail(data.email!);
 
 	const [existing] = (await Database`SELECT * FROM customers WHERE project = ${project.uuid} AND email = ${email}`) as CustomerRow[];
 	if (existing) return Utils.ok(ctx, presentCustomer(existing));

@@ -172,7 +172,7 @@ Server.app.get("/api/v1/customer/proformas", CustomerAuth.required(), async (ctx
 		JOIN invoices i ON i.uuid = pf.invoice
 		JOIN customers c ON c.uuid = i.customer
 		JOIN projects p ON p.uuid = i.project
-		WHERE LOWER(c.email) = ${email} AND i.status = 'draft' AND p.status != 'deleted'
+		WHERE c.email = ${email} AND i.status = 'draft' AND p.status != 'deleted'
 		ORDER BY pf.issued_at DESC, i.uuid ASC LIMIT 100
 	`) as (InvoiceRow & { proforma_issued: number; merchant: string | null; project_name: string; date_format: string; timezone: string })[];
 	return Utils.ok(ctx, {

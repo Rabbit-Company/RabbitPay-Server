@@ -225,7 +225,7 @@ describe("customer invoices", () => {
 
 	test("restricts invoice details and PDF downloads to the verified recipient", async () => {
 		const details = (await call("GET", `/customer/invoices/${firstInvoice}`, customerSession)).data;
-		expect(details.document.buyer.email).toBe("Client@Example.com");
+		expect(details.document.buyer.email).toBe("client@example.com");
 		const pdf = await fetchRoute("GET", `/customer/invoices/${firstInvoice}/pdf`, customerSession);
 		expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
 		expect(new TextDecoder().decode((await pdf.arrayBuffer()).slice(0, 5))).toBe("%PDF-");
@@ -251,7 +251,7 @@ describe("customer invoices", () => {
 		const details = (await call("GET", `/customer/invoices/${firstInvoice}`, customerSession)).data.document;
 		expect(details.buyer.name).toBe("Original Client");
 		expect(details.buyer.address_line1).toBe("Original address");
-		expect(details.buyer.email).toBe("Client@Example.com");
+		expect(details.buyer.email).toBe("client@example.com");
 		expect((await call("POST", `/projects/${firstProject}/invoices/${draftInvoice}/open`, ownerToken, {})).error).toBe(0);
 		expect((await call("GET", `/customer/invoices/${draftInvoice}`, replacement)).error).toBe(0);
 		expect((await call("GET", `/customer/invoices/${draftInvoice}`, customerSession)).error).toBe(1035);
