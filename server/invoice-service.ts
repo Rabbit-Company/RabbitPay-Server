@@ -147,12 +147,13 @@ export async function stampIssue(
 export interface CreateOptions {
 	draftReference?: string;
 	holdKeys?: boolean;
+	uuid?: string;
 }
 
 export async function createInvoice(projectId: string, data: InvoiceInput, options: CreateOptions = {}): Promise<InvoiceRow> {
 	const totals = calculateTotals(data.items!, data.discount_amount ?? 0);
 	const currency = data.currency ?? (await projectCurrency(projectId));
-	const uuid = crypto.randomUUID();
+	const uuid = options.uuid ?? crypto.randomUUID();
 	const timestamp = Date.now();
 	const status = data.status === "open" ? "open" : "draft";
 	const supplyDate = data.supply_date ?? (status === "open" ? timestamp : null);

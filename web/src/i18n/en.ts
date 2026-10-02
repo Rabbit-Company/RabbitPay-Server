@@ -2423,6 +2423,8 @@ export const en = {
 	"shop.social_email": "Email",
 	"shop.social_website": "Website",
 	"error.1000": "Sign in to continue.",
+	"error.1284": "This rate is printed on the issued invoice and cannot be changed. Credit the invoice and issue a new one instead.",
+	"error.1286": "This invoice was already sent to the server with different content. Check the invoice list before trying again.",
 	"error.1001": "Some required details are missing.",
 	"error.1009": "Enter a valid email address.",
 	"error.1016": "Your sign in is no longer valid. Please sign in again.",

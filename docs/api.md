@@ -254,6 +254,16 @@ Invoices are created as `draft` unless `"status": "open"` is passed. With
 request leaves no draft behind. It also needs the `invoice.send` permission and
 sends the `invoice.issued` webhook.
 
+Creating an invoice is safe to retry with an `Idempotency-Key` header of 1 to
+128 letters, digits, dots, colons, hyphens or underscores. When a request with
+the same key and the same body is sent again, for example after a lost
+connection, the server returns the invoice the first request created, with
+status `200` and the header `Idempotency-Replayed: true`. Nothing is issued
+twice and no second webhook is sent. The same key with a different body returns
+error `1286`, and a malformed key returns `1285`. A request that was refused
+does not use up its key. Keys are scoped to the project and kept for seven days.
+`POST /api/v1/pay/invoices` takes the same header.
+
 An invoice in another currency than the project's reporting currency takes an
 optional `tax_exchange_rate`, the reporting currency for one unit of the invoice
 currency. Leave it out to let the server pick the rate when the invoice is

@@ -353,8 +353,16 @@ export function clearSession() {
 
 const SESSION_ERRORS = new Set([1000, 1016, 1017, 1026]);
 
-async function send(method: string, path: string, body?: unknown): Promise<Response> {
-	const headers: Record<string, string> = {};
+export function newRequestKey(): string {
+	return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function outcomeUnknown(error: unknown): boolean {
+	return error instanceof ApiError && error.code < 0;
+}
+
+async function send(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}): Promise<Response> {
+	const headers: Record<string, string> = { ...extraHeaders };
 	const token = getToken();
 	if (token) headers["Authorization"] = `Bearer ${token}`;
 	if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -389,8 +397,8 @@ async function payloadOf<T>(response: Response): Promise<T> {
 	return payload.data as T;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-	return await payloadOf<T>(await send(method, path, body));
+async function request<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+	return await payloadOf<T>(await send(method, path, body, headers));
 }
 
 function filenameOf(disposition: string | null, fallback: string): string {
@@ -2871,9 +2879,10 @@ export const Api = {
 			notes: string | null;
 			tax_exchange_rate?: number | null;
 			status?: "draft" | "open";
-		}
+		},
+		requestKey?: string
 	) {
-		return request<Invoice>("POST", `/projects/${uuid}/invoices`, invoice);
+		return request<Invoice>("POST", `/projects/${uuid}/invoices`, invoice, requestKey ? { "Idempotency-Key": requestKey } : undefined);
 	},
 
 	setReferenceDocument(uuid: string, invoice: string, reference: ReferenceDocumentInput) {

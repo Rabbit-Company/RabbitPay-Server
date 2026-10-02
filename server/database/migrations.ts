@@ -376,6 +376,25 @@ export const MIGRATIONS: Migration[] = [
 			await sql`UPDATE projects SET tax_currency = 'EUR' WHERE tax_country = 'SI' AND (tax_currency IS NULL OR tax_currency <> 'EUR')`;
 		},
 	},
+	{
+		version: 40,
+		name: "idempotency keys",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS idempotency_keys(
+					project ${types.text("project")} NOT NULL,
+					request_key ${types.text("key")} NOT NULL,
+					request_hash ${types.text("sha256")} NOT NULL,
+					resource ${types.text("uuid")} NOT NULL,
+					created ${types.int64} NOT NULL,
+					PRIMARY KEY (project, request_key),
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

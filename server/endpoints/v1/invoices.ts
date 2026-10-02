@@ -25,6 +25,7 @@ import { awaitsStorePayment, isProformaDraft } from "../../payments/recorded";
 import { documentDetails, issueDraft } from "../../proformas";
 import { applyBalance } from "../../payments/ledger";
 import { enqueueLater } from "../../webhooks/events";
+import { idempotentRequest } from "../../idempotency";
 
 interface CreateInvoiceBody extends ReferenceDocumentInput {
 	customer?: string | null;
@@ -127,18 +128,40 @@ Server.app.post("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.
 		return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
 	}
 
+	const idempotent = await idempotentRequest(ctx, project.uuid, data);
+	if (idempotent instanceof Response) return idempotent;
+	const replay = async (existing: InvoiceRow) => {
+		idempotent.replayed();
+		return Utils.ok(ctx, present(existing, await loadItems(existing.uuid)));
+	};
+	const refuse = async (response: Response) => {
+		await idempotent.release();
+		return response;
+	};
+	const earlier = idempotent.resource ? await loadInvoice(project.uuid, idempotent.resource) : undefined;
+	if (earlier) return await replay(earlier);
+
 	const invalid = await validateInvoiceInput(project.uuid, data);
-	if (invalid !== null) return Utils.fail(ctx, invalid);
-	if (data.status === "open" && !(await hasCapacity(project.uuid))) return Utils.fail(ctx, ErrorCode.TRANSACTION_LIMIT_REACHED);
-	if (data.status === "open" && !(await hasStorageCapacity(project.uuid))) return Utils.fail(ctx, ErrorCode.STORAGE_LIMIT_REACHED);
-	if (data.status === "open" && (await accountingPeriodLocked(project.uuid, Date.now()))) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+	if (invalid !== null) return await refuse(Utils.fail(ctx, invalid));
+	if (data.status === "open" && !(await hasCapacity(project.uuid))) return await refuse(Utils.fail(ctx, ErrorCode.TRANSACTION_LIMIT_REACHED));
+	if (data.status === "open" && !(await hasStorageCapacity(project.uuid))) return await refuse(Utils.fail(ctx, ErrorCode.STORAGE_LIMIT_REACHED));
+	if (data.status === "open" && (await accountingPeriodLocked(project.uuid, Date.now()))) {
+		return await refuse(Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED));
+	}
 
 	let invoice: InvoiceRow;
 	try {
-		invoice = await createInvoice(project.uuid, { ...data, source: "invoice", created_by: Auth.account(ctx).username, recurring: null });
+		invoice = await createInvoice(
+			project.uuid,
+			{ ...data, source: "invoice", created_by: Auth.account(ctx).username, recurring: null },
+			{ uuid: idempotent.resource }
+		);
 	} catch (err) {
-		if (err instanceof OutOfStock) return Utils.fail(ctx, ErrorCode.OUT_OF_STOCK);
-		if (err instanceof InvoiceDataIncomplete) return invoiceDataErrorResponse(ctx, err);
+		if (err instanceof OutOfStock) return await refuse(Utils.fail(ctx, ErrorCode.OUT_OF_STOCK));
+		if (err instanceof InvoiceDataIncomplete) return await refuse(invoiceDataErrorResponse(ctx, err));
+		const concurrent = idempotent.resource ? await loadInvoice(project.uuid, idempotent.resource) : undefined;
+		if (concurrent) return await replay(concurrent);
+		await idempotent.release();
 		throw err;
 	}
 

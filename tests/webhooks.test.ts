@@ -336,6 +336,59 @@ describe("delivering events", () => {
 		expect(JSON.parse(issued[0].body).data).toMatchObject({ invoice: created.data.uuid, reference: created.data.reference, total_amount: 4200 });
 	});
 
+	test("issues once and sends invoice.issued once when the same request is repeated with its idempotency key", async () => {
+		received = [];
+		const body = {
+			customer: customerUuid,
+			currency: "EUR",
+			status: "open",
+			due_date: dueDate(),
+			items: [{ description: "Work", quantity: 1, unit_price: 5100 }],
+		};
+		const send = (payload: unknown, key: string) =>
+			Server.app.handle(
+				new Request(`http://127.0.0.1/api/v1/projects/${projectUuid}/invoices`, {
+					method: "POST",
+					headers: { Authorization: `Bearer ${sessionToken}`, "Content-Type": "application/json", "Idempotency-Key": key },
+					body: JSON.stringify(payload),
+				})
+			);
+
+		const first = await send(body, "retry-1");
+		const firstJson = (await first.json()) as any;
+		expect(first.status).toBe(201);
+		expect(first.headers.get("Idempotency-Replayed")).toBeNull();
+
+		const second = await send(body, "retry-1");
+		const secondJson = (await second.json()) as any;
+		expect(second.status).toBe(200);
+		expect(second.headers.get("Idempotency-Replayed")).toBe("true");
+		expect(secondJson.data.uuid).toBe(firstJson.data.uuid);
+		expect(secondJson.data.reference).toBe(firstJson.data.reference);
+
+		const [first_, second_] = await Promise.all([send(body, "retry-2"), send(body, "retry-2")]);
+		const together = [(await first_.json()) as any, (await second_.json()) as any];
+		expect(together[0].data.uuid).toBe(together[1].data.uuid);
+
+		const changed = (await (await send({ ...body, due_date: dueDate() + 1 }, "retry-1")).json()) as any;
+		expect(changed.error).toBe(1286);
+		expect(((await (await send(body, "not a key")).json()) as any).error).toBe(1285);
+
+		const refused = (await (await send({ ...body, items: [] }, "retry-3")).json()) as any;
+		expect(refused.error).not.toBe(0);
+		const corrected = (await (await send(body, "retry-3")).json()) as any;
+		expect(corrected.error).toBe(0);
+		expect(corrected.data.uuid).not.toBe(firstJson.data.uuid);
+
+		const [counted] = (await Database`
+			SELECT COUNT(*) AS count FROM invoices WHERE project = ${projectUuid} AND total_amount = 5100 AND status != 'draft'
+		`) as { count: number }[];
+		expect(Number(counted.count)).toBe(3);
+
+		await flush();
+		expect(received.filter((entry) => entry.event === "invoice.issued")).toHaveLength(3);
+	});
+
 	test("signs the delivery with the project secret", async () => {
 		received = [];
 		await makeInvoice(10000);

@@ -2425,6 +2425,8 @@ export const sl: UiDictionary = {
 	"shop.social_email": "E-pošta",
 	"shop.social_website": "Spletna stran",
 	"error.1000": "Za nadaljevanje se prijavite.",
+	"error.1284": "Ta tečaj je natisnjen na izdanem računu in ga ni mogoče spremeniti. Izdajte dobropis in nov račun.",
+	"error.1286": "Ta račun je bil strežniku že poslan z drugačno vsebino. Pred novim poskusom preverite seznam računov.",
 	"error.1001": "Manjkajo nekateri obvezni podatki.",
 	"error.1009": "Vnesite veljaven e-poštni naslov.",
 	"error.1016": "Vaša prijava ni več veljavna. Prijavite se znova.",
