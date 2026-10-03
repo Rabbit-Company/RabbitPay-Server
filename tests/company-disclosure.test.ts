@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const { disclosureGaps, legalFormOf } = await import("../server/company-disclosure");
+const { legalNameParts } = await import("../server/legal-name");
 const { t } = await import("../server/i18n");
 
 describe("reading the legal form from a company name", () => {
@@ -65,5 +66,22 @@ describe("what a Slovenian seller still has to disclose", () => {
 	test("says nothing for a foreign seller or an unknown legal form", () => {
 		expect(disclosureGaps({ ...company, country: "DE", legal_name: "Bau GmbH" }).form).toBeNull();
 		expect(disclosureGaps({ ...company, legal_name: "Zidar" })).toMatchObject({ form: null, registerEntry: false, registrationNumber: false });
+	});
+});
+
+describe("splitting a sole trader name from its activity", () => {
+	test("keeps the name up to s.p. and moves the activity out", () => {
+		expect(legalNameParts("JAGER SIMONCA ZAJC S.P. RAČUNOVODSKE, KNJIGOVODSKE STORITVE")).toEqual({
+			name: "JAGER SIMONCA ZAJC S.P.",
+			activity: "RAČUNOVODSKE, KNJIGOVODSKE STORITVE",
+		});
+		expect(legalNameParts("Janez Novak s.p., mizarstvo")).toEqual({ name: "Janez Novak s.p.", activity: "mizarstvo" });
+	});
+
+	test("leaves other names whole", () => {
+		expect(legalNameParts("Mizarstvo Janez Novak s.p.")).toEqual({ name: "Mizarstvo Janez Novak s.p.", activity: null });
+		expect(legalNameParts("Rabbit Company d.o.o.")).toEqual({ name: "Rabbit Company d.o.o.", activity: null });
+		expect(legalNameParts("Wasp Planet")).toEqual({ name: "Wasp Planet", activity: null });
+		expect(legalNameParts(null)).toEqual({ name: "", activity: null });
 	});
 });

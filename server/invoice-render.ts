@@ -8,6 +8,7 @@ import serifBoldFontPath from "./assets/fonts/NotoSerif-Bold.ttf" with { type: "
 import { LOGO_BOXES, type InvoiceDesign } from "./invoice-design";
 import { isCountryCode } from "./countries";
 import { partyTaxIds } from "./tax";
+import { legalNameParts } from "./legal-name";
 import { formatDateIn, formatIban, formatMoneyIn, formatPercentIn, localeFor, type DateFormat } from "./formats";
 import { translator, type TranslationKey } from "./i18n";
 import { UPN_QR_OPTIONS } from "./upn-qr";
@@ -326,7 +327,9 @@ function drawParties(
 	const column = (CONTENT_WIDTH - 24) / 2;
 	const buyerX = MARGIN + column + 24;
 
-	const sellerBottom = drawParty(layout, MARGIN, column, t("invoice.from"), seller.legal_name || seller.name, addressLines(seller, language), sellerExtras);
+	const sellerName = legalNameParts(seller.legal_name || seller.name);
+	const sellerLines = [...(sellerName.activity ? [sellerName.activity] : []), ...addressLines(seller, language)];
+	const sellerBottom = drawParty(layout, MARGIN, column, t("invoice.from"), sellerName.name, sellerLines, sellerExtras);
 	const buyerBottom = buyer
 		? drawParty(
 				layout,
@@ -561,20 +564,22 @@ async function prepareIssuer(layout: Layout, document: InvoiceDocument, t: Trans
 			void 0;
 		}
 	}
-	const legalName = layout.wrap(document.seller.legal_name || document.seller.name, width, { bold: true });
+	const sellerName = legalNameParts(document.seller.legal_name || document.seller.name);
+	const legalName = layout.wrap(sellerName.name, width, { bold: true });
+	const activity = sellerName.activity ? layout.wrap(sellerName.activity, width) : [];
 	const issuedBy = layout.wrap(`${t("invoice.issued_by")} ${document.issuer.name}`, width);
 	const line = layout.lineHeight(10);
 	const signatureHeight = signature ? 55 : 0;
 
 	return {
-		height: signatureHeight + line * (legalName.length + issuedBy.length),
+		height: signatureHeight + line * (legalName.length + activity.length + issuedBy.length),
 		draw(top: number) {
 			let cursor = top;
 			for (const entry of legalName) {
 				layout.text(entry, RIGHT_EDGE, cursor, { bold: true, align: "right" });
 				cursor += line;
 			}
-			for (const entry of issuedBy) {
+			for (const entry of [...activity, ...issuedBy]) {
 				layout.text(entry, RIGHT_EDGE, cursor, { align: "right" });
 				cursor += line;
 			}

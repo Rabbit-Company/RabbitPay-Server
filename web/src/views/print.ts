@@ -10,6 +10,7 @@ import { translator } from "../../../server/i18n";
 import { isDraftReference } from "../../../server/invoice-numbers";
 import { isCountryCode } from "../../../server/countries";
 import { partyTaxIds } from "../../../server/tax";
+import { legalNameParts } from "../../../server/legal-name";
 import { referenceDocumentRow } from "../../../server/reference-document";
 import { quantityWithUnit } from "../../../server/measure-units";
 import { brandLogo, poweredBy } from "../branding";
@@ -54,10 +55,12 @@ function parties(
 	sellerExtras: string[]
 ): HTMLElement {
 	const { seller, buyer, language } = document_;
+	const sellerName = legalNameParts(seller.legal_name || seller.name);
+	const sellerLines = [...(sellerName.activity ? [sellerName.activity] : []), ...addressLines(seller, language)];
 	return el(
 		"div",
 		{ class: "doc-parties" },
-		partyBlock(t("invoice.from"), seller.legal_name || seller.name, addressLines(seller, language), sellerExtras),
+		partyBlock(t("invoice.from"), sellerName.name, sellerLines, sellerExtras),
 		buyer
 			? partyBlock(
 					t("invoice.to"),
@@ -164,10 +167,12 @@ function fiscalBlock(fiscal: FiscalMarks | null, t: Translate, beside: HTMLEleme
 
 function issuerBlock(document_: InvoiceDocument, t: Translate): HTMLElement | null {
 	if (!document_.issuer) return null;
+	const sellerName = legalNameParts(document_.seller.legal_name || document_.seller.name);
 	return el(
 		"div",
 		{ class: "doc-issuer" },
-		el("strong", {}, document_.seller.legal_name || document_.seller.name),
+		el("strong", {}, sellerName.name),
+		sellerName.activity ? el("p", {}, sellerName.activity) : null,
 		el("p", {}, `${t("invoice.issued_by")} ${document_.issuer.name}`),
 		document_.issuer.signature
 			? el("div", { class: "doc-signature-box" }, el("img", { class: "doc-signature", src: document_.issuer.signature, alt: "" }))
