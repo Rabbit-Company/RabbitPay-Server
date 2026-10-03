@@ -1550,6 +1550,7 @@ export interface RecurringSummary {
 	end_date: number | null;
 	auto_issue: boolean;
 	auto_send: boolean;
+	bill_previous_period: boolean;
 	status: RecurringStatus;
 	last_error: string | null;
 	last_run_at: number | null;
@@ -1602,6 +1603,7 @@ export interface RecurringInput {
 	end_date?: number | null;
 	auto_issue?: boolean;
 	auto_send?: boolean;
+	bill_previous_period?: boolean;
 }
 
 export interface SalesDay {

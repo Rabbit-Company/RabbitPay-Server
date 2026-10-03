@@ -434,6 +434,14 @@ export const MIGRATIONS: Migration[] = [
 			]);
 		},
 	},
+	{
+		version: 44,
+		name: "recurring invoices for the previous period",
+		up: async (sql, dialect) => {
+			const flag = schemaTypes(dialect).flag;
+			await sql.unsafe(`ALTER TABLE recurring_invoices ADD COLUMN bill_previous_period ${flag} NOT NULL DEFAULT 0 CHECK (bill_previous_period IN (0, 1))`);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

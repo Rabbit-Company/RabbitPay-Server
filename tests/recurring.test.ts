@@ -160,6 +160,30 @@ describe("schedule", () => {
 		);
 		expect(schedule.fillPlaceholders("No {placeholders} here", period, "en", "auto")).toBe("No {placeholders} here");
 	});
+
+	test("describes the period before the invoice date in whole calendar months", () => {
+		const period = schedule.previousPeriodOf(monthly(local(2026, 9, 4)), 0);
+		expect(period).toEqual({ start: local(2026, 8, 1), end: local(2026, 8, 31) });
+		expect(schedule.fillPlaceholders("Knjizenje za mesec {month} {year}", period, "sl", "d. m. yyyy")).toBe("Knjizenje za mesec avgust 2026");
+
+		expect(schedule.previousPeriodOf(monthly(local(2026, 9, 4)), 4)).toEqual({ start: local(2026, 12, 1), end: local(2026, 12, 31) });
+		expect(schedule.previousPeriodOf({ ...monthly(local(2026, 10, 4)), interval_count: 3 }, 0)).toEqual({
+			start: local(2026, 7, 1),
+			end: local(2026, 9, 30),
+		});
+		expect(schedule.previousPeriodOf({ ...monthly(local(2027, 1, 4)), interval_unit: "year" }, 0)).toEqual({
+			start: local(2026, 1, 1),
+			end: local(2026, 12, 31),
+		});
+		expect(schedule.previousPeriodOf({ ...monthly(local(2026, 9, 14)), interval_unit: "week" }, 0)).toEqual({
+			start: local(2026, 9, 7),
+			end: local(2026, 9, 13),
+		});
+
+		const zoned = schedule.previousPeriodOf(monthly(schedule.startOfDay(local(2026, 9, 4), TIMEZONE)), 0, TIMEZONE);
+		expect(new Date(zoned.start).toLocaleDateString("en-GB", { timeZone: TIMEZONE })).toBe("01/08/2026");
+		expect(new Date(zoned.end).toLocaleDateString("en-GB", { timeZone: TIMEZONE })).toBe("31/08/2026");
+	});
 });
 
 describe("creating", () => {
@@ -280,6 +304,25 @@ describe("running", () => {
 		expect(detail.invoices[0].status).toBe("draft");
 		await Bun.sleep(20);
 		expect(sent.some((mail) => mail.to === "other@example.com")).toBe(false);
+	});
+
+	test("bills the previous month and supplies on its last day", async () => {
+		const created = await createTemplate({ bill_previous_period: true, auto_send: false, customer: otherCustomerUuid });
+		expect(created.bill_previous_period).toBe(true);
+		await runDueRecurring();
+		const detail = (await call("GET", `${base()}/recurring/${created.uuid}`, { token: ownerToken })).data;
+		const invoice = (await call("GET", `${base()}/invoices/${detail.invoices[0].uuid}`, { token: ownerToken })).data;
+
+		const previous = schedule.previousPeriodOf({ interval_unit: "month", interval_count: 1, anchor_date: today(), anchor_occurrence: 0 }, 0, TIMEZONE);
+		const label = new Date(previous.start).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: TIMEZONE });
+		expect(invoice.status).toBe("open");
+		expect(invoice.items[0].description).toBe(`Hosting for ${label}`);
+		expect(invoice.supply_date).toBe(previous.end);
+
+		const edited = await call("PATCH", `${base()}/recurring/${created.uuid}`, { token: ownerToken, body: { bill_previous_period: false } });
+		expect(edited.data.bill_previous_period).toBe(false);
+		const rejected = await call("PATCH", `${base()}/recurring/${created.uuid}`, { token: ownerToken, body: { bill_previous_period: "yes" } });
+		expect(rejected.error).not.toBe(0);
 	});
 
 	test("issues without emailing when sending is off", async () => {

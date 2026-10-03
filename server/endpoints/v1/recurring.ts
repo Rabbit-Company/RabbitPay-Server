@@ -111,6 +111,7 @@ Server.app.get("/api/v1/projects/:uuid/recurring", Auth.required(), Permissions.
 				...row,
 				auto_issue: Boolean(row.auto_issue),
 				auto_send: Boolean(row.auto_send),
+				bill_previous_period: Boolean(row.bill_previous_period),
 				first_line: lines[0]?.description ?? null,
 				total_amount: totals.total_amount,
 			};
@@ -145,12 +146,12 @@ Server.app.post("/api/v1/projects/:uuid/recurring", Auth.required(), Permissions
 		await tx`
 			INSERT INTO recurring_invoices(uuid, project, customer, title, currency, discount_amount, notes, interval_unit, interval_count,
 				start_date, anchor_date, anchor_occurrence, next_run_at, occurrences, max_occurrences, end_date, days_until_due,
-				auto_issue, auto_send, status, created_by, created, updated)
+				auto_issue, auto_send, bill_previous_period, status, created_by, created, updated)
 			VALUES(${uuid}, ${project.uuid}, ${data.customer!}, ${data.title?.trim() || null}, ${data.currency ?? project.currency},
 				${data.discount_amount ?? 0}, ${data.notes?.trim() || null}, ${schedule.interval_unit}, ${schedule.interval_count},
 				${startDate}, ${schedule.anchor_date}, 0, ${next}, 0, ${limits.max_occurrences}, ${limits.end_date},
-				${data.days_until_due ?? 14}, ${data.auto_issue === false ? 0 : 1}, ${data.auto_send === false ? 0 : 1}, ${status},
-				${account.username}, ${timestamp}, ${timestamp})
+				${data.days_until_due ?? 14}, ${data.auto_issue === false ? 0 : 1}, ${data.auto_send === false ? 0 : 1},
+				${data.bill_previous_period === true ? 1 : 0}, ${status}, ${account.username}, ${timestamp}, ${timestamp})
 		`;
 		await replaceRecurringItems(tx as typeof Database, uuid, data.items!);
 	});
@@ -259,6 +260,7 @@ Server.app.patch("/api/v1/projects/:uuid/recurring/:recurring", Auth.required(),
 				days_until_due = ${data.days_until_due ?? template.days_until_due},
 				auto_issue = ${data.auto_issue === undefined ? template.auto_issue : data.auto_issue ? 1 : 0},
 				auto_send = ${data.auto_send === undefined ? template.auto_send : data.auto_send ? 1 : 0},
+				bill_previous_period = ${data.bill_previous_period === undefined ? template.bill_previous_period : data.bill_previous_period ? 1 : 0},
 				status = ${status},
 				updated = ${Date.now()}
 			WHERE uuid = ${template.uuid}

@@ -20,6 +20,7 @@ import {
 	isIntervalUnit,
 	nextRunAfter,
 	periodOf,
+	previousPeriodOf,
 	startOfDay,
 	upcomingRuns,
 } from "./recurring-schedule";
@@ -45,6 +46,7 @@ export interface RecurringInput {
 	end_date?: number | null;
 	auto_issue?: boolean;
 	auto_send?: boolean;
+	bill_previous_period?: boolean;
 }
 
 function isTimestamp(value: unknown): value is number {
@@ -95,6 +97,7 @@ export async function validateRecurringInput(projectId: string, data: RecurringI
 	if (data.end_date !== undefined && data.end_date !== null && !isTimestamp(data.end_date)) return ErrorCode.INVALID_RECURRING;
 	if (data.auto_issue !== undefined && typeof data.auto_issue !== "boolean") return ErrorCode.INVALID_RECURRING;
 	if (data.auto_send !== undefined && typeof data.auto_send !== "boolean") return ErrorCode.INVALID_RECURRING;
+	if (data.bill_previous_period !== undefined && typeof data.bill_previous_period !== "boolean") return ErrorCode.INVALID_RECURRING;
 
 	return null;
 }
@@ -146,6 +149,7 @@ export function presentRecurring(row: RecurringInvoiceRow, items: RecurringInvoi
 		...row,
 		auto_issue: Boolean(row.auto_issue),
 		auto_send: Boolean(row.auto_send),
+		bill_previous_period: Boolean(row.bill_previous_period),
 		items: items.map((item) => ({ ...item })),
 		subtotal: totals.subtotal,
 		tax_amount: totals.tax_amount,
@@ -170,7 +174,8 @@ export async function generateNext(project: ProjectRow, template: RecurringInvoi
 		const [customer] = (await Database`SELECT * FROM customers WHERE uuid = ${template.customer}`) as CustomerRow[];
 		if (!customer) throw new Error("The customer no longer exists");
 
-		const period = periodOf(template, occurrence, project.timezone);
+		const billsPreviousPeriod = Boolean(template.bill_previous_period);
+		const period = billsPreviousPeriod ? previousPeriodOf(template, occurrence, project.timezone) : periodOf(template, occurrence, project.timezone);
 		const fill = (text: string) => fillPlaceholders(text, period, project.language, project.date_format as DateFormat, project.timezone);
 		const items = toInvoiceItems(await loadRecurringItems(template.uuid)).map((item) => ({ ...item, description: fill(item.description) }));
 		if (items.length === 0) throw new Error("The recurring invoice has no lines");
@@ -186,7 +191,7 @@ export async function generateNext(project: ProjectRow, template: RecurringInvoi
 			items,
 			discount_amount: template.discount_amount,
 			due_date: endOfLocalDate(shiftLocalDate(localDate(now, project.timezone), template.days_until_due), project.timezone),
-			supply_date: now,
+			supply_date: billsPreviousPeriod ? period.end : now,
 			notes: template.notes ? fill(template.notes) : null,
 			status: issue ? "open" : "draft",
 			source: "invoice",

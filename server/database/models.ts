@@ -467,6 +467,7 @@ export interface RecurringInvoiceRow {
 	days_until_due: number;
 	auto_issue: number;
 	auto_send: number;
+	bill_previous_period: number;
 	status: RecurringStatus;
 	failures: number;
 	last_invoice: string | null;

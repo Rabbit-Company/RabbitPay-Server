@@ -120,6 +120,23 @@ export function periodOf(schedule: Schedule, occurrence: number, timezone?: stri
 	return { start, end: end.getTime() };
 }
 
+export function previousPeriodOf(schedule: Schedule, occurrence: number, timezone?: string): Period {
+	if (schedule.interval_unit === "week") return periodOf(schedule, occurrence - 1, timezone);
+	const run = occurrenceDate(schedule, occurrence, timezone);
+	const months = (schedule.interval_unit === "year" ? 12 : 1) * schedule.interval_count;
+	if (timezone) {
+		const parts = zonedParts(run, timezone);
+		const first = new Date(Date.UTC(parts.year, parts.month - 1 - months, 1)).toISOString().slice(0, 10);
+		const last = new Date(Date.UTC(parts.year, parts.month - 1, 0)).toISOString().slice(0, 10);
+		return { start: startOfLocalDate(first, timezone), end: endOfLocalDate(last, timezone) };
+	}
+	const date = new Date(run);
+	return {
+		start: new Date(date.getFullYear(), date.getMonth() - months, 1).getTime(),
+		end: new Date(date.getFullYear(), date.getMonth(), 0).getTime(),
+	};
+}
+
 function monthName(timestamp: number, language: string, timezone?: string): string {
 	try {
 		return new Date(timestamp).toLocaleDateString(localeFor(language), { month: "long", timeZone: timezone });

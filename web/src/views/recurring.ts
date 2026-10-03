@@ -278,6 +278,14 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 		startingDelivery
 	);
 
+	const covers = select(
+		[
+			{ value: "current", label: t("recurring.covers_current") },
+			{ value: "previous", label: t("recurring.covers_previous") },
+		],
+		existing?.bill_previous_period ? "previous" : "current"
+	);
+
 	const preview = el("p", { class: "muted" });
 
 	const refreshPreview = () => {
@@ -340,6 +348,7 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 			end_date: endMode.value === "date" ? fromDateInput(endDate.value, project.timezone) : null,
 			auto_issue: delivery.value !== "draft",
 			auto_send: delivery.value === "email",
+			bill_previous_period: covers.value === "previous",
 		};
 
 		if (!existing) {
@@ -394,7 +403,8 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 			preview,
 			el(
 				"div",
-				{ class: "form-grid" },
+				{ class: "form-grid three" },
+				field(t("recurring.covers"), covers, t("recurring.covers_hint")),
 				field(t("recurring.terms"), terms, t("recurring.terms_hint")),
 				field(t("recurring.on_create"), delivery, project.email_enabled ? undefined : t("recurring.email_off_hint"))
 			)
@@ -554,6 +564,8 @@ export async function recurringView(uuid: string, recurringId: string): Promise<
 				el("dd", {}, recurring.next_run_at ? formatDate(recurring.next_run_at, dateFormat, project.timezone) : t("recurring.none_planned")),
 				el("dt", {}, t("recurring.ends")),
 				el("dd", {}, endsLabel(recurring, dateFormat, project.timezone)),
+				el("dt", {}, t("recurring.covers")),
+				el("dd", {}, recurring.bill_previous_period ? t("recurring.covers_previous") : t("recurring.covers_current")),
 				el("dt", {}, t("recurring.payment_terms")),
 				el("dd", {}, tn("count.days", recurring.days_until_due)),
 				el("dt", {}, t("recurring.each_invoice_is")),
