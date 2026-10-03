@@ -13,10 +13,15 @@ export function legalNameParts(legalName: string | null | undefined): LegalNameP
 	if (trailing) return { name: trailing[1].trim(), activity: trailing[2].trim() };
 
 	const segments = name.split(",").map((segment) => segment.trim());
-	if (segments.length < 3 || segments.includes("")) return { name, activity: null };
+	if (segments.length < 2 || segments.includes("")) return { name, activity: null };
 
 	const first = segments[0];
 	const last = segments[segments.length - 1];
+	if (segments.length === 2) {
+		const namesPerson = ENDS_AS_SOLE_TRADER.test(last) && !LEGAL_FORM_ALONE.test(last);
+		return namesPerson ? { name: last, activity: first } : { name, activity: null };
+	}
+
 	const activity = segments.slice(1, -1).join(", ");
 	if (LEGAL_FORM_ALONE.test(last)) return { name: `${first} ${last}`, activity };
 	if (ENDS_AS_SOLE_TRADER.test(last)) return { name: `${first}, ${last}`, activity };

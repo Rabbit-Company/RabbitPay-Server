@@ -88,7 +88,12 @@ describe("splitting a sole trader name from its activity", () => {
 			activity: "MONTAŽE IN INSTALACIJE",
 		});
 		expect(legalNameParts("MONT, MONTAŽE, INSTALACIJE, Janez Novak s.p.")).toEqual({ name: "MONT, Janez Novak s.p.", activity: "MONTAŽE, INSTALACIJE" });
-		expect(legalNameParts("Mizarstvo Novak, Janez Novak s.p.")).toEqual({ name: "Mizarstvo Novak, Janez Novak s.p.", activity: null });
+	});
+
+	test("moves an activity written before the person below them", () => {
+		expect(legalNameParts("ZAKLJUČNA GRADBENA DELA, JANEZ NOVAK S.P.")).toEqual({ name: "JANEZ NOVAK S.P.", activity: "ZAKLJUČNA GRADBENA DELA" });
+		expect(legalNameParts("Mizarstvo, Ana Kovač s.p.")).toEqual({ name: "Ana Kovač s.p.", activity: "Mizarstvo" });
+		expect(legalNameParts("Janez Novak, s.p.")).toEqual({ name: "Janez Novak, s.p.", activity: null });
 	});
 
 	test("moves an activity written between a company name and its legal form below them", () => {
