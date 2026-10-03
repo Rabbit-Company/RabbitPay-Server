@@ -249,6 +249,15 @@ describe("the bank transfer instruction", () => {
 		expect(instruction.account.holder).toBe("Bloggy Trading");
 	});
 
+	test("a UPN payload names a long sole trader without the activity", () => {
+		const holder = "JAGER SIMONCA ZAJC S.P. RAČUNOVODSKE, KNJIGOVODSKE STORITVE";
+		const instruction = bankInstruction({ ...base, config: { iban: SLOVENIAN_IBAN, account_holder: holder } })!;
+
+		expect(instruction.account.holder).toBe(holder);
+		expect(instruction.qr!.payload).toContain("\nJAGER SIMONCA ZAJC S.P.\n");
+		expect(instruction.qr!.payload).not.toContain("RAČUNOVOD");
+	});
+
 	test("builds a UPN payload carrying the amount in cents", () => {
 		const instruction = bankInstruction({ ...base, config: { iban: SLOVENIAN_IBAN } })!;
 

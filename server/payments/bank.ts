@@ -4,6 +4,7 @@ import { addressLines, type CompanyDetails } from "../company";
 import { minorUnitDigits } from "../invoicing";
 import { t } from "../i18n";
 import { creditorReference, isCreditorReference, mod97 } from "./reference";
+import { legalNameParts } from "../legal-name";
 
 export type QrFormat = "auto" | "epc" | "upn" | "none";
 
@@ -93,7 +94,7 @@ export function buildQr(options: {
 
 		const payload = upn({
 			recipientIban: normalizeIban(account.iban),
-			recipientName: account.holder.slice(0, 33),
+			recipientName: (account.holder.length > 33 ? legalNameParts(account.holder).name : account.holder).slice(0, 33),
 			recipientStreet: trimmed(street, 33),
 			recipientCity: trimmed(town, 33),
 			amount: amount > 0 ? amount.toFixed(2) : undefined,

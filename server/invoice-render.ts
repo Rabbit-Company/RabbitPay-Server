@@ -452,9 +452,11 @@ function drawPayment(layout: Layout, document: InvoiceDocument, t: Translate, fo
 
 	if (!bank && codes.length === 0) return;
 
+	const holder = legalNameParts(bank?.account.holder);
 	const details: { label: string; value: string }[] = bank
 		? [
-				{ label: t("bank.account_holder"), value: bank.account.holder },
+				{ label: t("bank.account_holder"), value: holder.name },
+				...(holder.activity ? [{ label: "", value: holder.activity }] : []),
 				{ label: t("bank.iban"), value: formatIban(bank.account.iban) },
 				...(bank.account.bic ? [{ label: t("bank.bic"), value: bank.account.bic }] : []),
 				...(bank.account.bank_name ? [{ label: t("bank.bank_name"), value: bank.account.bank_name }] : []),
@@ -473,7 +475,11 @@ function drawPayment(layout: Layout, document: InvoiceDocument, t: Translate, fo
 			: []
 		: layout.wrap(t(onlineBody(document.online)), textWidth);
 
-	const textHeight = layout.lineHeight(12) + 4 + (details.length + note.length) * layout.lineHeight(10);
+	const labelWidth = Math.max(0, ...details.map((entry) => layout.width(entry.label))) + 10;
+	const rows = details.flatMap((entry) =>
+		layout.wrap(entry.value, textWidth - labelWidth).map((line, index) => ({ label: index === 0 ? entry.label : "", value: line }))
+	);
+	const textHeight = layout.lineHeight(12) + 4 + (rows.length + note.length) * layout.lineHeight(10);
 	const codesHeight = codes.length > 0 ? QR_SIZE + layout.lineHeight(8) + 4 : 0;
 	const height = Math.max(textHeight, codesHeight) + padding * 2;
 
@@ -485,9 +491,8 @@ function drawPayment(layout: Layout, document: InvoiceDocument, t: Translate, fo
 	layout.text(bank ? t("bank.heading") : t("qr.online_heading"), MARGIN + padding, cursor, { bold: true, size: 12 });
 	cursor += layout.lineHeight(12) + 4;
 
-	const labelWidth = Math.max(0, ...details.map((entry) => layout.width(entry.label))) + 10;
-	for (const entry of details) {
-		layout.text(entry.label, MARGIN + padding, cursor, { color: MUTED });
+	for (const entry of rows) {
+		if (entry.label) layout.text(entry.label, MARGIN + padding, cursor, { color: MUTED });
 		layout.text(entry.value, MARGIN + padding + labelWidth, cursor);
 		cursor += layout.lineHeight(10);
 	}

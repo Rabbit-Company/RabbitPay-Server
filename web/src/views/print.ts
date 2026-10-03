@@ -327,9 +327,11 @@ export function invoiceDocumentView(document_: InvoiceDocument, actions: HTMLEle
 		document_.pay_qr ? qrBlock(document_.pay_qr, bank ? t("qr.online") : undefined, 4) : null,
 	].filter((code): code is HTMLElement => code !== null);
 
+	const holder = legalNameParts(bank?.account.holder);
 	const details: [string, string][] = bank
 		? [
-				[t("bank.account_holder"), bank.account.holder],
+				[t("bank.account_holder"), holder.name],
+				...(holder.activity ? [["", holder.activity] as [string, string]] : []),
 				[t("bank.iban"), formatIban(bank.account.iban)],
 				...(bank.account.bic ? [[t("bank.bic"), bank.account.bic] as [string, string]] : []),
 				...(bank.account.bank_name ? [[t("bank.bank_name"), bank.account.bank_name] as [string, string]] : []),
