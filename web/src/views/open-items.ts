@@ -1,4 +1,5 @@
 import { Api, type Company, type LedgerIssue, type OpenItem, type OpenItemsKind, type OpenItemsReport, type PartnerOpenItems } from "../api";
+import { legalNameParts } from "../../../server/legal-name";
 import { el, emptyState, field, input, saveFile, select, table } from "../dom";
 import { formatDate, formatMoney, fromDateInput, toDateInput } from "../money";
 import { can, Permission } from "../access";
@@ -215,13 +216,17 @@ function statement(partner: PartnerOpenItems, sender: string[], currency: string
 	const asOf = formatDate(until, dateFormat, timezone);
 	const debit = partner.items.reduce((sum, item) => sum + Math.max(item.open, 0), 0);
 	const credit = partner.items.reduce((sum, item) => sum + Math.max(-item.open, 0), 0);
-	const block = (label: string, lines: string[]) =>
-		el(
+	const block = (label: string, lines: string[]) => {
+		const [first, ...rest] = lines;
+		const parts = legalNameParts(first);
+		return el(
 			"div",
 			{ class: "iop-party" },
 			el("p", { class: "doc-muted" }, label),
-			...lines.map((line, index) => el("p", {}, index === 0 ? el("strong", {}, line) : line))
+			el("p", {}, el("strong", {}, parts.name)),
+			...(parts.activity ? [parts.activity, ...rest] : rest).map((line) => el("p", {}, line))
 		);
+	};
 	return el(
 		"div",
 		{ class: "document iop-sheet" },

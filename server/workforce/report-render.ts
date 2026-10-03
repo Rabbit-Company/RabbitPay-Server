@@ -4,6 +4,7 @@ import boldFontPath from "../assets/fonts/NotoSans-Bold.ttf" with { type: "file"
 import { localeFor } from "../formats";
 import { translator, type TranslationKey } from "../i18n";
 import { ABSENCE_KINDS } from "./absence-kinds";
+import { legalNameParts } from "../legal-name";
 import type { CompanyDetails } from "../company";
 import type { MonthReport, PersonMonth } from "./reports";
 import type { EmployeeRow, ProjectRow } from "../database/models";
@@ -216,9 +217,11 @@ export async function buildMonthReportPdf(input: MonthReportInput): Promise<Uint
 	const t = translator(project.language);
 	const [regular, bold] = await loadFonts();
 	const details = input.company.details;
+	const companyName = legalNameParts(input.company.name);
 	const company = {
-		name: input.company.name,
+		name: companyName.name,
 		details: [
+			companyName.activity ?? "",
 			[details.address_line1, details.address_line2].filter(Boolean).join(", "),
 			[details.postal_code, details.city].filter(Boolean).join(" "),
 			details.tax_number ? `${t("timesheet_pdf.tax_number")}: ${details.tax_number}` : "",

@@ -5,6 +5,7 @@ import { accentTextFor, isAccentColor } from "../colors";
 import { formatIban, formatMoneyIn, localeFor } from "../formats";
 import { translator, type TranslationKey } from "../i18n";
 import { printableLogo, tintOf, type Logo, type LogoSource } from "../invoice-render";
+import { legalNameParts } from "../legal-name";
 import type { CompanyDetails } from "../company";
 import type { PayrollCalculation } from "./payroll-runs";
 import type { NetPay, SeparatePay } from "./net-pay";
@@ -623,9 +624,11 @@ export async function buildPayslipsPdf(input: PayslipsInput): Promise<Uint8Array
 	const t = translator(project.language);
 	const [regular, bold] = await loadFonts();
 	const details = input.company.details;
+	const companyName = legalNameParts(input.company.name);
 	const company = {
-		name: input.company.name,
+		name: companyName.name,
 		details: [
+			companyName.activity ?? "",
 			[details.address_line1, details.address_line2].filter(Boolean).join(", "),
 			[details.postal_code, details.city].filter(Boolean).join(" "),
 			details.tax_number ? `${t("payslip.company_tax_number")}: ${details.tax_number}` : "",

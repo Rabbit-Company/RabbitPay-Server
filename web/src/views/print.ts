@@ -39,11 +39,13 @@ function regionName(code: string, language: string): string {
 }
 
 function partyBlock(title: string, name: string | null, lines: string[], extras: string[]): HTMLElement {
+	const parts = legalNameParts(name);
 	return el(
 		"div",
 		{ class: "party" },
 		el("h3", { class: "doc-label" }, title),
-		name ? el("p", { class: "party-name" }, name) : null,
+		parts.name ? el("p", { class: "party-name" }, parts.name) : null,
+		parts.activity ? el("p", {}, parts.activity) : null,
 		...lines.map((line) => el("p", {}, line)),
 		...extras.map((extra) => el("p", { class: "doc-muted" }, extra))
 	);
@@ -55,12 +57,10 @@ function parties(
 	sellerExtras: string[]
 ): HTMLElement {
 	const { seller, buyer, language } = document_;
-	const sellerName = legalNameParts(seller.legal_name || seller.name);
-	const sellerLines = [...(sellerName.activity ? [sellerName.activity] : []), ...addressLines(seller, language)];
 	return el(
 		"div",
 		{ class: "doc-parties" },
-		partyBlock(t("invoice.from"), sellerName.name, sellerLines, sellerExtras),
+		partyBlock(t("invoice.from"), seller.legal_name || seller.name, addressLines(seller, language), sellerExtras),
 		buyer
 			? partyBlock(
 					t("invoice.to"),

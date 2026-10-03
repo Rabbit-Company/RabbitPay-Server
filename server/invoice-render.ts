@@ -303,11 +303,13 @@ function drawParty(layout: Layout, x: number, width: number, title: string, name
 	layout.text(title.toUpperCase(), x, cursor, { bold: true, size: 8, color: labelColor });
 	cursor += layout.lineHeight(8) + 2;
 
-	for (const line of name ? layout.wrap(name, width, { bold: true, size: 11 }) : []) {
+	const parts = legalNameParts(name);
+	for (const line of parts.name ? layout.wrap(parts.name, width, { bold: true, size: 11 }) : []) {
 		layout.text(line, x, cursor, { bold: true, size: 11 });
 		cursor += layout.lineHeight(11);
 	}
-	const rows = [...lines.map((line) => ({ line, color: TEXT })), ...extras.map((line) => ({ line, color: MUTED }))];
+	const plain = parts.activity ? [parts.activity, ...lines] : lines;
+	const rows = [...plain.map((line) => ({ line, color: TEXT })), ...extras.map((line) => ({ line, color: MUTED }))];
 	for (const row of rows) {
 		for (const line of layout.wrap(row.line, width)) {
 			layout.text(line, x, cursor, { color: row.color });
@@ -327,9 +329,7 @@ function drawParties(
 	const column = (CONTENT_WIDTH - 24) / 2;
 	const buyerX = MARGIN + column + 24;
 
-	const sellerName = legalNameParts(seller.legal_name || seller.name);
-	const sellerLines = [...(sellerName.activity ? [sellerName.activity] : []), ...addressLines(seller, language)];
-	const sellerBottom = drawParty(layout, MARGIN, column, t("invoice.from"), sellerName.name, sellerLines, sellerExtras);
+	const sellerBottom = drawParty(layout, MARGIN, column, t("invoice.from"), seller.legal_name || seller.name, addressLines(seller, language), sellerExtras);
 	const buyerBottom = buyer
 		? drawParty(
 				layout,
