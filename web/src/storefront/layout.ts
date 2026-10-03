@@ -210,28 +210,58 @@ function categoryNav(ctx: StoreContext): HTMLElement {
 	const nav = el("nav", { class: "sf-nav" });
 	nav.setAttribute("aria-label", t("shop.categories"));
 	const path = window.location.pathname;
-	for (const category of topCategories(ctx.store).slice(0, 7)) {
-		const href = ctx.link(`/c/${category.slug}`);
-		const children = childCategories(ctx.store, category.uuid);
-		const anchor = el("a", { class: "sf-nav-link", href }, category.name, children.length ? icon("down", 14) : null);
-		if (path === href) anchor.setAttribute("aria-current", "page");
-		if (!children.length) {
-			nav.append(anchor);
-			continue;
-		}
-		nav.append(
-			el(
-				"div",
-				{ class: "sf-nav-group" },
-				anchor,
-				el(
-					"div",
-					{ class: "sf-nav-menu" },
-					...children.map((child) => el("a", { href: ctx.link(`/c/${child.slug}`) }, child.name, el("span", { class: "sf-count" }, String(child.count))))
-				)
-			)
-		);
+	const top = topCategories(ctx.store);
+
+	if (top.length) {
+		const menu = el("div", { class: "sf-nav-menu" });
+		const showFrom = (depth: number) => {
+			while (menu.children.length > depth) menu.lastElementChild?.remove();
+		};
+		const column = (categories: StoreCategoryNode[], depth: number): HTMLElement => {
+			const list = el("div", { class: "sf-nav-column" });
+			for (const category of categories) {
+				const href = ctx.link(`/c/${category.slug}`);
+				const children = childCategories(ctx.store, category.uuid);
+				const anchor = el(
+					"a",
+					{ href },
+					el("span", { class: "sf-nav-name" }, category.name),
+					el("span", { class: "sf-count" }, String(category.count)),
+					children.length ? icon("right", 14) : null
+				);
+				if (path === href) anchor.setAttribute("aria-current", "page");
+				const expand = () => {
+					if (anchor.classList.contains("open")) return;
+					showFrom(depth + 1);
+					for (const sibling of list.children) sibling.classList.remove("open");
+					if (!children.length) return;
+					anchor.classList.add("open");
+					menu.append(column(children, depth + 1));
+				};
+				anchor.addEventListener("mouseenter", expand);
+				anchor.addEventListener("focus", expand);
+				list.append(anchor);
+			}
+			return list;
+		};
+		const collapse = () => {
+			showFrom(1);
+			for (const anchor of menu.querySelectorAll(".open")) anchor.classList.remove("open");
+		};
+		menu.append(column(top, 0));
+
+		const toggle = el("button", { class: "sf-nav-link", type: "button", onClick: () => toggle.focus() }, t("shop.categories"), icon("down", 14));
+		toggle.setAttribute("aria-haspopup", "true");
+		const group = el("div", { class: "sf-nav-group" }, toggle, menu);
+		group.addEventListener("mouseleave", collapse);
+		group.addEventListener("keydown", (event) => {
+			if (event.key !== "Escape") return;
+			(document.activeElement as HTMLElement | null)?.blur();
+			collapse();
+		});
+		nav.append(group);
 	}
+
 	nav.append(el("a", { class: "sf-nav-link", href: ctx.link("/search") }, t("shop.all_products")));
 	return nav;
 }
