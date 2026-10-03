@@ -1,4 +1,5 @@
 const SOLE_TRADER_ACTIVITY = /^(.*?(?:^|[\s,])s\.\s*p\.?)[\s,]+(\S.*)$/i;
+const COMPANY_ACTIVITY = /^([^,]*?\s(?:d\.\s*o\.\s*o\.?|d\.\s*n\.\s*o\.?|k\.\s*d\.\s*d\.?|d\.\s*d\.?|k\.\s*d\.?))\s+(\S.*)$/i;
 const ENDS_AS_SOLE_TRADER = /(?:^|[\s,])s\.\s*p\.?$/i;
 const LEGAL_FORM_ALONE = /^(d\.\s*o\.\s*o\.?|d\.\s*d\.?|d\.\s*n\.\s*o\.?|k\.\s*d\.\s*d\.?|k\.\s*d\.?|s\.\s*p\.?)$/i;
 
@@ -11,6 +12,8 @@ export function legalNameParts(legalName: string | null | undefined): LegalNameP
 	const name = (legalName ?? "").trim();
 	const trailing = SOLE_TRADER_ACTIVITY.exec(name);
 	if (trailing) return { name: trailing[1].trim(), activity: trailing[2].trim() };
+	const company = COMPANY_ACTIVITY.exec(name);
+	if (company) return { name: company[1].trim(), activity: company[2].trim() };
 
 	const segments = name.split(",").map((segment) => segment.trim());
 	if (segments.length < 2 || segments.includes("")) return { name, activity: null };
