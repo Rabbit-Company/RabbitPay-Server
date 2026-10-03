@@ -89,10 +89,20 @@ describe("splitting a sole trader name from its activity", () => {
 		});
 		expect(legalNameParts("MONT, MONTAŽE, INSTALACIJE, Janez Novak s.p.")).toEqual({ name: "MONT, Janez Novak s.p.", activity: "MONTAŽE, INSTALACIJE" });
 		expect(legalNameParts("Mizarstvo Novak, Janez Novak s.p.")).toEqual({ name: "Mizarstvo Novak, Janez Novak s.p.", activity: null });
-		expect(legalNameParts("PRIMER PODJETJE ZA PRIPRAVO, IZVEDBO INVESTICIJ, D.O.O.")).toEqual({
-			name: "PRIMER PODJETJE ZA PRIPRAVO, IZVEDBO INVESTICIJ, D.O.O.",
+	});
+
+	test("moves an activity written between a company name and its legal form below them", () => {
+		expect(legalNameParts("PRIMER 10, GRADBENE IN DRUGE STORITVE, D.O.O.")).toEqual({
+			name: "PRIMER 10 D.O.O.",
+			activity: "GRADBENE IN DRUGE STORITVE",
+		});
+		expect(legalNameParts("Primer gradnje, fasaderstvo, d.o.o.")).toEqual({ name: "Primer gradnje d.o.o.", activity: "fasaderstvo" });
+		expect(legalNameParts("Primer, trgovina, storitve, d.d.")).toEqual({ name: "Primer d.d.", activity: "trgovina, storitve" });
+		expect(legalNameParts("PRIMER PODJETJE ZA PRIPRAVO IN IZVEDBO INVESTICIJ, D.O.O.")).toEqual({
+			name: "PRIMER PODJETJE ZA PRIPRAVO IN IZVEDBO INVESTICIJ, D.O.O.",
 			activity: null,
 		});
+		expect(legalNameParts("Primer, Novak in Kovač, partnerji")).toEqual({ name: "Primer, Novak in Kovač, partnerji", activity: null });
 	});
 
 	test("leaves other names whole", () => {
