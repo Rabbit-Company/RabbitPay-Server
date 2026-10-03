@@ -78,10 +78,27 @@ describe("splitting a sole trader name from its activity", () => {
 		expect(legalNameParts("Janez Novak s.p., mizarstvo")).toEqual({ name: "Janez Novak s.p.", activity: "mizarstvo" });
 	});
 
+	test("moves an activity written between the trade name and the person below them", () => {
+		expect(legalNameParts("PRIMER GRADNJE, GRADBENIŠTVO, JANEZ NOVAK S.P.")).toEqual({
+			name: "PRIMER GRADNJE, JANEZ NOVAK S.P.",
+			activity: "GRADBENIŠTVO",
+		});
+		expect(legalNameParts("PRIMER MONT, MONTAŽE IN INSTALACIJE, ANA KOVAČ S.P.")).toEqual({
+			name: "PRIMER MONT, ANA KOVAČ S.P.",
+			activity: "MONTAŽE IN INSTALACIJE",
+		});
+		expect(legalNameParts("MONT, MONTAŽE, INSTALACIJE, Janez Novak s.p.")).toEqual({ name: "MONT, Janez Novak s.p.", activity: "MONTAŽE, INSTALACIJE" });
+		expect(legalNameParts("Mizarstvo Novak, Janez Novak s.p.")).toEqual({ name: "Mizarstvo Novak, Janez Novak s.p.", activity: null });
+		expect(legalNameParts("PRIMER PODJETJE ZA PRIPRAVO, IZVEDBO INVESTICIJ, D.O.O.")).toEqual({
+			name: "PRIMER PODJETJE ZA PRIPRAVO, IZVEDBO INVESTICIJ, D.O.O.",
+			activity: null,
+		});
+	});
+
 	test("leaves other names whole", () => {
 		expect(legalNameParts("Mizarstvo Janez Novak s.p.")).toEqual({ name: "Mizarstvo Janez Novak s.p.", activity: null });
 		expect(legalNameParts("Rabbit Company d.o.o.")).toEqual({ name: "Rabbit Company d.o.o.", activity: null });
-		expect(legalNameParts("Wasp Planet")).toEqual({ name: "Wasp Planet", activity: null });
+		expect(legalNameParts("Primer Studio")).toEqual({ name: "Primer Studio", activity: null });
 		expect(legalNameParts(null)).toEqual({ name: "", activity: null });
 	});
 });
