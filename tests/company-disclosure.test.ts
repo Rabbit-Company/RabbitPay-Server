@@ -110,6 +110,14 @@ describe("splitting a sole trader name from its activity", () => {
 		expect(legalNameParts("Primer, Novak in Kovač, partnerji")).toEqual({ name: "Primer, Novak in Kovač, partnerji", activity: null });
 	});
 
+	test("keeps the seat written after the legal form with the name", () => {
+		expect(legalNameParts("PRIMER, TRGOVSKO, PROIZVODNO IN TURISTIČNO PODJETJE, D.O.O., LJUBLJANA")).toEqual({
+			name: "PRIMER, D.O.O., LJUBLJANA",
+			activity: "TRGOVSKO, PROIZVODNO IN TURISTIČNO PODJETJE",
+		});
+		expect(legalNameParts("Primer, d.o.o., Ljubljana")).toEqual({ name: "Primer, d.o.o., Ljubljana", activity: null });
+	});
+
 	test("leaves other names whole", () => {
 		expect(legalNameParts("Mizarstvo Janez Novak s.p.")).toEqual({ name: "Mizarstvo Janez Novak s.p.", activity: null });
 		expect(legalNameParts("Rabbit Company d.o.o.")).toEqual({ name: "Rabbit Company d.o.o.", activity: null });

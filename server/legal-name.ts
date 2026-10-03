@@ -25,5 +25,8 @@ export function legalNameParts(legalName: string | null | undefined): LegalNameP
 	const activity = segments.slice(1, -1).join(", ");
 	if (LEGAL_FORM_ALONE.test(last)) return { name: `${first} ${last}`, activity };
 	if (ENDS_AS_SOLE_TRADER.test(last)) return { name: `${first}, ${last}`, activity };
-	return { name, activity: null };
+
+	const form = segments[segments.length - 2];
+	if (segments.length < 4 || !LEGAL_FORM_ALONE.test(form)) return { name, activity: null };
+	return { name: `${first}, ${form}, ${last}`, activity: segments.slice(1, -2).join(", ") };
 }
