@@ -11,6 +11,7 @@ const { Settings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { runDueRecurring, generateNext, loadRecurring, MAX_FAILURES } = await import("../server/recurring-service");
 const schedule = await import("../server/recurring-schedule");
+const { recurringPreviewDocument } = await import("../server/recurring-preview");
 
 await Server.configure();
 Settings.email.enabled = true;
@@ -384,6 +385,70 @@ describe("running", () => {
 		row = (await loadRecurring(projectUuid, created.uuid))!;
 		expect(row.status).toBe("paused");
 		expect(row.failures).toBe(MAX_FAILURES);
+	});
+});
+
+describe("previewing", () => {
+	async function pdfOf(method: string, path: string, body?: unknown) {
+		const res = await Server.app.handle(
+			new Request(`http://127.0.0.1${path}`, {
+				method,
+				headers: { Authorization: `Bearer ${ownerToken}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+				body: body === undefined ? undefined : JSON.stringify(body),
+			})
+		);
+		return { type: res.headers.get("Content-Type"), start: new TextDecoder().decode(new Uint8Array(await res.arrayBuffer()).slice(0, 5)) };
+	}
+
+	test("shows the next invoice of an unsaved template without creating anything", async () => {
+		const [before] = (await Database`SELECT COUNT(*) AS count FROM invoices`) as { count: number }[];
+		const pdf = await pdfOf("POST", `${base()}/recurring/preview`, template({ bill_previous_period: true }));
+		expect(pdf).toEqual({ type: "application/pdf", start: "%PDF-" });
+
+		const [after] = (await Database`SELECT COUNT(*) AS count FROM invoices`) as { count: number }[];
+		expect(Number(after.count)).toBe(Number(before.count));
+
+		const missing = await call("POST", `${base()}/recurring/preview`, { token: ownerToken, body: template({ items: undefined }) });
+		expect(missing.error).not.toBe(0);
+		const foreign = await call("POST", `${base()}/recurring/preview`, { token: ownerToken, body: template({ customer: crypto.randomUUID() }) });
+		expect(foreign.error).not.toBe(0);
+	});
+
+	test("shows the next invoice of a saved template and leaves its schedule alone", async () => {
+		const created = await createTemplate({ start_date: today() + 3 * DAY });
+		const pdf = await pdfOf("GET", `${base()}/recurring/${created.uuid}/preview`);
+		expect(pdf).toEqual({ type: "application/pdf", start: "%PDF-" });
+
+		const detail = (await call("GET", `${base()}/recurring/${created.uuid}`, { token: ownerToken })).data;
+		expect(detail.occurrences).toBe(0);
+		expect(detail.next_run_at).toBe(created.next_run_at);
+		expect(detail.invoices).toHaveLength(0);
+	});
+
+	test("fills the previous month, the dates and the totals the way a run would", async () => {
+		const anchor = schedule.startOfDay(local(2026, 9, 4), TIMEZONE);
+		const document = await recurringPreviewDocument(await projectRow(), {
+			customer: customerUuid,
+			currency: "EUR",
+			items: [{ description: "Knjizenje za mesec {month} {year}", quantity: 1, unit_price: 8800, tax_rate: 22 }],
+			discount_amount: 0,
+			notes: "Obdobje {period}",
+			schedule: { interval_unit: "month", interval_count: 1, anchor_date: anchor, anchor_occurrence: 0 },
+			occurrence: 0,
+			days_until_due: 10,
+			bill_previous_period: true,
+			created_by: "rec-owner",
+		});
+
+		const previous = schedule.previousPeriodOf({ interval_unit: "month", interval_count: 1, anchor_date: anchor, anchor_occurrence: 0 }, 0, TIMEZONE);
+		expect(document.items[0].description).toBe("Knjizenje za mesec August 2026");
+		expect(document.invoice.notes).toBe("Obdobje 01.08.2026 to 31.08.2026");
+		expect(document.invoice.total_amount).toBe(10736);
+		expect(document.invoice.status).toBe("draft");
+		expect(document.invoice.issued).toBe(anchor);
+		expect(document.invoice.supply_date).toBe(previous.end);
+		expect(schedule.startOfDay(document.invoice.due_date!, TIMEZONE)).toBe(schedule.startOfDay(local(2026, 9, 14), TIMEZONE));
+		expect(document.buyer?.name).toBe("Retainer");
 	});
 });
 

@@ -4,7 +4,7 @@ import { Api, customerLabel, type IntervalUnit, type RecurringDetail, type Recur
 import { el, emptyState, field, input, select, statusPill, table } from "../dom";
 import { dayStartFromDateInput, formatDate, formatMoney, fromDateInput, toDateInput } from "../money";
 import { navigate } from "../router";
-import { confirmDialog, reportError, toast } from "../ui";
+import { confirmDialog, pdfPreviewButton, reportError, toast } from "../ui";
 import { loadProject, projectLayout } from "./project";
 import { invoiceEditor } from "./invoice-editor";
 import { customerFilter, rememberFilters, searchFilter } from "./list-filters";
@@ -329,26 +329,45 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 
 	const submit = el("button", { class: "button primary", type: "submit" }, existing ? t("ui.save") : t("recurring.start"));
 
-	const save = async () => {
+	const invoiceFields = (): RecurringInput | null => {
 		const values = editor.values();
-		if (!values) return;
-
-		const interval_count = Number(count.value);
-		const interval_unit = unit.value as IntervalUnit;
-		const first = dayStartFromDateInput(firstDate.value, project.timezone);
-		const body: RecurringInput = {
-			title: title.value.trim() || null,
+		if (!values) return null;
+		return {
 			customer: values.customer!,
 			currency: values.currency,
 			discount_amount: values.discount_amount,
 			notes: values.notes,
 			items: values.items,
 			days_until_due: Number(terms.value),
+			bill_previous_period: covers.value === "previous",
+		};
+	};
+
+	const previewInvoice = pdfPreviewButton(t("recurring.preview"), async () => {
+		const fields = invoiceFields();
+		if (!fields || !firstDate.value) return null;
+		return await Api.previewRecurring(uuid, {
+			...fields,
+			interval_unit: unit.value as IntervalUnit,
+			interval_count: Number(count.value),
+			start_date: dayStartFromDateInput(firstDate.value, project.timezone),
+		});
+	});
+
+	const save = async () => {
+		const fields = invoiceFields();
+		if (!fields) return;
+
+		const interval_count = Number(count.value);
+		const interval_unit = unit.value as IntervalUnit;
+		const first = dayStartFromDateInput(firstDate.value, project.timezone);
+		const body: RecurringInput = {
+			...fields,
+			title: title.value.trim() || null,
 			max_occurrences: endMode.value === "count" ? Number(endCount.value) : null,
 			end_date: endMode.value === "date" ? fromDateInput(endDate.value, project.timezone) : null,
 			auto_issue: delivery.value !== "draft",
 			auto_send: delivery.value === "email",
-			bill_previous_period: covers.value === "previous",
 		};
 
 		if (!existing) {
@@ -421,6 +440,7 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 			"div",
 			{ class: "form-actions" },
 			el("a", { class: "button ghost", href: existing ? `/projects/${uuid}/recurring/${existing.uuid}` : `/projects/${uuid}/recurring` }, t("ui.cancel")),
+			previewInvoice,
 			submit
 		)
 	);
@@ -461,6 +481,7 @@ export async function recurringView(uuid: string, recurringId: string): Promise<
 		if (can(project, Permission.SUBSCRIPTION_EDIT) && recurring.status !== "canceled") {
 			actions.push(el("a", { class: "button ghost", href: `/projects/${uuid}/recurring/${recurring.uuid}/edit` }, t("ui.edit")));
 		}
+		if (open) actions.push(pdfPreviewButton(t("recurring.preview"), () => Api.previewSavedRecurring(uuid, recurring.uuid)));
 		if (open && can(project, Permission.SUBSCRIPTION_EDIT) && can(project, Permission.INVOICE_CREATE)) {
 			actions.push(
 				el(

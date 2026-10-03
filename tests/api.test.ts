@@ -651,6 +651,69 @@ describe("invoices", () => {
 		const res = await call("DELETE", `/api/v1/projects/${projectUuid}/customers/${customerUuid}`, { token: ownerToken });
 		expect(res.error).toBe(1045);
 	});
+
+	test("previews an unsaved invoice as a PDF without saving it", async () => {
+		const preview = async (body: unknown) => {
+			const res = await Server.app.handle(
+				new Request(`http://127.0.0.1/api/v1/projects/${projectUuid}/invoices/preview`, {
+					method: "POST",
+					headers: { Authorization: `Bearer ${ownerToken}`, "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+				})
+			);
+			return { type: res.headers.get("Content-Type"), start: new TextDecoder().decode(new Uint8Array(await res.arrayBuffer()).slice(0, 5)) };
+		};
+		const body = {
+			customer: customerUuid,
+			currency: "EUR",
+			due_date: Date.now() + 7 * 24 * 60 * 60 * 1000,
+			items: [{ description: "Consulting", quantity: 3, unit_price: 10000, tax_rate: 22 }],
+		};
+		const [before] = (await Database`SELECT COUNT(*) AS count FROM invoices`) as { count: number }[];
+
+		expect(await preview(body)).toEqual({ type: "application/pdf", start: "%PDF-" });
+
+		const draft = (await call("POST", `/api/v1/projects/${projectUuid}/invoices`, { token: ownerToken, body })).data;
+		expect(await preview({ ...body, invoice: draft.uuid, notes: "Changed in the form" })).toEqual({ type: "application/pdf", start: "%PDF-" });
+		const unchanged = (await call("GET", `/api/v1/projects/${projectUuid}/invoices/${draft.uuid}`, { token: ownerToken })).data;
+		expect(unchanged.notes).toBeNull();
+
+		const [after] = (await Database`SELECT COUNT(*) AS count FROM invoices`) as { count: number }[];
+		expect(Number(after.count)).toBe(Number(before.count) + 1);
+
+		const noItems = await call("POST", `/api/v1/projects/${projectUuid}/invoices/preview`, { token: ownerToken, body: { ...body, items: [] } });
+		expect(noItems.error).not.toBe(0);
+		const unknown = await call("POST", `/api/v1/projects/${projectUuid}/invoices/preview`, {
+			token: ownerToken,
+			body: { ...body, invoice: crypto.randomUUID() },
+		});
+		expect(unknown.error).toBe(1035);
+	});
+
+	test("an unsaved invoice document carries the form values and totals", async () => {
+		const { unsavedInvoiceDocument } = await import("../server/unsaved-invoice");
+		const [project] = (await Database`SELECT * FROM projects WHERE uuid = ${projectUuid}`) as any[];
+		const issued = Date.now();
+		const document = await unsavedInvoiceDocument(project, {
+			customer: customerUuid,
+			currency: "EUR",
+			items: [{ description: "Consulting", quantity: 3, unit_price: 10000, tax_rate: 22 }],
+			discount_amount: 0,
+			notes: "Thank you",
+			issued,
+			due_date: issued + 86400000,
+			supply_date: issued,
+			created_by: null,
+		});
+
+		expect(document.invoice.status).toBe("draft");
+		expect(document.invoice.reference.startsWith("DRAFT-")).toBe(true);
+		expect(document.invoice.total_amount).toBe(36600);
+		expect(document.invoice.notes).toBe("Thank you");
+		expect(document.invoice.issued).toBe(issued);
+		expect(document.buyer?.name).toBe("Acme Ltd");
+		expect(document.items).toHaveLength(1);
+	});
 });
 
 describe("members and permissions", () => {

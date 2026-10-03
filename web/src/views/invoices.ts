@@ -22,7 +22,7 @@ import { el, emptyState, field, input, saveFile, select, statusPill, table } fro
 import { dayStartFromDateInput, formatDate, formatDateTime, formatMoney, fromDateInput, minorUnitDigits, toDateInput } from "../money";
 import { navigate } from "../router";
 import { convertMinor, outstandingOf } from "../../../server/invoicing";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { confirmDialog, modal, pdfPreviewButton, reportError, toast } from "../ui";
 import { actionMenu, type MenuLink } from "../menu";
 import { loadProject, projectLayout } from "./project";
 import type { DateFormat } from "../../../server/formats";
@@ -311,19 +311,30 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 
 	let requestKey = newRequestKey();
 
-	const save = async (action: "draft" | "issue" | "proforma") => {
-		if (submit.disabled) return;
+	const formBody = () => {
 		const values = editor.values();
-		if (!values) return;
-
-		setSaving(true);
-		const body = {
+		if (!values) return null;
+		return {
 			...values,
 			...reference.values(),
 			due_date: fromDateInput(dueDate.value, project.timezone),
 			supply_date: supplyDate.value ? dayStartFromDateInput(supplyDate.value, project.timezone) : null,
 			tax_exchange_rate: values.currency !== reporting && Number(taxRate.value) > 0 ? Number(taxRate.value) : null,
 		};
+	};
+
+	const previewInvoice = pdfPreviewButton(t("invoices.preview"), async () => {
+		const body = formBody();
+		if (!body || !dueDate.value) return null;
+		return await Api.previewInvoice(uuid, existing ? { ...body, invoice: existing.uuid } : body);
+	});
+
+	const save = async (action: "draft" | "issue" | "proforma") => {
+		if (submit.disabled) return;
+		const body = formBody();
+		if (!body) return;
+
+		setSaving(true);
 
 		try {
 			if (existing) {
@@ -403,6 +414,7 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 			"div",
 			{ class: "form-actions" },
 			el("a", { class: "button ghost", href: back }, t("ui.cancel")),
+			previewInvoice,
 			submit,
 			existing ? null : proformaButton,
 			existing ? null : issueButton

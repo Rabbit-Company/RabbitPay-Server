@@ -22,6 +22,11 @@ import {
 	type RecurringInput,
 } from "../../recurring-service";
 import { firstRunFrom, nextRunAfter, startOfDay, type Schedule } from "../../recurring-schedule";
+import { rateLimit } from "@rabbit-company/web-middleware/rate-limit";
+import { validateItems } from "../../invoice-service";
+import { pdfResponse } from "../../invoice-pdf";
+import { recurringPreviewPdf } from "../../recurring-preview";
+import { isIntervalCount, isIntervalUnit } from "../../recurring-schedule";
 import type { AppState, InvoiceRow, RecurringInvoiceItemRow, RecurringInvoiceRow, RecurringStatus } from "../../database/models";
 
 const LISTED_STATUSES = new Set<RecurringStatus>(["active", "paused", "completed", "canceled"]);
@@ -35,6 +40,8 @@ async function readBody(ctx: Context<AppState>): Promise<RecurringInput | null> 
 		return null;
 	}
 }
+
+const previewLimit = rateLimit({ windowMs: 60 * 1000, max: 30, message: "Too many previews. Please slow down." });
 
 async function findTemplate(ctx: Context<AppState>): Promise<RecurringInvoiceRow | ErrorCode> {
 	const recurringId = ctx.params["recurring"];
@@ -169,6 +176,68 @@ Server.app.post("/api/v1/projects/:uuid/recurring", Auth.required(), Permissions
 
 	return Utils.ok(ctx, await detail(created, project.timezone), 201);
 });
+
+Server.app.post("/api/v1/projects/:uuid/recurring/preview", previewLimit, Auth.required(), Permissions.require(Permission.SUBSCRIPTION_VIEW), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const account = Auth.account(ctx);
+
+	const data = await readBody(ctx);
+	if (data === null) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+
+	if (!Validate.uuid(data.customer)) return Utils.fail(ctx, ErrorCode.INVALID_RECURRING);
+	if (!validateItems(data.items)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ITEMS);
+	if (!isIntervalUnit(data.interval_unit) || !isIntervalCount(data.interval_count)) return Utils.fail(ctx, ErrorCode.INVALID_RECURRING);
+	if (typeof data.start_date !== "number" || !Number.isSafeInteger(data.start_date) || data.start_date <= 0) {
+		return Utils.fail(ctx, ErrorCode.INVALID_RECURRING);
+	}
+	const invalid = await validateRecurringInput(project.uuid, { ...data, start_date: undefined, next_date: undefined }, false);
+	if (invalid !== null) return Utils.fail(ctx, invalid);
+
+	const file = await recurringPreviewPdf(project, {
+		customer: data.customer!,
+		currency: data.currency ?? project.currency,
+		items: data.items!,
+		discount_amount: data.discount_amount ?? 0,
+		notes: data.notes?.trim() || null,
+		schedule: {
+			interval_unit: data.interval_unit,
+			interval_count: data.interval_count,
+			anchor_date: startOfDay(data.start_date, project.timezone),
+			anchor_occurrence: 0,
+		},
+		occurrence: 0,
+		days_until_due: data.days_until_due ?? 14,
+		bill_previous_period: data.bill_previous_period === true,
+		created_by: account.username,
+	});
+	return pdfResponse(file);
+});
+
+Server.app.get(
+	"/api/v1/projects/:uuid/recurring/:recurring/preview",
+	previewLimit,
+	Auth.required(),
+	Permissions.require(Permission.SUBSCRIPTION_VIEW),
+	async (ctx) => {
+		const project = Permissions.project(ctx);
+		const template = await findTemplate(ctx);
+		if (typeof template === "number") return Utils.fail(ctx, template);
+
+		const file = await recurringPreviewPdf(project, {
+			customer: template.customer,
+			currency: template.currency,
+			items: toInvoiceItems(await loadRecurringItems(template.uuid)),
+			discount_amount: template.discount_amount,
+			notes: template.notes,
+			schedule: template,
+			occurrence: template.occurrences,
+			days_until_due: template.days_until_due,
+			bill_previous_period: Boolean(template.bill_previous_period),
+			created_by: template.created_by,
+		});
+		return pdfResponse(file);
+	}
+);
 
 Server.app.get("/api/v1/projects/:uuid/recurring/:recurring", Auth.required(), Permissions.require(Permission.SUBSCRIPTION_VIEW), async (ctx) => {
 	const project = Permissions.project(ctx);

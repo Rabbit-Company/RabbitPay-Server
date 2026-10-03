@@ -26,6 +26,11 @@ import { documentDetails, issueDraft } from "../../proformas";
 import { applyBalance } from "../../payments/ledger";
 import { enqueueLater } from "../../webhooks/events";
 import { idempotentRequest } from "../../idempotency";
+import { rateLimit } from "@rabbit-company/web-middleware/rate-limit";
+import { unsavedInvoicePdf } from "../../unsaved-invoice";
+import { pdfResponse } from "../../invoice-pdf";
+
+const previewLimit = rateLimit({ windowMs: 60 * 1000, max: 30, message: "Too many previews. Please slow down." });
 
 interface CreateInvoiceBody extends ReferenceDocumentInput {
 	customer?: string | null;
@@ -193,6 +198,44 @@ Server.app.post("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.
 	}
 
 	return Utils.ok(ctx, present(invoice, await loadItems(invoice.uuid)), 201);
+});
+
+Server.app.post("/api/v1/projects/:uuid/invoices/preview", previewLimit, Auth.required(), Permissions.require(Permission.INVOICE_CREATE), async (ctx) => {
+	const project = Permissions.project(ctx);
+
+	let data: CreateInvoiceBody & { invoice?: string };
+	try {
+		data = await ctx.body<CreateInvoiceBody & { invoice?: string }>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	const invalid = await validateInvoiceInput(project.uuid, { ...data, status: "draft" });
+	if (invalid !== null) return Utils.fail(ctx, invalid);
+
+	let draft: InvoiceRow | undefined;
+	if (data.invoice !== undefined) {
+		if (!Validate.uuid(data.invoice)) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+		draft = await loadInvoice(project.uuid, data.invoice);
+		if (!draft) return Utils.fail(ctx, ErrorCode.INVOICE_NOT_FOUND);
+		if (draft.status !== "draft") return Utils.fail(ctx, ErrorCode.INVOICE_NOT_EDITABLE);
+	}
+
+	const now = Date.now();
+	const file = await unsavedInvoicePdf(project, {
+		draft,
+		customer: data.customer ?? null,
+		currency: data.currency ?? project.currency,
+		items: data.items!,
+		discount_amount: data.discount_amount ?? 0,
+		notes: data.notes?.trim() || null,
+		issued: now,
+		due_date: data.due_date!,
+		supply_date: data.supply_date ?? now,
+		created_by: Auth.account(ctx).username,
+		reference_document: resolveReferenceDocument(data) ?? undefined,
+	});
+	return pdfResponse(file);
 });
 
 Server.app.get("/api/v1/projects/:uuid/invoices/:invoice", Auth.required(), Permissions.require(Permission.INVOICE_VIEW), async (ctx) => {

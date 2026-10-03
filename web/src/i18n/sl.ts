@@ -1014,6 +1014,7 @@ export const sl: UiDictionary = {
 	"invoices.create_first": "Ustvarite svoj prvi račun",
 	"invoices.create_draft": "Ustvari osnutek",
 	"invoices.create_and_issue": "Ustvari in izdaj",
+	"invoices.preview": "Predogled",
 	"invoices.create_proforma": "Ustvari predračun",
 	"invoices.proforma_created": "Predračun je ustvarjen",
 	"invoices.proforma_kept_as_draft": "Račun je shranjen kot osnutek. Predračun ustvarite iz osnutka, ko odpravite težavo.",
@@ -1297,6 +1298,7 @@ export const sl: UiDictionary = {
 	"recurring.placeholder_hint":
 		"V opis zapišite {month}, {year} ali {period} in nadomesti se z obdobjem, ki ga pokriva posamezen račun, na primer Gostovanje za {month} {year}.",
 	"recurring.date_in_past": "Datum naslednjega računa ne more biti v preteklosti.",
+	"recurring.preview": "Predogled naslednjega računa",
 	"recurring.run_now": "Ustvari naslednji račun zdaj",
 	"recurring.run_now_title": "Ustvarjanje naslednjega računa",
 	"recurring.run_now_body": "Račun, načrtovan za {date}, bo ustvarjen takoj, urnik pa se premakne na naslednje obdobje.",

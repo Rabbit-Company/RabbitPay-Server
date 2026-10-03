@@ -426,6 +426,15 @@ async function requestFile(path: string, fallbackName: string): Promise<{ blob: 
 	return { blob: await response.blob(), name: filenameOf(response.headers.get("Content-Disposition"), fallbackName) };
 }
 
+async function requestPdf(path: string, body: unknown): Promise<Blob> {
+	const response = await send("POST", path, body);
+	if (!response.ok || response.headers.get("Content-Type")?.includes("application/json")) {
+		await payloadOf<never>(response);
+		throw new ApiError(-1, response.status, "The server returned an unreadable response.");
+	}
+	return await response.blob();
+}
+
 async function requestDownload(path: string, fallbackName: string): Promise<{ blob: Blob; name: string }> {
 	const response = await send("GET", path);
 	const disposition = response.headers.get("Content-Disposition");
@@ -2874,6 +2883,14 @@ export const Api = {
 		return request<RecurringDetail>("POST", `/projects/${uuid}/recurring`, recurring);
 	},
 
+	async previewRecurring(uuid: string, recurring: RecurringInput): Promise<Blob> {
+		return await requestPdf(`/projects/${uuid}/recurring/preview`, recurring);
+	},
+
+	async previewSavedRecurring(uuid: string, recurring: string): Promise<Blob> {
+		return (await requestFile(`/projects/${uuid}/recurring/${recurring}/preview`, "preview.pdf")).blob;
+	},
+
 	updateRecurring(uuid: string, recurring: string, changes: RecurringInput) {
 		return request<RecurringDetail>("PATCH", `/projects/${uuid}/recurring/${recurring}`, changes);
 	},
@@ -2903,6 +2920,10 @@ export const Api = {
 		requestKey?: string
 	) {
 		return request<Invoice>("POST", `/projects/${uuid}/invoices`, invoice, requestKey ? { "Idempotency-Key": requestKey } : undefined);
+	},
+
+	async previewInvoice(uuid: string, invoice: Record<string, unknown>): Promise<Blob> {
+		return await requestPdf(`/projects/${uuid}/invoices/preview`, invoice);
 	},
 
 	setReferenceDocument(uuid: string, invoice: string, reference: ReferenceDocumentInput) {

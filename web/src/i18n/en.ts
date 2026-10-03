@@ -1013,6 +1013,7 @@ export const en = {
 	"invoices.create_first": "Create your first invoice",
 	"invoices.create_draft": "Create draft",
 	"invoices.create_and_issue": "Create and issue",
+	"invoices.preview": "Preview",
 	"invoices.create_proforma": "Create pro forma invoice",
 	"invoices.proforma_created": "Pro forma invoice created",
 	"invoices.proforma_kept_as_draft": "The invoice was saved as a draft. Create the pro forma from the draft once the problem is fixed.",
@@ -1299,6 +1300,7 @@ export const en = {
 	"recurring.placeholder_hint":
 		"Write {month}, {year} or {period} in a description and it is replaced with the period each invoice covers, for example Hosting for {month} {year}.",
 	"recurring.date_in_past": "The next invoice date cannot be in the past.",
+	"recurring.preview": "Preview next invoice",
 	"recurring.run_now": "Create next invoice now",
 	"recurring.run_now_title": "Create the next invoice now",
 	"recurring.run_now_body": "The invoice planned for {date} is created right away, and the schedule moves on to the period after it.",

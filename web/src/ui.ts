@@ -197,3 +197,28 @@ export async function withLoading<T>(container: HTMLElement, work: () => Promise
 		container.appendChild(el("div", { class: "empty" }, el("p", {}, message)));
 	}
 }
+
+export function pdfPreviewButton(label: string, load: () => Promise<Blob | null>): HTMLButtonElement {
+	const button = el("button", { class: "button ghost", type: "button" }, label);
+	button.addEventListener("click", async () => {
+		button.disabled = true;
+		const opened = window.open("", "_blank");
+		try {
+			const blob = await load();
+			if (!blob) {
+				opened?.close();
+				return;
+			}
+			const url = URL.createObjectURL(blob);
+			if (opened) opened.location.href = url;
+			else window.location.href = url;
+			setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		} catch (error) {
+			opened?.close();
+			reportError(error);
+		} finally {
+			button.disabled = false;
+		}
+	});
+	return button;
+}

@@ -14,7 +14,7 @@ import { fiscalMarks } from "./fiscal/documents";
 import { referenceDocumentOf } from "./reference-document";
 import Database from "./database/database";
 import { documentKindOf, proformaFor } from "./proformas";
-import type { InvoiceRow, ProjectRow } from "./database/models";
+import type { InvoiceItemRow, InvoiceRow, ProjectRow } from "./database/models";
 
 export async function invoiceBank(
 	project: ProjectRow,
@@ -37,8 +37,8 @@ export async function invoiceBank(
 	});
 }
 
-export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, options: { archival?: boolean } = {}) {
-	const items = await loadItems(invoice.uuid);
+export async function invoiceDocument(project: ProjectRow, invoice: InvoiceRow, options: { archival?: boolean; items?: InvoiceItemRow[] } = {}) {
+	const items = options.items ?? (await loadItems(invoice.uuid));
 	const kind = await documentKindOf(invoice);
 	const proforma = kind === "proforma" ? await proformaFor(invoice.uuid) : null;
 	const sourceProforma = (
