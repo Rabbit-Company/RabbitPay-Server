@@ -38,6 +38,45 @@ const STATUS_KEYS: Record<RecurringStatus, UiKey> = {
 	canceled: "status.canceled",
 };
 
+interface RememberedSchedule {
+	interval_count?: number;
+	interval_unit?: string;
+	first_date?: string;
+	end_mode?: string;
+	end_count?: number;
+	end_date?: string;
+	days_until_due?: number;
+	delivery?: string;
+	covers?: string;
+}
+
+const rememberedScheduleKey = (project: string) => `rabbitpay.recurring.schedule.${project}`;
+
+function rememberedSchedule(project: string): RememberedSchedule {
+	try {
+		const saved: unknown = JSON.parse(localStorage.getItem(rememberedScheduleKey(project)) ?? "{}");
+		return typeof saved === "object" && saved !== null ? saved : {};
+	} catch {
+		return {};
+	}
+}
+
+function rememberSchedule(project: string, schedule: RememberedSchedule) {
+	try {
+		localStorage.setItem(rememberedScheduleKey(project), JSON.stringify(schedule));
+	} catch {
+		void 0;
+	}
+}
+
+function wholeNumberWithin(value: unknown, min: number, max: number): number | null {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max ? value : null;
+}
+
+function upcomingDate(value: unknown, earliest: string): string | null {
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= earliest ? value : null;
+}
+
 function unitOptions(): { value: IntervalUnit; label: string }[] {
 	return [
 		{ value: "week", label: t("recurring.unit_weeks") },
@@ -232,43 +271,74 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 	});
 
 	const today = startOfDay(Date.now(), project.timezone);
+	const todayInput = toDateInput(today, project.timezone);
+	const remembered = existing ? {} : rememberedSchedule(uuid);
 	const title = input("text", { value: existing?.title ?? "", placeholder: t("recurring.title_placeholder"), maxlength: "120" });
-	const count = input("number", { value: String(existing?.interval_count ?? 1), min: "1", max: String(MAX_INTERVAL_COUNT), step: "1", required: true });
-	const unit = select(unitOptions(), existing?.interval_unit ?? "month");
+	const count = input("number", {
+		value: String(existing?.interval_count ?? wholeNumberWithin(remembered.interval_count, 1, MAX_INTERVAL_COUNT) ?? 1),
+		min: "1",
+		max: String(MAX_INTERVAL_COUNT),
+		step: "1",
+		required: true,
+	});
+	const rememberedUnit = unitOptions().find((option) => option.value === remembered.interval_unit)?.value;
+	const unit = select(unitOptions(), existing?.interval_unit ?? rememberedUnit ?? "month");
 	const firstDate = input("date", {
-		value: toDateInput(existing ? (existing.next_run_at ?? today) : today, project.timezone),
-		min: existing ? undefined : toDateInput(today, project.timezone),
+		value: existing ? toDateInput(existing.next_run_at ?? today, project.timezone) : (upcomingDate(remembered.first_date, todayInput) ?? todayInput),
+		min: existing ? undefined : todayInput,
 		required: true,
 	});
 	const originalFirstDate = firstDate.value;
 	const scheduleOpen = !existing || existing.status === "active" || existing.status === "paused" || existing.status === "completed";
 
+	const rememberedEndDate = upcomingDate(remembered.end_date, todayInput);
 	const endMode = select(
 		[
 			{ value: "never", label: t("recurring.end_never") },
 			{ value: "count", label: t("recurring.end_count") },
 			{ value: "date", label: t("recurring.end_date") },
 		],
-		existing?.max_occurrences != null ? "count" : existing?.end_date != null ? "date" : "never"
+		existing
+			? existing.max_occurrences != null
+				? "count"
+				: existing.end_date != null
+					? "date"
+					: "never"
+			: remembered.end_mode === "count" || (remembered.end_mode === "date" && rememberedEndDate !== null)
+				? remembered.end_mode
+				: "never"
 	);
-	const endCount = input("number", { value: String(existing?.max_occurrences ?? 12), min: "1", max: String(MAX_OCCURRENCES), step: "1" });
+	const endCount = input("number", {
+		value: String(existing?.max_occurrences ?? wholeNumberWithin(remembered.end_count, 1, MAX_OCCURRENCES) ?? 12),
+		min: "1",
+		max: String(MAX_OCCURRENCES),
+		step: "1",
+	});
 	const endDate = input("date", {
-		value: existing?.end_date ? toDateInput(existing.end_date, project.timezone) : "",
-		min: toDateInput(today, project.timezone),
+		value: existing?.end_date ? toDateInput(existing.end_date, project.timezone) : (rememberedEndDate ?? ""),
+		min: todayInput,
 	});
 	const endCountField = field(t("recurring.invoice_count"), endCount, existing ? t("recurring.created_so_far", { count: existing.occurrences }) : undefined);
 	const endDateField = field(t("recurring.last_date"), endDate);
 
-	const terms = input("number", { value: String(existing?.days_until_due ?? 14), min: "0", max: String(MAX_DAYS_UNTIL_DUE), step: "1", required: true });
+	const terms = input("number", {
+		value: String(existing?.days_until_due ?? wholeNumberWithin(remembered.days_until_due, 0, MAX_DAYS_UNTIL_DUE) ?? 14),
+		min: "0",
+		max: String(MAX_DAYS_UNTIL_DUE),
+		step: "1",
+		required: true,
+	});
 	const startingDelivery: Delivery = existing
 		? !existing.auto_issue
 			? "draft"
 			: existing.auto_send
 				? "email"
 				: "issue"
-		: project.email_enabled
-			? "email"
-			: "issue";
+		: remembered.delivery === "email" || remembered.delivery === "issue" || remembered.delivery === "draft"
+			? remembered.delivery
+			: project.email_enabled
+				? "email"
+				: "issue";
 	const delivery = select(
 		[
 			{ value: "email", label: project.email_enabled ? t("recurring.delivery_option_email") : t("recurring.delivery_option_email_off") },
@@ -283,7 +353,7 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 			{ value: "current", label: t("recurring.covers_current") },
 			{ value: "previous", label: t("recurring.covers_previous") },
 		],
-		existing?.bill_previous_period ? "previous" : "current"
+		existing ? (existing.bill_previous_period ? "previous" : "current") : remembered.covers === "previous" ? "previous" : "current"
 	);
 
 	const preview = el("p", { class: "muted" });
@@ -387,6 +457,19 @@ export async function recurringFormView(uuid: string, recurringId: string | null
 		submit.disabled = true;
 		try {
 			const saved = existing ? await Api.updateRecurring(uuid, existing.uuid, body) : await Api.createRecurring(uuid, body);
+			if (!existing) {
+				rememberSchedule(uuid, {
+					interval_count,
+					interval_unit,
+					first_date: firstDate.value,
+					end_mode: endMode.value,
+					end_count: Number(endCount.value),
+					end_date: endDate.value,
+					days_until_due: Number(terms.value),
+					delivery: delivery.value,
+					covers: covers.value,
+				});
+			}
 			toast(existing ? t("recurring.updated") : t("recurring.started"), "success");
 			navigate(`/projects/${uuid}/recurring/${saved.uuid}`);
 		} catch (error) {
