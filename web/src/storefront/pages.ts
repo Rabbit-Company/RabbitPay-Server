@@ -1,7 +1,7 @@
 import { el, field } from "../dom";
 import { processorLabel, t, tn, type UiKey } from "../i18n";
 import { reportError } from "../ui";
-import { readEnteredChoice, readLicenseChoice, smallestChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
+import { hostedOnly, readEnteredChoice, readLicenseChoice, smallestChoice, type LicenseChoice, type LicenseProduct } from "../../../server/license-pricing";
 import { navigate, onLeave } from "../router";
 import { openLightbox } from "../lightbox";
 import { renderMarkdown } from "../../../server/markdown";
@@ -523,6 +523,7 @@ function deliveryPanel(ctx: StoreContext, product: ProductDetails): HTMLElement 
 
 const AMOUNT_LABELS: Partial<Record<LicenseProduct["type"], UiKey>> = {
 	transactions: "shop.license_amount_payments",
+	emails: "shop.license_amount_emails",
 	storage: "shop.license_amount_storage",
 	employees: "shop.license_amount_employees",
 };
@@ -574,7 +575,9 @@ function licenseOptions(
 		{ class: "sf-license-options" },
 		amount && amountLabel ? field(t(amountLabel), amount, t("shop.license_range", { min: license.min_amount!, max: license.max_amount! })) : null,
 		days ? field(t("shop.license_days"), days, t("shop.license_range", { min: license.min_days!, max: license.max_days! })) : null,
-		field(t("shop.license_server_id"), server, t("shop.license_server_hint")),
+		hostedOnly(license.type)
+			? el("p", { class: "sf-muted" }, t("shop.license_hosted_only"))
+			: field(t("shop.license_server_id"), server, t("shop.license_server_hint")),
 		problem
 	);
 }

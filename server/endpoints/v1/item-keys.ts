@@ -9,9 +9,8 @@ import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { loadInvoice } from "../../invoice-service";
-import { canEmail } from "../../email/mailer";
 import { deliverSoon } from "../../email/outbox";
-import { emailCount, findEmail, prepareKeysEmail, queueKeysEmail } from "../../email/messages";
+import { customerEmailRefusal, emailCount, findEmail, prepareKeysEmail, queueKeysEmail } from "../../email/messages";
 import { groupKeys, heldKeysOf, recipientFor } from "../../key-delivery";
 import { emptyStock, parseKeys, presentKey, stockFor } from "../../item-keys";
 import type { CatalogItemRow, ItemKeyRow, ItemKeyStatus } from "../../database/models";
@@ -176,7 +175,8 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/keys/email", Auth.requ
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
 
-	if (!canEmail(project)) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_CONFIGURED);
+	const refusal = await customerEmailRefusal(project);
+	if (refusal !== null) return Utils.fail(ctx, refusal);
 
 	const invoiceId = ctx.params["invoice"];
 	if (!Validate.uuid(invoiceId)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);

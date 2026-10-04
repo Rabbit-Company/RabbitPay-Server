@@ -170,6 +170,7 @@ export enum Error {
 	EMAIL_NOT_FOUND = 1291,
 	EMAIL_NOT_FAILED = 1292,
 	EMAIL_CONTENT_REMOVED = 1293,
+	EMAIL_ALLOWANCE_USED = 1294,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -684,6 +685,7 @@ namespace Errors {
 		1291: { message: "This email does not exist.", httpCode: 404 },
 		1292: { message: "Only an email that failed can be sent again.", httpCode: 409 },
 		1293: { message: "The content of this email is no longer kept. Send a new email from the document instead.", httpCode: 409 },
+		1294: { message: "This project has no emails left this month. Redeem an email license to continue.", httpCode: 402 },
 		1285: { message: "The Idempotency-Key header takes 1 to 128 letters, digits, dots, colons, hyphens or underscores.", httpCode: 400 },
 		1286: {
 			message:

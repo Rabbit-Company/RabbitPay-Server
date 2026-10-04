@@ -81,6 +81,7 @@ export async function issueLicenseOrder(invoiceId: string): Promise<number> {
 					duration_days: license.duration_days,
 					storage_gb: license.storage_gb,
 					employees: license.employees,
+					emails: license.emails ?? null,
 					price: license.unit_price,
 					currency: invoice.currency,
 					buyer_name: customer?.name ?? null,

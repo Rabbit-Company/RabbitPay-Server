@@ -25,3 +25,9 @@ const KINDS: Record<EmailKind, true> = {
 
 export const EMAIL_KINDS = Object.keys(KINDS) as EmailKind[];
 export const EMAIL_STATUSES: EmailStatus[] = ["pending", "sent", "failed"];
+
+const TEAM_EMAIL_KINDS: EmailKind[] = ["invitation", "fiscal_alert", "ticket_customer", "ticket_assigned", "absence_requested", "absence_decided"];
+
+export function countsTowardAllowance(kind: EmailKind): boolean {
+	return !TEAM_EMAIL_KINDS.includes(kind);
+}

@@ -29,6 +29,17 @@ function statusCell(email: ListedEmail): HTMLElement {
 	);
 }
 
+function allowanceNote(project: Project, remaining: number | null): HTMLElement | null {
+	if (remaining === null) return null;
+	if (remaining > 0) return el("span", {}, t("outbox.left", { count: remaining.toLocaleString() }));
+	return el(
+		"span",
+		{ class: "warn" },
+		`${t("outbox.none_left")} `,
+		can(project, Permission.PROJECT_EDIT) ? el("a", { href: `/projects/${project.uuid}/license` }, t("nav.license")) : null
+	);
+}
+
 function countsSummary(total: number, counts: EmailCounts): HTMLElement[] {
 	return [
 		el("span", {}, tn("count.emails", total)),
@@ -209,7 +220,7 @@ export async function emailsView(uuid: string): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "stack" },
-					el("div", { class: "summary" }, ...countsSummary(result.total, result.counts)),
+					el("div", { class: "summary" }, ...countsSummary(result.total, result.counts), allowanceNote(project, result.remaining)),
 					el(
 						"div",
 						{ class: "summary" },

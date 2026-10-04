@@ -19,6 +19,7 @@ export const TEST_SETTINGS: Record<string, string | number | boolean> = {
 	"email.poll_interval": 3600,
 	"email.max_attempts": 3,
 	"email.reminder_interval": 3600,
+	"licensing.free_emails": 100000,
 	"webhooks.poll_interval": 3600,
 	"webhooks.timeout": 2,
 	"webhooks.max_attempts": 3,

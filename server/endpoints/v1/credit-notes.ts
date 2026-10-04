@@ -13,8 +13,7 @@ import { creditableLines, creditNoteItems, creditNotesFor, issueCreditNote, plan
 import { creditNoteDocument } from "../../credit-note-document";
 import { creditNotePdf, pdfResponse } from "../../invoice-pdf";
 import { eslogFailure, eslogResponse, eslogVersions, presentVersions } from "../../eslog-archive";
-import { canEmail } from "../../email/mailer";
-import { emailCount, findEmail, queueCreditNoteEmail } from "../../email/messages";
+import { customerEmailRefusal, emailCount, findEmail, queueCreditNoteEmail } from "../../email/messages";
 import type { CustomerRow } from "../../database/models";
 import type { CreditNoteItemRow, CreditNoteRow } from "../../database/models";
 import { accountingPeriodLocked } from "../../accounting-periods";
@@ -196,7 +195,8 @@ Server.app.post("/api/v1/projects/:uuid/credit-notes/:note/email", Auth.required
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
 
-	if (!canEmail(project)) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_CONFIGURED);
+	const refusal = await customerEmailRefusal(project);
+	if (refusal !== null) return Utils.fail(ctx, refusal);
 
 	const noteId = ctx.params["note"];
 	if (!Validate.uuid(noteId)) return Utils.fail(ctx, ErrorCode.INVALID_CREDIT_NOTE_ID);

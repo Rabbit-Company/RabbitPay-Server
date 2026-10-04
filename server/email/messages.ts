@@ -13,7 +13,9 @@ import { creditNoteItems } from "../credit-notes";
 import { availableFor } from "../payments/methods";
 import { outstandingOf } from "../invoicing";
 import { deliverSoon, queueEmail } from "./outbox";
-import { canEmail } from "./mailer";
+import { canEmail, projectEmailServer } from "./mailer";
+import { ErrorCode } from "../errors";
+import { hasEmailCapacity } from "../licensing";
 import { whiteLabelActive } from "../licensing";
 import { emailDesignOf, logoPath } from "../branding";
 import { DEFAULT_EMAIL_DESIGN, type EmailDesign } from "../email-design";
@@ -59,6 +61,12 @@ export function presentEmail(row: EmailSummaryRow) {
 		has_body: Boolean(row.has_body),
 		created: row.created,
 	};
+}
+
+export async function customerEmailRefusal(project: ProjectRow): Promise<ErrorCode | null> {
+	if (!canEmail(project)) return ErrorCode.EMAIL_NOT_CONFIGURED;
+	if (projectEmailServer(project) === null && !(await hasEmailCapacity(project.uuid))) return ErrorCode.EMAIL_ALLOWANCE_USED;
+	return null;
 }
 
 export async function findEmail(uuid: string) {

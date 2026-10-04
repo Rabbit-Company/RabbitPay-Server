@@ -5,7 +5,8 @@ import { Settings } from "../settings";
 import { isEnabled, projectEmailServer, sendEmail, type EmailAttachment } from "./mailer";
 import { storedEslog } from "../eslog-archive";
 import { ESLOG_CONTENT_TYPE } from "../eslog";
-import { licensingEnforced } from "../licensing";
+import { billEmail, emailsMetered, hasEmailCapacity, licensingEnforced } from "../licensing";
+import { countsTowardAllowance } from "./kinds";
 import { documentStorage } from "../document-storage";
 import { deliveredCreditNotePdf, deliveredInvoicePdf } from "../invoice-pdf";
 import type { CreditNoteRow, EmailKind, EmailMessageRow, EmailRoute, InvoiceRow, ProjectRow } from "../database/models";
@@ -33,6 +34,7 @@ export interface QueuedEmail {
 }
 
 export const PDF_CONTENT_TYPE = "application/pdf";
+export const EMAIL_ALLOWANCE_USED = "This project has no emails left this month";
 
 export function retryDelay(attempts: number): number {
 	return Math.min(RETRY_BASE_SECONDS * Math.pow(2, Math.max(attempts - 1, 0)), RETRY_CAP_SECONDS) * 1000;
@@ -106,6 +108,15 @@ async function deliverBatch(now: number): Promise<{ attempted: number; sent: num
 			`;
 			continue;
 		}
+		const metered = !server && emailsMetered() && countsTowardAllowance(message.kind);
+		if (metered && !(await hasEmailCapacity(message.project))) {
+			await Database`
+				UPDATE email_messages SET status = 'failed', last_error = ${EMAIL_ALLOWANCE_USED}, attachment_data = NULL, attachment_storage_key = NULL,
+					next_attempt_at = NULL, updated = ${Date.now()}
+				WHERE uuid = ${message.uuid}
+			`;
+			continue;
+		}
 		try {
 			const attachmentContent = await storedAttachment(message);
 			const attachments: EmailAttachment[] = [];
@@ -135,6 +146,11 @@ async function deliverBatch(now: number): Promise<{ attempted: number; sent: num
 					attachment_data = NULL, attachment_storage_key = NULL, sent_at = ${timestamp}, sent_via = ${sentVia}, updated = ${timestamp}
 				WHERE uuid = ${message.uuid}
 			`;
+			if (metered) {
+				await billEmail(message.project, message.uuid, timestamp).catch((err) =>
+					Logger.error(`[EMAIL] Could not count the ${message.kind} email ${message.uuid} toward the allowance: ${err}`)
+				);
+			}
 			sent++;
 		} catch (err) {
 			const reason = err instanceof Error ? err.message : String(err);

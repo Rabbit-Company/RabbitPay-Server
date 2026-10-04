@@ -6,13 +6,13 @@ import { ErrorCode } from "./errors";
 import { isLicenseIssuer, looksSigned, readSignedLicense, signLicense } from "./license-signing";
 import { serverId } from "./server-identity";
 import { countedMembers, pendingTimeTrackers } from "./workforce/people";
-import { MAX_LICENSE_DAYS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS } from "./license-pricing";
+import { MAX_LICENSE_DAYS, MAX_LICENSE_EMAILS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS } from "./license-pricing";
 
-export { MAX_LICENSE_DAYS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS };
+export { MAX_LICENSE_DAYS, MAX_LICENSE_EMAILS, MAX_LICENSE_EMPLOYEES, MAX_LICENSE_STORAGE_GB, MAX_LICENSE_TRANSACTIONS };
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
+export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails"];
 export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage"];
 export const SCHEDULED_LICENSE_TYPES: LicenseType[] = ["employees", "storage"];
 export const ADD_ON_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "accounting"];
@@ -87,6 +87,14 @@ export function freeAllowance(project: Pick<ProjectRow, "free_transactions">): n
 	return isLicenseIssuer() ? (project.free_transactions ?? Settings.licensing.free_transactions) : includedPayments();
 }
 
+export function emailsMetered(): boolean {
+	return isLicenseIssuer() && Settings.licensing.enabled;
+}
+
+export function emailAllowance(project: Pick<ProjectRow, "free_emails">): number {
+	return project.free_emails ?? Settings.licensing.free_emails;
+}
+
 export function whiteLabelActive(project: Pick<ProjectRow, "white_label_until">, now = Date.now()): boolean {
 	if (!licensingEnforced()) return true;
 	return project.white_label_until !== null && project.white_label_until > now;
@@ -118,6 +126,61 @@ async function usageRow(sql: SQL, projectId: string, period: string): Promise<Pr
 		await sql`INSERT INTO project_usage(project, period, free_used, paid_used) VALUES(${projectId}, ${period}, 0, 0) ON CONFLICT(project, period) DO NOTHING`;
 	const [row] = (await sql`SELECT * FROM project_usage WHERE project = ${projectId} AND period = ${period}`) as ProjectUsageRow[];
 	return row;
+}
+
+export interface EmailUsage {
+	emails_metered: boolean;
+	emails_free_allowance: number;
+	emails_free_used: number;
+	emails_paid_used: number;
+	emails_paid_balance: number;
+	emails_remaining: number | null;
+}
+
+export async function emailUsageFor(projectId: string, now = Date.now()): Promise<EmailUsage> {
+	const [row] = (await Database`
+		SELECT p.free_emails, p.paid_emails, COALESCE(u.emails_free_used, 0) AS free_used, COALESCE(u.emails_paid_used, 0) AS paid_used
+		FROM projects p
+		LEFT JOIN project_usage u ON u.project = p.uuid AND u.period = ${periodOf(now)}
+		WHERE p.uuid = ${projectId}
+	`) as { free_emails: number | null; paid_emails: number; free_used: number; paid_used: number }[];
+	const metered = emailsMetered();
+	const allowance = row ? emailAllowance(row) : 0;
+	const freeUsed = Number(row?.free_used ?? 0);
+	const balance = Number(row?.paid_emails ?? 0);
+	return {
+		emails_metered: metered,
+		emails_free_allowance: allowance,
+		emails_free_used: freeUsed,
+		emails_paid_used: Number(row?.paid_used ?? 0),
+		emails_paid_balance: balance,
+		emails_remaining: metered ? Math.max(allowance - freeUsed, 0) + Math.max(balance, 0) : null,
+	};
+}
+
+export async function hasEmailCapacity(projectId: string, now = Date.now()): Promise<boolean> {
+	if (!emailsMetered()) return true;
+	return ((await emailUsageFor(projectId, now)).emails_remaining ?? 0) > 0;
+}
+
+export async function billEmail(projectId: string, emailId: string, sentAt: number) {
+	await Database.begin(async (tx) => {
+		const [project] = (await tx`SELECT free_emails FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "free_emails">[];
+		if (!project) return;
+		const period = periodOf(sentAt);
+		const usage = await usageRow(tx, projectId, period);
+		const billing: LicenseBilling = usage.emails_free_used < emailAllowance(project) ? "free" : "paid";
+
+		const claimed = await tx`UPDATE email_messages SET license_billing = ${billing} WHERE uuid = ${emailId} AND license_billing IS NULL`;
+		if (claimed.count === 0) return;
+
+		if (billing === "free") {
+			await tx`UPDATE project_usage SET emails_free_used = emails_free_used + 1 WHERE project = ${projectId} AND period = ${period}`;
+		} else {
+			await tx`UPDATE project_usage SET emails_paid_used = emails_paid_used + 1 WHERE project = ${projectId} AND period = ${period}`;
+			await tx`UPDATE projects SET paid_emails = paid_emails - 1 WHERE uuid = ${projectId}`;
+		}
+	});
 }
 
 async function billPayment(sql: SQL, project: Pick<ProjectRow, "uuid" | "free_transactions">, payment: { uuid: string; settled_at: number }) {
@@ -200,6 +263,12 @@ export interface ProjectUsage {
 	storage_remaining: number | null;
 	storage_grants: StorageGrant[];
 	scheduled: ScheduledAddOn[];
+	emails_metered: boolean;
+	emails_free_allowance: number;
+	emails_free_used: number;
+	emails_paid_used: number;
+	emails_paid_balance: number;
+	emails_remaining: number | null;
 }
 
 export interface EmployeeSeatGrant {
@@ -370,6 +439,7 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		...(await employeeSeatsFor(projectId, now)),
 		...storage,
 		scheduled: await scheduledAddOns(projectId, project, now),
+		...(await emailUsageFor(projectId, now)),
 	};
 }
 
@@ -419,6 +489,7 @@ export interface NewLicense {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 	price: number | null;
 	currency: string | null;
 	buyer_name: string | null;
@@ -463,10 +534,10 @@ export async function issueLicenses(
 					});
 		const code = signed ? signedCode(uuid) : generateLicenseCode();
 		await sql`
-			INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, status, price, currency, buyer_name, buyer_email,
-				note, created_by, server_id, signed_key, created, updated)
+			INSERT INTO license_keys(uuid, code, type, transactions, duration_days, storage_gb, employees, emails, status, price, currency, buyer_name,
+				buyer_email, note, created_by, server_id, signed_key, created, updated)
 			VALUES(${uuid}, ${code}, ${license.type}, ${license.transactions}, ${license.duration_days}, ${license.storage_gb}, ${license.employees},
-				'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email}, ${license.note}, ${createdBy}, ${server},
+				${license.emails}, 'available', ${license.price}, ${license.currency}, ${license.buyer_name}, ${license.buyer_email}, ${license.note}, ${createdBy}, ${server},
 				${signed}, ${timestamp}, ${timestamp})
 		`;
 		issued.push({ uuid, code, signed_key: signed });
@@ -622,6 +693,7 @@ export interface LicensePreview {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 	timed: boolean;
 	adds_up: boolean;
 	running_until: number | null;
@@ -643,6 +715,7 @@ export async function previewLicense(
 		duration_days: license.duration_days,
 		storage_gb: license.storage_gb,
 		employees: license.employees,
+		emails: license.emails,
 		timed,
 		adds_up: SCHEDULED_LICENSE_TYPES.includes(license.type),
 		running_until: timed ? await runningUntil(projectId, license.type, now) : null,
@@ -674,6 +747,8 @@ export async function redeemLicense(
 
 		if (license.type === "transactions") {
 			await tx`UPDATE projects SET paid_transactions = paid_transactions + ${license.transactions ?? 0}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+		} else if (license.type === "emails") {
+			await tx`UPDATE projects SET paid_emails = paid_emails + ${license.emails ?? 0}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 		} else if (ADD_ON_LICENSE_TYPES.includes(license.type) && starts === null) {
 			await extendAddOn(tx, projectId, license.type, license.duration_days ?? 0, timestamp);
 		}
@@ -694,6 +769,7 @@ export function presentLicense(license: LicenseKeyRow, revealCode: boolean) {
 		duration_days: license.duration_days,
 		storage_gb: license.storage_gb,
 		employees: license.employees,
+		emails: license.emails,
 		status: license.status,
 		price: license.price,
 		currency: license.currency,

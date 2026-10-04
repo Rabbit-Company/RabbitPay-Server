@@ -9,7 +9,7 @@ const { default: Database, initialize: initializeDatabase } = await import("../s
 const { default: Cache } = await import("../server/cache");
 const { Settings, reloadSettings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
-const { deliverPendingEmails } = await import("../server/email/outbox");
+const { deliverPendingEmails, queueEmail } = await import("../server/email/outbox");
 const { generateLicenseCode, normalizeLicenseCode, extendWhiteLabel, periodOf, storageFor, activateScheduledLicenses, DAY } =
 	await import("../server/licensing");
 const { readLogo } = await import("../server/branding");
@@ -657,6 +657,9 @@ describe("white label", () => {
 		expect(message.from.address).toBe("billing@shop.test");
 		expect(message.text).not.toContain("RabbitPay");
 		expect(message.html).toContain(`/api/v1/public/projects/${projectUuid}/logo?v=`);
+		const [own] = (await Database`SELECT sent_via, license_billing FROM email_messages WHERE uuid = ${sent.data.uuid}`) as any[];
+		expect(own).toEqual({ sent_via: "project", license_billing: null });
+		expect(await license()).toMatchObject({ emails_free_used: 0, emails_paid_used: 0 });
 
 		const tested = await call("POST", `${base()}/email-server/test`, { token: ownerToken, body: { to: "owner@shop.test" } });
 		expect(tested.data.to).toBe("owner@shop.test");
@@ -697,5 +700,171 @@ describe("white label", () => {
 		expect((await call("DELETE", `${base()}/email-server`, { token: ownerToken })).error).toBe(0);
 		expect((await call("GET", `${base()}/email-server`, { token: ownerToken })).data).toBeNull();
 		expect((await call("GET", base(), { token: ownerToken })).data).toMatchObject({ has_logo: false, custom_email_server: false });
+	});
+});
+
+describe("email limits", () => {
+	let mailProject = "";
+	let mailCustomer = "";
+	const mailBase = () => `/api/v1/projects/${mailProject}`;
+
+	async function mailLicense() {
+		return (await call("GET", `${mailBase()}/license`, { token: ownerToken })).data;
+	}
+
+	async function mailInvoice(): Promise<string> {
+		const res = await call("POST", `${mailBase()}/invoices`, {
+			token: ownerToken,
+			body: {
+				customer: mailCustomer,
+				due_date: Date.now() + 14 * DAY,
+				status: "open",
+				items: [{ description: "Work", quantity: 1, unit_price: 1000, tax_rate: 0 }],
+			},
+		});
+		if (res.error !== 0) throw new Error(res.info);
+		return res.data.uuid;
+	}
+
+	async function deliver() {
+		await Bun.sleep(5);
+		await deliverPendingEmails(Date.now() + 60 * 60 * 1000);
+	}
+
+	async function emailInvoice(invoice: string) {
+		return await call("POST", `${mailBase()}/invoices/${invoice}/email`, { token: ownerToken, body: {} });
+	}
+
+	beforeAll(async () => {
+		Settings.email.enabled = true;
+		mailProject = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "lic-mail", currency: "EUR" } })).data.uuid;
+		mailCustomer = (await call("POST", `${mailBase()}/customers`, { token: ownerToken, body: { email: "reader@example.com", name: "Reader" } })).data.uuid;
+	});
+
+	afterAll(() => {
+		Settings.email.enabled = false;
+	});
+
+	test("start with the server default of free emails, which an administrator can override", async () => {
+		expect(Settings.licensing.free_emails).toBeGreaterThan(2);
+		expect(await mailLicense()).toMatchObject({
+			emails_metered: true,
+			emails_free_allowance: Settings.licensing.free_emails,
+			emails_free_used: 0,
+			emails_paid_balance: 0,
+			emails_remaining: Settings.licensing.free_emails,
+		});
+
+		const res = await call("PATCH", `/api/v1/admin/projects/${mailProject}`, { token: adminToken, body: { free_emails: 2 } });
+		expect(res.data).toMatchObject({ free_emails: 2, emails_free_allowance: 2, emails_remaining: 2, free_transactions: null });
+		expect((await call("PATCH", `/api/v1/admin/projects/${mailProject}`, { token: adminToken, body: { free_emails: -1 } })).error).toBe(1099);
+	});
+
+	test("only delivered emails to customers use the allowance", async () => {
+		const invoice = await mailInvoice();
+		const queued = await emailInvoice(invoice);
+		expect(queued.error).toBe(0);
+		await deliver();
+		expect(await mailLicense()).toMatchObject({ emails_free_used: 1, emails_paid_used: 0, emails_remaining: 1 });
+		const [row] = (await Database`SELECT sent_via, license_billing FROM email_messages WHERE uuid = ${queued.data.uuid}`) as any[];
+		expect(row).toEqual({ sent_via: "server", license_billing: "free" });
+
+		await call("POST", `${mailBase()}/members`, { token: ownerToken, body: { email: "new-teammate@example.com", role: "viewer" } });
+		await deliver();
+		const [invitation] = (await Database`SELECT status, license_billing FROM email_messages WHERE project = ${mailProject} AND kind = 'invitation'`) as any[];
+		expect(invitation).toEqual({ status: "sent", license_billing: null });
+		expect(await mailLicense()).toMatchObject({ emails_free_used: 1, emails_remaining: 1 });
+	});
+
+	test("an exhausted project is refused up front and queued emails fail until a license is redeemed", async () => {
+		const invoice = await mailInvoice();
+		const last = await emailInvoice(invoice);
+		await deliver();
+		const waiting = {
+			data: {
+				uuid: await queueEmail(Database, {
+					project: mailProject,
+					invoice,
+					kind: "reminder_before",
+					to: "reader@example.com",
+					senderName: "lic-mail",
+					replyTo: null,
+					subject: "Reminder",
+					text: "Reminder",
+					html: "<p>Reminder</p>",
+					sentBy: null,
+				}),
+			},
+		};
+		await deliver();
+
+		expect(await mailLicense()).toMatchObject({ emails_free_used: 2, emails_remaining: 0 });
+		const rows = (await Database`
+			SELECT uuid, status, last_error, license_billing FROM email_messages WHERE uuid IN ${Database([last.data.uuid, waiting.data.uuid])}
+		`) as any[];
+		expect(rows.find((row) => row.uuid === last.data.uuid)).toMatchObject({ status: "sent", license_billing: "free" });
+		expect(rows.find((row) => row.uuid === waiting.data.uuid)).toMatchObject({
+			status: "failed",
+			last_error: "This project has no emails left this month",
+			license_billing: null,
+		});
+
+		const refused = await emailInvoice(invoice);
+		expect(refused.error).toBe(1294);
+		expect(refused.status).toBe(402);
+		expect((await call("POST", `${mailBase()}/emails/${waiting.data.uuid}/resend`, { token: ownerToken })).error).toBe(1294);
+
+		await call("POST", `${mailBase()}/members`, { token: ownerToken, body: { email: "another-teammate@example.com", role: "viewer" } });
+		await deliver();
+		const invitations = (await Database`SELECT status FROM email_messages WHERE project = ${mailProject} AND kind = 'invitation'`) as any[];
+		expect(invitations.map((row) => row.status)).toEqual(["sent", "sent"]);
+
+		const created = await createLicense({ type: "emails", emails: 3 });
+		const redeemed = await call("POST", `${mailBase()}/license/redeem`, { token: ownerToken, body: { code: created.code } });
+		expect(redeemed.data).toMatchObject({ emails_paid_balance: 3, emails_remaining: 3 });
+		expect(redeemed.data.licenses[0]).toMatchObject({ type: "emails", emails: 3, transactions: null, duration_days: null });
+
+		expect((await call("POST", `${mailBase()}/emails/${waiting.data.uuid}/resend`, { token: ownerToken })).error).toBe(0);
+		await deliver();
+		expect(await mailLicense()).toMatchObject({ emails_free_used: 2, emails_paid_used: 1, emails_paid_balance: 2, emails_remaining: 2 });
+		const [resent] = (await Database`SELECT status, license_billing FROM email_messages WHERE uuid = ${waiting.data.uuid}`) as any[];
+		expect(resent).toEqual({ status: "sent", license_billing: "paid" });
+	});
+
+	test("email keys are validated and only made for this server", async () => {
+		for (const body of [
+			{ type: "emails" },
+			{ type: "emails", emails: 0 },
+			{ type: "emails", emails: 1.5 },
+			{ type: "emails", emails: 100, server_id: "RPS-00000-00000-00000-00000" },
+		]) {
+			expect((await call("POST", "/api/v1/admin/licenses", { token: adminToken, body })).error).toBe(1095);
+		}
+
+		const created = await createLicense({ type: "emails", emails: 1000 });
+		const preview = await call("POST", `${mailBase()}/license/preview`, { token: ownerToken, body: { code: created.code } });
+		expect(preview.data).toMatchObject({ type: "emails", emails: 1000, timed: false });
+	});
+
+	test("the admin project list shows email usage and turning licensing off lifts the limit", async () => {
+		const listed = (await call("GET", "/api/v1/admin/projects?search=lic-mail", { token: adminToken })).data.projects[0];
+		expect(listed).toMatchObject({
+			free_emails: 2,
+			emails_free_allowance: 2,
+			emails_free_used: 2,
+			emails_paid_used: 1,
+			emails_paid_balance: 2,
+			emails_remaining: 2,
+		});
+
+		await call("PATCH", "/api/v1/admin/settings", { token: adminToken, body: { values: { "licensing.enabled": false } } });
+		Settings.email.enabled = true;
+		expect(await mailLicense()).toMatchObject({ emails_metered: false, emails_remaining: null });
+		const free = await emailInvoice(await mailInvoice());
+		await deliver();
+		const [row] = (await Database`SELECT status, license_billing FROM email_messages WHERE uuid = ${free.data.uuid}`) as any[];
+		expect(row).toEqual({ status: "sent", license_billing: null });
+		await call("PATCH", "/api/v1/admin/settings", { token: adminToken, body: { values: { "licensing.enabled": true } } });
+		expect(await mailLicense()).toMatchObject({ emails_paid_balance: 2, emails_remaining: 2 });
 	});
 });

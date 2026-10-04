@@ -279,6 +279,9 @@ of this RabbitPay server or the project's own one. An email that failed can be
 sent again from there. It keeps its place in the history instead of adding a new
 row, and its PDF is attached again.
 
+On rabbitpay.net the list also shows how many emails are left this month. See
+[Licensing](administration.md#licensing) for what counts.
+
 The content of delivered and failed emails is kept for 90 days and then
 removed. The record of what was sent to whom stays. The server administrator
 changes the period under Email, Keep email content, where 0 keeps it forever.

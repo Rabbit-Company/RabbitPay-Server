@@ -114,6 +114,7 @@ Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permis
 			duration_days: result.duration_days,
 			storage_gb: result.storage_gb,
 			employees: result.employees,
+			emails: result.emails,
 			starts_at: result.starts_at,
 		},
 	});

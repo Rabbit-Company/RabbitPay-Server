@@ -29,6 +29,7 @@ License keys add to a project:
 | Type         | What it adds                                                               |
 | ------------ | -------------------------------------------------------------------------- |
 | Transactions | Payments added to the paid balance. They never expire.                     |
+| Emails       | Emails added to the paid email balance. They never expire.                 |
 | Storage      | More document storage for a number of days.                                |
 | White label  | Your own branding for a number of days.                                    |
 | Online store | A web store for a number of days (see [Online store](online-store.md)).    |
@@ -70,6 +71,22 @@ and recurring invoices are refused with error `1096` (HTTP 402). Drafts can stil
 be created. Money that arrives for an invoice that is already open is always
 recorded. Those payments take the balance below zero, and the next transactions
 key covers them first.
+
+On the issuing server every project also gets 100 free emails each calendar
+month. Only emails to customers that were delivered through the server's email
+server count: invoices, pro forma invoices, reminders, credit notes, receipts,
+license keys, store order updates and ticket replies. Emails to the team
+(invitations, FURS alerts, ticket and absence notices), failed emails and emails
+a white label project sends through its own email server are free. Past the free
+emails, each one takes one from the paid email balance that emails keys add to.
+
+When no emails are left, sending one by hand is refused with error `1294`
+(HTTP 402), and automatic emails such as reminders fail with the reason "This
+project has no emails left this month". They stay in the project's Emails list
+and can be sent again once a key is redeemed or the month ends. The default of
+100 is the setting Licensing, Free emails per month, and Admin, Projects sets a
+different number for one project. A self-hosted server sends through its own
+email server and has no email limit, so emails keys cannot be signed for one.
 
 Invoice and credit note PDFs, original expense attachments, stored e-invoices,
 FURS export packages and store photos count toward storage. When it is full,

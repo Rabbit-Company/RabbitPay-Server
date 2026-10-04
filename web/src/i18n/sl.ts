@@ -3882,4 +3882,25 @@ export const sl: UiDictionary = {
 	"error.1291": "To sporočilo ne obstaja.",
 	"error.1292": "Znova je mogoče poslati samo sporočilo, ki ni uspelo.",
 	"error.1293": "Vsebina tega sporočila se ne hrani več. Iz dokumenta pošljite novo sporočilo.",
+	"items.license_emails": "E-pošta",
+	"items.license_rate_emails": "Cena za 1.000 sporočil",
+	"items.license_amount_emails": "Najmanj sporočil",
+	"shop.license_emails": "e-poštnih sporočil: {count}",
+	"shop.license_amount_emails": "E-poštna sporočila",
+	"shop.license_hosted_only":
+		"Ključi za e-pošto se uporabljajo na rabbitpay.net. Strežnik z lastnim gostovanjem pošilja prek svojega poštnega strežnika brez omejitve.",
+	"license.grants_emails": "e-poštnih sporočil: {count}",
+	"license.emails_this_month": "E-pošta ta mesec",
+	"license.emails_free_used": "Porabljena brezplačna sporočila",
+	"license.emails_paid_used": "Porabljena plačana sporočila ta mesec",
+	"license.emails_left": "Preostala sporočila",
+	"license.emails_note":
+		"Štejejo samo dostavljena sporočila vašim kupcem. Sporočila vaši ekipi in sporočila, poslana prek vašega poštnega strežnika, so brezplačna. {allowance} brezplačnih sporočil se ponastavi {date}, ostaja jih {left}. Po tem se sporočila odštevajo od plačanega stanja, ki ne poteče.",
+	"license.emails_none_left":
+		"Sporočil ni več. Pošiljanje kupcem ne bo uspelo, dokler ne unovčite licence za e-pošto ali se mesec ne konča. Neuspela sporočila lahko znova pošljete v razdelku E-pošta.",
+	"license.emails_open": "Odpri E-pošto",
+	"outbox.none_left": "Ta mesec ni več sporočil. Pošiljanje kupcem ne bo uspelo, dokler ne unovčite licence za e-pošto.",
+	"outbox.left": "ta mesec preostane sporočil: {count}",
+	"error.1294": "Ta projekt ta mesec nima več e-poštnih sporočil. Za nadaljevanje unovčite licenco za e-pošto.",
+	"license.emails_unlimited": "Na tem strežniku e-pošta ni omejena. Pošilja se prek njegovega poštnega strežnika.",
 };

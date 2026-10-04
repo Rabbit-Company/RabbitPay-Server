@@ -9,12 +9,13 @@ import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { loadInvoice } from "../../invoice-service";
-import { canEmail } from "../../email/mailer";
-import { emailCount, findEmail, presentEmail, queueInvitationEmail, queueInvoiceEmail, type EmailSummaryRow } from "../../email/messages";
+import { canEmail, projectEmailServer } from "../../email/mailer";
+import { emailUsageFor } from "../../licensing";
+import { customerEmailRefusal, emailCount, findEmail, presentEmail, queueInvitationEmail, queueInvoiceEmail, type EmailSummaryRow } from "../../email/messages";
 import { eslogFailure } from "../../eslog-archive";
 import { isProformaDraft } from "../../payments/recorded";
 import { deliverSoon } from "../../email/outbox";
-import { EMAIL_KINDS, EMAIL_STATUSES } from "../../email/kinds";
+import { countsTowardAllowance, EMAIL_KINDS, EMAIL_STATUSES } from "../../email/kinds";
 import { archivedInvoiceAttachment } from "../../invoice-archive";
 import { archivedCreditNoteAttachment } from "../../credit-note-archive";
 import { invoicePdf } from "../../invoice-pdf";
@@ -35,7 +36,8 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/email", Auth.required(
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
 
-	if (!canEmail(project)) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_CONFIGURED);
+	const refusal = await customerEmailRefusal(project);
+	if (refusal !== null) return Utils.fail(ctx, refusal);
 
 	const invoiceId = ctx.params["invoice"];
 	if (!Validate.uuid(invoiceId)) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_ID);
@@ -241,6 +243,7 @@ Server.app.get("/api/v1/projects/:uuid/emails", Auth.required(), Permissions.req
 		total: counts.pending + counts.sent + counts.failed,
 		counts,
 		kinds: EMAIL_KINDS.filter((value) => byKind.has(value)).map((value) => ({ kind: value, ...byKind.get(value)! })),
+		remaining: projectEmailServer(project) === null ? (await emailUsageFor(project.uuid)).emails_remaining : null,
 		limit,
 		offset,
 	});
@@ -296,6 +299,8 @@ Server.app.post("/api/v1/projects/:uuid/emails/:email/resend", Auth.required(), 
 	if (!email) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_FOUND);
 	if (email.status !== "failed") return Utils.fail(ctx, ErrorCode.EMAIL_NOT_FAILED);
 	if (!email.has_body) return Utils.fail(ctx, ErrorCode.EMAIL_CONTENT_REMOVED);
+	const refusal = countsTowardAllowance(email.kind) ? await customerEmailRefusal(project) : null;
+	if (refusal !== null) return Utils.fail(ctx, refusal);
 
 	const attachment = await restoredAttachment(project, email);
 	if (!attachment) return Utils.fail(ctx, ErrorCode.EMAIL_CONTENT_REMOVED);

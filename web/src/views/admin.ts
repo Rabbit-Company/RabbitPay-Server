@@ -61,6 +61,7 @@ const LICENSE_STATUS_FILTERS = [
 const LICENSE_TYPE_FILTERS = [
 	{ value: "", label: "All types" },
 	{ value: "transactions", label: "Transactions" },
+	{ value: "emails", label: "Emails" },
 	{ value: "white_label", label: "White label" },
 	{ value: "storage", label: "Storage" },
 	{ value: "store", label: "Online store" },
@@ -135,8 +136,9 @@ function statCard(label: string, value: string): HTMLElement {
 	return el("div", { class: "card stat" }, el("span", { class: "stat-value" }, value), el("span", { class: "stat-label" }, label));
 }
 
-export function describeLicense(license: Pick<License, "type" | "transactions" | "duration_days" | "storage_gb" | "employees">): string {
+export function describeLicense(license: Pick<License, "type" | "transactions" | "duration_days" | "storage_gb" | "employees" | "emails">): string {
 	if (license.type === "transactions") return `${(license.transactions ?? 0).toLocaleString()} payments`;
+	if (license.type === "emails") return `${(license.emails ?? 0).toLocaleString()} emails`;
 	const days = license.duration_days ?? 0;
 	if (license.type === "storage") return `${(license.storage_gb ?? 0).toLocaleString()} GB storage for ${days} ${days === 1 ? "day" : "days"}`;
 	if (license.type === "employees") {
@@ -263,6 +265,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 	const type = select(
 		[
 			{ value: "transactions", label: "Transactions" },
+			{ value: "emails", label: "Emails" },
 			{ value: "white_label", label: "White label" },
 			{ value: "storage", label: "Storage" },
 			{ value: "store", label: "Online store" },
@@ -276,6 +279,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 	const days = input("number", { min: "1", max: "3650", step: "1", value: "30", required: true });
 	const storage = input("number", { min: "1", max: "1000000", step: "1", value: "10", required: true });
 	const employees = input("number", { min: "1", max: "1000000", step: "1", value: "10", required: true });
+	const emails = input("number", { min: "1", step: "1", value: "1000", required: true });
 	const quantity = input("number", { min: "1", max: "100", step: "1", value: "1", required: true });
 	const server = input("text", { placeholder: "Leave empty for a key used on this server", autocomplete: "off", maxlength: "27" });
 	const price = input("number", { min: "0", step: "0.01", placeholder: "Optional" });
@@ -293,6 +297,12 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 	);
 	const storageField = field("Storage in GB", storage, "Added to the project's document storage capacity, for the days below.");
 	const employeesField = field("Employees", employees, "Added to the people the workforce license covers, for the days below.");
+	const emailsField = field("Emails", emails, "Added to the project's paid emails. They never expire and only count on this server.");
+	const serverField = field(
+		"For a self-hosted server",
+		server,
+		"The customer's Server ID from their Admin overview. The key is signed and only works on that server."
+	);
 
 	const sync = () => {
 		const transactionsSelected = type.value === "transactions";
@@ -305,6 +315,10 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			type.value === "accounting" ||
 			storageSelected;
 		const employeesSelected = type.value === "employees";
+		const emailsSelected = type.value === "emails";
+		emailsField.hidden = !emailsSelected;
+		emails.required = emailsSelected;
+		serverField.hidden = emailsSelected;
 		transactionsField.hidden = !transactionsSelected;
 		daysField.hidden = !white;
 		storageField.hidden = !storageSelected;
@@ -334,9 +348,10 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 					buyer_name: buyerName.value.trim() || null,
 					buyer_email: buyerEmail.value.trim() || null,
 					note: note.value.trim() || null,
-					server_id: server.value.trim() || null,
+					server_id: type.value === "emails" ? null : server.value.trim() || null,
 				};
 				if (body.type === "transactions") body.transactions = Number(transactions.value);
+				else if (body.type === "emails") body.emails = Number(emails.value);
 				else body.duration_days = Number(days.value);
 				if (body.type === "storage") body.storage_gb = Number(storage.value);
 				if (body.type === "employees") body.employees = Number(employees.value);
@@ -356,12 +371,13 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			{ class: "form-grid" },
 			field("Type", type),
 			transactionsField,
+			emailsField,
 			employeesField,
 			daysField,
 			storageField,
 			field("How many keys", quantity, "Up to 100 at once")
 		),
-		field("For a self-hosted server", server, "The customer's Server ID from their Admin overview. The key is signed and only works on that server."),
+		serverField,
 		el("h3", {}, "Purchase"),
 		el("div", { class: "form-grid" }, field("Price per key", price), field("Currency", currency), field("Buyer", buyerName), field("Buyer email", buyerEmail)),
 		field("Note", note),
@@ -572,17 +588,23 @@ export async function adminLicensesView(): Promise<HTMLElement> {
 	);
 }
 
-function freeLimitDialog(project: AdminProject, defaultAllowance: () => number, onSaved: () => void) {
+function freeLimitDialog(project: AdminProject, defaultAllowance: () => number, defaultEmails: () => number, onSaved: () => void) {
 	const custom = input("checkbox");
 	custom.checked = project.free_transactions !== null;
 	const amount = input("number", { min: "0", step: "1", value: String(project.free_transactions ?? project.free_allowance), required: true });
 	const amountField = field("Free payments per month", amount);
+	const customEmails = input("checkbox");
+	customEmails.checked = project.free_emails !== null;
+	const emails = input("number", { min: "0", step: "1", value: String(project.free_emails ?? project.emails_free_allowance), required: true });
+	const emailsField = field("Free emails per month", emails);
 	const submit = el("button", { class: "button primary", type: "submit" }, "Save");
 
 	const sync = () => {
 		amountField.hidden = !custom.checked;
+		emailsField.hidden = !customEmails.checked;
 	};
 	custom.addEventListener("change", sync);
+	customEmails.addEventListener("change", sync);
 	sync();
 
 	const form = el(
@@ -593,9 +615,12 @@ function freeLimitDialog(project: AdminProject, defaultAllowance: () => number, 
 				event.preventDefault();
 				submit.disabled = true;
 				try {
-					await AdminApi.updateProject(project.uuid, { free_transactions: custom.checked ? Number(amount.value) : null });
+					await AdminApi.updateProject(project.uuid, {
+						free_transactions: custom.checked ? Number(amount.value) : null,
+						free_emails: customEmails.checked ? Number(emails.value) : null,
+					});
 					dialog.close();
-					toast("Free payments updated", "success");
+					toast("Free limits updated", "success");
 					onSaved();
 				} catch (error) {
 					reportError(error);
@@ -603,13 +628,16 @@ function freeLimitDialog(project: AdminProject, defaultAllowance: () => number, 
 				}
 			},
 		},
-		el("label", { class: "switch" }, custom, el("span", {}, "Use a custom limit for this project")),
-		el("p", { class: "muted" }, `Without one, the server default of ${defaultAllowance().toLocaleString()} applies.`),
+		el("label", { class: "switch" }, custom, el("span", {}, "Use a custom payment limit for this project")),
+		el("p", { class: "muted" }, `Without one, the server default of ${defaultAllowance().toLocaleString()} payments applies.`),
 		amountField,
+		el("label", { class: "switch" }, customEmails, el("span", {}, "Use a custom email limit for this project")),
+		el("p", { class: "muted" }, `Without one, the server default of ${defaultEmails().toLocaleString()} emails applies.`),
+		emailsField,
 		el("div", { class: "dialog-actions" }, submit)
 	);
 
-	const dialog = modal(`Free payments for ${project.name}`, form);
+	const dialog = modal(`Free limits for ${project.name}`, form);
 }
 
 function applyLicenseDialog(project: AdminProject, onApplied: () => void) {
@@ -642,6 +670,7 @@ function applyLicenseDialog(project: AdminProject, onApplied: () => void) {
 export async function adminProjectsView(): Promise<HTMLElement> {
 	const settings = await AdminApi.settings();
 	const defaultAllowance = () => Number((settings.license_issuer ? settings.values : settings.defaults)["licensing.free_transactions"]);
+	const defaultEmails = () => Number((settings.license_issuer ? settings.values : settings.defaults)["licensing.free_emails"]);
 	const search = input("search", { placeholder: "Search name, owner or id" });
 
 	const row = (project: AdminProject): HTMLElement => {
@@ -666,6 +695,13 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 				project.free_transactions !== null ? el("div", { class: "muted" }, "custom limit") : null
 			),
 			el("td", { class: project.paid_balance < 0 ? "mono warn" : "mono" }, project.paid_balance.toLocaleString()),
+			el(
+				"td",
+				{ class: "mono" },
+				project.emails_metered ? `${project.emails_free_used.toLocaleString()} / ${project.emails_free_allowance.toLocaleString()}` : "unlimited",
+				project.emails_metered ? el("div", { class: "muted" }, `${Math.max(project.emails_paid_balance, 0).toLocaleString()} paid left`) : null,
+				project.free_emails !== null ? el("div", { class: "muted" }, "custom limit") : null
+			),
 			el("td", { class: "mono" }, storage),
 			el("td", {}, whiteLabel),
 			el("td", {}, store),
@@ -681,8 +717,8 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 					settings.license_issuer
 						? el(
 								"button",
-								{ class: "button ghost small", type: "button", onClick: () => freeLimitDialog(project, defaultAllowance, list.refresh) },
-								"Free limit"
+								{ class: "button ghost small", type: "button", onClick: () => freeLimitDialog(project, defaultAllowance, defaultEmails, list.refresh) },
+								"Free limits"
 							)
 						: null,
 					el("button", { class: "button ghost small", type: "button", onClick: () => applyLicenseDialog(project, list.refresh) }, "Apply key")
@@ -697,7 +733,20 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 			return { items: result.projects, total: result.total };
 		},
 		row,
-		["Project", "Owner", "Free used this month", "Paid balance", "Storage", "White label", "Online store", "Workforce", "Accounting", "Created", ""],
+		[
+			"Project",
+			"Owner",
+			"Free used this month",
+			"Paid balance",
+			"Emails this month",
+			"Storage",
+			"White label",
+			"Online store",
+			"Workforce",
+			"Accounting",
+			"Created",
+			"",
+		],
 		"No projects match."
 	);
 

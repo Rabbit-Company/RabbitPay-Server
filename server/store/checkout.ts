@@ -156,6 +156,7 @@ export function readCartLines(value: unknown): CartLineInput[] | null {
 function describeLicense(language: string, product: LicenseProduct, choice: LicenseChoice): string {
 	const parts = [
 		product.type === "transactions" ? t(language, "license.line_payments", { count: choice.amount ?? 0 }) : null,
+		product.type === "emails" ? t(language, "license.line_emails", { count: choice.amount ?? 0 }) : null,
 		product.type === "storage" ? t(language, "license.line_storage", { count: choice.amount ?? 0 }) : null,
 		product.type === "employees" ? t(language, "license.line_employees", { count: choice.amount ?? 0 }) : null,
 		choice.days !== null ? t(language, "license.line_days", { count: choice.days }) : null,

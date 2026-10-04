@@ -1150,7 +1150,7 @@ export interface Branding {
 	logo: string | null;
 }
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails";
 
 export interface License {
 	uuid: string;
@@ -1160,6 +1160,7 @@ export interface License {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 	status: "available" | "redeemed" | "revoked";
 	price: number | null;
 	currency: string | null;
@@ -1186,6 +1187,7 @@ export interface LicensePreview {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 	timed: boolean;
 	adds_up: boolean;
 	running_until: number | null;
@@ -1197,6 +1199,7 @@ export interface LicenseInput {
 	duration_days?: number;
 	storage_gb?: number;
 	employees?: number;
+	emails?: number;
 	quantity?: number;
 	price?: number | null;
 	currency?: string | null;
@@ -1240,6 +1243,12 @@ export interface ProjectLicense extends LicenseIdentity {
 	storage_remaining: number | null;
 	storage_grants: { storage_gb: number; from: number; until: number }[];
 	scheduled: { type: LicenseType; from: number; until: number }[];
+	emails_metered: boolean;
+	emails_free_allowance: number;
+	emails_free_used: number;
+	emails_paid_used: number;
+	emails_paid_balance: number;
+	emails_remaining: number | null;
 	logo: string | null;
 	licenses: License[];
 }
@@ -1314,6 +1323,13 @@ export interface AdminProject {
 	created: number;
 	created_by: string;
 	free_transactions: number | null;
+	free_emails: number | null;
+	emails_metered: boolean;
+	emails_free_allowance: number;
+	emails_free_used: number;
+	emails_paid_used: number;
+	emails_paid_balance: number;
+	emails_remaining: number | null;
 	free_allowance: number;
 	free_used: number;
 	paid_used: number;
@@ -1977,6 +1993,7 @@ export interface EmailList {
 	total: number;
 	counts: EmailCounts;
 	kinds: ({ kind: EmailKind } & EmailCounts)[];
+	remaining: number | null;
 }
 
 export interface Invitation {
@@ -3534,7 +3551,7 @@ export const AdminApi = {
 		return request<{ projects: AdminProject[]; total: number; period: string }>("GET", `/admin/projects${listQuery(options)}`);
 	},
 
-	updateProject(uuid: string, changes: { free_transactions: number | null }) {
+	updateProject(uuid: string, changes: { free_transactions?: number | null; free_emails?: number | null }) {
 		return request<AdminProject>("PATCH", `/admin/projects/${uuid}`, changes);
 	},
 

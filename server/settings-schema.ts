@@ -101,6 +101,7 @@ export interface ServerSettings {
 	licensing: {
 		enabled: boolean;
 		free_transactions: number;
+		free_emails: number;
 		free_storage_gb: number;
 		free_employees: number;
 	};
@@ -244,7 +245,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		phone: "",
 		business_only: false,
 	},
-	licensing: { enabled: true, free_transactions: 50, free_storage_gb: 1, free_employees: 5 },
+	licensing: { enabled: true, free_transactions: 50, free_emails: 100, free_storage_gb: 1, free_employees: 5 },
 	payments: { allow_private_wallets: false },
 	invoices: { overdue_interval: 300, recurring_interval: 300, document_interval: 60 },
 	fiscal: { poll_interval: 30, software_supplier_tax_number: 0, software_supplier_name: "RabbitPay" },
@@ -500,6 +501,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				key: "licensing.free_transactions",
 				label: "Free payments per month",
 				hint: "Default for every project. You can override it per project.",
+				kind: "number",
+				min: 0,
+			},
+			{
+				key: "licensing.free_emails",
+				label: "Free emails per month",
+				hint: "Emails to customers sent through this server's email server. Default for every project. You can override it per project.",
 				kind: "number",
 				min: 0,
 			},

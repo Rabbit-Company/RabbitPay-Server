@@ -14,8 +14,7 @@ import { createInvoice, loadItems, present } from "../../invoice-service";
 import { cancelInvoice } from "../../invoice-cancel";
 import { invoiceDocument } from "../../invoice-document";
 import { invoicePdf, pdfResponse } from "../../invoice-pdf";
-import { canEmail } from "../../email/mailer";
-import { emailCount, findEmail, queueReceiptEmail } from "../../email/messages";
+import { customerEmailRefusal, emailCount, findEmail, queueReceiptEmail } from "../../email/messages";
 import { PAYABLE_STATUSES, recordPayment } from "../../payments/recorded";
 import { fiscalBlocked } from "../../fiscal/config";
 import { submitNow } from "../../fiscal/documents";
@@ -236,7 +235,8 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/email", Auth.required(),
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
 
-	if (!canEmail(project)) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_CONFIGURED);
+	const refusal = await customerEmailRefusal(project);
+	if (refusal !== null) return Utils.fail(ctx, refusal);
 
 	const sale = await findSale(ctx);
 	if (typeof sale === "number") return Utils.fail(ctx, sale);

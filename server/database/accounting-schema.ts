@@ -4,7 +4,7 @@ import { run } from "./schema";
 import { schemaTypes } from "./schema-types";
 import { LICENSE_TYPES_WITH_SEATS, replaceCheck } from "./workforce-schema";
 
-const LICENSE_TYPES_WITH_ACCOUNTING = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees', 'accounting'))";
+export const LICENSE_TYPES_WITH_ACCOUNTING = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees', 'accounting'))";
 
 export async function createAccountingSchema(sql: SQL, dialect: Dialect) {
 	const types = schemaTypes(dialect);

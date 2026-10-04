@@ -12,6 +12,7 @@ import TwoFactor from "../../two-factor";
 import { deleteAccount, deletionPlan, exportAccount, exportResponse } from "../../account-data";
 import { isLicenseIssuer } from "../../license-signing";
 import { normalizeServerId, serverId } from "../../server-identity";
+import { hostedOnly } from "../../license-pricing";
 import Errors, { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { presentSettings, settingsWith, updateSettings, type ServerSettings } from "../../settings";
@@ -27,7 +28,10 @@ import {
 	MAX_LICENSE_EMPLOYEES,
 	MAX_LICENSE_STORAGE_GB,
 	MAX_LICENSE_TRANSACTIONS,
+	MAX_LICENSE_EMAILS,
 	createLicenses,
+	emailAllowance,
+	emailsMetered,
 	freeAllowance,
 	accountingActive,
 	isLicenseType,
@@ -66,6 +70,7 @@ interface CreateLicenseBody {
 	duration_days?: unknown;
 	storage_gb?: unknown;
 	employees?: unknown;
+	emails?: unknown;
 	quantity?: unknown;
 	price?: unknown;
 	currency?: unknown;
@@ -150,6 +155,13 @@ async function presentProject(project: ProjectRow) {
 		created: project.created,
 		created_by: project.created_by,
 		free_transactions: project.free_transactions,
+		free_emails: project.free_emails,
+		emails_metered: usage.emails_metered,
+		emails_free_allowance: usage.emails_free_allowance,
+		emails_free_used: usage.emails_free_used,
+		emails_paid_used: usage.emails_paid_used,
+		emails_paid_balance: usage.emails_paid_balance,
+		emails_remaining: usage.emails_remaining,
 		free_allowance: usage.free_allowance,
 		free_used: usage.free_used,
 		paid_used: usage.paid_used,
@@ -386,7 +398,7 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 	if (!isLicenseType(data.type)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	const wantsServer = data.server_id !== undefined && data.server_id !== null && data.server_id !== "";
 	const server = wantsServer ? normalizeServerId(data.server_id) : null;
-	if (wantsServer && server === null) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
+	if (wantsServer && (server === null || hostedOnly(data.type))) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	const quantity = data.quantity === undefined ? 1 : data.quantity;
 	if (!isWholeNumber(quantity, 1, MAX_LICENSE_BATCH)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 
@@ -394,6 +406,8 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 	const durationDays = TIMED_LICENSE_TYPES.includes(data.type) ? data.duration_days : null;
 	const storageGb = data.type === "storage" ? data.storage_gb : null;
 	const employees = data.type === "employees" ? data.employees : null;
+	const emails = data.type === "emails" ? data.emails : null;
+	if (data.type === "emails" && !isWholeNumber(emails, 1, MAX_LICENSE_EMAILS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (data.type === "transactions" && !isWholeNumber(transactions, 1, MAX_LICENSE_TRANSACTIONS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (TIMED_LICENSE_TYPES.includes(data.type) && !isWholeNumber(durationDays, 1, MAX_LICENSE_DAYS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (data.type === "storage" && !isWholeNumber(storageGb, 1, MAX_LICENSE_STORAGE_GB)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
@@ -408,6 +422,7 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 		duration_days: durationDays as number | null,
 		storage_gb: storageGb as number | null,
 		employees: employees as number | null,
+		emails: emails as number | null,
 		...purchase,
 	};
 	const created = await createLicenses(license, quantity, account.username, server);
@@ -421,6 +436,7 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 			duration_days: license.duration_days,
 			storage_gb: license.storage_gb,
 			employees: license.employees,
+			emails: license.emails,
 			quantity,
 			server_id: server,
 			price: license.price,
@@ -501,8 +517,9 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 	const period = periodOf(Date.now());
 	const usage = rows.length
 		? ((await Database`
-				SELECT project, free_used, paid_used FROM project_usage WHERE period = ${period} AND project IN ${Database(rows.map((row) => row.uuid))}
-			`) as { project: string; free_used: number; paid_used: number }[])
+				SELECT project, free_used, paid_used, emails_free_used, emails_paid_used FROM project_usage
+				WHERE period = ${period} AND project IN ${Database(rows.map((row) => row.uuid))}
+			`) as { project: string; free_used: number; paid_used: number; emails_free_used: number; emails_paid_used: number }[])
 		: [];
 	const usageByProject = new Map(usage.map((row) => [row.project, row]));
 	const storage = await Promise.all(rows.map((row) => storageFor(row.uuid)));
@@ -512,6 +529,9 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 			const used = usageByProject.get(project.uuid);
 			const allowance = freeAllowance(project);
 			const freeUsed = used?.free_used ?? 0;
+			const emailsAllowance = emailAllowance(project);
+			const emailsFreeUsed = Number(used?.emails_free_used ?? 0);
+			const emailsMeteredHere = emailsMetered();
 			return {
 				uuid: project.uuid,
 				name: project.name,
@@ -520,6 +540,13 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 				created: project.created,
 				created_by: project.created_by,
 				free_transactions: project.free_transactions,
+				free_emails: project.free_emails,
+				emails_metered: emailsMeteredHere,
+				emails_free_allowance: emailsAllowance,
+				emails_free_used: emailsFreeUsed,
+				emails_paid_used: Number(used?.emails_paid_used ?? 0),
+				emails_paid_balance: project.paid_emails,
+				emails_remaining: emailsMeteredHere ? Math.max(emailsAllowance - emailsFreeUsed, 0) + Math.max(project.paid_emails, 0) : null,
 				free_allowance: allowance,
 				free_used: freeUsed,
 				paid_used: used?.paid_used ?? 0,
@@ -547,26 +574,42 @@ Server.app.patch("/api/v1/admin/projects/:project", ...guard, async (ctx) => {
 	const project = await findProject(ctx.params["project"]);
 	if (!project) return Utils.fail(ctx, ErrorCode.PROJECT_NOT_FOUND);
 
-	let data: { free_transactions?: unknown };
+	let data: { free_transactions?: unknown; free_emails?: unknown };
 	try {
-		data = await ctx.body<{ free_transactions?: unknown }>();
+		data = await ctx.body<{ free_transactions?: unknown; free_emails?: unknown }>();
 	} catch {
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
 	if (!isLicenseIssuer()) return Utils.fail(ctx, ErrorCode.LICENSE_ISSUER_ONLY);
-	const free = data.free_transactions;
+	const changesEmails = data.free_emails !== undefined;
+	const changesPayments = data.free_transactions !== undefined || !changesEmails;
+	const free = changesPayments ? data.free_transactions : project.free_transactions;
+	const freeEmails = changesEmails ? data.free_emails : project.free_emails;
 	if (free !== null && !isWholeNumber(free, 0, MAX_LICENSE_TRANSACTIONS)) return Utils.fail(ctx, ErrorCode.INVALID_SETTING);
+	if (freeEmails !== null && !isWholeNumber(freeEmails, 0, MAX_LICENSE_EMAILS)) return Utils.fail(ctx, ErrorCode.INVALID_SETTING);
 
-	await Database`UPDATE projects SET free_transactions = ${free}, updated = ${Date.now()} WHERE uuid = ${project.uuid}`;
-	await Audit.record(ctx, {
-		project: project.uuid,
-		action: "project.free_transactions_changed",
-		entityType: "project",
-		entityId: project.uuid,
-		oldValue: { free_transactions: project.free_transactions },
-		newValue: { free_transactions: free },
-	});
+	await Database`UPDATE projects SET free_transactions = ${free}, free_emails = ${freeEmails}, updated = ${Date.now()} WHERE uuid = ${project.uuid}`;
+	if (changesPayments) {
+		await Audit.record(ctx, {
+			project: project.uuid,
+			action: "project.free_transactions_changed",
+			entityType: "project",
+			entityId: project.uuid,
+			oldValue: { free_transactions: project.free_transactions },
+			newValue: { free_transactions: free },
+		});
+	}
+	if (changesEmails) {
+		await Audit.record(ctx, {
+			project: project.uuid,
+			action: "project.free_emails_changed",
+			entityType: "project",
+			entityId: project.uuid,
+			oldValue: { free_emails: project.free_emails },
+			newValue: { free_emails: freeEmails },
+		});
+	}
 
 	return Utils.ok(ctx, await presentProject((await findProject(project.uuid))!));
 });
@@ -619,6 +662,7 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 			duration_days: result.duration_days,
 			storage_gb: result.storage_gb,
 			employees: result.employees,
+			emails: result.emails,
 			starts_at: result.starts_at,
 		},
 	});

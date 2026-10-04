@@ -10,8 +10,9 @@ import { invalidateProject, loadProject, projectLayout } from "./project";
 import { t, tn } from "../i18n";
 import { convertToWebp, ImageTooLargeError, ImageUnreadableError, toBase64 } from "../image";
 
-export function describeLicense(license: Pick<LicensePreview, "type" | "transactions" | "duration_days" | "storage_gb" | "employees">): string {
+export function describeLicense(license: Pick<LicensePreview, "type" | "transactions" | "duration_days" | "storage_gb" | "employees" | "emails">): string {
 	if (license.type === "transactions") return t("license.grants_payments", { count: (license.transactions ?? 0).toLocaleString() });
+	if (license.type === "emails") return t("license.grants_emails", { count: (license.emails ?? 0).toLocaleString() });
 	if (license.type === "storage") {
 		return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB`, days: tn("count.days", license.duration_days ?? 0) });
 	}
@@ -96,6 +97,57 @@ function usageCard(state: ProjectLicense): HTMLElement {
 		),
 		remaining <= 0 ? el("p", { class: "warn" }, t("license.none_left")) : null,
 		state.paid_balance < 0 ? el("p", { class: "muted" }, t("license.negative_balance", { count: Math.abs(state.paid_balance).toLocaleString() })) : null
+	);
+}
+
+function emailsCard(uuid: string, state: ProjectLicense): HTMLElement {
+	if (!state.emails_metered) {
+		return el(
+			"div",
+			{ class: "card stack" },
+			el("h2", {}, t("license.emails_this_month")),
+			el("p", {}, t("license.emails_unlimited")),
+			el("a", { class: "button ghost small", href: `/projects/${uuid}/emails` }, t("license.emails_open"))
+		);
+	}
+
+	const freeLeft = Math.max(state.emails_free_allowance - state.emails_free_used, 0);
+	const remaining = state.emails_remaining ?? 0;
+
+	return el(
+		"div",
+		{ class: "card stack" },
+		el("h2", {}, t("license.emails_this_month")),
+		el(
+			"div",
+			{ class: "totals usage-totals" },
+			el(
+				"div",
+				{ class: "totals-row" },
+				el("span", {}, t("license.emails_free_used")),
+				el("span", { class: "mono" }, t("license.of", { used: state.emails_free_used.toLocaleString(), total: state.emails_free_allowance.toLocaleString() }))
+			),
+			usageMeter(state.emails_free_used, state.emails_free_allowance),
+			el("div", { class: "totals-row" }, el("span", {}, t("license.emails_paid_used")), el("span", { class: "mono" }, state.emails_paid_used.toLocaleString())),
+			el(
+				"div",
+				{ class: "totals-row" },
+				el("span", {}, t("license.paid_balance")),
+				el("span", { class: "mono" }, Math.max(state.emails_paid_balance, 0).toLocaleString())
+			),
+			el("div", { class: "totals-row grand" }, el("span", {}, t("license.emails_left")), el("span", { class: "mono" }, remaining.toLocaleString()))
+		),
+		el(
+			"p",
+			{ class: "muted" },
+			t("license.emails_note", {
+				allowance: state.emails_free_allowance.toLocaleString(),
+				date: formatDate(state.resets_at),
+				left: freeLeft.toLocaleString(),
+			})
+		),
+		remaining <= 0 ? el("p", { class: "warn" }, t("license.emails_none_left")) : null,
+		el("a", { class: "button ghost small", href: `/projects/${uuid}/emails` }, t("license.emails_open"))
 	);
 }
 
@@ -632,6 +684,7 @@ export async function licenseView(uuid: string): Promise<HTMLElement> {
 				: el("div", {}),
 			timelineCard(state) ?? el("div", {}),
 			usageCard(state),
+			emailsCard(uuid, state),
 			storageCard(state),
 			whiteLabelCard(uuid, project, state, server, () => void refresh()),
 			storeCard(uuid, state),

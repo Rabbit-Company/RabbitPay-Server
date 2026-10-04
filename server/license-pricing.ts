@@ -1,15 +1,17 @@
 import type { LicenseType } from "./database/models";
 
 export const MAX_LICENSE_TRANSACTIONS = 100_000_000;
+export const MAX_LICENSE_EMAILS = 100_000_000;
 export const MAX_LICENSE_DAYS = 3650;
 export const MAX_LICENSE_STORAGE_GB = 1_000_000;
 export const MAX_LICENSE_EMPLOYEES = 1_000_000;
 export const MAX_LICENSE_RATE = 100_000_000;
 export const RATE_DAYS = 30;
 export const RATE_PAYMENTS = 1000;
+export const RATE_EMAILS = 1000;
 
 const SERVER_ID = /^RPS(?:-[0-9A-HJKMNP-TV-Z]{5}){4}$/;
-const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting"];
+const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails"];
 
 export interface LicenseGrant {
 	type: LicenseType;
@@ -17,6 +19,7 @@ export interface LicenseGrant {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 }
 
 export type BelowMinimum = "charge" | "refuse";
@@ -45,7 +48,19 @@ export function normalizeServerId(value: unknown): string | null {
 }
 
 export function usesAmount(type: LicenseType): boolean {
-	return type === "transactions" || type === "storage" || type === "employees";
+	return type === "transactions" || type === "storage" || type === "employees" || type === "emails";
+}
+
+export function soldByCount(type: LicenseType): boolean {
+	return type === "transactions" || type === "emails";
+}
+
+export function countRate(type: LicenseType): number {
+	return type === "emails" ? RATE_EMAILS : RATE_PAYMENTS;
+}
+
+export function hostedOnly(type: LicenseType): boolean {
+	return type === "emails";
 }
 
 export function usesDays(type: LicenseType): boolean {
@@ -54,6 +69,7 @@ export function usesDays(type: LicenseType): boolean {
 
 export function amountLimit(type: LicenseType): number {
 	if (type === "transactions") return MAX_LICENSE_TRANSACTIONS;
+	if (type === "emails") return MAX_LICENSE_EMAILS;
 	if (type === "storage") return MAX_LICENSE_STORAGE_GB;
 	return MAX_LICENSE_EMPLOYEES;
 }
@@ -116,7 +132,7 @@ export function readEnteredChoice(product: LicenseProduct, value: unknown): Lice
 
 	const wantsServer = data.server_id !== undefined && data.server_id !== null && data.server_id !== "";
 	const server = wantsServer ? normalizeServerId(data.server_id) : null;
-	if (wantsServer && server === null) return null;
+	if (wantsServer && (server === null || hostedOnly(product.type))) return null;
 
 	return { amount: amount as number | null, days: days as number | null, server_id: server };
 }
@@ -140,7 +156,7 @@ export function smallestChoice(product: LicenseProduct): LicenseChoice {
 		choice.days = Math.min(Math.max(needed, choice.days), product.max_days ?? needed);
 	}
 	if (choice.amount !== null && belowMinimum(product, choice)) {
-		const perUnit = product.type === "transactions" ? product.rate / RATE_PAYMENTS : ((choice.days ?? 0) * product.rate) / RATE_DAYS;
+		const perUnit = soldByCount(product.type) ? product.rate / countRate(product.type) : ((choice.days ?? 0) * product.rate) / RATE_DAYS;
 		choice.amount = Math.min(Math.max(Math.ceil(product.minimum / perUnit), choice.amount), product.max_amount ?? choice.amount);
 	}
 	return choice;
@@ -149,12 +165,11 @@ export function smallestChoice(product: LicenseProduct): LicenseChoice {
 export function calculatedPrice(product: LicenseProduct, choice: Pick<LicenseChoice, "amount" | "days">): number {
 	const amount = choice.amount ?? 0;
 	const days = choice.days ?? 0;
-	const price =
-		product.type === "transactions"
-			? (amount * product.rate) / RATE_PAYMENTS
-			: usesAmount(product.type)
-				? (amount * days * product.rate) / RATE_DAYS
-				: (days * product.rate) / RATE_DAYS;
+	const price = soldByCount(product.type)
+		? (amount * product.rate) / countRate(product.type)
+		: usesAmount(product.type)
+			? (amount * days * product.rate) / RATE_DAYS
+			: (days * product.rate) / RATE_DAYS;
 	return Math.round(price);
 }
 
@@ -173,5 +188,6 @@ export function grantOf(product: LicenseProduct, choice: LicenseChoice): License
 		duration_days: usesDays(product.type) ? choice.days : null,
 		storage_gb: product.type === "storage" ? choice.amount : null,
 		employees: product.type === "employees" ? choice.amount : null,
+		emails: product.type === "emails" ? choice.amount : null,
 	};
 }

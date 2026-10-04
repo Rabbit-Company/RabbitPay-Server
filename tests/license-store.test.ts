@@ -310,6 +310,13 @@ describe("license products", () => {
 		expect(smallestChoice(readLicenseProduct({ ...PAYMENTS, minimum: 5800, below_minimum: "refuse" })!)).toEqual({ amount: 2000, days: null, server_id: null });
 		expect(smallestChoice({ ...STORAGE, max_days: 90 } as never)).toEqual({ amount: 4, days: 90, server_id: null });
 
+		const emails = readLicenseProduct({ type: "emails", rate: 200, minimum: 100, below_minimum: "refuse", min_amount: 100, max_amount: 100000 })!;
+		expect(emails).toMatchObject({ type: "emails", min_days: null, max_days: null });
+		expect(licensePrice(emails, { amount: 2500, days: null })).toBe(500);
+		expect(smallestChoice(emails)).toEqual({ amount: 500, days: null, server_id: null });
+		expect(readLicenseChoice(emails, { amount: 1000 })).toEqual({ amount: 1000, days: null, server_id: null });
+		expect(readLicenseChoice(emails, { amount: 1000, server_id: "RPS-00000-00000-00000-00000" })).toBeNull();
+
 		const item = { name: "Document storage", unit_price: 0, currency: "EUR", tax_rate: 22, supply_type: "services", license: STORAGE };
 		const unreachable = { ...STORAGE, max_amount: 1, max_days: 90 };
 		expect((await call("POST", `${base()}/items`, tokens.admin, { ...item, license: unreachable })).error).toBe(1066);

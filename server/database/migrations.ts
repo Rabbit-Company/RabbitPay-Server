@@ -20,8 +20,9 @@ import {
 	createPayrollSchema,
 	createWorkforceSchema,
 	rebuildSqliteTable,
+	replaceCheck,
 } from "./workforce-schema";
-import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema } from "./accounting-schema";
+import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema, LICENSE_TYPES_WITH_ACCOUNTING } from "./accounting-schema";
 import { createRegistrySchema } from "./registry-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
@@ -34,6 +35,8 @@ async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string
 		await sql`SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND INDEX_NAME = ${name}`;
 	if (rows.length) await sql.unsafe(`DROP INDEX ${name} ON ${table}`);
 }
+
+const LICENSE_TYPES_WITH_EMAILS = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees', 'accounting', 'emails'))";
 
 export interface Migration {
 	version: number;
@@ -455,6 +458,21 @@ export const MIGRATIONS: Migration[] = [
 				`CREATE INDEX IF NOT EXISTS idx_email_messages_project ON email_messages(project, created)`,
 				`CREATE INDEX IF NOT EXISTS idx_email_messages_body ON email_messages(has_body, created)`,
 			]);
+		},
+	},
+	{
+		version: 46,
+		name: "email licenses",
+		rebuildsSqliteTables: true,
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await replaceCheck(sql, dialect, "license_keys", "white_label", "license_keys_type_check", LICENSE_TYPES_WITH_ACCOUNTING, LICENSE_TYPES_WITH_EMAILS);
+			await sql.unsafe(`ALTER TABLE license_keys ADD COLUMN emails INTEGER`);
+			await sql.unsafe(`ALTER TABLE projects ADD COLUMN free_emails ${types.int64}`);
+			await sql.unsafe(`ALTER TABLE projects ADD COLUMN paid_emails ${types.int64} NOT NULL DEFAULT 0`);
+			await sql.unsafe(`ALTER TABLE project_usage ADD COLUMN emails_free_used ${types.int64} NOT NULL DEFAULT 0`);
+			await sql.unsafe(`ALTER TABLE project_usage ADD COLUMN emails_paid_used ${types.int64} NOT NULL DEFAULT 0`);
+			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN license_billing ${types.text("status")}`);
 		},
 	},
 ];

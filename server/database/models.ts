@@ -82,6 +82,8 @@ export interface ProjectRow {
 	email_portal_link: number;
 	free_transactions: number | null;
 	paid_transactions: number;
+	free_emails: number | null;
+	paid_emails: number;
 	paid_storage_bytes: number;
 	white_label_until: number | null;
 	store_until: number | null;
@@ -540,6 +542,7 @@ export interface EmailMessageRow {
 	sent_by: string | null;
 	sent_at: number | null;
 	sent_via: EmailRoute | null;
+	license_billing: LicenseBilling | null;
 	has_body: number;
 	created: number;
 	updated: number;
@@ -581,7 +584,7 @@ export interface TransactionRow {
 
 export type LicenseBilling = "free" | "paid" | "unmetered";
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails";
 
 export type LicenseStatus = "available" | "redeemed" | "revoked";
 
@@ -593,6 +596,7 @@ export interface LicenseKeyRow {
 	duration_days: number | null;
 	storage_gb: number | null;
 	employees: number | null;
+	emails: number | null;
 	status: LicenseStatus;
 	price: number | null;
 	currency: string | null;
@@ -617,6 +621,8 @@ export interface ProjectUsageRow {
 	period: string;
 	free_used: number;
 	paid_used: number;
+	emails_free_used: number;
+	emails_paid_used: number;
 }
 
 export interface CryptoAddressRow {
