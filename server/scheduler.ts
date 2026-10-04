@@ -34,6 +34,7 @@ const DOMAIN_CHECK_MS = 5 * 60 * 1000;
 const LEDGER_POSTING_MS = 15 * 60 * 1000;
 const REGISTRY_CHECK_MS = 60 * 60 * 1000;
 const REFERENCE_RATE_CHECK_MS = 60 * 60 * 1000;
+const EMAIL_CONTENT_RETENTION_MS = 60 * 60 * 1000;
 
 function bitcoinSource(): string {
 	return bitcoinBackend() === "rpc" ? `node RPC at ${Settings.btc?.rpc_url}` : (Settings.btc?.api_url ?? "");
@@ -115,6 +116,8 @@ namespace Scheduler {
 
 		const emailInterval = Math.max(Settings.email?.poll_interval || 15, 5);
 		every(emailInterval * 1000, () => TaskEmail.run(), true);
+
+		every(EMAIL_CONTENT_RETENTION_MS, () => TaskEmail.removeOldContent(), true);
 
 		every(emailInterval * 1000, () => TaskKeys.run(), true);
 

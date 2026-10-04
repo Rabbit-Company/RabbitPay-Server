@@ -429,26 +429,11 @@ async function invoiceFormView(uuid: string, project: Project, existing: Invoice
 	return projectLayout(project, el("div", { class: "stack" }, backLink, form));
 }
 
-function emailKindLabel(kind: EmailMessage["kind"]): string {
-	const labels: Record<EmailMessage["kind"], UiKey> = {
-		invoice: "email_kind.invoice",
-		reminder_before: "email_kind.reminder_before",
-		reminder_after: "email_kind.reminder_after",
-		receipt: "email_kind.receipt",
-		invitation: "email_kind.invitation",
-		keys: "email_kind.keys",
-		credit_note: "email_kind.credit_note",
-		fiscal_alert: "email_kind.fiscal_alert",
-		order_update: "email_kind.order_update",
-		order_processing: "email_kind.order_processing",
-		order_shipped: "email_kind.order_shipped",
-		order_delivered: "email_kind.order_delivered",
-	};
-
-	return t(labels[kind]);
+export function emailKindLabel(kind: EmailMessage["kind"]): string {
+	return t(`email_kind.${kind}`);
 }
 
-const EMAIL_STATUS_PILLS: Record<EmailMessage["status"], string> = {
+export const EMAIL_STATUS_PILLS: Record<EmailMessage["status"], string> = {
 	pending: "open",
 	sent: "paid",
 	failed: "canceled",

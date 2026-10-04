@@ -755,6 +755,9 @@ export async function recurringView(uuid: string, recurringId: string): Promise<
 			"div",
 			{ class: "card" },
 			el("h3", {}, t("recurring.invoices_created")),
+			can(project, Permission.EMAIL_VIEW)
+				? el("a", { class: "button ghost small", href: `/projects/${uuid}/emails?recurring=${recurring.uuid}` }, t("recurring.view_emails"))
+				: null,
 			remoteTable(
 				[t("credits.column_number"), t("payments.status"), t("editor.total"), t("invoices.column_due"), t("recurring.column_created")],
 				async (offset, limit) => {

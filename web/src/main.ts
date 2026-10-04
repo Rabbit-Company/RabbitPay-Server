@@ -25,6 +25,7 @@ import { expensesView } from "./views/expenses";
 import { statisticsView } from "./views/statistics";
 import { editInvoiceView, invoicesView, invoiceView, newInvoiceView } from "./views/invoices";
 import { transactionsView } from "./views/transactions";
+import { emailsView } from "./views/emails";
 import { membersView } from "./views/members";
 import { settingsView } from "./views/settings";
 import { payView } from "./views/pay";
@@ -409,6 +410,10 @@ define(
 define(
 	"/projects/:uuid/transactions",
 	projectRoute([Permission.PAYMENT_VIEW], (params) => transactionsView(params.uuid))
+);
+define(
+	"/projects/:uuid/emails",
+	projectRoute([Permission.EMAIL_VIEW], (params) => emailsView(params.uuid))
 );
 define(
 	"/projects/:uuid/customers",

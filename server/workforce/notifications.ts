@@ -42,13 +42,22 @@ async function activeMembers(projectId: string): Promise<ProjectMemberRow[]> {
 	return members.filter(Permissions.isActive);
 }
 
-async function deliver(project: ProjectRow, brand: EmailBrand, kind: EmailKind, recipients: Recipient[], content: NoticeContent, sentBy: string | null) {
+async function deliver(
+	project: ProjectRow,
+	brand: EmailBrand,
+	kind: EmailKind,
+	recipients: Recipient[],
+	content: NoticeContent,
+	sentBy: string | null,
+	ticket: string | null = null
+) {
 	const unique = [...new Map(recipients.map((recipient) => [recipient.email.toLowerCase(), recipient])).values()];
 	if (unique.length === 0) return;
 	const email = noticeEmail(brand, content);
 	for (const recipient of unique) {
 		await queueEmail(Database, {
 			project: project.uuid,
+			ticket,
 			member: recipient.member,
 			kind,
 			to: recipient.email,
@@ -106,7 +115,8 @@ export function notifyCustomerReply(ticket: TicketRow, author: string, body: str
 				button: { label: t("email.ticket.open_portal"), url: portalUrl(ticket) },
 				closing: [t("email.ticket.portal_closing")],
 			},
-			actor
+			actor,
+			ticket.uuid
 		);
 	});
 }
@@ -136,7 +146,8 @@ export function notifyCustomerStatus(ticket: TicketRow, actor: string) {
 				button: { label: t("email.ticket.open_portal"), url: portalUrl(ticket) },
 				closing: [t("email.ticket.portal_closing")],
 			},
-			actor
+			actor,
+			ticket.uuid
 		);
 	});
 }
@@ -176,7 +187,8 @@ export function notifyTeamOfCustomer(ticket: TicketRow, activity: "created" | "c
 				note: body ? { title: t(created ? "email.ticket.description" : "email.ticket.message"), body } : null,
 				button: { label: t("email.ticket.open_team"), url: ticketUrl(project, ticket) },
 			},
-			null
+			null,
+			ticket.uuid
 		);
 	});
 }
@@ -202,7 +214,8 @@ export function notifyAssigned(ticket: TicketRow, members: string[], actor: Proj
 				note: ticket.description ? { title: t("email.ticket.description"), body: ticket.description } : null,
 				button: { label: t("email.ticket.open_team"), url: ticketUrl(project, ticket) },
 			},
-			actor.account_username
+			actor.account_username,
+			ticket.uuid
 		);
 	});
 }

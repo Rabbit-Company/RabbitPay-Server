@@ -1,4 +1,4 @@
-import type { ExpenseRow, RecurringExpenseRow } from "../../server/database/models";
+import type { EmailKind, EmailRoute, EmailStatus, ExpenseRow, RecurringExpenseRow } from "../../server/database/models";
 import type { ExpenseInput, ExpenseScheduleInput, ExpenseVatLineInput } from "../../server/expense-types";
 import type { FinancialReport } from "../../server/expense-types";
 import type { DdvEvidenceResult, DdvExportOptions } from "../../server/ddv-evidence";
@@ -1938,29 +1938,45 @@ export interface Member {
 
 export interface EmailMessage {
 	uuid: string;
-	kind:
-		| "invoice"
-		| "reminder_before"
-		| "reminder_after"
-		| "receipt"
-		| "invitation"
-		| "keys"
-		| "credit_note"
-		| "fiscal_alert"
-		| "order_update"
-		| "order_processing"
-		| "order_shipped"
-		| "order_delivered";
+	invoice: string | null;
+	credit_note: string | null;
+	ticket: string | null;
+	kind: EmailKind;
 	recipient: string;
 	subject: string;
 	attachment: string | null;
 	eslog_document: string | null;
-	status: "pending" | "sent" | "failed";
+	status: EmailStatus;
 	attempts: number;
 	last_error: string | null;
 	sent_by: string | null;
 	sent_at: number | null;
+	sent_via: EmailRoute | null;
+	has_body: boolean;
 	created: number;
+}
+
+export interface ListedEmail extends EmailMessage {
+	invoice_reference: string | null;
+	recurring: string | null;
+	credit_note_reference: string | null;
+	ticket_number: number | null;
+}
+
+export interface EmailDetail extends EmailMessage {
+	sender_name: string;
+	reply_to: string | null;
+	body_text: string | null;
+	body_html: string | null;
+}
+
+export type EmailCounts = Record<EmailStatus, number>;
+
+export interface EmailList {
+	emails: ListedEmail[];
+	total: number;
+	counts: EmailCounts;
+	kinds: ({ kind: EmailKind } & EmailCounts)[];
 }
 
 export interface Invitation {
@@ -2688,6 +2704,31 @@ export const Api = {
 
 	invoiceEmails(uuid: string, invoice: string) {
 		return request<EmailMessage[]>("GET", `/projects/${uuid}/invoices/${invoice}/emails`);
+	},
+
+	emails(
+		uuid: string,
+		options: {
+			search?: string;
+			status?: string;
+			kind?: string;
+			invoice?: string;
+			recurring?: string;
+			from?: number;
+			to?: number;
+			limit?: number;
+			offset?: number;
+		} = {}
+	) {
+		return request<EmailList>("GET", `/projects/${uuid}/emails${listQuery(options)}`);
+	},
+
+	email(uuid: string, email: string) {
+		return request<EmailDetail>("GET", `/projects/${uuid}/emails/${email}`);
+	},
+
+	resendEmail(uuid: string, email: string) {
+		return request<EmailMessage>("POST", `/projects/${uuid}/emails/${email}/resend`, {});
 	},
 
 	emailReceipt(uuid: string, sale: string, to: string) {

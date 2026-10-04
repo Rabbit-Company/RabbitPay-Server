@@ -513,11 +513,14 @@ export type EmailKind =
 	| "absence_requested"
 	| "absence_decided";
 export type EmailStatus = "pending" | "sent" | "failed";
+export type EmailRoute = "server" | "project";
 
 export interface EmailMessageRow {
 	uuid: string;
 	project: string;
 	invoice: string | null;
+	credit_note: string | null;
+	ticket: string | null;
 	member: string | null;
 	kind: EmailKind;
 	recipient: string;
@@ -536,6 +539,8 @@ export interface EmailMessageRow {
 	next_attempt_at: number | null;
 	sent_by: string | null;
 	sent_at: number | null;
+	sent_via: EmailRoute | null;
+	has_body: number;
 	created: number;
 	updated: number;
 }

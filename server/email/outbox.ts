@@ -8,7 +8,7 @@ import { ESLOG_CONTENT_TYPE } from "../eslog";
 import { licensingEnforced } from "../licensing";
 import { documentStorage } from "../document-storage";
 import { deliveredCreditNotePdf, deliveredInvoicePdf } from "../invoice-pdf";
-import type { CreditNoteRow, EmailKind, EmailMessageRow, InvoiceRow, ProjectRow } from "../database/models";
+import type { CreditNoteRow, EmailKind, EmailMessageRow, EmailRoute, InvoiceRow, ProjectRow } from "../database/models";
 
 export const RETRY_BASE_SECONDS = 30;
 export const RETRY_CAP_SECONDS = 3600;
@@ -17,6 +17,8 @@ const BATCH_SIZE = 20;
 export interface QueuedEmail {
 	project: string;
 	invoice?: string | null;
+	creditNote?: string | null;
+	ticket?: string | null;
 	member?: string | null;
 	kind: EmailKind;
 	to: string;
@@ -41,7 +43,7 @@ export async function storedAttachment(message: EmailMessageRow): Promise<Buffer
 	if (!message.attachment_storage_key) return null;
 	const [project] = (await Database`SELECT * FROM projects WHERE uuid = ${message.project}`) as ProjectRow[];
 	if (message.kind === "credit_note" && project) {
-		const noteId = message.attachment_storage_key.split("/")[2];
+		const noteId = message.credit_note ?? message.attachment_storage_key.split("/")[2];
 		const [note] = (await Database`SELECT * FROM credit_notes WHERE uuid = ${noteId} AND project = ${message.project}`) as CreditNoteRow[];
 		if (note) return Buffer.from((await deliveredCreditNotePdf(project, note)).data);
 	}
@@ -60,11 +62,11 @@ export async function queueEmail(sql: SQL, email: QueuedEmail): Promise<string> 
 	const attachmentStorageKey = email.attachment?.storageKey ?? null;
 
 	await sql`
-		INSERT INTO email_messages(uuid, project, invoice, member, kind, recipient, reply_to, sender_name, subject, body_text, body_html,
-			attachment_name, attachment_data, attachment_storage_key, eslog_document, status, attempts, next_attempt_at, sent_by, created, updated)
-		VALUES(${uuid}, ${email.project}, ${email.invoice ?? null}, ${email.member ?? null}, ${email.kind}, ${email.to}, ${email.replyTo},
-			${email.senderName}, ${email.subject}, ${email.text}, ${email.html}, ${attachmentName}, ${attachmentData}, ${attachmentStorageKey},
-			${email.eslogDocument ?? null}, 'pending', 0, ${timestamp}, ${email.sentBy}, ${timestamp}, ${timestamp})
+		INSERT INTO email_messages(uuid, project, invoice, credit_note, ticket, member, kind, recipient, reply_to, sender_name, subject, body_text,
+			body_html, attachment_name, attachment_data, attachment_storage_key, eslog_document, status, attempts, next_attempt_at, sent_by, created, updated)
+		VALUES(${uuid}, ${email.project}, ${email.invoice ?? null}, ${email.creditNote ?? null}, ${email.ticket ?? null}, ${email.member ?? null},
+			${email.kind}, ${email.to}, ${email.replyTo}, ${email.senderName}, ${email.subject}, ${email.text}, ${email.html}, ${attachmentName},
+			${attachmentData}, ${attachmentStorageKey}, ${email.eslogDocument ?? null}, 'pending', 0, ${timestamp}, ${email.sentBy}, ${timestamp}, ${timestamp})
 	`;
 
 	return uuid;
@@ -127,9 +129,10 @@ async function deliverBatch(now: number): Promise<{ attempted: number; sent: num
 				server ? { projectId: message.project, server } : null
 			);
 			const timestamp = Date.now();
+			const sentVia: EmailRoute = server ? "project" : "server";
 			await Database`
 				UPDATE email_messages SET status = 'sent', attempts = ${attempts}, last_error = NULL, next_attempt_at = NULL,
-					attachment_data = NULL, attachment_storage_key = NULL, sent_at = ${timestamp}, updated = ${timestamp}
+					attachment_data = NULL, attachment_storage_key = NULL, sent_at = ${timestamp}, sent_via = ${sentVia}, updated = ${timestamp}
 				WHERE uuid = ${message.uuid}
 			`;
 			sent++;
@@ -173,6 +176,17 @@ export async function deliverPendingEmails(now?: number): Promise<{ attempted: n
 	} finally {
 		delivering = null;
 	}
+}
+
+export async function removeExpiredBodies(now = Date.now()): Promise<number> {
+	const days = Settings.email?.body_retention_days ?? 0;
+	if (days <= 0) return 0;
+	const cutoff = now - days * 24 * 60 * 60 * 1000;
+	const result = await Database`
+		UPDATE email_messages SET body_text = '', body_html = '', has_body = 0
+		WHERE has_body = 1 AND created < ${cutoff} AND status <> 'pending'
+	`;
+	return result.count;
 }
 
 export function deliverSoon() {

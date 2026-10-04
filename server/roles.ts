@@ -34,6 +34,8 @@ export enum Permission {
 	INVOICE_DELETE = "invoice.delete",
 	INVOICE_SEND = "invoice.send",
 
+	EMAIL_VIEW = "email.view",
+
 	// Customer permissions
 	CUSTOMER_VIEW = "customer.view",
 	CUSTOMER_CREATE = "customer.create",
@@ -101,6 +103,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.INVOICE_EDIT,
 		Permission.INVOICE_DELETE,
 		Permission.INVOICE_SEND,
+		Permission.EMAIL_VIEW,
 		Permission.CUSTOMER_VIEW,
 		Permission.CUSTOMER_CREATE,
 		Permission.CUSTOMER_EDIT,
@@ -143,6 +146,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.INVOICE_CREATE,
 		Permission.INVOICE_EDIT,
 		Permission.INVOICE_SEND,
+		Permission.EMAIL_VIEW,
 		Permission.CUSTOMER_VIEW,
 		Permission.CUSTOMER_CREATE,
 		Permission.CUSTOMER_EDIT,
@@ -169,6 +173,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.PAYMENT_VIEW,
 		Permission.PAYMENT_EXPORT,
 		Permission.INVOICE_VIEW,
+		Permission.EMAIL_VIEW,
 		Permission.CUSTOMER_VIEW,
 		Permission.ITEM_VIEW,
 		Permission.REPORT_VIEW,
@@ -192,6 +197,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.PROJECT_VIEW,
 		Permission.PAYMENT_VIEW,
 		Permission.INVOICE_VIEW,
+		Permission.EMAIL_VIEW,
 		Permission.CUSTOMER_VIEW,
 		Permission.ITEM_VIEW,
 		Permission.REPORT_VIEW,

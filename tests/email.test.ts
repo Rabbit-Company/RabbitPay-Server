@@ -9,7 +9,7 @@ const { default: Database, initialize: initializeDatabase } = await import("../s
 const { default: Cache } = await import("../server/cache");
 const { Settings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
-const { deliverPendingEmails, retryDelay } = await import("../server/email/outbox");
+const { deliverPendingEmails, removeExpiredBodies, retryDelay } = await import("../server/email/outbox");
 const { sendDueReminders } = await import("../server/email/messages");
 const { DAY, reminderDue } = await import("../server/email/reminders");
 const { creditNoteEmail, emailDate, escapeHtml, invitationEmail, invoiceEmail, money, receiptEmail } = await import("../server/email/templates");
@@ -610,6 +610,126 @@ describe("delivery", () => {
 		expect(row.status).toBe("sent");
 		expect(row.attempts).toBe(3);
 		expect(row.last_error).toBeNull();
+	});
+});
+
+describe("email history", () => {
+	test("lists every email of the project with its document, filters and counts", async () => {
+		const invoice = await issue();
+		const unpaid = await issue();
+		const started = Date.now();
+		await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: { to: "history@example.com" } });
+		const note = (await call("POST", `${base()}/invoices/${invoice.uuid}/credit-notes`, { token: ownerToken, body: {} })).data;
+		await call("POST", `${base()}/credit-notes/${note.uuid}/email`, { token: ownerToken, body: { to: "history@example.com" } });
+		await flush();
+		failWith = "Mailbox unavailable";
+		await call("POST", `${base()}/invoices/${unpaid.uuid}/email`, { token: ownerToken, body: { to: "history@example.com", reminder: true } });
+		await flush();
+
+		const all = (await call("GET", `${base()}/emails?search=HISTORY@example`, { token: viewerToken })).data;
+		expect(all.total).toBe(3);
+		expect(all.counts).toEqual({ pending: 1, sent: 2, failed: 0 });
+		expect(all.kinds).toEqual([
+			{ kind: "invoice", pending: 0, sent: 1, failed: 0 },
+			{ kind: "reminder_before", pending: 1, sent: 0, failed: 0 },
+			{ kind: "credit_note", pending: 0, sent: 1, failed: 0 },
+		]);
+		expect(all.emails[0]).not.toHaveProperty("body_html");
+
+		const credit = all.emails.find((email: { kind: string }) => email.kind === "credit_note");
+		expect(credit).toMatchObject({
+			invoice: invoice.uuid,
+			invoice_reference: invoice.reference,
+			credit_note: note.uuid,
+			credit_note_reference: note.reference,
+			status: "sent",
+			sent_via: "server",
+			has_body: true,
+		});
+
+		const pending = (await call("GET", `${base()}/emails?search=history@example&status=pending`, { token: ownerToken })).data;
+		expect(pending.emails.map((email: { kind: string }) => email.kind)).toEqual(["reminder_before"]);
+		expect(pending.emails[0].last_error).toBe("Mailbox unavailable");
+		expect(pending.emails[0].sent_via).toBeNull();
+
+		expect((await call("GET", `${base()}/emails?invoice=${invoice.uuid}&kind=invoice`, { token: ownerToken })).data.total).toBe(1);
+		expect((await call("GET", `${base()}/emails?search=history@example&from=${started}&to=${Date.now() + 1000}`, { token: ownerToken })).data.total).toBe(3);
+		expect((await call("GET", `${base()}/emails?search=history@example&to=${started - 1}`, { token: ownerToken })).data.total).toBe(0);
+		expect((await call("GET", `${base()}/emails?search=history@example&limit=1&offset=1`, { token: ownerToken })).data.emails).toHaveLength(1);
+
+		expect((await call("GET", `${base()}/emails?status=lost`, { token: ownerToken })).error).toBe(1001);
+		expect((await call("GET", `${base()}/emails?kind=newsletter`, { token: ownerToken })).error).toBe(1001);
+		expect((await call("GET", `${base()}/emails?from=yesterday`, { token: ownerToken })).error).toBe(1001);
+		expect((await call("GET", `${base()}/emails`, { token: cashierToken })).error).toBe(9999);
+	});
+
+	test("shows the content of one email", async () => {
+		const invoice = await issue();
+		const queued = (await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: {} })).data;
+		await flush();
+
+		const email = (await call("GET", `${base()}/emails/${queued.uuid}`, { token: viewerToken })).data;
+		expect(email).toMatchObject({ uuid: queued.uuid, status: "sent", sender_name: "Studio <Nord>", reply_to: "hello@studio.example" });
+		expect(email.body_text).toContain(invoice.reference);
+		expect(email.body_html).toContain("<html");
+
+		expect((await call("GET", `${base()}/emails/${crypto.randomUUID()}`, { token: ownerToken })).error).toBe(1291);
+		expect((await call("GET", `${base()}/emails/${queued.uuid}`, { token: cashierToken })).error).toBe(9999);
+	});
+
+	test("a failed email is sent again with its attachment, a delivered one is not", async () => {
+		const invoice = await issue();
+		failWith = "Connection refused";
+		const queued = (await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: { attach_invoice: true } })).data;
+		await flush();
+		await flush();
+		await flush();
+		const [failed] = (await Database`SELECT status, attachment_storage_key FROM email_messages WHERE uuid = ${queued.uuid}`) as any[];
+		expect(failed).toEqual({ status: "failed", attachment_storage_key: null });
+
+		expect((await call("POST", `${base()}/emails/${queued.uuid}/resend`, { token: viewerToken })).error).toBe(9999);
+
+		failWith = null;
+		const again = await call("POST", `${base()}/emails/${queued.uuid}/resend`, { token: ownerToken });
+		expect(again.error).toBe(0);
+		expect(again.data).toMatchObject({ uuid: queued.uuid, attempts: 0, last_error: null });
+		await flush();
+
+		expect(outbox).toHaveLength(1);
+		expect(outbox[0].attachments?.[0].content.subarray(0, 5).toString()).toBe("%PDF-");
+		const sent = (await call("GET", `${base()}/emails/${queued.uuid}`, { token: ownerToken })).data;
+		expect(sent).toMatchObject({ status: "sent", attempts: 1, sent_by: "mail-owner", sent_via: "server" });
+
+		expect((await call("POST", `${base()}/emails/${queued.uuid}/resend`, { token: ownerToken })).error).toBe(1292);
+		expect((await call("GET", `${base()}/emails?invoice=${invoice.uuid}`, { token: ownerToken })).data.total).toBe(1);
+	});
+
+	test("the content is removed after the retention period and the history stays", async () => {
+		const invoice = await issue();
+		const delivered = (await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: {} })).data;
+		await flush();
+		failWith = "Connection refused";
+		const failed = (await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: {} })).data;
+		await flush();
+		await flush();
+		await flush();
+		const waiting = (await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: {} })).data;
+
+		const later = Date.now() + 91 * DAY;
+		Settings.email.body_retention_days = 0;
+		expect(await removeExpiredBodies(later)).toBe(0);
+		Settings.email.body_retention_days = 90;
+		expect(await removeExpiredBodies(Date.now() + 89 * DAY)).toBe(0);
+		expect(await removeExpiredBodies(later)).toBeGreaterThanOrEqual(2);
+		expect(await removeExpiredBodies(later)).toBe(0);
+
+		const kept = (await call("GET", `${base()}/emails/${delivered.uuid}`, { token: ownerToken })).data;
+		expect(kept).toMatchObject({ status: "sent", recipient: "client@example.com", has_body: false, body_text: null, body_html: null });
+		expect(kept.subject).toContain(invoice.reference);
+		expect((await call("GET", `${base()}/emails/${waiting.uuid}`, { token: ownerToken })).data.has_body).toBe(true);
+
+		failWith = null;
+		expect((await call("POST", `${base()}/emails/${failed.uuid}/resend`, { token: ownerToken })).error).toBe(1293);
 	});
 });
 

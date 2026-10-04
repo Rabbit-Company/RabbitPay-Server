@@ -34,9 +34,17 @@ import type { CreditNoteRow, EmailKind, EmailMessageRow, InvoiceItemRow, Invoice
 
 const REMINDER_BATCH = 500;
 
-export function presentEmail(row: EmailMessageRow) {
+export type EmailSummaryRow = Omit<
+	EmailMessageRow,
+	"body_text" | "body_html" | "attachment_data" | "attachment_storage_key" | "reply_to" | "sender_name" | "next_attempt_at" | "updated"
+>;
+
+export function presentEmail(row: EmailSummaryRow) {
 	return {
 		uuid: row.uuid,
+		invoice: row.invoice,
+		credit_note: row.credit_note,
+		ticket: row.ticket,
 		kind: row.kind,
 		recipient: row.recipient,
 		subject: row.subject,
@@ -47,6 +55,8 @@ export function presentEmail(row: EmailMessageRow) {
 		last_error: row.last_error,
 		sent_by: row.sent_by,
 		sent_at: row.sent_at,
+		sent_via: row.sent_via,
+		has_body: Boolean(row.has_body),
 		created: row.created,
 	};
 }
@@ -286,6 +296,7 @@ export async function queueCreditNoteEmail(
 	const uuid = await queueEmail(Database, {
 		project: project.uuid,
 		invoice: note.invoice,
+		creditNote: note.uuid,
 		kind: "credit_note",
 		to: options.to,
 		senderName: brand.merchant,

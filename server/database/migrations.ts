@@ -442,6 +442,21 @@ export const MIGRATIONS: Migration[] = [
 			await sql.unsafe(`ALTER TABLE recurring_invoices ADD COLUMN bill_previous_period ${flag} NOT NULL DEFAULT 0 CHECK (bill_previous_period IN (0, 1))`);
 		},
 	},
+	{
+		version: 45,
+		name: "email history",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN credit_note ${types.text("credit_note")}`);
+			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN ticket ${types.text("ticket")}`);
+			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN sent_via ${types.text("source")}`);
+			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN has_body ${types.flag} NOT NULL DEFAULT 1 CHECK (has_body IN (0, 1))`);
+			await run(sql, dialect, [
+				`CREATE INDEX IF NOT EXISTS idx_email_messages_project ON email_messages(project, created)`,
+				`CREATE INDEX IF NOT EXISTS idx_email_messages_body ON email_messages(has_body, created)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

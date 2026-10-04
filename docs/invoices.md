@@ -260,6 +260,41 @@ Both take either `from` and `to` as `YYYY-MM-DD` dates in the project timezone,
 or `first` and `last` as invoice numbers. The first returns `count`, `limit` and
 the `first` and `last` invoice of the selection, the second returns the ZIP.
 
+## Emails
+
+Every email a project sends is listed under Emails: invoices, pro forma
+invoices, reminders, credit notes, receipts, license keys, store order updates,
+ticket and absence notices, team invitations and FURS alerts. Each row shows
+when it was sent, to whom, the document it belongs to and whether it was
+delivered, is still waiting or failed. The reason of a failure is shown with it.
+
+The list can be searched by recipient, subject or invoice number and narrowed
+by status, kind of email and period. Above the list are the totals of the
+current selection: how many emails were sent, failed and are waiting, and how
+many there were of each kind. A recurring invoice links to the emails of the
+invoices it created.
+
+Opening an email shows its content and whether it went through the email server
+of this RabbitPay server or the project's own one. An email that failed can be
+sent again from there. It keeps its place in the history instead of adding a new
+row, and its PDF is attached again.
+
+The content of delivered and failed emails is kept for 90 days and then
+removed. The record of what was sent to whom stays. The server administrator
+changes the period under Email, Keep email content, where 0 keeps it forever.
+
+| Method | Path                                          | Permission     |
+| ------ | --------------------------------------------- | -------------- |
+| `GET`  | `/api/v1/projects/:uuid/emails`               | `email.view`   |
+| `GET`  | `/api/v1/projects/:uuid/emails/:email`        | `email.view`   |
+| `POST` | `/api/v1/projects/:uuid/emails/:email/resend` | `invoice.send` |
+
+The list takes `search`, `status` (`pending`, `sent`, `failed`), `kind`,
+`invoice`, `recurring`, `from` and `to` (timestamps in milliseconds), `limit`
+and `offset`. It answers with `emails`, `total`, `counts` per status and `kinds`
+with the counts of each kind of email. Owners, admins, managers, accountants and
+viewers have `email.view`.
+
 ## Digital products and license keys
 
 An item in the catalogue can carry a list of license keys, and then selling it

@@ -28,6 +28,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 	{ id: "invoices", label: "nav.invoices", suffix: "/invoices", permissions: [Permission.INVOICE_VIEW], group: "sales" },
 	{ id: "recurring", label: "nav.recurring", suffix: "/recurring", permissions: [Permission.SUBSCRIPTION_VIEW], group: "sales" },
 	{ id: "transactions", label: "nav.payments", suffix: "/transactions", permissions: [Permission.PAYMENT_VIEW], group: "sales" },
+	{ id: "emails", label: "nav.emails", suffix: "/emails", permissions: [Permission.EMAIL_VIEW], group: "sales" },
 	{ id: "customers", label: "nav.customers", suffix: "/customers", permissions: [Permission.CUSTOMER_VIEW], group: "sales" },
 	{ id: "items", label: "nav.items", suffix: "/items", permissions: [Permission.ITEM_VIEW], group: "sales" },
 	{ id: "store", label: "nav.store", suffix: "/store", permissions: [Permission.PROJECT_VIEW], group: "sales" },

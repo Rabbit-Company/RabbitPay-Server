@@ -132,6 +132,7 @@ export interface ServerSettings {
 		poll_interval: number;
 		max_attempts: number;
 		reminder_interval: number;
+		body_retention_days: number;
 	};
 	webhooks: {
 		poll_interval: number;
@@ -260,6 +261,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		poll_interval: 15,
 		max_attempts: 5,
 		reminder_interval: 900,
+		body_retention_days: 90,
 	},
 	webhooks: { poll_interval: 15, timeout: 10, max_attempts: 5, allow_private_targets: false },
 	rates: { enabled: true, api_url: "https://forex.rabbitmonitor.com", cache_seconds: 60, ecb_url: "https://www.ecb.europa.eu/stats/eurofxref" },
@@ -599,6 +601,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			pollField("email.poll_interval", 5, "How often queued emails are sent."),
 			{ key: "email.max_attempts", label: "Delivery attempts", kind: "number", min: 1 },
 			{ key: "email.reminder_interval", label: "Reminder check interval", hint: "Seconds. Minimum 60.", kind: "number", min: 60, restart: true },
+			{
+				key: "email.body_retention_days",
+				label: "Keep email content",
+				hint: "Days. The text of delivered and failed emails is removed after this, the history of who was sent what stays. 0 keeps it forever.",
+				kind: "number",
+				min: 0,
+			},
 		],
 	},
 	{
