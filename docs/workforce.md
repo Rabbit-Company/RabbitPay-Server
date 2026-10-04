@@ -49,7 +49,10 @@ Tickets are tasks, bug reports, feature requests and support requests, assigned
 to one or more people and optionally linked to a customer. Time logged on a
 ticket appears in the timesheets, and a ticket can have its own hourly rate.
 Invoice the logged hours creates a draft invoice for the customer, to check
-before issuing it.
+before issuing it. Several tickets for the same customer can be selected so
+small jobs are combined on one invoice, with each ticket kept as its own line.
+A ticket can instead have a fixed price, which is billed once regardless of
+the time logged on it.
 
 A customer can see tickets in the [customer portal](customer-portal.md) only
 after a project member gives them access and marks the tickets they may see. The

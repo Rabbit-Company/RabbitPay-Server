@@ -582,6 +582,10 @@ describe("the workforce module", () => {
 
 		const mine = await call("GET", `${base()}/tickets?assignee=me&search=mail`, tokens.employee);
 		expect(mine.data.tickets.map((row: { number: number }) => row.number)).toEqual([1]);
+		const byNumber = await call("GET", `${base()}/tickets?search=1`, tokens.employee);
+		expect(byNumber.data.tickets.map((row: { number: number }) => row.number)).toEqual([1]);
+		const byHashNumber = await call("GET", `${base()}/tickets?search=%231`, tokens.employee);
+		expect(byHashNumber.data.tickets.map((row: { number: number }) => row.number)).toEqual([1]);
 
 		const portal = await customerLogin("client@acme.test");
 		const list = await call("GET", "/customer/tickets", portal);
@@ -705,6 +709,70 @@ describe("the workforce module", () => {
 		const [other] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 2`;
 		const missingRate = await call("POST", `${base()}/tickets/${other.uuid}/invoice`, tokens.owner, {});
 		expect(missingRate.error).toBe(1211);
+	});
+
+	test("uninvoiced hours from several tickets share one draft invoice", async () => {
+		const first = await call("POST", `${base()}/tickets`, tokens.supervisor, {
+			title: "Configure mailboxes",
+			customer,
+			hourly_rate: 5000,
+		});
+		const second = await call("POST", `${base()}/tickets`, tokens.supervisor, {
+			title: "Document mail setup",
+			customer,
+			hourly_rate: 7000,
+		});
+		expect(
+			(await call("POST", `${base()}/timesheets`, tokens.employee, entry(today, "20:00", "21:00", { break_minutes: 0, ticket: first.data.uuid }))).status
+		).toBe(201);
+		expect(
+			(await call("POST", `${base()}/timesheets`, tokens.employee, entry(today, "21:00", "22:30", { break_minutes: 0, ticket: second.data.uuid }))).status
+		).toBe(201);
+
+		const [differentCustomer] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 2`;
+		const mixed = await call("POST", `${base()}/tickets/invoice`, tokens.owner, { tickets: [first.data.uuid, differentCustomer.uuid] });
+		expect(mixed.error).toBe(1295);
+		const denied = await call("POST", `${base()}/tickets/invoice`, tokens.supervisor, { tickets: [first.data.uuid, second.data.uuid] });
+		expect(denied.error).toBe(9999);
+
+		const created = await call("POST", `${base()}/tickets/invoice`, tokens.owner, { tickets: [first.data.uuid, second.data.uuid] });
+		expect(created.status).toBe(201);
+		expect(created.data).toMatchObject({ minutes: 150, quantity: 2.5, rate: null });
+		const invoice = await call("GET", `${base()}/invoices/${created.data.invoice}`, tokens.owner);
+		expect(invoice.data.status).toBe("draft");
+		expect(invoice.data.customer).toBe(customer);
+		expect(invoice.data.metadata).toEqual({ tickets: [first.data.uuid, second.data.uuid] });
+		expect(invoice.data.items).toHaveLength(2);
+		expect(invoice.data.items[0]).toMatchObject({ description: `#${first.data.number} Configure mailboxes`, quantity: 1, unit_price: 5000, unit: "HUR" });
+		expect(invoice.data.items[1]).toMatchObject({ description: `#${second.data.number} Document mail setup`, quantity: 1.5, unit_price: 7000, unit: "HUR" });
+		expect((await call("POST", `${base()}/tickets/invoice`, tokens.owner, { tickets: [first.data.uuid, second.data.uuid] })).error).toBe(1206);
+	});
+
+	test("a fixed-price ticket is invoiced once without needing logged hours", async () => {
+		const ticket = await call("POST", `${base()}/tickets`, tokens.supervisor, {
+			title: "Deliver the migration",
+			customer,
+			hourly_rate: 5000,
+			fixed_price: 1_500_000,
+		});
+		expect(ticket.data).toMatchObject({ fixed_price: 1_500_000, fixed_price_invoiced: false, hourly_rate: null, uninvoiced_minutes: 0 });
+
+		const created = await call("POST", `${base()}/tickets/${ticket.data.uuid}/invoice`, tokens.owner, {});
+		expect(created.status).toBe(201);
+		expect(created.data).toMatchObject({ minutes: 0, quantity: 1, rate: 1_500_000 });
+		const invoice = await call("GET", `${base()}/invoices/${created.data.invoice}`, tokens.owner);
+		expect(invoice.data.items[0]).toMatchObject({
+			description: `#${ticket.data.number} Deliver the migration`,
+			quantity: 1,
+			unit_price: 1_500_000,
+			unit: "C62",
+		});
+		expect((await call("GET", `${base()}/tickets/${ticket.data.uuid}`, tokens.owner)).data.fixed_price_invoiced).toBe(true);
+		expect((await call("POST", `${base()}/tickets/${ticket.data.uuid}/invoice`, tokens.owner, {})).error).toBe(1206);
+
+		expect((await call("DELETE", `${base()}/invoices/${created.data.invoice}`, tokens.owner)).status).toBe(200);
+		expect((await call("GET", `${base()}/tickets/${ticket.data.uuid}`, tokens.owner)).data.fixed_price_invoiced).toBe(false);
+		expect((await call("POST", `${base()}/tickets/${ticket.data.uuid}/invoice`, tokens.owner, {})).status).toBe(201);
 	});
 
 	test("employee records keep private details encrypted and feed payroll", async () => {

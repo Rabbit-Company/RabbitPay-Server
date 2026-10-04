@@ -4318,6 +4318,194 @@ img.zoomable {
 .ticket-comment.customer {
 	border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
+.ticket-view-toggle {
+	margin: 0;
+}
+.ticket-board-surface {
+	min-width: 0;
+	overflow-x: auto;
+	padding: 0.1rem 0.1rem 0.75rem;
+}
+.ticket-board {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(260px, 1fr));
+	gap: 0.85rem;
+	min-width: 1380px;
+	align-items: start;
+}
+.ticket-board-column {
+	min-width: 0;
+	padding: 0.65rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--border) 20%, var(--surface));
+	transition:
+		border-color 0.15s ease,
+		background 0.15s ease;
+}
+.ticket-board-column.drag-over {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.ticket-board-column-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 0.1rem 0.15rem 0.65rem;
+}
+.ticket-board-column-head h3 {
+	margin: 0;
+	font-size: 0.95rem;
+}
+.ticket-board-count {
+	min-width: 1.6rem;
+	padding: 0.15rem 0.45rem;
+	border-radius: 999px;
+	background: var(--surface);
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 650;
+	text-align: center;
+}
+.ticket-board-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	min-height: 4rem;
+}
+.ticket-board-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+	padding: 0.75rem;
+	border: 1px solid var(--border);
+	border-left: 3px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+.ticket-board-card[draggable="true"] {
+	cursor: grab;
+}
+.ticket-board-card[draggable="true"]:active {
+	cursor: grabbing;
+}
+.ticket-board-card.dragging {
+	opacity: 0.45;
+}
+.ticket-board-card.priority-high {
+	border-left-color: var(--warning);
+}
+.ticket-board-card.priority-urgent {
+	border-left-color: var(--danger);
+}
+.ticket-board-card-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.6rem;
+}
+.ticket-board-card-head a {
+	min-width: 0;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.ticket-board-card-head .mono {
+	flex: none;
+	font-size: 0.78rem;
+}
+.ticket-board-tags,
+.ticket-board-card-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.4rem 0.6rem;
+	flex-wrap: wrap;
+	font-size: 0.78rem;
+}
+.ticket-board-kind,
+.ticket-board-priority {
+	padding: 0.12rem 0.4rem;
+	border-radius: 999px;
+	background: var(--bg);
+}
+.ticket-board-priority.priority-high {
+	color: var(--warning);
+}
+.ticket-board-priority.priority-urgent {
+	color: var(--danger);
+}
+.ticket-board-detail {
+	font-size: 0.86rem;
+	overflow-wrap: anywhere;
+}
+.ticket-board-move {
+	width: 100%;
+	min-height: 2rem;
+	padding-block: 0.3rem;
+	font-size: 0.82rem;
+}
+.ticket-board-empty {
+	margin: 0;
+	padding: 1rem 0.5rem;
+	font-size: 0.85rem;
+	text-align: center;
+}
+.ticket-board-more {
+	width: 100%;
+}
+.ticket-invoice-choices {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	max-height: min(50vh, 28rem);
+	overflow-y: auto;
+}
+.ticket-invoice-choice {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.65rem 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	cursor: pointer;
+}
+.ticket-invoice-choice:hover {
+	border-color: var(--hover-border);
+	background: color-mix(in srgb, var(--text) calc(var(--hover-tint) / 2), transparent);
+}
+.ticket-invoice-choice > span {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	min-width: 0;
+}
+.ticket-invoice-choice-meta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 0.5rem;
+	flex: none;
+}
+.ticket-invoice-choice strong {
+	overflow-wrap: anywhere;
+}
+.ticket-invoice-summary {
+	margin: 0;
+	font-weight: 600;
+}
+@media (max-width: 640px) {
+	.ticket-invoice-choice-main {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+	.ticket-invoice-choice-meta {
+		justify-content: flex-start;
+	}
+}
 fieldset.stack-tight {
 	border: 1px solid var(--border);
 	border-radius: var(--radius);

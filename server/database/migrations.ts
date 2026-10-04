@@ -475,6 +475,24 @@ export const MIGRATIONS: Migration[] = [
 			await sql.unsafe(`ALTER TABLE email_messages ADD COLUMN license_billing ${types.text("status")}`);
 		},
 	},
+	{
+		version: 47,
+		name: "fixed-price tickets",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE tickets ADD COLUMN fixed_price ${types.int64}`);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS ticket_fixed_price_invoices(
+					ticket ${types.text("ticket")} PRIMARY KEY,
+					invoice ${types.text("invoice")} NOT NULL,
+					created ${types.int64} NOT NULL,
+					FOREIGN KEY (ticket) REFERENCES tickets(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (invoice) REFERENCES invoices(uuid) ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_ticket_fixed_price_invoice ON ticket_fixed_price_invoices(invoice)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

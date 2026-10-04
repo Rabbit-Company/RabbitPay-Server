@@ -18,6 +18,7 @@ import { workedMinutes } from "../../workforce/timesheets";
 import { notifyAssigned, notifyCustomerReply, notifyCustomerStatus } from "../../workforce/notifications";
 import {
 	assigneesOf,
+	fixedPriceInvoicesOf,
 	insertTicket,
 	isClosedStatus,
 	parsePortalKinds,
@@ -69,11 +70,21 @@ async function validReferences(projectId: string, input: TicketInput): Promise<E
 }
 
 async function detailed(ticket: TicketRow) {
-	const [assignees, time] = await Promise.all([assigneesOf([ticket.uuid]), timeOf(ticket.project, [ticket.uuid])]);
+	const [assignees, time, fixedInvoices] = await Promise.all([
+		assigneesOf([ticket.uuid]),
+		timeOf(ticket.project, [ticket.uuid]),
+		fixedPriceInvoicesOf([ticket.uuid]),
+	]);
 	const [customer] = ticket.customer
 		? ((await Database`SELECT name, email FROM customers WHERE uuid = ${ticket.customer}`) as Pick<CustomerRow, "name" | "email">[])
 		: [];
-	return presentTicket(ticket, assignees.get(ticket.uuid) ?? [], time.get(ticket.uuid), customer ? (customer.name ?? customer.email) : null);
+	return presentTicket(
+		ticket,
+		assignees.get(ticket.uuid) ?? [],
+		time.get(ticket.uuid),
+		customer ? (customer.name ?? customer.email) : null,
+		fixedInvoices.has(ticket.uuid)
+	);
 }
 
 Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permission.TICKET_VIEW), async (ctx) => {
@@ -95,7 +106,14 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 	const customerFilter = customer ? Database`AND t.customer = ${customer}` : Database``;
 	const assigneeFilter = assigned ? Database`AND t.uuid IN (SELECT ticket FROM ticket_assignees WHERE member = ${assigned})` : Database``;
 	const pattern = `%${(search ?? "").toLowerCase().replace(/[!%_]/g, (character) => `!${character}`)}%`;
-	const searchFilter = search ? Database`AND LOWER(t.title) LIKE ${pattern} ESCAPE '!'` : Database``;
+	const numberText = search?.startsWith("#") ? search.slice(1) : search;
+	const parsedNumber = numberText && /^\d+$/.test(numberText) ? Number(numberText) : null;
+	const ticketNumber = parsedNumber !== null && Number.isSafeInteger(parsedNumber) && parsedNumber > 0 ? parsedNumber : null;
+	const searchFilter = search
+		? ticketNumber === null
+			? Database`AND LOWER(t.title) LIKE ${pattern} ESCAPE '!'`
+			: Database`AND (LOWER(t.title) LIKE ${pattern} ESCAPE '!' OR t.number = ${ticketNumber})`
+		: Database``;
 
 	const rows = (await Database`
 		SELECT t.*, c.name AS customer_name, c.email AS customer_email FROM tickets t LEFT JOIN customers c ON c.uuid = t.customer
@@ -106,9 +124,11 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 		SELECT COUNT(*) AS count FROM tickets t WHERE t.project = ${project.uuid} ${statusFilter} ${customerFilter} ${assigneeFilter} ${searchFilter}
 	`) as { count: number }[];
 	const ids = rows.map((row) => row.uuid);
-	const [assignees, time] = await Promise.all([assigneesOf(ids), timeOf(project.uuid, ids)]);
+	const [assignees, time, fixedInvoices] = await Promise.all([assigneesOf(ids), timeOf(project.uuid, ids), fixedPriceInvoicesOf(ids)]);
 	return Utils.ok(ctx, {
-		tickets: rows.map((row) => presentTicket(row, assignees.get(row.uuid) ?? [], time.get(row.uuid), row.customer_name ?? row.customer_email)),
+		tickets: rows.map((row) =>
+			presentTicket(row, assignees.get(row.uuid) ?? [], time.get(row.uuid), row.customer_name ?? row.customer_email, fixedInvoices.has(row.uuid))
+		),
 		total: Number(total.count),
 		limit,
 		offset,
@@ -213,7 +233,7 @@ Server.app.patch(`${base}/tickets/:ticket`, Auth.required(), Permissions.require
 		await tx`
 			UPDATE tickets SET title = ${input.title}, description = ${input.description}, kind = ${input.kind}, status = ${input.status},
 				priority = ${input.priority}, customer = ${input.customer}, customer_visible = ${input.customer_visible ? 1 : 0},
-				estimate_minutes = ${input.estimate_minutes}, hourly_rate = ${input.hourly_rate}, due_on = ${input.due_on}, closed_at = ${closedAt},
+				estimate_minutes = ${input.estimate_minutes}, hourly_rate = ${input.hourly_rate}, fixed_price = ${input.fixed_price}, due_on = ${input.due_on}, closed_at = ${closedAt},
 				updated = ${now}
 			WHERE uuid = ${ticket.uuid}
 		`;
@@ -282,66 +302,135 @@ Server.app.delete(
 	}
 );
 
-Server.app.post(`${base}/tickets/:ticket/invoice`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
+async function createTicketInvoice(ctx: Context<AppState>, tickets: TicketRow[], data: Record<string, unknown>) {
 	const project = Permissions.project(ctx);
 	const account = Auth.account(ctx);
-	if (!Permissions.has(Permissions.member(ctx), Permission.INVOICE_CREATE)) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
-	const ticket = await findTicket(ctx);
-	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
-	const data = (await body(ctx)) ?? {};
 	const dueDate = data.due_date ?? Date.now() + 14 * DAY;
 	if ((data.tax_rate !== undefined && !Validate.taxRate(data.tax_rate)) || typeof dueDate !== "number" || !Number.isSafeInteger(dueDate) || dueDate <= 0) {
 		return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
 	}
+	if (tickets.some((ticket) => ticket.customer !== tickets[0].customer)) return Utils.fail(ctx, ErrorCode.TICKET_CUSTOMER_MISMATCH);
 
-	const entries = (await Database`SELECT * FROM time_entries WHERE ticket = ${ticket.uuid} AND invoice IS NULL`) as TimeEntryRow[];
+	const ticketIds = tickets.map((ticket) => ticket.uuid);
+	const [entries, fixedInvoices] = await Promise.all([
+		Database`SELECT * FROM time_entries WHERE ticket IN ${Database(ticketIds)} AND invoice IS NULL` as Promise<TimeEntryRow[]>,
+		fixedPriceInvoicesOf(ticketIds),
+	]);
 	const configOf = await memberConfigs(
 		project.uuid,
 		entries.map((entry) => entry.member)
 	);
-	if (entries.length === 0 && (ticket.hourly_rate ?? configOf(null).ticket_hourly_rate) === null) return Utils.fail(ctx, ErrorCode.TICKET_RATE_MISSING);
-	const groups = new Map<string, { rate: number; tax_rate: number; minutes: number; people: Set<string> }>();
+	const fixedTickets = tickets.filter((ticket) => ticket.fixed_price !== null && !fixedInvoices.has(ticket.uuid));
+	if (entries.length === 0 && fixedTickets.length === 0) {
+		if (tickets.length === 1 && tickets[0].fixed_price === null && (tickets[0].hourly_rate ?? configOf(null).ticket_hourly_rate) === null) {
+			return Utils.fail(ctx, ErrorCode.TICKET_RATE_MISSING);
+		}
+		return Utils.fail(ctx, ErrorCode.NOTHING_TO_INVOICE);
+	}
+	const ticketById = new Map(tickets.map((ticket) => [ticket.uuid, ticket]));
+	const groups = new Map<string, { ticket: TicketRow; rate: number; tax_rate: number; minutes: number; people: Set<string> }>();
 	for (const entry of entries) {
+		const ticket = entry.ticket ? ticketById.get(entry.ticket) : undefined;
+		if (!ticket || ticket.fixed_price !== null) continue;
 		const settings = configOf(entry.member);
 		const rate = ticket.hourly_rate ?? settings.ticket_hourly_rate;
 		if (rate === null) return Utils.fail(ctx, ErrorCode.TICKET_RATE_MISSING);
 		const taxRate = (data.tax_rate as number | undefined) ?? settings.ticket_tax_rate;
-		const key = `${rate}:${taxRate}`;
-		const group = groups.get(key) ?? { rate, tax_rate: taxRate, minutes: 0, people: new Set<string>() };
+		const key = `${ticket.uuid}:${rate}:${taxRate}`;
+		const group = groups.get(key) ?? { ticket, rate, tax_rate: taxRate, minutes: 0, people: new Set<string>() };
 		group.minutes += workedMinutes(entry, settings);
 		group.people.add(entry.person);
 		groups.set(key, group);
 	}
-	const lines = [...groups.values()]
-		.map((group) => ({ ...group, quantity: Math.round((group.minutes / 60) * 100) / 100 }))
+	const hourlyLines = tickets
+		.flatMap((ticket) => [...groups.values()].filter((group) => group.ticket.uuid === ticket.uuid))
+		.map((group) => ({ ...group, quantity: Math.round((group.minutes / 60) * 100) / 100, fixed: false }))
 		.filter((group) => group.quantity > 0);
+	const fixedLines = fixedTickets.map((ticket) => ({
+		ticket,
+		rate: ticket.fixed_price!,
+		tax_rate: (data.tax_rate as number | undefined) ?? configOf(null).ticket_tax_rate,
+		minutes: entries.filter((entry) => entry.ticket === ticket.uuid).reduce((sum, entry) => sum + workedMinutes(entry, configOf(entry.member)), 0),
+		people: new Set<string>(),
+		quantity: 1,
+		fixed: true,
+	}));
+	const lines = tickets.flatMap((ticket) => [...fixedLines, ...hourlyLines].filter((line) => line.ticket.uuid === ticket.uuid));
 	const minutes = lines.reduce((sum, line) => sum + line.minutes, 0);
 	const quantity = Math.round(lines.reduce((sum, line) => sum + line.quantity, 0) * 100) / 100;
 	if (quantity <= 0) return Utils.fail(ctx, ErrorCode.NOTHING_TO_INVOICE);
 	const rate = lines.length === 1 ? lines[0].rate : null;
-	const title = `#${ticket.number} ${ticket.title}`;
+	const groupsPerTicket = new Map<string, number>();
+	for (const line of hourlyLines) groupsPerTicket.set(line.ticket.uuid, (groupsPerTicket.get(line.ticket.uuid) ?? 0) + 1);
 
 	const invoice = await createInvoice(project.uuid, {
-		customer: ticket.customer,
+		customer: tickets[0].customer,
 		items: lines.map((line) => ({
-			description: lines.length === 1 ? title : `${title} (${[...line.people].join(", ")})`,
+			description:
+				line.fixed || groupsPerTicket.get(line.ticket.uuid) === 1
+					? `#${line.ticket.number} ${line.ticket.title}`
+					: `#${line.ticket.number} ${line.ticket.title} (${[...line.people].join(", ")})`,
 			quantity: line.quantity,
 			unit_price: line.rate,
 			tax_rate: line.tax_rate,
-			unit: "HUR",
+			unit: line.fixed ? "C62" : "HUR",
+			metadata: { ticket: line.ticket.uuid },
 		})),
 		due_date: dueDate,
 		status: "draft",
 		source: "invoice",
 		created_by: account.username,
 		recurring: null,
-		metadata: { ticket: ticket.uuid },
+		metadata: tickets.length === 1 ? { ticket: tickets[0].uuid } : { tickets: ticketIds },
 	});
-	const claimed = entries.map((entry) => entry.uuid);
-	await Database`UPDATE time_entries SET invoice = ${invoice.uuid} WHERE uuid IN ${Database(claimed)} AND invoice IS NULL`;
-	await audit(ctx, "ticket.invoiced", ticket.uuid, { invoice: invoice.uuid, minutes, quantity, rate });
-	Logger.audit(`[TICKETS] ${account.username} invoiced ${quantity} h of ticket #${ticket.number} on ${project.uuid}`);
+	const billedTickets = new Set(lines.map((line) => line.ticket.uuid));
+	const claimed = entries.filter((entry) => entry.ticket !== null && billedTickets.has(entry.ticket)).map((entry) => entry.uuid);
+	if (claimed.length) await Database`UPDATE time_entries SET invoice = ${invoice.uuid} WHERE uuid IN ${Database(claimed)} AND invoice IS NULL`;
+	for (const line of fixedLines) {
+		await Database`INSERT INTO ticket_fixed_price_invoices(ticket, invoice, created) VALUES(${line.ticket.uuid}, ${invoice.uuid}, ${Date.now()})`;
+	}
+	for (const ticket of tickets) {
+		const ticketLines = lines.filter((line) => line.ticket.uuid === ticket.uuid);
+		await audit(ctx, "ticket.invoiced", ticket.uuid, {
+			invoice: invoice.uuid,
+			minutes: ticketLines.reduce((sum, line) => sum + line.minutes, 0),
+			quantity: Math.round(ticketLines.reduce((sum, line) => sum + line.quantity, 0) * 100) / 100,
+			rate: ticketLines.length === 1 ? ticketLines[0].rate : null,
+		});
+	}
+	Logger.audit(`[TICKETS] ${account.username} created an invoice from tickets ${tickets.map((ticket) => `#${ticket.number}`).join(", ")} on ${project.uuid}`);
 	return Utils.ok(ctx, { invoice: invoice.uuid, reference: invoice.reference, minutes, quantity, rate }, 201);
+}
+
+Server.app.post(`${base}/tickets/invoice`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
+	const project = Permissions.project(ctx);
+	if (!Permissions.has(Permissions.member(ctx), Permission.INVOICE_CREATE)) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
+	const data = (await body(ctx)) ?? {};
+	const ticketIds = data.tickets;
+	if (
+		!Array.isArray(ticketIds) ||
+		ticketIds.length === 0 ||
+		ticketIds.length > 100 ||
+		!ticketIds.every((ticket) => typeof ticket === "string" && Validate.uuid(ticket))
+	) {
+		return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
+	}
+	const uniqueIds = [...new Set(ticketIds as string[])];
+	const rows = (await Database`SELECT * FROM tickets WHERE project = ${project.uuid} AND uuid IN ${Database(uniqueIds)}`) as TicketRow[];
+	if (rows.length !== uniqueIds.length) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
+	const byId = new Map(rows.map((ticket) => [ticket.uuid, ticket]));
+	return createTicketInvoice(
+		ctx,
+		uniqueIds.map((ticket) => byId.get(ticket)!),
+		data
+	);
+});
+
+Server.app.post(`${base}/tickets/:ticket/invoice`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
+	if (!Permissions.has(Permissions.member(ctx), Permission.INVOICE_CREATE)) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
+	const ticket = await findTicket(ctx);
+	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
+	return createTicketInvoice(ctx, [ticket], (await body(ctx)) ?? {});
 });
 
 Server.app.get(`${base}/customers/:customer/ticket-access`, Auth.required(), Permissions.require(Permission.TICKET_VIEW), async (ctx) => {

@@ -779,6 +779,8 @@ export interface Ticket {
 	customer_visible: boolean;
 	estimate_minutes: number | null;
 	hourly_rate: number | null;
+	fixed_price: number | null;
+	fixed_price_invoiced: boolean;
 	due_on: string | null;
 	assignees: TicketAssignee[];
 	logged_minutes: number;
@@ -817,6 +819,7 @@ export interface TicketInput {
 	customer_visible?: boolean;
 	estimate_minutes?: number | null;
 	hourly_rate?: number | null;
+	fixed_price?: number | null;
 	due_on?: string | null;
 	assignees?: string[];
 }
@@ -3407,6 +3410,14 @@ export const Api = {
 			"POST",
 			`/projects/${uuid}/tickets/${ticket}/invoice`,
 			{}
+		);
+	},
+
+	invoiceTickets(uuid: string, tickets: string[]) {
+		return request<{ invoice: string; reference: string; minutes: number; quantity: number; rate: number | null }>(
+			"POST",
+			`/projects/${uuid}/tickets/invoice`,
+			{ tickets }
 		);
 	},
 

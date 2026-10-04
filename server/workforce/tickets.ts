@@ -32,6 +32,7 @@ export interface TicketInput {
 	customer_visible: boolean;
 	estimate_minutes: number | null;
 	hourly_rate: number | null;
+	fixed_price: number | null;
 	due_on: string | null;
 	assignees: string[] | null;
 }
@@ -50,6 +51,7 @@ export function readTicket(data: Record<string, unknown>, previous?: TicketRow):
 	const visible = data.customer_visible ?? (previous ? Boolean(previous.customer_visible) : true);
 	const estimate = data.estimate_minutes === undefined ? (previous?.estimate_minutes ?? null) : data.estimate_minutes;
 	const rate = data.hourly_rate === undefined ? (previous?.hourly_rate ?? null) : data.hourly_rate;
+	const fixedPrice = data.fixed_price === undefined ? (previous?.fixed_price ?? null) : data.fixed_price;
 	const dueOn = data.due_on === undefined ? (previous?.due_on ?? null) : data.due_on;
 	const assignees = data.assignees === undefined ? null : data.assignees;
 
@@ -61,6 +63,8 @@ export function readTicket(data: Record<string, unknown>, previous?: TicketRow):
 	if (typeof visible !== "boolean") return null;
 	if (estimate !== null && (typeof estimate !== "number" || !Number.isSafeInteger(estimate) || estimate < 0 || estimate > 1_000_000)) return null;
 	if (rate !== null && (typeof rate !== "number" || !Number.isSafeInteger(rate) || rate < 0 || rate > 100_000_000)) return null;
+	if (fixedPrice !== null && (typeof fixedPrice !== "number" || !Number.isSafeInteger(fixedPrice) || fixedPrice <= 0 || fixedPrice > 100_000_000_000))
+		return null;
 	if (dueOn !== null && !isIsoDate(dueOn)) return null;
 	if (assignees !== null && (!Array.isArray(assignees) || assignees.length > 50 || !assignees.every((entry) => typeof entry === "string"))) return null;
 
@@ -73,7 +77,8 @@ export function readTicket(data: Record<string, unknown>, previous?: TicketRow):
 		customer,
 		customer_visible: visible,
 		estimate_minutes: estimate,
-		hourly_rate: rate,
+		hourly_rate: fixedPrice === null ? rate : null,
+		fixed_price: fixedPrice,
 		due_on: dueOn as string | null,
 		assignees: assignees === null ? null : [...new Set(assignees as string[])],
 	};
@@ -99,9 +104,9 @@ export async function insertTicket(projectId: string, input: TicketInput, author
 				const number = await nextTicketNumber(tx, projectId);
 				await tx`
 					INSERT INTO tickets(uuid, project, number, title, description, kind, status, priority, customer, customer_visible, estimate_minutes,
-						hourly_rate, due_on, created_by, reported_by, closed_at, created, updated)
+						hourly_rate, fixed_price, due_on, created_by, reported_by, closed_at, created, updated)
 					VALUES(${uuid}, ${projectId}, ${number}, ${input.title}, ${input.description}, ${input.kind}, ${input.status}, ${input.priority},
-						${input.customer}, ${input.customer_visible ? 1 : 0}, ${input.estimate_minutes}, ${input.hourly_rate}, ${input.due_on},
+						${input.customer}, ${input.customer_visible ? 1 : 0}, ${input.estimate_minutes}, ${input.hourly_rate}, ${input.fixed_price}, ${input.due_on},
 						${author.username}, ${author.email}, ${isClosedStatus(input.status) ? now : null}, ${now}, ${now})
 				`;
 				await replaceAssignees(tx, uuid, input.assignees ?? []);
@@ -161,7 +166,13 @@ export async function timeOf(projectId: string, ticketIds: string[]): Promise<Ma
 	return result;
 }
 
-export function presentTicket(row: TicketRow, assignees: Assignee[], time: TicketTime | undefined, customerName?: string | null) {
+export async function fixedPriceInvoicesOf(ticketIds: string[]): Promise<Set<string>> {
+	if (ticketIds.length === 0) return new Set();
+	const rows = (await Database`SELECT ticket FROM ticket_fixed_price_invoices WHERE ticket IN ${Database(ticketIds)}`) as { ticket: string }[];
+	return new Set(rows.map((row) => row.ticket));
+}
+
+export function presentTicket(row: TicketRow, assignees: Assignee[], time: TicketTime | undefined, customerName?: string | null, fixedPriceInvoiced = false) {
 	return {
 		uuid: row.uuid,
 		number: row.number,
@@ -175,6 +186,8 @@ export function presentTicket(row: TicketRow, assignees: Assignee[], time: Ticke
 		customer_visible: Boolean(row.customer_visible),
 		estimate_minutes: row.estimate_minutes,
 		hourly_rate: row.hourly_rate,
+		fixed_price: row.fixed_price,
+		fixed_price_invoiced: fixedPriceInvoiced,
 		due_on: row.due_on,
 		assignees,
 		logged_minutes: time?.minutes ?? 0,

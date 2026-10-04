@@ -1071,6 +1071,7 @@ export interface TicketRow {
 	customer_visible: number;
 	estimate_minutes: number | null;
 	hourly_rate: number | null;
+	fixed_price: number | null;
 	due_on: string | null;
 	created_by: string | null;
 	reported_by: string | null;

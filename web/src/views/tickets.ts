@@ -78,7 +78,18 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 	const rate = input("number", {
 		min: "0",
 		step: "0.01",
-		value: ticket?.hourly_rate == null ? "" : String(toMajorUnits(ticket.hourly_rate, project.currency)),
+		value: ticket?.hourly_rate == null || ticket.fixed_price !== null ? "" : String(toMajorUnits(ticket.hourly_rate, project.currency)),
+	});
+	const fixedPrice = input("number", {
+		min: "0.01",
+		step: "0.01",
+		value: ticket?.fixed_price == null ? "" : String(toMajorUnits(ticket.fixed_price, project.currency)),
+	});
+	rate.addEventListener("input", () => {
+		if (rate.value !== "") fixedPrice.value = "";
+	});
+	fixedPrice.addEventListener("input", () => {
+		if (fixedPrice.value !== "") rate.value = "";
 	});
 	const estimate = hoursInput(ticket?.estimate_minutes ?? null);
 	const due = input("date", { value: ticket?.due_on ?? "" });
@@ -109,6 +120,7 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 					customer: customer.value || null,
 					customer_visible: visible.checked,
 					hourly_rate: rate.value === "" ? null : toMinorUnits(Number(rate.value), project.currency),
+					fixed_price: fixedPrice.value === "" ? null : toMinorUnits(Number(fixedPrice.value), project.currency),
 					estimate_minutes: minutesFrom(estimate),
 					due_on: due.value || null,
 					assignees: checks.filter((check) => check.box.checked).map((check) => check.box.value),
@@ -132,8 +144,9 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 		el("label", { class: "switch" }, visible, el("span", {}, t("ticket.customer_visible"))),
 		el(
 			"div",
-			{ class: "form-grid" },
+			{ class: "form-grid three" },
 			field(t("ticket.rate", { currency: project.currency }), rate, t("ticket.rate_hint")),
+			field(t("ticket.fixed_price", { currency: project.currency }), fixedPrice, t("ticket.fixed_price_hint")),
 			field(t("ticket.estimate"), estimate)
 		),
 		members.length ? el("fieldset", { class: "stack-tight" }, el("legend", {}, t("ticket.assignees")), ...checks.map((check) => check.element)) : null,
@@ -144,6 +157,83 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 
 function assigneeNames(ticket: Ticket): string {
 	return ticket.assignees.map((assignee) => assignee.name).join(", ");
+}
+
+function ticketCanBeInvoiced(ticket: Ticket): boolean {
+	return ticket.fixed_price !== null ? !ticket.fixed_price_invoiced : ticket.uninvoiced_minutes > 0;
+}
+
+type TicketViewMode = "list" | "board";
+
+const TICKET_VIEW_KEY = "rabbitpay.tickets.view";
+
+function savedTicketView(): TicketViewMode {
+	try {
+		return localStorage.getItem(TICKET_VIEW_KEY) === "board" ? "board" : "list";
+	} catch {
+		return "list";
+	}
+}
+
+function saveTicketView(view: TicketViewMode) {
+	try {
+		localStorage.setItem(TICKET_VIEW_KEY, view);
+	} catch {
+		void 0;
+	}
+}
+
+function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, onMove: (status: TicketStatus) => void): HTMLElement {
+	const card = el(
+		"article",
+		{ class: `ticket-board-card priority-${ticket.priority}` },
+		el(
+			"div",
+			{ class: "ticket-board-card-head" },
+			el("a", { href: `/projects/${project.uuid}/tickets/${ticket.uuid}` }, ticket.title),
+			el("span", { class: "mono muted" }, `#${ticket.number}`)
+		),
+		el(
+			"div",
+			{ class: "ticket-board-tags" },
+			el("span", { class: "ticket-board-kind" }, ticketKindLabel(ticket.kind)),
+			el("span", { class: `ticket-board-priority priority-${ticket.priority}` }, ticketPriorityLabel(ticket.priority)),
+			ticket.reported_by ? el("span", { class: "muted" }, t("ticket.from_customer")) : null
+		),
+		ticket.customer_name ? el("div", { class: "ticket-board-detail muted" }, ticket.customer_name) : null,
+		el("div", { class: "ticket-board-detail" }, assigneeNames(ticket) || t("ticket.unassigned")),
+		ticket.due_on || ticket.logged_minutes || ticket.fixed_price !== null
+			? el(
+					"div",
+					{ class: "ticket-board-card-foot muted" },
+					ticket.due_on ? el("span", {}, `${t("ticket.due")}: ${formatDay(ticket.due_on, project)}`) : null,
+					ticket.fixed_price !== null
+						? el("span", {}, `${t("ticket.fixed_price_short")}: ${formatMoney(ticket.fixed_price, project.currency)}`)
+						: ticket.logged_minutes
+							? el("span", { class: "mono" }, `${t("ticket.logged")}: ${formatHours(ticket.logged_minutes)}`)
+							: null
+				)
+			: null
+	);
+
+	if (movable) {
+		card.draggable = true;
+		card.addEventListener("dragstart", (event) => {
+			card.classList.add("dragging");
+			event.dataTransfer?.setData("text/plain", ticket.uuid);
+			if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+		});
+		card.addEventListener("dragend", () => card.classList.remove("dragging"));
+
+		const move = select(statusOptions(), ticket.status);
+		move.className = "ticket-board-move";
+		move.setAttribute("aria-label", t("ticket.move_to"));
+		move.addEventListener("change", () => onMove(move.value as TicketStatus));
+		move.addEventListener("dragstart", (event) => event.stopPropagation());
+		card.append(move);
+	}
+
+	return card;
 }
 
 export async function ticketsView(uuid: string): Promise<HTMLElement> {
@@ -161,12 +251,156 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 		);
 		const search = input("search", { placeholder: t("ticket.search") });
 		const body = el("div", {});
+		const surface = el("div", { class: "card" }, body);
 		const controls = pagination(() => load());
+		const canMove = state.license.active && can(project, Permission.TICKET_WORK);
+		let view = savedTicketView();
 		let debounce: ReturnType<typeof setTimeout>;
+		let boardTickets: Record<TicketStatus, Ticket[]> = { open: [], in_progress: [], waiting: [], resolved: [], closed: [] };
+		let boardTotals: Record<TicketStatus, number> = { open: 0, in_progress: 0, waiting: 0, resolved: 0, closed: 0 };
+		const moving = new Set<string>();
+		const loadingColumns = new Set<TicketStatus>();
+		let boardVersion = 0;
+
+		const findBoardTicket = (ticket: string): Ticket | undefined => {
+			for (const ticketStatus of TICKET_STATUSES) {
+				const found = boardTickets[ticketStatus].find((entry) => entry.uuid === ticket);
+				if (found) return found;
+			}
+			return undefined;
+		};
+
+		const renderBoard = () => {
+			const loadMore = async (ticketStatus: TicketStatus) => {
+				if (loadingColumns.has(ticketStatus) || boardTickets[ticketStatus].length >= boardTotals[ticketStatus]) return;
+				const version = boardVersion;
+				loadingColumns.add(ticketStatus);
+				renderBoard();
+				try {
+					const result = await Api.tickets(uuid, {
+						status: ticketStatus,
+						assignee: assignee.value || undefined,
+						search: search.value.trim() || undefined,
+						limit: 200,
+						offset: boardTickets[ticketStatus].length,
+					});
+					if (version !== boardVersion) return;
+					const known = new Set(boardTickets[ticketStatus].map((ticket) => ticket.uuid));
+					boardTickets[ticketStatus].push(...result.tickets.filter((ticket) => !known.has(ticket.uuid)));
+					boardTotals[ticketStatus] = result.total;
+				} catch (error) {
+					if (version === boardVersion) reportError(error);
+				} finally {
+					loadingColumns.delete(ticketStatus);
+					if (version === boardVersion) renderBoard();
+				}
+			};
+
+			const moveTicket = async (ticket: Ticket, nextStatus: TicketStatus) => {
+				const previousStatus = ticket.status;
+				if (previousStatus === nextStatus || moving.has(ticket.uuid)) return;
+				const previousIndex = boardTickets[previousStatus].findIndex((entry) => entry.uuid === ticket.uuid);
+				boardTickets[previousStatus].splice(previousIndex, 1);
+				boardTickets[nextStatus].unshift(ticket);
+				boardTotals[previousStatus] = Math.max(0, boardTotals[previousStatus] - 1);
+				boardTotals[nextStatus] += 1;
+				ticket.status = nextStatus;
+				moving.add(ticket.uuid);
+				renderBoard();
+				try {
+					Object.assign(ticket, await Api.updateTicket(uuid, ticket.uuid, { status: nextStatus }));
+				} catch (error) {
+					boardTickets[nextStatus] = boardTickets[nextStatus].filter((entry) => entry.uuid !== ticket.uuid);
+					boardTickets[previousStatus].splice(Math.max(0, previousIndex), 0, ticket);
+					boardTotals[nextStatus] = Math.max(0, boardTotals[nextStatus] - 1);
+					boardTotals[previousStatus] += 1;
+					ticket.status = previousStatus;
+					reportError(error);
+				} finally {
+					moving.delete(ticket.uuid);
+					renderBoard();
+				}
+			};
+
+			const columns = TICKET_STATUSES.map((ticketStatus) => {
+				const headingId = `ticket-board-${ticketStatus}`;
+				const column = el(
+					"section",
+					{ class: "ticket-board-column" },
+					el(
+						"header",
+						{ class: "ticket-board-column-head" },
+						el("h3", { id: headingId }, ticketPill(ticketStatus)),
+						el("span", { class: "ticket-board-count" }, boardTotals[ticketStatus].toLocaleString())
+					),
+					el(
+						"div",
+						{ class: "ticket-board-cards" },
+						...boardTickets[ticketStatus].map((ticket) =>
+							ticketBoardCard(project, ticket, canMove && !moving.has(ticket.uuid), (nextStatus) => void moveTicket(ticket, nextStatus))
+						),
+						boardTickets[ticketStatus].length === 0 ? el("p", { class: "ticket-board-empty muted" }, t("ticket.column_empty")) : null,
+						boardTickets[ticketStatus].length < boardTotals[ticketStatus]
+							? el(
+									"button",
+									{
+										class: "button ghost small ticket-board-more",
+										type: "button",
+										disabled: loadingColumns.has(ticketStatus),
+										onClick: () => void loadMore(ticketStatus),
+									},
+									loadingColumns.has(ticketStatus)
+										? t("ui.loading")
+										: t("ticket.load_more", { count: boardTotals[ticketStatus] - boardTickets[ticketStatus].length })
+								)
+							: null
+					)
+				);
+				column.setAttribute("aria-labelledby", headingId);
+				if (canMove) {
+					column.addEventListener("dragover", (event) => {
+						event.preventDefault();
+						if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+						column.classList.add("drag-over");
+					});
+					column.addEventListener("dragleave", (event) => {
+						if (!column.contains(event.relatedTarget as Node | null)) column.classList.remove("drag-over");
+					});
+					column.addEventListener("drop", (event) => {
+						event.preventDefault();
+						column.classList.remove("drag-over");
+						const ticket = findBoardTicket(event.dataTransfer?.getData("text/plain") ?? "");
+						if (ticket) void moveTicket(ticket, ticketStatus);
+					});
+				}
+				return column;
+			});
+			body.replaceChildren(el("div", { class: "ticket-board" }, ...columns));
+		};
 
 		const load = async (): Promise<void> => {
 			const round = controls.state.begin();
+			const currentBoardVersion = ++boardVersion;
 			try {
+				if (view === "board") {
+					const results = await Promise.all(
+						TICKET_STATUSES.map((ticketStatus) =>
+							Api.tickets(uuid, {
+								status: ticketStatus,
+								assignee: assignee.value || undefined,
+								search: search.value.trim() || undefined,
+								limit: 200,
+							})
+						)
+					);
+					if (!controls.state.current(round) || currentBoardVersion !== boardVersion) return;
+					for (const [index, ticketStatus] of TICKET_STATUSES.entries()) {
+						boardTickets[ticketStatus] = results[index].tickets;
+						boardTotals[ticketStatus] = results[index].total;
+					}
+					renderBoard();
+					return;
+				}
 				const result = await Api.tickets(uuid, {
 					status: status.value,
 					assignee: assignee.value || undefined,
@@ -214,13 +448,40 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 			} catch (error) {
 				if (controls.state.current(round)) {
 					controls.fail();
+					controls.element.hidden = view === "board";
 					reportError(error);
 				}
 			}
 		};
 		const reload = () => {
 			controls.reset();
+			controls.element.hidden = view === "board";
 			void load();
+		};
+		const viewToggle = el("div", { class: "segmented ticket-view-toggle" });
+		viewToggle.setAttribute("role", "radiogroup");
+		viewToggle.setAttribute("aria-label", t("ticket.view"));
+		const viewChoices = (["list", "board"] as TicketViewMode[]).map((value) => {
+			const button = el("button", { class: "segment", type: "button" }, t(`ticket.view_${value}`));
+			button.setAttribute("role", "radio");
+			button.addEventListener("click", () => {
+				if (view === value) return;
+				view = value;
+				saveTicketView(view);
+				syncView();
+				reload();
+			});
+			viewToggle.append(button);
+			return { value, button };
+		});
+		const syncView = () => {
+			status.hidden = view === "board";
+			controls.element.hidden = view === "board";
+			surface.className = view === "board" ? "ticket-board-surface" : "card";
+			for (const choice of viewChoices) {
+				choice.button.classList.toggle("active", choice.value === view);
+				choice.button.setAttribute("aria-checked", String(choice.value === view));
+			}
 		};
 		status.addEventListener("change", reload);
 		assignee.addEventListener("change", reload);
@@ -228,6 +489,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 			clearTimeout(debounce);
 			debounce = setTimeout(reload, 250);
 		});
+		syncView();
 		void load();
 
 		const creates = state.license.active && can(project, Permission.TICKET_MANAGE);
@@ -240,6 +502,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 				status,
 				assignee,
 				search,
+				viewToggle,
 				creates
 					? el(
 							"button",
@@ -252,10 +515,133 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						)
 					: null
 			),
-			el("div", { class: "card" }, body),
+			surface,
 			controls.element
 		);
 	});
+}
+
+async function ticketInvoiceDialog(project: Project, initial: Ticket): Promise<void> {
+	try {
+		const candidates: Ticket[] = [];
+		let offset = 0;
+		let total = 0;
+		do {
+			const result = await Api.tickets(project.uuid, {
+				status: "all",
+				customer: initial.customer ?? undefined,
+				limit: 200,
+				offset,
+			});
+			total = result.total;
+			candidates.push(...result.tickets.filter((ticket) => ticket.customer === initial.customer && ticketCanBeInvoiced(ticket)));
+			offset += result.tickets.length;
+		} while (offset < total);
+
+		if (!candidates.some((ticket) => ticket.uuid === initial.uuid) && ticketCanBeInvoiced(initial)) candidates.unshift(initial);
+		const unique = [...new Map(candidates.map((ticket) => [ticket.uuid, ticket])).values()];
+		const choices = unique.map((ticket) => {
+			const checkbox = input("checkbox", { value: ticket.uuid });
+			checkbox.checked = ticket.uuid === initial.uuid;
+			const element = el(
+				"label",
+				{ class: "ticket-invoice-choice" },
+				checkbox,
+				el(
+					"span",
+					{ class: "ticket-invoice-choice-main" },
+					el("strong", {}, `#${ticket.number} ${ticket.title}`),
+					el(
+						"span",
+						{ class: "ticket-invoice-choice-meta" },
+						ticketPill(ticket.status),
+						el(
+							"span",
+							{ class: "muted mono" },
+							ticket.fixed_price !== null
+								? formatMoney(ticket.fixed_price, project.currency)
+								: t("ticket.invoice_hours", { hours: formatHours(ticket.uninvoiced_minutes) })
+						)
+					)
+				)
+			);
+			return { ticket, checkbox, element };
+		});
+		const search = input("search", { placeholder: t("ticket.invoice_search") });
+		const initialStatus = initial.status === "resolved" || initial.status === "closed" ? "done" : initial.status;
+		const status = select(
+			[{ value: "done", label: t("ticket.filter_done") }, { value: "all", label: t("ticket.filter_all") }, ...statusOptions()],
+			initialStatus
+		);
+		const noMatches = el("p", { class: "ticket-board-empty muted" }, t("ticket.invoice_no_matches"));
+		let syncSelection = () => {};
+		const syncFilter = () => {
+			const query = search.value.trim().toLowerCase();
+			const numberQuery = query.startsWith("#") ? query.slice(1) : query;
+			let shown = 0;
+			let selectionChanged = false;
+			for (const choice of choices) {
+				const matchesSearch =
+					!query || choice.ticket.title.toLowerCase().includes(query) || (numberQuery !== "" && String(choice.ticket.number).includes(numberQuery));
+				const matchesStatus =
+					status.value === "all" ||
+					(status.value === "done" ? choice.ticket.status === "resolved" || choice.ticket.status === "closed" : choice.ticket.status === status.value);
+				if (!matchesStatus && choice.checkbox.checked) {
+					choice.checkbox.checked = false;
+					selectionChanged = true;
+				}
+				choice.element.hidden = !matchesSearch || !matchesStatus;
+				if (!choice.element.hidden) shown++;
+			}
+			noMatches.hidden = shown > 0;
+			if (selectionChanged) syncSelection();
+		};
+		search.addEventListener("input", syncFilter);
+		status.addEventListener("change", syncFilter);
+		const summary = el("p", { class: "ticket-invoice-summary muted" });
+		const submit = el("button", { class: "button primary", type: "submit" }, t("ticket.invoice_create_draft"));
+		const sync = () => {
+			const selected = choices.filter((choice) => choice.checkbox.checked);
+			const minutes = selected.reduce((sum, choice) => sum + choice.ticket.uninvoiced_minutes, 0);
+			summary.textContent = t("ticket.invoice_selection", { count: selected.length, hours: formatHours(minutes) });
+			submit.disabled = selected.length === 0;
+		};
+		syncSelection = sync;
+		for (const choice of choices) choice.checkbox.addEventListener("change", sync);
+
+		const form = el(
+			"form",
+			{
+				class: "stack",
+				onSubmit: async (event) => {
+					event.preventDefault();
+					const selected = choices.filter((choice) => choice.checkbox.checked).map((choice) => choice.ticket.uuid);
+					if (selected.length === 0) return;
+					submit.disabled = true;
+					try {
+						const result = await Api.invoiceTickets(project.uuid, selected);
+						dialog.close();
+						toast(t("ticket.invoiced", { reference: result.reference }), "success");
+						navigate(`/projects/${project.uuid}/invoices/${result.invoice}`);
+					} catch (error) {
+						reportError(error);
+						submit.disabled = false;
+					}
+				},
+			},
+			el("p", {}, t("ticket.invoice_customer", { customer: initial.customer_name ?? t("ticket.no_customer") })),
+			el("p", { class: "muted" }, t("ticket.invoice_multi_hint")),
+			el("div", { class: "form-grid" }, field(t("ticket.invoice_search_label"), search), field(t("ticket.status"), status)),
+			el("div", { class: "ticket-invoice-choices" }, ...choices.map((choice) => choice.element), noMatches),
+			summary,
+			el("div", { class: "form-actions" }, submit)
+		);
+		const dialog = modal(t("ticket.invoice_title"), form);
+		sync();
+		syncFilter();
+	} catch (error) {
+		reportError(error);
+	}
 }
 
 function commentForm(project: Project, ticket: TicketDetails, onSaved: () => void): HTMLElement {
@@ -339,7 +725,8 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 			[t("ticket.estimate"), ticket.estimate_minutes ? formatHours(ticket.estimate_minutes) : "-"],
 			[t("ticket.logged"), formatHours(ticket.logged_minutes)],
 			[t("ticket.uninvoiced"), formatHours(ticket.uninvoiced_minutes)],
-			[t("ticket.rate_short"), ticket.hourly_rate === null ? "-" : formatMoney(ticket.hourly_rate, project.currency)],
+			[t("ticket.rate_short"), ticket.fixed_price !== null || ticket.hourly_rate === null ? "-" : formatMoney(ticket.hourly_rate, project.currency)],
+			[t("ticket.fixed_price_short"), ticket.fixed_price === null ? "-" : formatMoney(ticket.fixed_price, project.currency)],
 			[t("ticket.opened"), `${when(project, ticket.created)} | ${ticket.reported_by ?? ticket.created_by ?? ""}`],
 		];
 
@@ -349,27 +736,13 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 			manages
 				? el("button", { class: "button ghost", type: "button", onClick: () => void ticketDialog(project, ticket, () => void reload()) }, t("ui.edit"))
 				: null,
-			manages && can(project, Permission.INVOICE_CREATE) && ticket.uninvoiced_minutes > 0
+			manages && can(project, Permission.INVOICE_CREATE) && ticketCanBeInvoiced(ticket)
 				? el(
 						"button",
 						{
 							class: "button primary",
 							type: "button",
-							onClick: async () => {
-								const confirmed = await confirmDialog({
-									title: t("ticket.invoice_title"),
-									body: t("ticket.invoice_body", { hours: formatHours(ticket.uninvoiced_minutes) }),
-									confirmLabel: t("ticket.invoice_create"),
-								});
-								if (!confirmed) return;
-								try {
-									const result = await Api.invoiceTicket(uuid, ticket.uuid);
-									toast(t("ticket.invoiced", { reference: result.reference }), "success");
-									navigate(`/projects/${uuid}/invoices/${result.invoice}`);
-								} catch (error) {
-									reportError(error);
-								}
-							},
+							onClick: () => void ticketInvoiceDialog(project, ticket),
 						},
 						t("ticket.invoice_create")
 					)
