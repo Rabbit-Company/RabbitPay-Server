@@ -149,11 +149,11 @@ export async function exportAccount(account: AccountRow) {
 	};
 }
 
-export function exportResponse(data: unknown, username: string): Response {
+export function exportResponse(data: unknown, email: string): Response {
 	return new Response(JSON.stringify(data, null, 2), {
 		headers: {
 			"Content-Type": "application/json; charset=utf-8",
-			"Content-Disposition": `attachment; filename="rabbitpay-${username}-data.json"`,
+			"Content-Disposition": `attachment; filename="rabbitpay-${email.replace(/[^a-zA-Z0-9.@_-]/g, "_")}-data.json"`,
 			"Cache-Control": "no-store",
 			"X-Content-Type-Options": "nosniff",
 		},

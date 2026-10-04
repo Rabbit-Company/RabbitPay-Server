@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.licensing.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -49,8 +49,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 const outbox: Captured[] = [];
@@ -167,13 +167,13 @@ describe("administrators", () => {
 
 	test("can promote another account but not change their own", async () => {
 		const other = await account("lic-helper");
-		expect((await call("PATCH", "/api/v1/admin/accounts/lic-admin", { token: adminToken, body: { admin: false } })).error).toBe(1103);
+		expect((await call("PATCH", `/api/v1/admin/accounts/${await accountId("lic-admin")}`, { token: adminToken, body: { admin: false } })).error).toBe(1103);
 
-		const promoted = await call("PATCH", "/api/v1/admin/accounts/lic-helper", { token: adminToken, body: { admin: true } });
+		const promoted = await call("PATCH", `/api/v1/admin/accounts/${await accountId("lic-helper")}`, { token: adminToken, body: { admin: true } });
 		expect(promoted.data.admin).toBe(true);
 		expect((await call("GET", "/api/v1/admin/overview", { token: other })).error).toBe(0);
 
-		await call("PATCH", "/api/v1/admin/accounts/lic-helper", { token: adminToken, body: { admin: false, status: "suspended" } });
+		await call("PATCH", `/api/v1/admin/accounts/${await accountId("lic-helper")}`, { token: adminToken, body: { admin: false, status: "suspended" } });
 		expect((await call("GET", "/api/v1/admin/overview", { token: other })).error).toBe(1026);
 		expect((await call("PATCH", "/api/v1/admin/accounts/nobody-here", { token: adminToken, body: { admin: true } })).error).toBe(1104);
 	});
@@ -373,7 +373,12 @@ describe("transaction limits", () => {
 		expect(await license()).toMatchObject({ free_used: 2, paid_used: 1, paid_balance: 2, remaining: 2 });
 
 		const listed = await call("GET", `/api/v1/admin/licenses?status=redeemed`, { token: adminToken });
-		expect(listed.data.licenses[0]).toMatchObject({ redeemed_project: projectUuid, project_name: "lic-shop", redeemed_by: "lic-owner" });
+		expect(listed.data.licenses[0]).toMatchObject({
+			redeemed_project: projectUuid,
+			project_name: "lic-shop",
+			redeemed_by: await accountId("lic-owner"),
+			redeemed_by_name: "lic-owner@example.com",
+		});
 	});
 
 	test("payments that arrive past the limit are still recorded and taken from the next license", async () => {

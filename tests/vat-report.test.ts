@@ -82,10 +82,10 @@ beforeAll(async () => {
 	await initializeDatabase();
 	await storeEcbRates([{ day: localDate(Date.now(), DEFAULT_TIMEZONE), currency: "USD", rate: 1 / 0.9 }]);
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "vat-owner", email: "vat@example.com", password: password("vat-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "vat-owner", password: password("vat-owner") } })).data.token;
-	await call("POST", "/api/v1/auth/register", { body: { username: "vat-viewer", email: "vat-viewer@example.com", password: password("vat-viewer") } });
-	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "vat-viewer", password: password("vat-viewer") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "vat-owner@example.com", password: password("vat-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "vat-owner@example.com", password: password("vat-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "vat-viewer@example.com", password: password("vat-viewer") } });
+	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "vat-viewer@example.com", password: password("vat-viewer") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "vat-shop", currency: "EUR" } })).data.uuid;
 	await call("PATCH", base(), { token: ownerToken, body: { tax_country: "SI", vat_status: "registered", oss_registered: true, tax_currency: "EUR" } });

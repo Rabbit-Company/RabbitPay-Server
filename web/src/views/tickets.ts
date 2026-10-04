@@ -17,7 +17,7 @@ import { formatDateTime, formatMoney, toMajorUnits, toMinorUnits } from "../mone
 import { can, Permission } from "../access";
 import { t } from "../i18n";
 import { navigate } from "../router";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { markdownEditor, markdownView } from "../markdown-editor";
 import {
@@ -99,7 +99,7 @@ async function ticketDialog(project: Project, ticket: Ticket | null, onSaved: (t
 		box.checked = assigned.has(member.uuid);
 		return {
 			box,
-			element: el("label", { class: "switch" }, box, el("span", {}, member.full_name || member.account_username || member.invitation_email || "")),
+			element: el("label", { class: "switch" }, box, el("span", {}, member.full_name || member.account_email || member.invitation_email || "")),
 		};
 	});
 	const submit = el("button", { class: "button primary", type: "submit" }, t("ui.save"));
@@ -862,7 +862,7 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 			[t("ticket.estimate"), ticket.estimate_minutes ? formatHours(ticket.estimate_minutes) : "-"],
 			[t("ticket.logged"), formatHours(ticket.logged_minutes)],
 			[t("ticket.uninvoiced"), formatHours(ticket.uninvoiced_minutes)],
-			[t("ticket.opened"), `${when(project, ticket.created)} | ${ticket.reported_by ?? ticket.created_by ?? ""}`],
+			[t("ticket.opened"), `${when(project, ticket.created)} | ${ticket.reported_by ?? accountName(ticket.created_by_name, ticket.created_by) ?? ""}`],
 		];
 		if (manages) {
 			facts.splice(

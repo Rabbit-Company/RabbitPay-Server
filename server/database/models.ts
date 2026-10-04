@@ -206,6 +206,7 @@ export interface ProjectMemberRow {
 	uuid: string;
 	project_id: string;
 	account_username: string | null;
+	account_email?: string | null;
 	role: ProjectRole;
 	invited_by: string | null;
 	invitation_token: string | null;

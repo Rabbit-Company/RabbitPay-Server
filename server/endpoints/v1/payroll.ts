@@ -5,6 +5,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
@@ -81,7 +82,7 @@ async function runState(run: PayrollRunRow) {
 
 Server.app.get(`${base}/rates`, Auth.required(), Permissions.require(Permission.EMPLOYEE_VIEW), async (ctx) => {
 	const rows = (await Database`SELECT * FROM payroll_rates WHERE project = ${Permissions.project(ctx).uuid} ORDER BY period DESC`) as PayrollRatesRow[];
-	return Utils.ok(ctx, { tables: rows.map(presentRates), presets: SLOVENIA_PRESETS });
+	return await okWithNames(ctx, { tables: rows.map(presentRates), presets: SLOVENIA_PRESETS });
 });
 
 Server.app.put(`${base}/rates/:period`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -108,7 +109,7 @@ Server.app.put(`${base}/rates/:period`, Auth.required(), Permissions.require(Per
 	}
 	const [row] = (await Database`SELECT * FROM payroll_rates WHERE project = ${project.uuid} AND period = ${period}`) as PayrollRatesRow[];
 	await audit(ctx, "payroll_rates.saved", "payroll_rates", row.uuid, { period, rates, verified: data.verified }, previous ? presentRates(previous) : undefined);
-	return Utils.ok(ctx, presentRates(row));
+	return await okWithNames(ctx, presentRates(row));
 });
 
 Server.app.delete(`${base}/rates/:period`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -128,7 +129,7 @@ Server.app.get(`${base}/runs`, Auth.required(), Permissions.require(Permission.E
 		const lines = await runLines(run);
 		result.push({ ...run, people: lines.length, totals: runTotals(lines.map((line) => line.calculation)) });
 	}
-	return Utils.ok(ctx, result);
+	return await okWithNames(ctx, result);
 });
 
 Server.app.post(`${base}/runs`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -148,13 +149,13 @@ Server.app.post(`${base}/runs`, Auth.required(), Permissions.require(Permission.
 	const [run] = (await Database`SELECT * FROM payroll_runs WHERE uuid = ${uuid}`) as PayrollRunRow[];
 	await storeRunCalculation(project, run);
 	await audit(ctx, "payroll_run.created", "payroll_run", uuid, { period, pay_date: payDate });
-	return Utils.ok(ctx, await runState(run), 201);
+	return await okWithNames(ctx, await runState(run), 201);
 });
 
 Server.app.get(`${base}/runs/:run`, Auth.required(), Permissions.require(Permission.EMPLOYEE_VIEW), async (ctx) => {
 	const run = await findRun(ctx);
 	if (!run) return Utils.fail(ctx, ErrorCode.PAYROLL_RUN_NOT_FOUND);
-	return Utils.ok(ctx, await runState(run));
+	return await okWithNames(ctx, await runState(run));
 });
 
 Server.app.patch(`${base}/runs/:run`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -166,7 +167,7 @@ Server.app.patch(`${base}/runs/:run`, Auth.required(), Permissions.require(Permi
 	if (payDate !== null && !isIsoDate(payDate)) return Utils.fail(ctx, ErrorCode.INVALID_PAYROLL_RUN);
 	await Database`UPDATE payroll_runs SET pay_date = ${payDate as string | null}, updated = ${Date.now()} WHERE uuid = ${run.uuid}`;
 	await audit(ctx, "payroll_run.updated", "payroll_run", run.uuid, { pay_date: payDate }, { pay_date: run.pay_date });
-	return Utils.ok(ctx, await runState(run));
+	return await okWithNames(ctx, await runState(run));
 });
 
 Server.app.post(`${base}/runs/:run/recalculate`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -174,7 +175,7 @@ Server.app.post(`${base}/runs/:run/recalculate`, Auth.required(), Permissions.re
 	if (!run) return Utils.fail(ctx, ErrorCode.PAYROLL_RUN_NOT_FOUND);
 	if (run.status === "final") return Utils.fail(ctx, ErrorCode.PAYROLL_RUN_FINAL);
 	await storeRunCalculation(Permissions.project(ctx), run);
-	return Utils.ok(ctx, await runState(run));
+	return await okWithNames(ctx, await runState(run));
 });
 
 Server.app.put(`${base}/runs/:run/lines/:line/items`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -202,7 +203,7 @@ Server.app.put(`${base}/runs/:run/lines/:line/items`, Auth.required(), Permissio
 		UPDATE payroll_lines SET items = ${JSON.stringify(items)}, calculation = ${JSON.stringify(calculation)}, updated = ${Date.now()} WHERE uuid = ${line.uuid}
 	`;
 	await audit(ctx, "payroll_line.items_updated", "payroll_run", run.uuid, { person: line.person, items }, { items: previous.items });
-	return Utils.ok(ctx, await runState(run));
+	return await okWithNames(ctx, await runState(run));
 });
 
 Server.app.post(`${base}/runs/:run/finalize`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -220,7 +221,7 @@ Server.app.post(`${base}/runs/:run/finalize`, Auth.required(), Permissions.requi
 	`;
 	const state = await runState(run);
 	await audit(ctx, "payroll_run.finalized", "payroll_run", run.uuid, { period: run.period, totals: state.totals });
-	return Utils.ok(ctx, state);
+	return await okWithNames(ctx, state);
 });
 
 Server.app.post(`${base}/runs/:run/reopen`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {
@@ -228,7 +229,7 @@ Server.app.post(`${base}/runs/:run/reopen`, Auth.required(), Permissions.require
 	if (!run) return Utils.fail(ctx, ErrorCode.PAYROLL_RUN_NOT_FOUND);
 	await Database`UPDATE payroll_runs SET status = 'draft', finalized_by = NULL, finalized_at = NULL, updated = ${Date.now()} WHERE uuid = ${run.uuid}`;
 	await audit(ctx, "payroll_run.reopened", "payroll_run", run.uuid, { period: run.period }, { finalized_by: run.finalized_by, finalized_at: run.finalized_at });
-	return Utils.ok(ctx, await runState(run));
+	return await okWithNames(ctx, await runState(run));
 });
 
 Server.app.delete(`${base}/runs/:run`, Auth.required(), Permissions.require(Permission.EMPLOYEE_EDIT), requireWorkforce(), async (ctx) => {

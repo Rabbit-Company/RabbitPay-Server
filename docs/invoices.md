@@ -150,7 +150,7 @@ untranslated.
 ## Interface language
 
 The dashboard speaks English and Slovenian, chosen with the switcher in the
-header, beside your username. The login and invitation pages carry the same
+header, beside your email. The login and invitation pages carry the same
 switcher, since there is no header before you sign in.
 
 This is a separate choice from the project's document language above. The

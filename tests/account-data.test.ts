@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 
 const databasePath = `${import.meta.dir}/.account-data.sqlite`;
 await prepareTest(`sqlite://${databasePath}`);
@@ -34,11 +34,13 @@ async function call(method: string, path: string, options: { token?: string; bod
 
 const password = (value: string) => new Bun.CryptoHasher("blake2b512").update(value).digest("hex");
 const tokens: Record<string, string> = {};
+const ids: Record<string, string> = {};
 const projects: Record<string, string> = {};
 
 async function account(username: string) {
-	await call("POST", "/api/v1/auth/register", { body: { username, email: `${username}@example.com`, password: password("data-pass") } });
-	tokens[username] = (await call("POST", "/api/v1/auth/login", { body: { username, password: password("data-pass") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${username}@example.com`, password: password("data-pass") } });
+	tokens[username] = (await call("POST", "/api/v1/auth/login", { body: { email: `${username}@example.com`, password: password("data-pass") } })).data.token;
+	ids[username] = await accountId(username);
 }
 
 async function project(owner: string, name: string) {
@@ -49,7 +51,7 @@ async function addMember(projectName: string, username: string, role: string) {
 	const timestamp = Date.now();
 	await Database`
 		INSERT INTO project_members(uuid, project_id, account_username, role, status, full_name, created, updated)
-		VALUES(${crypto.randomUUID()}, ${projects[projectName]}, ${username}, ${role}, 'active', ${`${username} person`}, ${timestamp}, ${timestamp})
+		VALUES(${crypto.randomUUID()}, ${projects[projectName]}, ${ids[username]}, ${role}, 'active', ${`${username} person`}, ${timestamp}, ${timestamp})
 	`;
 }
 
@@ -79,11 +81,11 @@ describe("personal data export", () => {
 	test("downloads the signed-in account's own data as a JSON file", async () => {
 		const response = await raw("GET", "/api/v1/auth/export", { token: tokens["data-owner"] });
 		expect(response.status).toBe(200);
-		expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="rabbitpay-data-owner-data.json"');
+		expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="rabbitpay-data-owner@example.com-data.json"');
 		expect(response.headers.get("Cache-Control")).toBe("no-store");
 
 		const data = (await response.json()) as any;
-		expect(data.account.username).toBe("data-owner");
+		expect(data.account.username).toBe(ids["data-owner"]);
 		expect(data.account.email).toBe("data-owner@example.com");
 		expect(data.account.two_factor.enabled).toBe(false);
 		expect(JSON.stringify(data)).not.toContain("argon2");
@@ -92,37 +94,47 @@ describe("personal data export", () => {
 	});
 
 	test("lets administrators export an account to answer an access request", async () => {
-		const response = await raw("GET", "/api/v1/admin/accounts/data-colleague/export", { token: tokens["data-admin"] });
+		const response = await raw("GET", `/api/v1/admin/accounts/${ids["data-colleague"]}/export`, { token: tokens["data-admin"] });
 		expect(response.status).toBe(200);
-		expect(((await response.json()) as any).account.username).toBe("data-colleague");
-		expect((await call("GET", "/api/v1/admin/accounts/data-colleague/export", { token: tokens["data-other"] })).error).toBe(1098);
+		expect(((await response.json()) as any).account.username).toBe(ids["data-colleague"]);
+		expect((await call("GET", `/api/v1/admin/accounts/${ids["data-colleague"]}/export`, { token: tokens["data-other"] })).error).toBe(1098);
 	});
 });
 
 describe("account deletion", () => {
 	test("is blocked while the account is the only owner of a project others use", async () => {
-		const plan = await call("GET", "/api/v1/admin/accounts/data-owner/deletion", { token: tokens["data-admin"] });
+		const plan = await call("GET", `/api/v1/admin/accounts/${ids["data-owner"]}/deletion`, { token: tokens["data-admin"] });
 		expect(plan.data.shared.map((row: { name: string }) => row.name)).toEqual(["team-shop"]);
 		expect(plan.data.closing.map((row: { name: string }) => row.name)).toEqual(["solo-shop"]);
 
-		const refused = await call("DELETE", "/api/v1/admin/accounts/data-owner", { token: tokens["data-admin"], body: { confirm: "data-owner" } });
+		const refused = await call("DELETE", `/api/v1/admin/accounts/${ids["data-owner"]}`, {
+			token: tokens["data-admin"],
+			body: { confirm: "data-owner@example.com" },
+		});
 		expect(refused.error).toBe(1239);
 		expect(refused.data.shared[0].name).toBe("team-shop");
 	});
 
-	test("needs the username typed as confirmation and cannot target yourself", async () => {
-		await Database`UPDATE project_members SET role = 'owner' WHERE project_id = ${projects["team-shop"]} AND account_username = ${"data-colleague"}`;
-		expect((await call("DELETE", "/api/v1/admin/accounts/data-owner", { token: tokens["data-admin"], body: { confirm: "data-own" } })).error).toBe(1001);
-		expect((await call("DELETE", "/api/v1/admin/accounts/data-admin", { token: tokens["data-admin"], body: { confirm: "data-admin" } })).error).toBe(1103);
+	test("needs the email typed as confirmation and cannot target yourself", async () => {
+		await Database`UPDATE project_members SET role = 'owner' WHERE project_id = ${projects["team-shop"]} AND account_username = ${ids["data-colleague"]}`;
+		expect((await call("DELETE", `/api/v1/admin/accounts/${ids["data-owner"]}`, { token: tokens["data-admin"], body: { confirm: "data-own" } })).error).toBe(
+			1001
+		);
+		expect(
+			(await call("DELETE", `/api/v1/admin/accounts/${ids["data-admin"]}`, { token: tokens["data-admin"], body: { confirm: "data-admin@example.com" } })).error
+		).toBe(1103);
 	});
 
 	test("removes the account, closes its solo projects and keeps shared business records", async () => {
-		await Database`UPDATE audit_log SET ip_address = '203.0.113.9' WHERE account = ${"data-owner"}`;
-		const deleted = await call("DELETE", "/api/v1/admin/accounts/data-owner", { token: tokens["data-admin"], body: { confirm: "data-owner" } });
+		await Database`UPDATE audit_log SET ip_address = '203.0.113.9' WHERE account = ${ids["data-owner"]}`;
+		const deleted = await call("DELETE", `/api/v1/admin/accounts/${ids["data-owner"]}`, {
+			token: tokens["data-admin"],
+			body: { confirm: "data-owner@example.com" },
+		});
 		expect(deleted.error).toBe(0);
 		expect(deleted.data.closed_projects.map((row: { name: string }) => row.name)).toEqual(["solo-shop"]);
 
-		const [account] = (await Database`SELECT username FROM accounts WHERE username = ${"data-owner"}`) as { username: string }[];
+		const [account] = (await Database`SELECT username FROM accounts WHERE username = ${ids["data-owner"]}`) as { username: string }[];
 		expect(account).toBeUndefined();
 
 		const statuses = (await Database`SELECT name, status FROM projects ORDER BY name`) as { name: string; status: string }[];
@@ -136,13 +148,25 @@ describe("account deletion", () => {
 		const [traces] = (await Database`SELECT COUNT(*) AS count FROM audit_log WHERE ip_address = '203.0.113.9'`) as { count: number }[];
 		expect(Number(traces.count)).toBe(0);
 
-		const [recorded] = (await Database`SELECT action FROM audit_log WHERE action = 'account.deleted' AND entity_id = ${"data-owner"}`) as { action: string }[];
+		const [recorded] = (await Database`SELECT action FROM audit_log WHERE action = 'account.deleted' AND entity_id = ${ids["data-owner"]}`) as {
+			action: string;
+		}[];
 		expect(recorded.action).toBe("account.deleted");
+	});
+
+	test("shows who created a project by email, and nobody once that account is gone", async () => {
+		const listed = await call("GET", "/api/v1/admin/projects?search=shop", { token: tokens["data-admin"] });
+		const creators = Object.fromEntries(listed.data.projects.map((row: any) => [row.name, [row.created_by, row.created_by_name]]));
+		expect(creators["team-shop"]).toEqual([ids["data-owner"], null]);
+		const other = await call("GET", "/api/v1/admin/projects?search=co-owned", { token: tokens["data-admin"] });
+		expect(other.data.projects[0]).toMatchObject({ created_by: ids["data-other"], created_by_name: "data-other@example.com" });
+		const byOwner = await call("GET", "/api/v1/admin/projects?search=data-other@example", { token: tokens["data-admin"] });
+		expect(byOwner.data.projects.map((row: any) => row.name)).toEqual(["co-owned"]);
 	});
 
 	test("signs the deleted account out and does not hand its session to a new account with the same name", async () => {
 		expect((await call("GET", "/api/v1/auth/me", { token: tokens["data-owner"] })).error).toBe(1017);
-		await call("POST", "/api/v1/auth/register", { body: { username: "data-owner", email: "someone-else@example.com", password: password("other") } });
+		await call("POST", "/api/v1/auth/register", { body: { email: "data-owner@example.com", password: password("other") } });
 		const reused = await call("GET", "/api/v1/auth/me", { token: tokens["data-owner"] });
 		expect(reused.error).toBe(1017);
 	});

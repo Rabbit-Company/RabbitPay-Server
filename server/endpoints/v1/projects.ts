@@ -428,14 +428,15 @@ Server.app.get("/api/v1/projects/:uuid/members", Auth.required(), Permissions.re
 	const member = Permissions.member(ctx);
 
 	const members = (await Database`
-		SELECT pm.uuid, pm.account_username, pm.full_name, pm.role, pm.status, pm.invitation_email, pm.invitation_token, pm.invited_by,
-			pm.expires_at, pm.accepted_at, pm.created,
+		SELECT pm.uuid, pm.account_username, a.email AS account_email, pm.full_name, pm.role, pm.status, pm.invitation_email, pm.invitation_token,
+			pm.invited_by, pm.expires_at, pm.accepted_at, pm.created,
 			CASE WHEN EXISTS(
 				SELECT 1 FROM project_member_signature_versions signature
 				WHERE signature.member = pm.uuid AND signature.valid_until IS NULL
 			) THEN 1 ELSE 0 END AS has_signature
-		FROM project_members pm WHERE pm.project_id = ${project.uuid} AND pm.status != 'removed' ORDER BY pm.created ASC
-	`) as (ProjectMemberRow & { has_signature: number })[];
+		FROM project_members pm LEFT JOIN accounts a ON a.username = pm.account_username
+		WHERE pm.project_id = ${project.uuid} AND pm.status != 'removed' ORDER BY pm.created ASC
+	`) as (ProjectMemberRow & { account_email: string | null; has_signature: number })[];
 
 	const managesMembers = Permissions.has(member, Permission.PROJECT_MEMBERS);
 	return Utils.ok(

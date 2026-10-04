@@ -202,7 +202,11 @@ projects: the person is detached from each project, so invoices, timesheets and
 payroll they worked on keep the name recorded on them. Projects where the
 account was the only member are closed. Deletion is refused while the account is
 the only owner of a project that other people still use (error `1239`), so make
-someone else an owner first. The admin types the username to confirm.
+someone else an owner first. The admin types the account's email to confirm.
+
+`:username` in the paths below is the account ID shown beside each email in the
+account list. It is random, assigned at registration and stays the same when
+the person changes their email. `DELETE` takes that email as `confirm`.
 
 Users can download the same export themselves under Account, Your data.
 
@@ -254,7 +258,7 @@ All of these need an administrator session.
 | `DELETE` | `/api/v1/admin/accounts/:username/two-factor`      | Reset two-factor authentication.             |
 | `GET`    | `/api/v1/admin/accounts/:username/export`          | Download the account's personal data.        |
 | `GET`    | `/api/v1/admin/accounts/:username/deletion`        | What deleting the account would do.          |
-| `DELETE` | `/api/v1/admin/accounts/:username`                 | Delete the account (`confirm` = username).   |
+| `DELETE` | `/api/v1/admin/accounts/:username`                 | Delete the account (`confirm` = its email).  |
 | `GET`    | `/api/v1/admin/invites`                            | List invite codes.                           |
 | `POST`   | `/api/v1/admin/invites`                            | Create an invite code.                       |
 | `POST`   | `/api/v1/admin/invites/:invite/revoke`             | Revoke an invite code.                       |

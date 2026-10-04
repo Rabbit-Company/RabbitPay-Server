@@ -405,6 +405,28 @@ export function customerLoginEmail(language: UiLanguage, url: string, store: { n
 	});
 }
 
+function accountBrand(language: UiLanguage): EmailBrand {
+	return { merchant: "RabbitPay", language, accent: null, dateFormat: "auto", replyTo: null, address: [], whiteLabel: true, logoUrl: null };
+}
+
+export function emailChangeEmail(language: UiLanguage, url: string, previous: string): EmailContent {
+	return render(accountBrand(language), translate(language, "account.email_mail_subject"), {
+		heading: translate(language, "account.email_mail_heading"),
+		paragraphs: [translate(language, "account.email_mail_body", { email: previous })],
+		button: { label: translate(language, "account.email_mail_button"), url },
+		closing: [translate(language, "account.email_mail_expiry")],
+	});
+}
+
+export function emailChangedEmail(language: UiLanguage, url: string, current: string): EmailContent {
+	return render(accountBrand(language), translate(language, "account.email_notice_subject"), {
+		heading: translate(language, "account.email_notice_heading"),
+		paragraphs: [translate(language, "account.email_notice_body", { email: current })],
+		button: { label: translate(language, "account.email_notice_button"), url },
+		closing: [translate(language, "account.email_notice_closing")],
+	});
+}
+
 export function invoiceEmail(
 	brand: EmailBrand,
 	kind: InvoiceEmailKind,

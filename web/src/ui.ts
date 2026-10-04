@@ -74,6 +74,10 @@ function host(): HTMLElement {
 	return toastHost;
 }
 
+export function accountName(name: string | null | undefined, id: string | null | undefined): string | null {
+	return name || (id ? t("ui.deleted_user") : null);
+}
+
 export function toast(message: string, variant: "success" | "error" | "info" = "info") {
 	const node = el("div", { class: `toast toast-${variant}` }, message);
 	host().appendChild(node);

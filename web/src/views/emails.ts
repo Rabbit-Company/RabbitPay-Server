@@ -3,7 +3,7 @@ import { pagination, PAGE_SIZE } from "../pagination";
 import { Api, type EmailCounts, type ListedEmail, type Project } from "../api";
 import { el, emptyState, input, select, table } from "../dom";
 import { dayStartFromDateInput, formatDateTime, fromDateInput } from "../money";
-import { modal, reportError, toast } from "../ui";
+import { accountName, modal, reportError, toast } from "../ui";
 import { can, Permission } from "../access";
 import { loadProject, projectLayout } from "./project";
 import { statusLabel, t, tn } from "../i18n";
@@ -103,7 +103,7 @@ async function emailDialog(project: Project, listed: ListedEmail, onResent: () =
 			el("dt", {}, t("outbox.attempts")),
 			el("dd", {}, String(email.attempts)),
 			el("dt", {}, t("invoices.email_column_by")),
-			el("dd", {}, email.sent_by ?? t("ui.automatic")),
+			el("dd", {}, accountName(email.sent_by_name, email.sent_by) ?? t("ui.automatic")),
 			email.attachment ? el("dt", {}, t("outbox.attachment")) : null,
 			email.attachment ? el("dd", {}, email.attachment) : null
 		),
@@ -199,7 +199,7 @@ export async function emailsView(uuid: string): Promise<HTMLElement> {
 					el("td", {}, documentLink(uuid, email)),
 					el("td", {}, email.recipient),
 					statusCell(email),
-					el("td", {}, email.sent_by ?? t("ui.automatic")),
+					el("td", {}, accountName(email.sent_by_name, email.sent_by) ?? t("ui.automatic")),
 					el(
 						"td",
 						{},

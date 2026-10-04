@@ -71,10 +71,10 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "cn-owner", email: "cn@example.com", password: password("cn-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "cn-owner", password: password("cn-owner") } })).data.token;
-	await call("POST", "/api/v1/auth/register", { body: { username: "cn-viewer", email: "cn-viewer@example.com", password: password("cn-viewer") } });
-	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "cn-viewer", password: password("cn-viewer") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "cn-owner@example.com", password: password("cn-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "cn-owner@example.com", password: password("cn-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "cn-viewer@example.com", password: password("cn-viewer") } });
+	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "cn-viewer@example.com", password: password("cn-viewer") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "cn-shop", currency: "EUR" } })).data.uuid;
 	await call("PATCH", base(), { token: ownerToken, body: { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" } });

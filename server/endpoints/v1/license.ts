@@ -4,6 +4,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import Vault from "../../crypto/vault";
 import { ErrorCode } from "../../errors";
@@ -65,7 +66,7 @@ function presentEmailServer(project: ProjectRow) {
 }
 
 Server.app.get("/api/v1/projects/:uuid/license", Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
-	return Utils.ok(ctx, await licenseState(Permissions.project(ctx)));
+	return await okWithNames(ctx, await licenseState(Permissions.project(ctx)));
 });
 
 Server.app.post("/api/v1/projects/:uuid/license/preview", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -82,7 +83,7 @@ Server.app.post("/api/v1/projects/:uuid/license/preview", Auth.required(), Permi
 
 	const result = await previewLicense(project.uuid, data.code.trim());
 	if (typeof result === "number") return Utils.fail(ctx, result);
-	return Utils.ok(ctx, result);
+	return await okWithNames(ctx, result);
 });
 
 Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -120,7 +121,7 @@ Server.app.post("/api/v1/projects/:uuid/license/redeem", Auth.required(), Permis
 	});
 	Logger.audit(`[LICENSE] ${account.username} redeemed a ${result.type} license on ${project.uuid}`);
 
-	return Utils.ok(ctx, await licenseState(await reload(project.uuid)));
+	return await okWithNames(ctx, await licenseState(await reload(project.uuid)));
 });
 
 Server.app.put("/api/v1/projects/:uuid/branding/logo", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -140,7 +141,7 @@ Server.app.put("/api/v1/projects/:uuid/branding/logo", Auth.required(), Permissi
 	const updated = await saveLogo(project.uuid, logo);
 	await Audit.record(ctx, { project: project.uuid, action: "branding.logo_updated", entityType: "project", entityId: project.uuid });
 
-	return Utils.ok(ctx, { logo: logoPath({ uuid: project.uuid, logo_updated: updated }) });
+	return await okWithNames(ctx, { logo: logoPath({ uuid: project.uuid, logo_updated: updated }) });
 });
 
 Server.app.delete("/api/v1/projects/:uuid/branding/logo", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -153,7 +154,7 @@ Server.app.delete("/api/v1/projects/:uuid/branding/logo", Auth.required(), Permi
 });
 
 Server.app.get("/api/v1/projects/:uuid/email-server", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
-	return Utils.ok(ctx, presentEmailServer(Permissions.project(ctx)));
+	return await okWithNames(ctx, presentEmailServer(Permissions.project(ctx)));
 });
 
 Server.app.put("/api/v1/projects/:uuid/email-server", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -189,7 +190,7 @@ Server.app.put("/api/v1/projects/:uuid/email-server", Auth.required(), Permissio
 		newValue: { host: server.host, port: server.port, from_address: server.from_address },
 	});
 
-	return Utils.ok(ctx, presentEmailServer(await reload(project.uuid)));
+	return await okWithNames(ctx, presentEmailServer(await reload(project.uuid)));
 });
 
 Server.app.delete("/api/v1/projects/:uuid/email-server", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -236,7 +237,7 @@ Server.app.post("/api/v1/projects/:uuid/email-server/test", Auth.required(), Per
 		return Utils.failWithReason(ctx, ErrorCode.EMAIL_SERVER_FAILED, `The email server did not accept the test message: ${reason.slice(0, 300)}`);
 	}
 
-	return Utils.ok(ctx, { to });
+	return await okWithNames(ctx, { to });
 });
 
 const previewLimit = rateLimit({ windowMs: 60 * 1000, max: 30, message: "Too many previews. Please slow down." });
@@ -250,7 +251,7 @@ function designState(project: ProjectRow) {
 }
 
 Server.app.get("/api/v1/projects/:uuid/invoice-design", Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
-	return Utils.ok(ctx, designState(Permissions.project(ctx)));
+	return await okWithNames(ctx, designState(Permissions.project(ctx)));
 });
 
 Server.app.put("/api/v1/projects/:uuid/invoice-design", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -277,7 +278,7 @@ Server.app.put("/api/v1/projects/:uuid/invoice-design", Auth.required(), Permiss
 		newValue: design,
 	});
 
-	return Utils.ok(ctx, designState(await reload(project.uuid)));
+	return await okWithNames(ctx, designState(await reload(project.uuid)));
 });
 
 Server.app.post("/api/v1/projects/:uuid/invoice-design/preview", previewLimit, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -291,7 +292,7 @@ Server.app.post("/api/v1/projects/:uuid/invoice-design/preview", previewLimit, A
 	const kind = data.kind ?? "invoice";
 	if (!design || (kind !== "invoice" && kind !== "receipt" && kind !== "credit_note")) return Utils.fail(ctx, ErrorCode.INVALID_INVOICE_DESIGN);
 
-	if (data.format === "document") return Utils.ok(ctx, await previewDocument(Permissions.project(ctx), design, kind as PreviewKind));
+	if (data.format === "document") return await okWithNames(ctx, await previewDocument(Permissions.project(ctx), design, kind as PreviewKind));
 	const pdf = await renderDesignPreview(Permissions.project(ctx), design, kind as PreviewKind);
 	return new Response(pdf, {
 		headers: {
@@ -313,7 +314,7 @@ function emailDesignState(project: ProjectRow) {
 }
 
 Server.app.get("/api/v1/projects/:uuid/email-design", Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
-	return Utils.ok(ctx, emailDesignState(Permissions.project(ctx)));
+	return await okWithNames(ctx, emailDesignState(Permissions.project(ctx)));
 });
 
 Server.app.put("/api/v1/projects/:uuid/email-design", Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -339,7 +340,7 @@ Server.app.put("/api/v1/projects/:uuid/email-design", Auth.required(), Permissio
 		newValue: design,
 	});
 
-	return Utils.ok(ctx, emailDesignState(await reload(project.uuid)));
+	return await okWithNames(ctx, emailDesignState(await reload(project.uuid)));
 });
 
 Server.app.post("/api/v1/projects/:uuid/email-design/preview", previewLimit, Auth.required(), Permissions.require(Permission.PROJECT_EDIT), async (ctx) => {
@@ -354,5 +355,5 @@ Server.app.post("/api/v1/projects/:uuid/email-design/preview", previewLimit, Aut
 	if (!design || !(CUSTOMER_EMAIL_KINDS as readonly unknown[]).includes(kind)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL_DESIGN);
 
 	const email = await previewEmail(Permissions.project(ctx), design, kind as CustomerEmailKind);
-	return Utils.ok(ctx, { subject: email.subject, html: email.html });
+	return await okWithNames(ctx, { subject: email.subject, html: email.html });
 });

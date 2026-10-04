@@ -4,6 +4,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
@@ -103,7 +104,7 @@ Server.app.post("/api/v1/projects/:uuid/invoices/:invoice/email", Auth.required(
 	});
 	Logger.audit(`[EMAIL] ${account.username} emailed ${invoice.reference} to ${recipient}`);
 
-	return Utils.ok(ctx, email, 201);
+	return await okWithNames(ctx, email, 201);
 });
 
 Server.app.get("/api/v1/projects/:uuid/invoices/:invoice/emails", Auth.required(), Permissions.require(Permission.INVOICE_VIEW), async (ctx) => {
@@ -119,7 +120,7 @@ Server.app.get("/api/v1/projects/:uuid/invoices/:invoice/emails", Auth.required(
 		SELECT * FROM email_messages WHERE project = ${project.uuid} AND invoice = ${invoiceId} ORDER BY created DESC, uuid ASC
 	`) as EmailMessageRow[];
 
-	return Utils.ok(ctx, rows.map(presentEmail));
+	return await okWithNames(ctx, rows.map(presentEmail));
 });
 
 Server.app.post("/api/v1/projects/:uuid/members/:member/invitation-email", Auth.required(), Permissions.require(Permission.PROJECT_MEMBERS), async (ctx) => {
@@ -152,7 +153,7 @@ Server.app.post("/api/v1/projects/:uuid/members/:member/invitation-email", Auth.
 		newValue: { recipient: member.invitation_email },
 	});
 
-	return Utils.ok(ctx, await findEmail(uuid), 201);
+	return await okWithNames(ctx, await findEmail(uuid), 201);
 });
 
 interface ListedEmail extends EmailSummaryRow {
@@ -238,7 +239,7 @@ Server.app.get("/api/v1/projects/:uuid/emails", Auth.required(), Permissions.req
 		byKind.set(row.kind, kindCounts);
 	}
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		emails: emails.map(presentListed),
 		total: counts.pending + counts.sent + counts.failed,
 		counts,
@@ -261,7 +262,7 @@ Server.app.get("/api/v1/projects/:uuid/emails/:email", Auth.required(), Permissi
 	const email = await emailFor(project.uuid, ctx.params["email"]);
 	if (!email) return Utils.fail(ctx, ErrorCode.EMAIL_NOT_FOUND);
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		...presentEmail(email),
 		sender_name: email.sender_name,
 		reply_to: email.reply_to,
@@ -323,5 +324,5 @@ Server.app.post("/api/v1/projects/:uuid/emails/:email/resend", Auth.required(), 
 	});
 	Logger.audit(`[EMAIL] ${account.username} sent the failed ${email.kind} email to ${email.recipient} again`);
 
-	return Utils.ok(ctx, await findEmail(email.uuid));
+	return await okWithNames(ctx, await findEmail(email.uuid));
 });

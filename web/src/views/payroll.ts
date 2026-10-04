@@ -4,7 +4,7 @@ import { formatDateTime, formatMoney, toMajorUnits, toMinorUnits } from "../mone
 import { can, Permission } from "../access";
 import { navigate } from "../router";
 import { language, t, type UiKey } from "../i18n";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { workforceGate } from "./workforce-shared";
 import type { DateFormat, TimeFormat } from "../../../server/formats";
 import { icon } from "../storefront/icons";
@@ -537,7 +537,7 @@ export async function payrollRunView(uuid: string, runId: string): Promise<HTMLE
 							"p",
 							{ class: "muted" },
 							t("payroll.finalized_by", {
-								name: run.finalized_by ?? "",
+								name: accountName(run.finalized_by_name, run.finalized_by) ?? "",
 								date: formatDateTime(run.finalized_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone),
 							})
 						)
@@ -787,7 +787,7 @@ export async function payrollRatesView(uuid: string): Promise<HTMLElement> {
 											"td",
 											{},
 											row.verified_at
-												? `${row.verified_by ?? ""} | ${formatDateTime(row.verified_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone)}`
+												? `${accountName(row.verified_by_name, row.verified_by) ?? ""} | ${formatDateTime(row.verified_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone)}`
 												: ""
 										),
 										el(

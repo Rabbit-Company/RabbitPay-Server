@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.recurring.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -49,8 +49,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 const local = (year: number, month: number, day: number) => new Date(year, month - 1, day).getTime();
@@ -266,7 +266,7 @@ describe("running", () => {
 		sent.length = 0;
 		await call("PUT", `${base()}/member-profile`, { token: ownerToken, body: { full_name: "Recurring Owner" } });
 		const created = await createTemplate({ notes: "Covers {period}" });
-		await Database`UPDATE recurring_invoices SET created_by = 'rec-accountant' WHERE uuid = ${created.uuid}`;
+		await Database`UPDATE recurring_invoices SET created_by = ${await accountId("rec-accountant")} WHERE uuid = ${created.uuid}`;
 		const now = Date.now();
 
 		expect(await runDueRecurring(now)).toBeGreaterThanOrEqual(1);
@@ -280,7 +280,7 @@ describe("running", () => {
 		expect(invoice.status).toBe("open");
 		expect(invoice.recurring).toBe(created.uuid);
 		expect(invoice.customer).toBe(customerUuid);
-		expect(invoice.created_by).toBe("rec-owner");
+		expect(invoice.created_by).toBe(await accountId("rec-owner"));
 		expect(invoice.issuer_name).toBe("Recurring Owner");
 		expect(invoice.total_amount).toBe(2440);
 		expect(invoice.reference.startsWith("DRAFT")).toBe(false);
@@ -437,7 +437,7 @@ describe("previewing", () => {
 			occurrence: 0,
 			days_until_due: 10,
 			bill_previous_period: true,
-			created_by: "rec-owner",
+			created_by: await accountId("rec-owner"),
 		});
 
 		const previous = schedule.previousPeriodOf({ interval_unit: "month", interval_count: 1, anchor_date: anchor, anchor_occurrence: 0 }, 0, TIMEZONE);

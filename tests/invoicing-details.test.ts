@@ -78,11 +78,11 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "doc-owner", email: "doc-owner@example.com", password: password("doc-owner") } });
-	await call("POST", "/api/v1/auth/register", { body: { username: "doc-viewer", email: "doc-viewer@example.com", password: password("doc-viewer") } });
+	await call("POST", "/api/v1/auth/register", { body: { email: "doc-owner@example.com", password: password("doc-owner") } });
+	await call("POST", "/api/v1/auth/register", { body: { email: "doc-viewer@example.com", password: password("doc-viewer") } });
 
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "doc-owner", password: password("doc-owner") } })).data.token;
-	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "doc-viewer", password: password("doc-viewer") } })).data.token;
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "doc-owner@example.com", password: password("doc-owner") } })).data.token;
+	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "doc-viewer@example.com", password: password("doc-viewer") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "bloggy", currency: "EUR" } });
 	projectUuid = project.data.uuid;

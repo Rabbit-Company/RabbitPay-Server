@@ -29,8 +29,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initialize();
 	const password = new Bun.CryptoHasher("blake2b512").update("pagination-owner").digest("hex");
-	await call("POST", "/api/v1/auth/register", { username: "pagination-owner", email: "pagination@example.com", password });
-	token = (await call("POST", "/api/v1/auth/login", { username: "pagination-owner", password })).data.token;
+	await call("POST", "/api/v1/auth/register", { email: "pagination-owner@example.com", password });
+	token = (await call("POST", "/api/v1/auth/login", { email: "pagination-owner@example.com", password })).data.token;
 	project = (await call("POST", "/api/v1/projects", { name: "pagination-project" })).data.uuid;
 	other = (await call("POST", "/api/v1/projects", { name: "pagination-other" })).data.uuid;
 	for (let index = 0; index < 55; index++) {

@@ -45,8 +45,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "key-owner", email: "keyowner@example.com", password: password("owner") } });
-	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { username: "key-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "key-owner@example.com", password: password("owner") } });
+	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { email: "key-owner@example.com", password: password("owner") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: sessionToken, body: { name: "key-shop" } });
 	projectUuid = project.data.uuid;

@@ -2,7 +2,7 @@ import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { createVerify, X509Certificate } from "node:crypto";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.furs.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -46,8 +46,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 let mock: Awaited<ReturnType<typeof startFursMock>>;
@@ -432,19 +432,25 @@ describe("verifying invoices", () => {
 
 describe("the person who issued the invoice", () => {
 	test("is sent to FURS with their own tax number and shown on the invoice", async () => {
-		const bad = await call("PUT", `${base()}/fiscal/operators/furs-owner`, { token, body: { tax_number: 1234 } });
+		const bad = await call("PUT", `${base()}/fiscal/operators/${await accountId("furs-owner")}`, { token, body: { tax_number: 1234 } });
 		expect(bad.error).toBe(ErrorCode.REQUIRED_DATA_MISSING);
 		expect((await call("PUT", `${base()}/fiscal/operators/nobody`, { token, body: { tax_number: 12345678 } })).error).toBe(ErrorCode.MEMBER_NOT_FOUND);
 
-		const saved = await call("PUT", `${base()}/fiscal/operators/furs-owner`, { token, body: { tax_number: 12345678 } });
-		expect(saved.data.operators).toContainEqual({ username: "furs-owner", name: "furs-owner", role: "owner", tax_number: 12345678 });
+		const saved = await call("PUT", `${base()}/fiscal/operators/${await accountId("furs-owner")}`, { token, body: { tax_number: 12345678 } });
+		expect(saved.data.operators).toContainEqual({
+			username: await accountId("furs-owner"),
+			name: "furs-owner@example.com",
+			email: "furs-owner@example.com",
+			role: "owner",
+			tax_number: 12345678,
+		});
 
 		const sale = await call("POST", `${base()}/pos/sales`, { token, body: { lines: [{ item: coffee, quantity: 1 }] } });
 		await call("POST", `${base()}/pos/sales/${sale.data.uuid}/cash`, { token, body: {} });
 		expect(mock.invoices.at(-1)!.invoice.OperatorTaxNumber).toBe(12345678);
 
 		const document = await call("GET", `${base()}/pos/sales/${sale.data.uuid}/document`, { token });
-		expect(document.data.fiscal.operator).toBe("furs-owner");
+		expect(document.data.fiscal.operator).toBe("furs-owner@example.com");
 	});
 
 	test("falls back to the project tax number when the cashier has none", async () => {
@@ -457,7 +463,7 @@ describe("the person who issued the invoice", () => {
 		expect(mock.invoices.at(-1)!.invoice.OperatorTaxNumber).toBe(87654321);
 
 		const document = await call("GET", `${base()}/pos/sales/${sale.data.uuid}/document`, { token });
-		expect(document.data.fiscal.operator).toBe("furs-cashier");
+		expect(document.data.fiscal.operator).toBe("furs-cashier@example.com");
 	});
 });
 
@@ -517,7 +523,7 @@ describe("emailed documents", () => {
 		const [fiscal] = (await Database`SELECT status FROM fiscal_documents WHERE invoice = ${invoice.uuid}`) as { status: string }[];
 		expect(fiscal.status).toBe("verified");
 
-		const uuid = await queueReceiptEmail(project, invoice, "buyer@example.com", "furs-owner", [], { attachDocument: true });
+		const uuid = await queueReceiptEmail(project, invoice, "buyer@example.com", await accountId("furs-owner"), [], { attachDocument: true });
 		const [message] = (await Database`SELECT * FROM email_messages WHERE uuid = ${uuid}`) as EmailMessageRow[];
 		const sent = await storedAttachment(message);
 		const archived = await documentStorage().get(message.attachment_storage_key!);

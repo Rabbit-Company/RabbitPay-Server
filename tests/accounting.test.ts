@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId as ownerId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.accounting.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -63,8 +63,8 @@ async function accountId(code: string): Promise<string> {
 beforeAll(async () => {
 	await Cache.initialize();
 	await initialize();
-	await call("POST", "/api/v1/auth/register", { username: "ledger-owner", email: "ledger@example.com", password });
-	token = (await call("POST", "/api/v1/auth/login", { username: "ledger-owner", password })).data.token;
+	await call("POST", "/api/v1/auth/register", { email: "ledger-owner@example.com", password });
+	token = (await call("POST", "/api/v1/auth/login", { email: "ledger-owner@example.com", password })).data.token;
 	project = (await call("POST", "/api/v1/projects", { name: "ledger", currency: "EUR" })).data.uuid;
 	await call("PATCH", base(), { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });
 	await call("PUT", `${base()}/company`, {
@@ -241,7 +241,7 @@ describe("manual entries", () => {
 			],
 		});
 		expect(posted.error).toBe(0);
-		expect(posted.data.posted_by).toBe("ledger-owner");
+		expect(posted.data.posted_by).toBe(await ownerId("ledger-owner"));
 		expect((await trialBalance())["1000"].closing).toBe(50000);
 
 		const reversed = await call("POST", `${base()}/accounting/journal/${posted.data.uuid}/reverse`);
@@ -368,13 +368,13 @@ describe("accounting firms", () => {
 	test("an accountant member redeems accounting keys but no other license types, and sees clients in one overview", async () => {
 		const owner = token;
 		const accountantPassword = new Bun.CryptoHasher("blake2b512").update("ledger-accountant").digest("hex");
-		await call("POST", "/api/v1/auth/register", { username: "ledger-accountant", email: "accountant@example.com", password: accountantPassword });
-		const accountant = (await call("POST", "/api/v1/auth/login", { username: "ledger-accountant", password: accountantPassword })).data.token;
+		await call("POST", "/api/v1/auth/register", { email: "ledger-accountant@example.com", password: accountantPassword });
+		const accountant = (await call("POST", "/api/v1/auth/login", { email: "ledger-accountant@example.com", password: accountantPassword })).data.token;
 		const client = (await call("POST", "/api/v1/projects", { name: "ledger-client", currency: "EUR" })).data.uuid;
 		const now = Date.now();
 		await Database`
 			INSERT INTO project_members(uuid, project_id, account_username, role, status, created, updated)
-			VALUES(${crypto.randomUUID()}, ${client}, 'ledger-accountant', 'accountant', 'active', ${now}, ${now})
+			VALUES(${crypto.randomUUID()}, ${client}, ${await ownerId("ledger-accountant")}, 'accountant', 'active', ${now}, ${now})
 		`;
 		const key = async (type: string) => {
 			const code = generateLicenseCode();

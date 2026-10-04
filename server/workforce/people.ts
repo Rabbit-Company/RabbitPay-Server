@@ -17,8 +17,12 @@ export interface Person {
 	employee: Pick<EmployeeRow, "employee_number" | "job_title" | "employment_type" | "started_on" | "ended_on" | "weekly_minutes"> | null;
 }
 
-export function personName(member: Pick<ProjectMemberRow, "full_name" | "account_username" | "invitation_email">): string {
-	return member.full_name?.trim() || member.account_username || member.invitation_email || "";
+export function membersWithEmail() {
+	return Database`SELECT pm.*, a.email AS account_email FROM project_members pm LEFT JOIN accounts a ON a.username = pm.account_username`;
+}
+
+export function personName(member: Pick<ProjectMemberRow, "full_name" | "account_email" | "invitation_email">): string {
+	return member.full_name?.trim() || member.account_email || member.invitation_email || "";
 }
 
 export function dailyMinutesOf(employee: Pick<EmployeeRow, "weekly_minutes"> | null | undefined, config: WorkforceConfig): number {
@@ -28,7 +32,7 @@ export function dailyMinutesOf(employee: Pick<EmployeeRow, "weekly_minutes"> | n
 export async function findMember(projectId: string, uuid: unknown): Promise<ProjectMemberRow | null> {
 	if (typeof uuid !== "string") return null;
 	const [member] = (await Database`
-		SELECT * FROM project_members WHERE uuid = ${uuid} AND project_id = ${projectId} AND status != 'removed'
+		${membersWithEmail()} WHERE pm.uuid = ${uuid} AND pm.project_id = ${projectId} AND pm.status != 'removed'
 	`) as ProjectMemberRow[];
 	return member ?? null;
 }
@@ -44,7 +48,7 @@ export function tracksTime(member: ProjectMemberRow): boolean {
 
 async function workforceMembers(projectId: string): Promise<{ members: ProjectMemberRow[]; byMember: Map<string, EmployeeRow> }> {
 	const members = (await Database`
-		SELECT * FROM project_members WHERE project_id = ${projectId} AND status IN ('active', 'suspended') ORDER BY created ASC
+		${membersWithEmail()} WHERE pm.project_id = ${projectId} AND pm.status IN ('active', 'suspended') ORDER BY pm.created ASC
 	`) as ProjectMemberRow[];
 	const employees = (await Database`SELECT * FROM employees WHERE project = ${projectId}`) as EmployeeRow[];
 	const byMember = new Map(employees.map((employee) => [employee.member, employee]));

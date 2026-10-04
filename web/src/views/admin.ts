@@ -20,7 +20,7 @@ import {
 import { el, emptyState, field, input, saveFile, select, table } from "../dom";
 import { formatBytes, formatDate, formatDateTime, formatMoney, toMajorUnits, toMinorUnits } from "../money";
 import { currentPath } from "../router";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { SETTING_GROUPS, type SettingField } from "../../../server/settings-schema";
 import { markdownEditor } from "../markdown-editor";
 import { LICENSE_VENDOR } from "../../../server/license-vendor";
@@ -509,7 +509,7 @@ export async function adminLicensesView(): Promise<HTMLElement> {
 						"div",
 						{},
 						license.project_name ?? "Deleted project",
-						el("div", { class: "muted" }, `${license.redeemed_by ?? ""} on ${formatDate(license.redeemed_at)}`)
+						el("div", { class: "muted" }, `${accountName(license.redeemed_by_name, license.redeemed_by) ?? ""} on ${formatDate(license.redeemed_at)}`)
 					)
 				: license.status === "revoked"
 					? el("span", { class: "muted" }, `Revoked ${formatDate(license.revoked_at)}`)
@@ -687,7 +687,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 			"tr",
 			{},
 			el("td", {}, el("strong", {}, project.display_name ?? project.name), el("div", { class: "muted mono" }, project.uuid)),
-			el("td", {}, project.created_by),
+			el("td", {}, accountName(project.created_by_name, project.created_by) ?? ""),
 			el(
 				"td",
 				{ class: "mono" },
@@ -782,7 +782,7 @@ async function exportAccountData(username: string) {
 	}
 }
 
-async function deleteAccountDialog(username: string, onDeleted: () => void) {
+async function deleteAccountDialog(username: string, email: string, onDeleted: () => void) {
 	let plan: DeletionPlan;
 	try {
 		plan = await AdminApi.deletionPlan(username);
@@ -795,11 +795,11 @@ async function deleteAccountDialog(username: string, onDeleted: () => void) {
 
 	if (plan.shared.length > 0) {
 		modal(
-			`${username} cannot be deleted yet`,
+			`${email} cannot be deleted yet`,
 			el(
 				"div",
 				{ class: "stack" },
-				el("p", {}, `${username} is the only owner of these projects, and other people still use them:`),
+				el("p", {}, `${email} is the only owner of these projects, and other people still use them:`),
 				projectList(plan.shared),
 				el("p", { class: "muted" }, "Ask them to make another member an owner, or remove the other members, then try again.")
 			)
@@ -807,10 +807,10 @@ async function deleteAccountDialog(username: string, onDeleted: () => void) {
 		return;
 	}
 
-	const confirmation = input("text", { autocomplete: "off", placeholder: username });
+	const confirmation = input("text", { autocomplete: "off", placeholder: email });
 	const submit = el("button", { class: "button danger", type: "submit", disabled: true }, "Delete account");
 	confirmation.addEventListener("input", () => {
-		submit.disabled = confirmation.value.trim() !== username;
+		submit.disabled = confirmation.value.trim().toLowerCase() !== email.toLowerCase();
 	});
 
 	const form = el(
@@ -819,12 +819,12 @@ async function deleteAccountDialog(username: string, onDeleted: () => void) {
 			class: "stack",
 			onSubmit: async (event) => {
 				event.preventDefault();
-				if (confirmation.value.trim() !== username) return;
+				if (confirmation.value.trim().toLowerCase() !== email.toLowerCase()) return;
 				submit.disabled = true;
 				try {
-					await AdminApi.deleteAccount(username);
+					await AdminApi.deleteAccount(username, email);
 					dialog.close();
-					toast(`${username} was deleted`, "success");
+					toast(`${email} was deleted`, "success");
 					onDeleted();
 				} catch (error) {
 					reportError(error);
@@ -845,17 +845,17 @@ async function deleteAccountDialog(username: string, onDeleted: () => void) {
 		plan.closing.length > 0 ? el("p", {}, "These projects have no other members and will be closed:") : null,
 		plan.closing.length > 0 ? projectList(plan.closing) : null,
 		el("p", { class: "muted" }, "Export the data first if the person asked for a copy."),
-		field(`Type ${username} to confirm`, confirmation),
+		field(`Type ${email} to confirm`, confirmation),
 		el("div", { class: "dialog-actions" }, submit)
 	);
 
-	const dialog = modal(`Delete ${username}`, form);
+	const dialog = modal(`Delete ${email}`, form);
 	confirmation.focus();
 }
 
 export function adminAccountsView(): HTMLElement {
 	const me = getUsername();
-	const search = input("search", { placeholder: "Search username or email" });
+	const search = input("search", { placeholder: "Search email or account ID" });
 
 	const update = async (account: AdminAccount, changes: { admin?: boolean; status?: string }, message: string) => {
 		try {
@@ -889,7 +889,7 @@ export function adminAccountsView(): HTMLElement {
 							onClick: async () => {
 								if (account.status === "active") {
 									const confirmed = await confirmDialog({
-										title: `Suspend ${account.username}`,
+										title: `Suspend ${account.email}`,
 										body: "They are signed out on their next request and cannot sign in until you reactivate them. Their projects keep working.",
 										confirmLabel: "Suspend",
 										destructive: true,
@@ -913,7 +913,7 @@ export function adminAccountsView(): HTMLElement {
 									type: "button",
 									onClick: async () => {
 										const confirmed = await confirmDialog({
-											title: `Reset two-factor authentication for ${account.username}`,
+											title: `Reset two-factor authentication for ${account.email}`,
 											body: "This removes their security keys, authenticator app and recovery codes so they can sign in with only their password. Only do this after you have confirmed who is asking. They can set up two-factor authentication again from their account page.",
 											confirmLabel: "Reset 2FA",
 											destructive: true,
@@ -934,7 +934,11 @@ export function adminAccountsView(): HTMLElement {
 					el("button", { class: "button ghost small", type: "button", onClick: () => void exportAccountData(account.username) }, "Export data"),
 					el(
 						"button",
-						{ class: "button danger small", type: "button", onClick: () => void deleteAccountDialog(account.username, () => void list.refresh()) },
+						{
+							class: "button danger small",
+							type: "button",
+							onClick: () => void deleteAccountDialog(account.username, account.email, () => void list.refresh()),
+						},
 						"Delete"
 					),
 				];
@@ -942,8 +946,8 @@ export function adminAccountsView(): HTMLElement {
 		return el(
 			"tr",
 			{},
-			el("td", {}, el("strong", {}, account.username), account.admin ? el("span", { class: "pill pill-owner" }, "admin") : null),
-			el("td", {}, account.email),
+			el("td", {}, el("strong", {}, account.email), account.admin ? el("span", { class: "pill pill-owner" }, "admin") : null),
+			el("td", { class: "muted" }, account.username),
 			el("td", {}, String(account.projects)),
 			el("td", {}, el("span", { class: `pill pill-${account.status === "active" ? "active" : "canceled"}` }, account.status)),
 			el("td", {}, account.two_factor_enabled ? el("span", { class: "pill pill-active" }, "on") : el("span", { class: "muted" }, "off")),
@@ -959,7 +963,7 @@ export function adminAccountsView(): HTMLElement {
 			return { items: result.accounts, total: result.total };
 		},
 		row,
-		["Account", "Email", "Projects", "Status", "2FA", "Registered", "Last seen", ""],
+		["Email", "Account ID", "Projects", "Status", "2FA", "Registered", "Last seen", ""],
 		"No accounts match."
 	);
 
@@ -1085,7 +1089,12 @@ export async function adminInvitesView(): Promise<HTMLElement> {
 			el("td", { class: "mono" }, invite.max_uses === null ? `${invite.uses} / unlimited` : `${invite.uses} / ${invite.max_uses}`),
 			el("td", {}, invite.expires_at === null ? el("span", { class: "muted" }, "Never") : formatDateTime(invite.expires_at)),
 			el("td", {}, invite.note ?? ""),
-			el("td", {}, formatDate(invite.created), invite.created_by ? el("div", { class: "muted" }, invite.created_by) : null),
+			el(
+				"td",
+				{},
+				formatDate(invite.created),
+				invite.created_by ? el("div", { class: "muted" }, accountName(invite.created_by_name, invite.created_by)) : null
+			),
 			el("td", {}, el("div", { class: "line-actions" }, ...actions))
 		);
 	};

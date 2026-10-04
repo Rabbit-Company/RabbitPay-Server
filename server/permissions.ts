@@ -64,7 +64,7 @@ export default class Permissions {
 			}
 
 			ctx.set("project", project);
-			ctx.set("member", member);
+			ctx.set("member", { ...member, account_email: account.email });
 
 			await Permissions.log(ctx, uuid, permission, true);
 

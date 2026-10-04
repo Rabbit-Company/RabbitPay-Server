@@ -34,11 +34,11 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 function register(name: string, extra: Record<string, unknown> = {}, email = `${name}@example.com`) {
-	return call("POST", "/api/v1/auth/register", { body: { username: name, email, password: password(name), ...extra } });
+	return call("POST", "/api/v1/auth/register", { body: { email, password: password(name), ...extra } });
 }
 
 async function login(name: string): Promise<string> {
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 let adminToken = "";

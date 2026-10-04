@@ -40,8 +40,8 @@ function query(options: Record<string, unknown>): string {
 beforeAll(async () => {
 	await Cache.initialize();
 	await initialize();
-	await call("POST", "/api/v1/auth/register", { username: "ddv-owner", email: "ddv@example.com", password });
-	token = (await call("POST", "/api/v1/auth/login", { username: "ddv-owner", password })).data.token;
+	await call("POST", "/api/v1/auth/register", { email: "ddv-owner@example.com", password });
+	token = (await call("POST", "/api/v1/auth/login", { email: "ddv-owner@example.com", password })).data.token;
 	project = (await call("POST", "/api/v1/projects", { name: "ddv-evidence", currency: "EUR" })).data.uuid;
 	const base = `/api/v1/projects/${project}`;
 	await call("PATCH", base, { tax_country: "SI", vat_status: "registered", tax_currency: "EUR" });

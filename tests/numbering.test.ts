@@ -57,8 +57,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "num-owner", email: "num@example.com", password: password("num-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "num-owner", password: password("num-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "num-owner@example.com", password: password("num-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "num-owner@example.com", password: password("num-owner") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "num-shop", currency: "EUR" } });
 	projectUuid = project.data.uuid;
@@ -434,8 +434,8 @@ describe("choosing a project's number format", () => {
 	});
 
 	test("only lets owners and admins change it", async () => {
-		await call("POST", "/api/v1/auth/register", { body: { username: "num-viewer", email: "num-viewer@example.com", password: password("num-viewer") } });
-		const viewer = (await call("POST", "/api/v1/auth/login", { body: { username: "num-viewer", password: password("num-viewer") } })).data.token;
+		await call("POST", "/api/v1/auth/register", { body: { email: "num-viewer@example.com", password: password("num-viewer") } });
+		const viewer = (await call("POST", "/api/v1/auth/login", { body: { email: "num-viewer@example.com", password: password("num-viewer") } })).data.token;
 		await call("POST", `${base()}/members`, { token: ownerToken, body: { email: "num-viewer@example.com", role: "viewer" } });
 
 		expect((await call("GET", `${base()}/invoice-numbering`, { token: viewer })).error).toBe(0);

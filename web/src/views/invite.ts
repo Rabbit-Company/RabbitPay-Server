@@ -1,4 +1,4 @@
-import { Api, getToken, getUsername, type Invitation } from "../api";
+import { Api, getEmail, getToken, type Invitation } from "../api";
 import { el } from "../dom";
 import { navigate } from "../router";
 import { confirmDialog, reportError, toast } from "../ui";
@@ -99,5 +99,5 @@ export async function inviteView(token: string): Promise<HTMLElement> {
 		t("invite.decline")
 	);
 
-	return card(heading, summary, role, expired, el("p", { class: "muted" }, t("invite.signed_in_as", { username: getUsername() ?? "" })), accept, decline);
+	return card(heading, summary, role, expired, el("p", { class: "muted" }, t("invite.signed_in_as", { email: getEmail() ?? "" })), accept, decline);
 }

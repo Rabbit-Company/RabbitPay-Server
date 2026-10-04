@@ -5,6 +5,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
@@ -138,7 +139,7 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 	const ids = rows.map((row) => row.uuid);
 	const showPricing = Permissions.has(Permissions.member(ctx), Permission.TICKET_MANAGE);
 	const [assignees, time, fixedInvoices] = await Promise.all([assigneesOf(ids), timeOf(project.uuid, ids), fixedPriceInvoicesOf(ids)]);
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		tickets: rows.map((row) =>
 			presentTicket(row, assignees.get(row.uuid) ?? [], time.get(row.uuid), row.customer_name ?? row.customer_email, fixedInvoices.has(row.uuid), showPricing)
 		),
@@ -162,7 +163,7 @@ Server.app.post(`${base}/tickets`, Auth.required(), Permissions.require(Permissi
 	const ticket = await detailed(row);
 	await audit(ctx, "ticket.created", uuid, ticket);
 	await notifyAssigned(row, input.assignees ?? [], Permissions.member(ctx));
-	return Utils.ok(ctx, ticket, 201);
+	return await okWithNames(ctx, ticket, 201);
 });
 
 Server.app.get(`${base}/tickets/report`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), async (ctx) => {
@@ -199,7 +200,7 @@ Server.app.get(`${base}/tickets/report`, Auth.required(), Permissions.require(Pe
 		summary.people.set(entry.person, (summary.people.get(entry.person) ?? 0) + minutes);
 		tickets.set(entry.ticket!, summary);
 	}
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		from,
 		to,
 		tickets: [...tickets.values()]
@@ -220,7 +221,7 @@ Server.app.get(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(P
 	);
 	const people = new Map<string, number>();
 	for (const entry of entries) people.set(entry.person, (people.get(entry.person) ?? 0) + workedMinutes(entry, configOf(entry.member)));
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		...(await detailed(ticket, showPricing)),
 		comments: comments.map(presentComment),
 		time_by_person: [...people].map(([person, minutes]) => ({ person, minutes })),
@@ -263,7 +264,7 @@ Server.app.patch(`${base}/tickets/:ticket`, Auth.required(), Permissions.require
 		Permissions.member(ctx)
 	);
 	if (row.status !== ticket.status) await notifyCustomerStatus(row, Auth.account(ctx).username);
-	return Utils.ok(ctx, updated);
+	return await okWithNames(ctx, updated);
 });
 
 Server.app.post(`${base}/tickets/:ticket/order`, Auth.required(), Permissions.require(Permission.TICKET_WORK), requireWorkforce(), async (ctx) => {
@@ -320,7 +321,7 @@ Server.app.post(`${base}/tickets/:ticket/comments`, Auth.required(), Permissions
 	const [row] = (await Database`SELECT * FROM ticket_comments WHERE uuid = ${uuid}`) as TicketCommentRow[];
 	await audit(ctx, "ticket.commented", ticket.uuid, { comment: uuid, internal: comment.internal });
 	if (!comment.internal) await notifyCustomerReply(ticket, personName(Permissions.member(ctx)), comment.body, account.username);
-	return Utils.ok(ctx, presentComment(row), 201);
+	return await okWithNames(ctx, presentComment(row), 201);
 });
 
 Server.app.delete(
@@ -440,7 +441,7 @@ async function createTicketInvoice(ctx: Context<AppState>, tickets: TicketRow[],
 		});
 	}
 	Logger.audit(`[TICKETS] ${account.username} created an invoice from tickets ${tickets.map((ticket) => `#${ticket.number}`).join(", ")} on ${project.uuid}`);
-	return Utils.ok(ctx, { invoice: invoice.uuid, reference: invoice.reference, minutes, quantity, rate }, 201);
+	return await okWithNames(ctx, { invoice: invoice.uuid, reference: invoice.reference, minutes, quantity, rate }, 201);
 }
 
 Server.app.post(`${base}/tickets/invoice`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
@@ -479,7 +480,7 @@ Server.app.get(`${base}/customers/:customer/ticket-access`, Auth.required(), Per
 	const [access] = (await Database`
 		SELECT * FROM ticket_portal_access WHERE customer = ${ctx.params.customer} AND project = ${project.uuid}
 	`) as TicketPortalAccessRow[];
-	return Utils.ok(ctx, { customer: ctx.params.customer, enabled: access !== undefined, kinds: parsePortalKinds(access?.kinds) });
+	return await okWithNames(ctx, { customer: ctx.params.customer, enabled: access !== undefined, kinds: parsePortalKinds(access?.kinds) });
 });
 
 Server.app.put(`${base}/customers/:customer/ticket-access`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
@@ -514,5 +515,5 @@ Server.app.put(`${base}/customers/:customer/ticket-access`, Auth.required(), Per
 		oldValue: { enabled: previous !== undefined, kinds: parsePortalKinds(previous?.kinds) },
 		newValue: { enabled, kinds: granted },
 	});
-	return Utils.ok(ctx, { customer: customerId, enabled, kinds: granted });
+	return await okWithNames(ctx, { customer: customerId, enabled, kinds: granted });
 });

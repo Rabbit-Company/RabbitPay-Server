@@ -276,7 +276,7 @@ export default class WebAuthn {
 		return {
 			challenge,
 			rp: { id: rp.id, name: rp.name },
-			user: { id: userHandle(account.username), name: account.username, displayName: account.email || account.username },
+			user: { id: userHandle(account.username), name: account.email, displayName: account.email },
 			pubKeyCredParams: SUPPORTED_ALGORITHMS.map((alg) => ({ type: "public-key", alg })),
 			timeout: WEBAUTHN_TIMEOUT * 1000,
 			attestation: "none",

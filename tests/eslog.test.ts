@@ -571,8 +571,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "eslog-owner", email: "eslog@example.com", password: password("eslog-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "eslog-owner", password: password("eslog-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "eslog-owner@example.com", password: password("eslog-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "eslog-owner@example.com", password: password("eslog-owner") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "eslog-shop", currency: "EUR" } })).data.uuid;
 	await call("PATCH", base(), { token: ownerToken, body: { tax_country: "SI", vat_status: "registered", tax_currency: "EUR", language: "sl" } });

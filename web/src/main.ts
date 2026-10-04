@@ -1,6 +1,6 @@
 import "./styles.css";
 import "./storefront/storefront.css";
-import { ApiError, getToken, getUsername, isAdmin, setUnauthorizedHandler } from "./api";
+import { ApiError, getEmail, getToken, getUsername, isAdmin, setUnauthorizedHandler } from "./api";
 import { el } from "./dom";
 import { installSelectPicker } from "./select-picker";
 import { configure, define, navigate, setErrorView, start } from "./router";
@@ -37,7 +37,7 @@ import { creditNotePrintView, printView } from "./views/print";
 import { licenseView } from "./views/license";
 import { adminAccountsView, adminInvitesView, adminLegalView, adminLicensesView, adminOverviewView, adminProjectsView, adminSettingsView } from "./views/admin";
 import { handleShortcutRender, installKeyboardShortcuts, showShortcutModal } from "./keyboard";
-import { accountView } from "./views/account";
+import { accountView, confirmEmailView } from "./views/account";
 import { customerOrdersView, customerProfileView } from "./views/customer-profile";
 import { storeSettingsView } from "./views/store";
 import { storeCategoriesView, storeProductsView, storeProductView } from "./views/store-products";
@@ -95,7 +95,7 @@ function header(): HTMLElement {
 		{ class: "app-header" },
 		el("div", { class: "header-left" }, el("a", { class: "brand", href: "/" }, logo(), el("span", {}, "RabbitPay")), nav),
 		accountMenu(
-			getUsername() ?? t("account.title"),
+			getEmail() ?? getUsername() ?? t("account.title"),
 			[
 				{ links, compactOnly: true },
 				{
@@ -123,6 +123,7 @@ function isStandalone(): boolean {
 		path === "/customer" ||
 		path.startsWith("/customer/") ||
 		path.startsWith("/pay/") ||
+		path === "/account/email" ||
 		path === "/legal" ||
 		path === "/terms" ||
 		path === "/privacy" ||
@@ -230,6 +231,7 @@ define(
 	false
 );
 define("/account", () => accountView());
+define("/account/email", () => confirmEmailView(), false);
 define("/converter", () => converterView());
 define("/accounting", () => accountingClientsView());
 define("/admin", () => adminOverviewView());

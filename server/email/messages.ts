@@ -1,3 +1,4 @@
+import { accountNames } from "../accounts";
 import type { SQL } from "bun";
 import Database from "../database/database";
 import Utils from "../utils";
@@ -323,7 +324,7 @@ export async function queueInvitationEmail(project: ProjectRow, member: ProjectM
 
 	const brand = await brandFor(project, "team");
 	const content = invitationEmail(brand, {
-		inviter,
+		inviter: (await accountNames([inviter], project.uuid)).get(inviter) ?? brand.merchant,
 		role: member.role,
 		url: `${Utils.publicUrl()}/invite/${member.invitation_token}`,
 	});

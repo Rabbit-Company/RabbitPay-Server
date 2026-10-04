@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, beforeEach, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.email.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -50,8 +50,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 const outbox: Captured[] = [];
@@ -292,7 +292,7 @@ describe("emailing an invoice", () => {
 		const invoice = await issue();
 		const res = await call("POST", `${base()}/invoices/${invoice.uuid}/email`, { token: ownerToken, body: { message: "Thanks for the project" } });
 		expect(res.status).toBe(201);
-		expect(res.data).toMatchObject({ kind: "invoice", recipient: "client@example.com", sent_by: "mail-owner" });
+		expect(res.data).toMatchObject({ kind: "invoice", recipient: "client@example.com", sent_by: await accountId("mail-owner") });
 		expect(["pending", "sent"]).toContain(res.data.status);
 
 		await flush();
@@ -698,7 +698,7 @@ describe("email history", () => {
 		expect(outbox).toHaveLength(1);
 		expect(outbox[0].attachments?.[0].content.subarray(0, 5).toString()).toBe("%PDF-");
 		const sent = (await call("GET", `${base()}/emails/${queued.uuid}`, { token: ownerToken })).data;
-		expect(sent).toMatchObject({ status: "sent", attempts: 1, sent_by: "mail-owner", sent_via: "server" });
+		expect(sent).toMatchObject({ status: "sent", attempts: 1, sent_by: await accountId("mail-owner"), sent_via: "server" });
 
 		expect((await call("POST", `${base()}/emails/${queued.uuid}/resend`, { token: ownerToken })).error).toBe(1292);
 		expect((await call("GET", `${base()}/emails?invoice=${invoice.uuid}`, { token: ownerToken })).data.total).toBe(1);
@@ -741,7 +741,7 @@ describe("invitation emails", () => {
 		await flush();
 		expect(outbox).toHaveLength(1);
 		expect(outbox[0].to).toBe("new-hire@example.com");
-		expect(outbox[0].subject).toBe("mail-owner invited you to Studio <Nord>");
+		expect(outbox[0].subject).toBe("mail-owner@example.com invited you to Studio <Nord>");
 		expect(outbox[0].text).toContain(`http://127.0.0.1:8099/invite/${res.data.invitation_token}`);
 		expect(outbox[0].text).toContain("as Cashier");
 	});
@@ -777,7 +777,7 @@ describe("terminal receipts", () => {
 		await call("POST", `${base()}/pos/sales/${sale.uuid}/cash`, { token: cashierToken, body: {} });
 
 		const res = await call("POST", `${base()}/pos/sales/${sale.uuid}/email`, { token: cashierToken, body: { to: "shopper@example.com" } });
-		expect(res.data).toMatchObject({ kind: "receipt", recipient: "shopper@example.com", sent_by: "mail-cashier" });
+		expect(res.data).toMatchObject({ kind: "receipt", recipient: "shopper@example.com", sent_by: await accountId("mail-cashier") });
 
 		await flush();
 		expect(outbox[0].subject).toBe(`Receipt ${sale.reference} from Studio <Nord>`);

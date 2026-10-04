@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 
 const databasePath = `${import.meta.dir}/.legal.sqlite`;
 await prepareTest(`sqlite://${databasePath}`);
@@ -41,7 +41,7 @@ let privacyVersion = 0;
 
 async function register(username: string, extra: Record<string, unknown> = {}) {
 	return await call("POST", "/api/v1/auth/register", {
-		body: { username, email: `${username}@example.com`, password: password("legal-pass"), ...extra },
+		body: { email: `${username}@example.com`, password: password("legal-pass"), ...extra },
 	});
 }
 
@@ -49,7 +49,7 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 	await register("legal-admin");
-	adminToken = (await call("POST", "/api/v1/auth/login", { body: { username: "legal-admin", password: password("legal-pass") } })).data.token;
+	adminToken = (await call("POST", "/api/v1/auth/login", { body: { email: "legal-admin@example.com", password: password("legal-pass") } })).data.token;
 });
 
 afterAll(async () => {
@@ -157,10 +157,10 @@ describe("publishing", () => {
 
 	test("is limited to administrators", async () => {
 		const user = await call("POST", "/api/v1/auth/register", {
-			body: { username: "legal-early", email: "legal-early@example.com", password: password("legal-pass") },
+			body: { email: "legal-early@example.com", password: password("legal-pass") },
 		});
 		expect(user.error).toBe(0);
-		const token = (await call("POST", "/api/v1/auth/login", { body: { username: "legal-early", password: password("legal-pass") } })).data.token;
+		const token = (await call("POST", "/api/v1/auth/login", { body: { email: "legal-early@example.com", password: password("legal-pass") } })).data.token;
 		expect((await call("POST", "/api/v1/admin/legal/terms", { token, body: { content_en: "# Terms" } })).error).toBe(1098);
 	});
 
@@ -190,7 +190,7 @@ describe("registration", () => {
 		);
 		expect((await register("legal-refused", { accept_terms: true, legal_versions: { terms: [termsVersion] } })).error).toBe(1235);
 
-		const [account] = (await Database`SELECT username FROM accounts WHERE username = ${"legal-refused"}`) as { username: string }[];
+		const [account] = (await Database`SELECT username FROM accounts WHERE email = ${"legal-refused@example.com"}`) as { username: string }[];
 		expect(account).toBeUndefined();
 	});
 
@@ -199,7 +199,7 @@ describe("registration", () => {
 		expect(created.error).toBe(0);
 
 		const rows = (await Database`
-			SELECT kind, version, ip_address, user_agent FROM legal_acceptances WHERE account_username = ${"legal-user"} ORDER BY kind
+			SELECT kind, version, ip_address, user_agent FROM legal_acceptances WHERE account_username = ${await accountId("legal-user")} ORDER BY kind
 		`) as { kind: string; version: number; user_agent: string }[];
 		expect(rows.map((row) => [row.kind, Number(row.version)])).toEqual([
 			["privacy", 1],
@@ -207,7 +207,7 @@ describe("registration", () => {
 		]);
 		expect(rows[0].user_agent).toBe("legal-test");
 
-		const token = (await call("POST", "/api/v1/auth/login", { body: { username: "legal-user", password: password("legal-pass") } })).data.token;
+		const token = (await call("POST", "/api/v1/auth/login", { body: { email: "legal-user@example.com", password: password("legal-pass") } })).data.token;
 		expect((await call("GET", "/api/v1/auth/me", { token })).data.pending_terms).toBeNull();
 	});
 });
@@ -282,7 +282,7 @@ describe("scheduled versions", () => {
 	test("new accounts accept both the current and the upcoming version", async () => {
 		expect((await register("legal-later", { accept_terms: true, legal_versions: { terms: [2], privacy: [1] } })).error).toBe(1235);
 		expect((await register("legal-later", { accept_terms: true, legal_versions: { terms: [2, 3], privacy: [1] } })).error).toBe(0);
-		const token = (await call("POST", "/api/v1/auth/login", { body: { username: "legal-later", password: password("legal-pass") } })).data.token;
+		const token = (await call("POST", "/api/v1/auth/login", { body: { email: "legal-later@example.com", password: password("legal-pass") } })).data.token;
 		const me = await call("GET", "/api/v1/auth/me", { token });
 		expect(me.data.upcoming_terms).toBeNull();
 	});

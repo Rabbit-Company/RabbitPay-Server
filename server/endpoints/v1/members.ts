@@ -8,6 +8,7 @@ import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { Permission, ProjectRole } from "../../roles";
+import { accountByEmail } from "../../accounts";
 import { canEmail } from "../../email/mailer";
 import { queueInvitationEmail } from "../../email/messages";
 import { readSignature } from "../../member-signature";
@@ -147,7 +148,7 @@ Server.app.post("/api/v1/projects/:uuid/members", Auth.required(), Permissions.r
 
 	if (role === ProjectRole.OWNER && actorMember.role !== ProjectRole.OWNER) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
 
-	const [invitee] = (await Database`SELECT * FROM accounts WHERE email = ${email}`) as AccountRow[];
+	const invitee = await accountByEmail<AccountRow>(Database, email);
 
 	const sameAccount = invitee ? Database`OR account_username = ${invitee.username}` : Database``;
 	const existing = (await Database`

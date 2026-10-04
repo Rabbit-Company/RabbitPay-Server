@@ -112,8 +112,8 @@ beforeAll(async () => {
 		return config.wallet_rpc_url === WALLET_URL ? wallet : otherWallet;
 	});
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "xmr-owner", email: "xmr@example.com", password: password("owner") } });
-	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { username: "xmr-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "xmr-owner@example.com", password: password("owner") } });
+	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { email: "xmr-owner@example.com", password: password("owner") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: sessionToken, body: { name: "xmr-shop" } });
 	projectUuid = project.data.uuid;

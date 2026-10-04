@@ -20,6 +20,8 @@ password is rejected as malformed.
 | `POST`   | `/api/v1/auth/login`                              | Sign in with a password and, when enabled, a second factor. |
 | `POST`   | `/api/v1/auth/logout`                             | Revoke the current session.                                 |
 | `GET`    | `/api/v1/auth/me`                                 | The signed-in account.                                      |
+| `POST`   | `/api/v1/auth/email`                              | Change the email address the account signs in with.         |
+| `POST`   | `/api/v1/auth/email/confirm`                      | Confirm a new email address with the emailed link.          |
 | `GET`    | `/api/v1/auth/export`                             | Download the account's personal data as JSON.               |
 | `POST`   | `/api/v1/auth/legal/accept`                       | Accept the current Terms of Service.                        |
 | `POST`   | `/api/v1/auth/two-factor/setup`                   | Start an authenticator app enrollment.                      |
@@ -62,12 +64,35 @@ PW=$(printf 'correct-horse' | b2sum -l 512 | cut -d' ' -f1)
 
 curl -X POST localhost:8085/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d "{\"username\":\"ziga\",\"email\":\"z@example.com\",\"password\":\"$PW\"}"
+  -d "{\"email\":\"z@example.com\",\"password\":\"$PW\"}"
 
 curl -X POST localhost:8085/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d "{\"username\":\"ziga\",\"password\":\"$PW\"}"
+  -d "{\"email\":\"z@example.com\",\"password\":\"$PW\"}"
 ```
+
+Accounts sign in with their email address, which is matched without regard to
+letter case. Each account also gets a permanent identifier at registration,
+returned as `username`. It is 26 random lowercase letters and digits, never
+changes, is never given to another account and is what invoices, timesheets and
+the audit log record as the person who acted. Nobody types it to sign in.
+Accounts created before identifiers were random keep the username they chose.
+
+Fields that hold an identifier, such as `created_by`, `sent_by` or
+`decided_by`, come with a `_name` field beside them wherever the dashboard
+shows a person: the member's full name in that project, or their email when no
+name is saved. The name is `null` once the account has been deleted. Invoices
+and fiscal documents name the issuer the same way, full name first and email
+otherwise.
+
+`POST /api/v1/auth/email` takes the new `email`, the `password` and, when
+two-factor authentication is on, `code` or `credential`. An address that already
+has an account is refused with `1007`, and accounts are never merged. When the
+server can send email, the change waits until the link sent to the new address
+is opened (`pending: true`), the link works once for an hour, and the old
+address is told afterwards. Without an email server the change applies at once.
+`POST /api/v1/auth/email/confirm` takes the `token` from that link and needs no
+session. The identifier, projects, roles and sessions stay as they are.
 
 Sessions are held in the cache, keyed by a hash of the token, and expire after
 `session_ttl` seconds. The expiry slides forward on each authenticated request,

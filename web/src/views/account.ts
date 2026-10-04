@@ -1,6 +1,9 @@
-import { Api, type Account, type SecondFactor, type SecurityKey, type TwoFactorSetup } from "../api";
+import { Api, getToken, type Account, type SecondFactor, type SecurityKey, type TwoFactorSetup } from "../api";
 import { el, field, input, saveFile } from "../dom";
-import { t } from "../i18n";
+import { language, t } from "../i18n";
+import { navigate } from "../router";
+import { refreshAccount } from "../session";
+import { authBrand, authPage } from "../auth-page";
 import { formatDate } from "../money";
 import { modal, reportError, toast } from "../ui";
 import { legalInfo } from "./legal";
@@ -36,6 +39,95 @@ function factorField(account: Account) {
 			return { credential: await getSecurityKey(await Api.securityKeyChallenge()) };
 		},
 	};
+}
+
+function emailPanel(account: Account): HTMLElement {
+	const email = input("email", { autocomplete: "email", required: true, maxlength: "254", placeholder: "you@example.com" });
+	const password = input("password", { autocomplete: "current-password", required: true });
+	const factor = account.two_factor_enabled ? factorField(account) : null;
+	const submit = el("button", { class: "button primary", type: "submit" }, t("account.email_change"));
+	const sent = el("p", { class: "muted" });
+	sent.hidden = true;
+
+	return el(
+		"form",
+		{
+			class: "card stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					const result = await Api.changeEmail(email.value.trim(), password.value, language(), factor ? await factor.value() : undefined);
+					if (result.pending) {
+						sent.textContent = t("account.email_sent", { email: result.email });
+						sent.hidden = false;
+						password.value = "";
+						submit.disabled = false;
+						return;
+					}
+					toast(t("account.email_changed", { email: result.email }), "success");
+					await refreshAccount();
+					navigate("/account", true);
+				} catch (error) {
+					reportFailure(error);
+					submit.disabled = false;
+				}
+			},
+		},
+		el("h2", {}, t("account.email_title")),
+		el("p", { class: "muted" }, t("account.email_body", { email: account.email })),
+		el("div", { class: "form-grid" }, field(t("account.email_new"), email), field(t("login.password"), password)),
+		factor?.element ?? null,
+		sent,
+		el("div", {}, submit)
+	);
+}
+
+export function confirmEmailView(): HTMLElement {
+	const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("token");
+	const token: string | null = fragmentToken ?? history.state?.emailChangeToken ?? null;
+	if (fragmentToken) history.replaceState({ emailChangeToken: fragmentToken }, "", "/account/email");
+	const home = getToken() === null ? "/login" : "/account";
+
+	if (!token) {
+		return authPage(
+			el(
+				"div",
+				{ class: "auth-card" },
+				authBrand(),
+				el("h1", {}, t("account.email_confirm_title")),
+				el("p", { class: "auth-subtitle" }, t("account.email_confirm_missing")),
+				el("a", { class: "button primary wide", href: home }, t("invite.go_home"))
+			)
+		);
+	}
+
+	const submit = el("button", { class: "button primary wide", type: "submit" }, t("account.email_confirm"));
+	return authPage(
+		el(
+			"form",
+			{
+				class: "auth-card",
+				onSubmit: async (event) => {
+					event.preventDefault();
+					submit.disabled = true;
+					try {
+						const result = await Api.confirmEmail(token);
+						toast(t("account.email_changed", { email: result.email }), "success");
+						await refreshAccount();
+						navigate(home, true);
+					} catch (error) {
+						reportError(error);
+						submit.disabled = false;
+					}
+				},
+			},
+			authBrand(),
+			el("h1", {}, t("account.email_confirm_title")),
+			el("p", { class: "auth-subtitle" }, t("account.email_confirm_body")),
+			submit
+		)
+	);
 }
 
 function recoveryPanel(codes: string[]): HTMLElement {
@@ -332,9 +424,12 @@ export async function accountView(): Promise<HTMLElement> {
 	const [initial, legal] = await Promise.all([Api.me(), legalInfo().catch(() => null)]);
 	const contact = legal?.operator?.email ?? null;
 	const content = el("div", { class: "stack account-security" });
+	const intro = el("p", { class: "muted" });
 
 	const show = (account: Account, recoveryCodes: string[] | null) => {
+		intro.textContent = t("account.intro", { email: account.email });
 		content.replaceChildren(
+			emailPanel(account),
 			statusPanel(account),
 			recoveryCodes ? recoveryPanel(recoveryCodes) : "",
 			securityKeysPanel(account, reload),
@@ -355,14 +450,5 @@ export async function accountView(): Promise<HTMLElement> {
 
 	show(initial, null);
 
-	return el(
-		"div",
-		{ class: "page" },
-		el(
-			"div",
-			{ class: "page-head" },
-			el("div", {}, el("h1", {}, t("account.title")), el("p", { class: "muted" }, t("account.intro", { username: initial.username, email: initial.email })))
-		),
-		content
-	);
+	return el("div", { class: "page" }, el("div", { class: "page-head" }, el("div", {}, el("h1", {}, t("account.title")), intro)), content);
 }

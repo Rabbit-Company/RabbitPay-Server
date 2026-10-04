@@ -98,10 +98,10 @@ beforeAll(async () => {
 	receiverUrl = `http://127.0.0.1:${receiver.port}/hook`;
 
 	const registration = await call("POST", "/api/v1/auth/register", {
-		body: { username: "hook-owner", email: "hook@example.com", password: password("owner") },
+		body: { email: "hook-owner@example.com", password: password("owner") },
 	});
 	if (registration.error !== 0) throw new Error(`Webhook test registration failed: ${registration.error}`);
-	const login = await call("POST", "/api/v1/auth/login", { body: { username: "hook-owner", password: password("owner") } });
+	const login = await call("POST", "/api/v1/auth/login", { body: { email: "hook-owner@example.com", password: password("owner") } });
 	if (login.error !== 0) throw new Error(`Webhook test login failed: ${login.error}`);
 	sessionToken = login.data.token;
 
@@ -153,8 +153,8 @@ describe("webhook URL", () => {
 		const tokens: Record<string, string> = {};
 		for (const role of ["developer", "viewer"]) {
 			const name = `hook-${role}`;
-			await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-			tokens[role] = (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+			await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+			tokens[role] = (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 			await call("POST", `/api/v1/projects/${project.uuid}/members`, { token: sessionToken, body: { email: `${name}@example.com`, role } });
 		}
 		const path = `/api/v1/projects/${project.uuid}/webhook-url`;

@@ -64,11 +64,10 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initialize();
 	await call("POST", "/api/v1/auth/register", {
-		username: "invoice-validation-owner",
-		email: "invoice-validation@example.com",
+		email: "invoice-validation-owner@example.com",
 		password,
 	});
-	token = (await call("POST", "/api/v1/auth/login", { username: "invoice-validation-owner", password })).data.token;
+	token = (await call("POST", "/api/v1/auth/login", { email: "invoice-validation-owner@example.com", password })).data.token;
 });
 
 afterAll(async () => {

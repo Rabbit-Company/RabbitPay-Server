@@ -280,10 +280,11 @@ export async function membersView(uuid: string): Promise<HTMLElement> {
 					el(
 						"td",
 						{},
-						el("strong", {}, member.full_name || member.account_username || member.invitation_email || t("members.unknown")),
+						el("strong", {}, member.full_name || member.account_email || member.invitation_email || t("members.unknown")),
 						isMe ? el("span", { class: "muted" }, ` (${t("members.you")})`) : null,
-						member.full_name && member.account_username ? el("div", { class: "muted" }, member.account_username) : null,
-						member.account_username && member.invitation_email ? el("div", { class: "muted" }, member.invitation_email) : null,
+						member.full_name && (member.account_email || member.invitation_email)
+							? el("div", { class: "muted" }, member.account_email || member.invitation_email)
+							: null,
 						member.has_signature ? el("div", { class: "muted" }, t("members.signature_saved")) : null
 					),
 					el("td", {}, manages ? roleSelect : roleLabel(member.role)),
@@ -330,7 +331,7 @@ export async function membersView(uuid: string): Promise<HTMLElement> {
 										onClick: async () => {
 											const confirmed = await confirmDialog({
 												title: t("members.remove_title"),
-												body: t("members.remove_body", { member: member.account_username || member.invitation_email || "" }),
+												body: t("members.remove_body", { member: member.full_name || member.account_email || member.invitation_email || "" }),
 												confirmLabel: t("members.remove"),
 												destructive: true,
 											});

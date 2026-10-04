@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.payments.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -68,17 +68,17 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "pay-owner", email: "payowner@example.com", password: password("owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "pay-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "pay-owner@example.com", password: password("owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "pay-owner@example.com", password: password("owner") } })).data.token;
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "pay-books", email: "paybooks@example.com", password: password("books") } });
-	accountantToken = (await call("POST", "/api/v1/auth/login", { body: { username: "pay-books", password: password("books") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "pay-books@example.com", password: password("books") } });
+	accountantToken = (await call("POST", "/api/v1/auth/login", { body: { email: "pay-books@example.com", password: password("books") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "pay-shop" } })).data.uuid;
 
 	await call("POST", `/api/v1/projects/${projectUuid}/members`, {
 		token: ownerToken,
-		body: { email: "paybooks@example.com", role: "accountant" },
+		body: { email: "pay-books@example.com", role: "accountant" },
 	});
 
 	customerUuid = (await call("POST", `/api/v1/projects/${projectUuid}/customers`, { token: ownerToken, body: { email: "payer@example.com", name: "Payer" } }))
@@ -344,7 +344,7 @@ describe("refunds", () => {
 
 		const [row] = (await Database`SELECT * FROM refunds WHERE transaction_id = ${payment.data.uuid}`) as any[];
 		expect(row.reason).toBe("Goodwill");
-		expect(row.initiated_by).toBe("pay-owner");
+		expect(row.initiated_by).toBe(await accountId("pay-owner"));
 		expect(row.amount).toBe(1000);
 	});
 });

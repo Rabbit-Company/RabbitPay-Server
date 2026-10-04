@@ -57,17 +57,17 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "proc-owner", email: "proc@example.com", password: password("owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "proc-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "proc-owner@example.com", password: password("owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "proc-owner@example.com", password: password("owner") } })).data.token;
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "proc-viewer", email: "procview@example.com", password: password("viewer") } });
-	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "proc-viewer", password: password("viewer") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "proc-viewer@example.com", password: password("viewer") } });
+	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "proc-viewer@example.com", password: password("viewer") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "proc-shop" } });
 	projectUuid = project.data.uuid;
 	apiKey = project.data.apikey;
 
-	await call("POST", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken, body: { email: "procview@example.com", role: "viewer" } });
+	await call("POST", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken, body: { email: "proc-viewer@example.com", role: "viewer" } });
 });
 
 afterAll(async () => {

@@ -1,9 +1,9 @@
 import { pagination, PAGE_SIZE } from "../pagination";
 import { toSVG } from "@rabbit-company/qrcode";
-import { Api, ApiError, getUsername, type CatalogItem, type Invoice } from "../api";
+import { Api, ApiError, getEmail, getUsername, type CatalogItem, type Invoice } from "../api";
 import { el, input, statusPill, table } from "../dom";
 import { formatMoney, formatTime, minorUnitDigits, toMajorUnits, toMinorUnits } from "../money";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
 import { convertAmount, currencyOptions, currencyRates } from "../currencies";
 import { staticCombobox } from "../combobox";
@@ -215,12 +215,7 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 		"header",
 		{ class: "pos-bar" },
 		leave,
-		el(
-			"div",
-			{ class: "pos-bar-title" },
-			el("strong", {}, project.public_name),
-			cashierOnly ? el("span", { class: "muted" }, ` ${getUsername() ?? ""}`) : null
-		),
+		el("div", { class: "pos-bar-title" }, el("strong", {}, project.public_name), cashierOnly ? el("span", { class: "muted" }, ` ${getEmail() ?? ""}`) : null),
 		el(
 			"div",
 			{ class: "pos-bar-actions" },
@@ -887,7 +882,7 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 						{},
 						el("td", {}, formatTime(sale.created, timeFormat)),
 						el("td", { class: "mono" }, sale.reference),
-						everyone ? el("td", {}, sale.created_by ?? "-") : null,
+						everyone ? el("td", {}, accountName(sale.created_by_name, sale.created_by) ?? "-") : null,
 						el("td", {}, statusPill(sale.status)),
 						el("td", { class: "mono" }, formatMoney(sale.total_amount, sale.currency)),
 						el("td", { class: "actions" }, saleAction(sale))

@@ -30,8 +30,8 @@ async function call(method: string, path: string, data?: unknown, auth = token) 
 }
 async function account(name: string) {
 	const password = new Bun.CryptoHasher("blake2b512").update(name).digest("hex");
-	await call("POST", "/api/v1/auth/register", { username: name, email: `${name}@example.com`, password });
-	return (await call("POST", "/api/v1/auth/login", { username: name, password })).data.token as string;
+	await call("POST", "/api/v1/auth/register", { email: `${name}@example.com`, password });
+	return (await call("POST", "/api/v1/auth/login", { email: `${name}@example.com`, password })).data.token as string;
 }
 function expense(overrides: Record<string, unknown> = {}) {
 	return {

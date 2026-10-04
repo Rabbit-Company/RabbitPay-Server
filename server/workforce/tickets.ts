@@ -128,11 +128,12 @@ export async function assigneesOf(ticketIds: string[]): Promise<Map<string, Assi
 	const result = new Map<string, Assignee[]>();
 	if (ticketIds.length === 0) return result;
 	const rows = (await Database`
-		SELECT a.ticket, m.uuid, m.full_name, m.account_username, m.invitation_email
+		SELECT a.ticket, m.uuid, m.full_name, account.email AS account_email, m.invitation_email
 		FROM ticket_assignees a JOIN project_members m ON m.uuid = a.member
+		LEFT JOIN accounts account ON account.username = m.account_username
 		WHERE a.ticket IN ${Database(ticketIds)}
 		ORDER BY a.created ASC
-	`) as (Pick<ProjectMemberRow, "uuid" | "full_name" | "account_username" | "invitation_email"> & { ticket: string })[];
+	`) as (Pick<ProjectMemberRow, "uuid" | "full_name" | "account_email" | "invitation_email"> & { ticket: string })[];
 	for (const row of rows) {
 		const list = result.get(row.ticket) ?? [];
 		list.push({ member: row.uuid, name: personName(row), full_name: row.full_name?.trim() || null });

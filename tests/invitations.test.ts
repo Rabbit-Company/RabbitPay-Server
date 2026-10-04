@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.invitations.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -34,8 +34,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 async function invite(email: string, role = "cashier"): Promise<string> {
@@ -87,7 +87,7 @@ describe("invitation links", () => {
 			role: "cashier",
 			role_name: "Cashier",
 			invitation_email: "new-cashier@example.com",
-			invited_by: "invite-owner",
+			invited_by: "invite-owner@example.com",
 			expired: false,
 		});
 	});
@@ -122,13 +122,14 @@ describe("invitation links", () => {
 		expect((await call("GET", base(), { token: joiner })).error).toBe(1020);
 
 		const accepted = await call("POST", `/api/v1/invitations/${token}/accept`, { token: joiner });
-		expect(accepted.data.account_username).toBe("invite-joiner");
+		expect(accepted.data.account_username).toBe(await accountId("invite-joiner"));
 
 		const project = await call("GET", base(), { token: joiner });
 		expect(project.data.role).toBe("cashier");
 
 		const members = (await call("GET", `${base()}/members`, { token: ownerToken })).data;
-		const row = members.find((member: any) => member.account_username === "invite-joiner");
+		const rowId = await accountId("invite-joiner");
+		const row = members.find((member: any) => member.account_username === rowId);
 		expect(row.status).toBe("active");
 		expect(row.invitation_token).toBeNull();
 		expect(row.accepted_at).not.toBeNull();
@@ -156,7 +157,8 @@ describe("invitation links", () => {
 		await call("POST", `/api/v1/invitations/${first}/accept`, { token: returning });
 
 		const members = (await call("GET", `${base()}/members`, { token: ownerToken })).data;
-		const seat = members.find((member: any) => member.account_username === "invite-returning");
+		const seatId = await accountId("invite-returning");
+		const seat = members.find((member: any) => member.account_username === seatId);
 		await call("DELETE", `${base()}/members/${seat.uuid}`, { token: ownerToken });
 		expect((await call("GET", base(), { token: returning })).error).toBe(1020);
 
@@ -200,8 +202,8 @@ describe("invitation links", () => {
 
 	test("a link to a deleted project stops working", async () => {
 		const other = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "invite-gone" } })).data.uuid;
-		const token = (await call("POST", `/api/v1/projects/${other}/members`, { token: ownerToken, body: { email: "gone@example.com", role: "viewer" } }))
-			.data.invitation_token;
+		const token = (await call("POST", `/api/v1/projects/${other}/members`, { token: ownerToken, body: { email: "gone@example.com", role: "viewer" } })).data
+			.invitation_token;
 		await call("DELETE", `/api/v1/projects/${other}`, { token: ownerToken });
 		expect((await call("GET", `/api/v1/invitations/${token}`)).error).toBe(1082);
 	});

@@ -245,6 +245,7 @@ export interface DdvExport {
 	byte_size: number;
 	sha256: string;
 	created_by: string | null;
+	created_by_name?: string | null;
 	created: number;
 }
 
@@ -271,6 +272,7 @@ export type { CustomerStats, SaleLineInput, SalesSummary };
 
 const TOKEN_KEY = "rabbitpay.token";
 const USERNAME_KEY = "rabbitpay.username";
+const EMAIL_KEY = "rabbitpay.email";
 const ADMIN_KEY = "rabbitpay.admin";
 
 export interface ApiResult<T = unknown> {
@@ -323,6 +325,14 @@ export function getUsername(): string | null {
 	}
 }
 
+export function getEmail(): string | null {
+	try {
+		return localStorage.getItem(EMAIL_KEY);
+	} catch {
+		return null;
+	}
+}
+
 export function isAdmin(): boolean {
 	try {
 		return localStorage.getItem(ADMIN_KEY) === "1";
@@ -331,11 +341,12 @@ export function isAdmin(): boolean {
 	}
 }
 
-export function storeSession(token: string, username: string, admin: boolean) {
+export function storeSession(token: string, account: { username: string; email: string; admin: boolean }) {
 	try {
 		localStorage.setItem(TOKEN_KEY, token);
-		localStorage.setItem(USERNAME_KEY, username);
-		localStorage.setItem(ADMIN_KEY, admin ? "1" : "0");
+		localStorage.setItem(USERNAME_KEY, account.username);
+		localStorage.setItem(EMAIL_KEY, account.email);
+		localStorage.setItem(ADMIN_KEY, account.admin ? "1" : "0");
 	} catch {
 		void 0;
 	}
@@ -345,6 +356,7 @@ export function clearSession() {
 	try {
 		localStorage.removeItem(TOKEN_KEY);
 		localStorage.removeItem(USERNAME_KEY);
+		localStorage.removeItem(EMAIL_KEY);
 		localStorage.removeItem(ADMIN_KEY);
 	} catch {
 		void 0;
@@ -637,6 +649,7 @@ export interface TimeEntry {
 	note: string | null;
 	invoice: string | null;
 	created_by: string | null;
+	created_by_name?: string | null;
 	updated_by: string | null;
 	created: number;
 	updated: number;
@@ -667,8 +680,10 @@ export interface TimesheetPeriod {
 	status: TimesheetPeriodStatus;
 	note: string | null;
 	submitted_by: string | null;
+	submitted_by_name?: string | null;
 	submitted_at: number | null;
 	decided_by: string | null;
+	decided_by_name?: string | null;
 	decided_at: number | null;
 	updated: number | null;
 }
@@ -703,9 +718,11 @@ export interface Absence {
 	status: AbsenceStatus;
 	note: string | null;
 	decided_by: string | null;
+	decided_by_name?: string | null;
 	decided_at: number | null;
 	decision_note: string | null;
 	created_by: string | null;
+	created_by_name?: string | null;
 	created: number;
 	updated: number;
 }
@@ -739,6 +756,7 @@ export interface WorkforceRevision {
 	old_value: Record<string, unknown> | null;
 	new_value: Record<string, unknown> | null;
 	changed_by: string | null;
+	changed_by_name?: string | null;
 	reason: string | null;
 	created: number;
 }
@@ -811,6 +829,7 @@ export interface Ticket {
 	logged_minutes: number;
 	uninvoiced_minutes: number;
 	created_by: string | null;
+	created_by_name?: string | null;
 	reported_by: string | null;
 	closed_at: number | null;
 	created: number;
@@ -1067,6 +1086,7 @@ export interface PayrollRatesTable {
 	rates: PayrollRates;
 	verified: boolean;
 	verified_by: string | null;
+	verified_by_name?: string | null;
 	verified_at: number | null;
 	updated: number;
 }
@@ -1092,6 +1112,7 @@ export interface PayrollRunSummary {
 	pay_date: string | null;
 	rates_period: string | null;
 	finalized_by: string | null;
+	finalized_by_name?: string | null;
 	finalized_at: number | null;
 	created: number;
 	updated: number;
@@ -1152,6 +1173,7 @@ export interface Project {
 	created: number;
 	updated: number;
 	created_by: string;
+	created_by_name?: string | null;
 	apikey?: string;
 	apikey2?: string;
 	stats?: { members: number; invoices: number; transactions: number; customers: number };
@@ -1209,8 +1231,10 @@ export interface License {
 	buyer_email: string | null;
 	note: string | null;
 	created_by: string | null;
+	created_by_name?: string | null;
 	redeemed_project: string | null;
 	redeemed_by: string | null;
+	redeemed_by_name?: string | null;
 	redeemed_at: number | null;
 	starts_at: number | null;
 	ends_at: number | null;
@@ -1363,6 +1387,7 @@ export interface AdminProject {
 	status: string;
 	created: number;
 	created_by: string;
+	created_by_name?: string | null;
 	free_transactions: number | null;
 	free_emails: number | null;
 	emails_metered: boolean;
@@ -1403,6 +1428,7 @@ export interface RegistrationInvite {
 	note: string | null;
 	state: "active" | "used_up" | "expired" | "revoked";
 	created_by: string | null;
+	created_by_name?: string | null;
 	revoked_at: number | null;
 	created: number;
 	updated: number;
@@ -1583,6 +1609,7 @@ export interface Invoice extends ReferenceDocumentColumns {
 	customer_email?: string | null;
 	source?: "invoice" | "pos";
 	created_by?: string | null;
+	created_by_name?: string | null;
 	recurring?: string | null;
 	document_type?: "invoice" | "advance";
 	advanced_amount?: number;
@@ -1641,6 +1668,7 @@ export interface RecurringDetail extends Omit<RecurringSummary, "customer_name" 
 	failures: number;
 	last_invoice: string | null;
 	created_by: string | null;
+	created_by_name?: string | null;
 	items: RecurringLine[];
 	subtotal: number;
 	tax_amount: number;
@@ -1695,6 +1723,7 @@ export interface CreditNote {
 	transaction_id: string | null;
 	issued_at: number;
 	created_by: string | null;
+	created_by_name?: string | null;
 	items: { uuid: string; invoice_item: string | null; description: string; tax_rate: number; net_amount: number; tax_amount: number }[];
 }
 
@@ -1764,7 +1793,7 @@ export interface FiscalSettings {
 	rejected: number;
 	late: number;
 	due_soon: number;
-	operators: { username: string; name: string; role: string; tax_number: number | null }[];
+	operators: { username: string; name: string; email: string; role: string; tax_number: number | null }[];
 }
 
 export interface FiscalChanges {
@@ -1980,6 +2009,7 @@ export interface PaymentInstruction {
 export interface Member {
 	uuid: string;
 	account_username: string | null;
+	account_email?: string | null;
 	full_name: string | null;
 	has_signature: boolean;
 	role: string;
@@ -2007,6 +2037,7 @@ export interface EmailMessage {
 	attempts: number;
 	last_error: string | null;
 	sent_by: string | null;
+	sent_by_name?: string | null;
 	sent_at: number | null;
 	sent_via: EmailRoute | null;
 	has_body: boolean;
@@ -2483,13 +2514,13 @@ export const Api = {
 		return requestDownload("/auth/export", "rabbitpay-data.json");
 	},
 
-	register(username: string, email: string, password: string, access: { invite?: string; invitation?: string } & Partial<LegalAcceptance> = {}) {
-		return request<{ username: string }>("POST", "/auth/register", { username, email, password: hashPassword(password), ...access });
+	register(email: string, password: string, access: { invite?: string; invitation?: string } & Partial<LegalAcceptance> = {}) {
+		return request<{ username: string; email: string }>("POST", "/auth/register", { email, password: hashPassword(password), ...access });
 	},
 
-	login(username: string, password: string, factor?: SecondFactor) {
+	login(email: string, password: string, factor?: SecondFactor) {
 		return request<{ token: string; username: string; email: string; admin: boolean; expires_in: number }>("POST", "/auth/login", {
-			username,
+			email,
 			password: hashPassword(password),
 			...factor,
 		});
@@ -2501,6 +2532,14 @@ export const Api = {
 
 	me() {
 		return request<Account>("GET", "/auth/me");
+	},
+
+	changeEmail(email: string, password: string, language: string, factor?: SecondFactor) {
+		return request<{ email: string; pending: boolean }>("POST", "/auth/email", { email, password: hashPassword(password), language, ...factor });
+	},
+
+	confirmEmail(token: string) {
+		return request<{ email: string }>("POST", "/auth/email/confirm", { token });
 	},
 
 	setupTwoFactor() {
@@ -3652,16 +3691,16 @@ export const AdminApi = {
 	},
 
 	exportAccount(username: string) {
-		return requestDownload(`/admin/accounts/${encodeURIComponent(username)}/export`, `rabbitpay-${username}-data.json`);
+		return requestDownload(`/admin/accounts/${encodeURIComponent(username)}/export`, "rabbitpay-data.json");
 	},
 
 	deletionPlan(username: string) {
 		return request<DeletionPlan>("GET", `/admin/accounts/${encodeURIComponent(username)}/deletion`);
 	},
 
-	deleteAccount(username: string) {
+	deleteAccount(username: string, email: string) {
 		return request<{ deleted: string; closed_projects: DeletionPlan["closing"] }>("DELETE", `/admin/accounts/${encodeURIComponent(username)}`, {
-			confirm: username,
+			confirm: email,
 		});
 	},
 

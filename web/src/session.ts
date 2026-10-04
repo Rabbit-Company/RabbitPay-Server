@@ -16,7 +16,7 @@ export async function refreshAccount(): Promise<Account | null> {
 	if (token === null) return null;
 	try {
 		const account = await Api.me();
-		storeSession(token, account.username, account.admin);
+		storeSession(token, account);
 		return account;
 	} catch {
 		return null;

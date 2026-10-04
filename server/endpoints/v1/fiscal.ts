@@ -123,12 +123,12 @@ async function presentSettings(project: ProjectRow) {
 		FROM fiscal_documents WHERE project = ${project.uuid}
 	`) as { pending: number; rejected: number; late: number; due_soon: number }[];
 	const operators = (await Database`
-		SELECT pm.account_username AS username, pm.full_name, pm.role, fo.tax_number
-		FROM project_members pm
+		SELECT pm.account_username AS username, a.email, pm.full_name, pm.role, fo.tax_number
+		FROM project_members pm JOIN accounts a ON a.username = pm.account_username
 		LEFT JOIN fiscal_operators fo ON fo.project = pm.project_id AND fo.username = pm.account_username
 		WHERE pm.project_id = ${project.uuid} AND pm.status = 'active' AND pm.account_username IS NOT NULL
 		ORDER BY pm.created ASC
-	`) as { username: string; full_name: string | null; role: string; tax_number: number | null }[];
+	`) as { username: string; email: string; full_name: string | null; role: string; tax_number: number | null }[];
 
 	return {
 		required: isFiscalCountry(project),
@@ -155,7 +155,8 @@ async function presentSettings(project: ProjectRow) {
 		due_soon: Number(counts?.due_soon ?? 0),
 		operators: operators.map((operator) => ({
 			username: operator.username,
-			name: operator.full_name?.trim() || operator.username,
+			name: operator.full_name?.trim() || operator.email,
+			email: operator.email,
 			role: operator.role,
 			tax_number: operator.tax_number === null ? null : Number(operator.tax_number),
 		})),

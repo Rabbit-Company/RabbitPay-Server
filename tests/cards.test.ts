@@ -114,8 +114,8 @@ beforeAll(async () => {
 	stripe = new FakeStripe();
 	paypal = new FakePaypal();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "card-owner", email: "card@example.com", password: password("owner") } });
-	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { username: "card-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "card-owner@example.com", password: password("owner") } });
+	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { email: "card-owner@example.com", password: password("owner") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: sessionToken, body: { name: "card-shop" } });
 	projectUuid = project.data.uuid;

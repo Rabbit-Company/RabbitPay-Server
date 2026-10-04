@@ -15,10 +15,13 @@ import WebAuthn from "../../webauthn";
 import { RegistrationRefused, claimRegistration, registrationGrant, registrationMode } from "../../registration";
 import { pendingTerms, recordAcceptance, requiredVersions, requiresTerms, sameVersions, upcomingTerms } from "../../legal";
 import { exportAccount, exportResponse } from "../../account-data";
+import { accountByEmail, newAccountId, normalizeEmail } from "../../accounts";
+import { isEnabled, sendEmail } from "../../email/mailer";
+import { emailChangeEmail, emailChangedEmail } from "../../email/templates";
+import { isUiLanguage, type UiLanguage } from "../../../web/src/i18n/dictionary";
 import type { AccountRow } from "../../database/models";
 
 interface RegisterBody {
-	username?: string;
 	email?: string;
 	password?: string;
 	invite?: unknown;
@@ -33,12 +36,24 @@ interface SecondFactorBody {
 }
 
 interface LoginBody extends SecondFactorBody {
-	username?: string;
+	email?: string;
 	password?: string;
 }
 
 interface PasswordAndSecondFactorBody extends SecondFactorBody {
 	password?: string;
+}
+
+interface EmailChangeBody extends PasswordAndSecondFactorBody {
+	email?: string;
+	language?: string;
+}
+
+interface EmailChange {
+	username: string;
+	from: string;
+	to: string;
+	language: UiLanguage;
 }
 
 interface SecurityKeyBody {
@@ -48,6 +63,11 @@ interface SecurityKeyBody {
 }
 
 const TWO_FACTOR_SETUP_TTL = 10 * 60;
+const EMAIL_CHANGE_TTL = 60 * 60;
+
+async function emailChangeCacheKey(token: string): Promise<string> {
+	return `email_change_${await Utils.generateHash(token, "sha256")}`;
+}
 
 async function setupCacheKey(token: string): Promise<string> {
 	return `two_factor_setup_${await Utils.generateHash(token, "sha256")}`;
@@ -119,21 +139,18 @@ Server.app.post("/api/v1/auth/register", credentialLimit, async (ctx) => {
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
-	if (!Validate.username(data.username)) return Utils.fail(ctx, ErrorCode.INVALID_USERNAME_FORMAT);
-	if (!Validate.email(data.email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	const email = normalizeEmail(data.email);
+	if (!Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
 	if (!Validate.password(data.password)) return Utils.fail(ctx, ErrorCode.PASSWORD_NOT_HASHED);
-
-	const username = data.username!;
-	const email = data.email!;
 
 	const grant = await registrationGrant({ email, invite: data.invite, invitation: data.invitation });
 	if (typeof grant === "number") return Utils.fail(ctx, grant);
 
-	const existing = (await Database`SELECT username FROM accounts WHERE username = ${username} OR email = ${email}`) as AccountRow[];
-	if (existing.length > 0) return Utils.fail(ctx, ErrorCode.USERNAME_OR_EMAIL_ALREADY_EXISTS);
+	if (await accountByEmail(Database, email)) return Utils.fail(ctx, ErrorCode.EMAIL_ALREADY_REGISTERED);
 
 	const password = await Bun.password.hash(data.password!);
 	const timestamp = Date.now();
+	const username = newAccountId();
 
 	try {
 		await Database.begin(async (tx) => {
@@ -150,13 +167,13 @@ Server.app.post("/api/v1/auth/register", credentialLimit, async (ctx) => {
 		});
 	} catch (err) {
 		if (err instanceof RegistrationRefused) return Utils.fail(ctx, err.code);
-		Logger.warn(`[AUTH] Registration rejected for "${username}": ${err}`);
-		return Utils.fail(ctx, ErrorCode.USERNAME_OR_EMAIL_ALREADY_EXISTS);
+		Logger.warn(`[AUTH] Registration rejected for "${email}": ${err}`);
+		return Utils.fail(ctx, ErrorCode.EMAIL_ALREADY_REGISTERED);
 	}
 
 	const via = grant.kind === "invite" ? { invite: grant.invite.uuid } : grant.kind === "project_invitation" ? { project_invitation: grant.member } : {};
 	await Audit.record(ctx, { action: "account.created", entityType: "account", entityId: username, newValue: { username, email, ...via } });
-	Logger.audit(`[AUTH] Account created: ${username}`);
+	Logger.audit(`[AUTH] Account created: ${username} (${email})`);
 
 	return Utils.ok(ctx, { username, email, created: timestamp }, 201);
 });
@@ -169,14 +186,15 @@ Server.app.post("/api/v1/auth/login", credentialLimit, async (ctx) => {
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
 
-	if (!Validate.username(data.username)) return Utils.fail(ctx, ErrorCode.INVALID_USERNAME);
+	const email = normalizeEmail(data.email);
+	if (!Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
 	if (!Validate.password(data.password)) return Utils.fail(ctx, ErrorCode.INVALID_PASSWORD);
 
-	const [account] = (await Database`SELECT * FROM accounts WHERE username = ${data.username!}`) as AccountRow[];
+	const account = await accountByEmail<AccountRow>(Database, email);
 
 	const valid = await Bun.password.verify(data.password!, account?.password ?? DUMMY_ARGON2_HASH);
 	if (!account || !valid) {
-		Logger.audit(`[AUTH] Failed login for "${data.username}" from ${Utils.clientIp(ctx)}`);
+		Logger.audit(`[AUTH] Failed login for "${email}" from ${Utils.clientIp(ctx)}`);
 		return Utils.fail(ctx, ErrorCode.INCORRECT_PASSWORD);
 	}
 
@@ -244,10 +262,122 @@ Server.app.get("/api/v1/auth/me", Auth.required(), async (ctx) => {
 	});
 });
 
+async function applyEmailChange(change: Pick<EmailChange, "username" | "from" | "to">): Promise<ErrorCode | null> {
+	if (await accountByEmail(Database, change.to)) return ErrorCode.EMAIL_ALREADY_REGISTERED;
+	try {
+		const changed = await Database`
+			UPDATE accounts SET email = ${change.to}, updated = ${Date.now()} WHERE username = ${change.username} AND email = ${change.from}
+		`;
+		return changed.count === 1 ? null : ErrorCode.EMAIL_LINK_EXPIRED;
+	} catch {
+		return ErrorCode.EMAIL_ALREADY_REGISTERED;
+	}
+}
+
+async function recordEmailChange(ctx: Parameters<typeof Audit.record>[0], change: Pick<EmailChange, "username" | "from" | "to">) {
+	await Audit.record(ctx, {
+		action: "account.email_changed",
+		entityType: "account",
+		entityId: change.username,
+		oldValue: { email: change.from },
+		newValue: { email: change.to },
+	});
+	Logger.audit(`[AUTH] Email changed: ${change.username} from ${change.from} to ${change.to}`);
+}
+
+Server.app.post("/api/v1/auth/email", Auth.required(), credentialLimit, async (ctx) => {
+	ctx.header("Cache-Control", "no-store");
+	let data: EmailChangeBody;
+	try {
+		data = await ctx.body<EmailChangeBody>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	const account = Auth.account(ctx);
+	const email = normalizeEmail(data.email);
+	if (!Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	if (!Validate.password(data.password)) return Utils.fail(ctx, ErrorCode.INVALID_PASSWORD);
+
+	const validPassword = await Bun.password.verify(data.password!, account.password);
+	if (!validPassword) return Utils.fail(ctx, ErrorCode.INCORRECT_PASSWORD);
+	if (email === normalizeEmail(account.email)) return Utils.fail(ctx, ErrorCode.EMAIL_UNCHANGED);
+	if (await accountByEmail(Database, email)) return Utils.fail(ctx, ErrorCode.EMAIL_ALREADY_REGISTERED);
+	if (account.two_factor_secret !== null) {
+		if (!Vault.isConfigured()) return Utils.fail(ctx, ErrorCode.MASTER_KEY_NOT_CONFIGURED);
+		if (!(await verifySecondFactor(account, data, "confirm"))) return Utils.fail(ctx, secondFactorError(data));
+	}
+
+	const change: EmailChange = { username: account.username, from: account.email, to: email, language: isUiLanguage(data.language) ? data.language : "en" };
+
+	if (!isEnabled()) {
+		const refused = await applyEmailChange(change);
+		if (refused !== null) return Utils.fail(ctx, refused);
+		await recordEmailChange(ctx, change);
+		return Utils.ok(ctx, { email, pending: false });
+	}
+
+	const token = Utils.generateRandomText(128);
+	const key = await emailChangeCacheKey(token);
+	const stored = await Cache.setString(key, JSON.stringify(change), EMAIL_CHANGE_TTL, EMAIL_CHANGE_TTL);
+	if (!stored) return Utils.fail(ctx, ErrorCode.REDIS_CONNECTION_ERROR);
+
+	try {
+		await sendEmail({
+			to: email,
+			senderName: "RabbitPay",
+			replyTo: null,
+			...emailChangeEmail(change.language, `${Utils.publicUrl()}/account/email#token=${token}`, change.from),
+		});
+	} catch {
+		await Cache.deleteString(key);
+		return Utils.fail(ctx, ErrorCode.EMAIL_SERVER_FAILED);
+	}
+
+	Logger.audit(`[AUTH] Email change requested: ${account.username} to ${email}`);
+	return Utils.ok(ctx, { email, pending: true });
+});
+
+Server.app.post("/api/v1/auth/email/confirm", credentialLimit, async (ctx) => {
+	ctx.header("Cache-Control", "no-store");
+	let data: { token?: string };
+	try {
+		data = await ctx.body();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+	if (!Validate.token(data?.token)) return Utils.fail(ctx, ErrorCode.EMAIL_LINK_EXPIRED);
+
+	const key = await emailChangeCacheKey(data.token!);
+	const stored = await Cache.getString(key);
+	if (!stored || !(await Cache.deleteString(key))) return Utils.fail(ctx, ErrorCode.EMAIL_LINK_EXPIRED);
+
+	const change = JSON.parse(stored) as EmailChange;
+	const refused = await applyEmailChange(change);
+	if (refused !== null) return Utils.fail(ctx, refused);
+
+	const [account] = (await Database`SELECT * FROM accounts WHERE username = ${change.username}`) as AccountRow[];
+	if (account) ctx.set("account", account);
+	await recordEmailChange(ctx, change);
+
+	try {
+		await sendEmail({
+			to: change.from,
+			senderName: "RabbitPay",
+			replyTo: null,
+			...emailChangedEmail(change.language, `${Utils.publicUrl()}/account`, change.to),
+		});
+	} catch (err) {
+		Logger.warn(`[AUTH] Could not tell ${change.from} about the email change: ${err}`);
+	}
+
+	return Utils.ok(ctx, { email: change.to });
+});
+
 Server.app.get("/api/v1/auth/export", Auth.required(), exportLimit, async (ctx) => {
 	const account = Auth.account(ctx);
 	await Audit.record(ctx, { action: "account.data_exported", entityType: "account", entityId: account.username });
-	return exportResponse(await exportAccount(account), account.username);
+	return exportResponse(await exportAccount(account), account.email);
 });
 
 Server.app.post("/api/v1/auth/two-factor/setup", Auth.required(), async (ctx) => {

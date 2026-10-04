@@ -89,8 +89,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "btc-owner", email: "btc@example.com", password: password("owner") } });
-	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { username: "btc-owner", password: password("owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "btc-owner@example.com", password: password("owner") } });
+	sessionToken = (await call("POST", "/api/v1/auth/login", { body: { email: "btc-owner@example.com", password: password("owner") } })).data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: sessionToken, body: { name: "btc-shop" } });
 	projectUuid = project.data.uuid;

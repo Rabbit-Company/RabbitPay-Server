@@ -48,8 +48,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "cur-owner", email: "cur-owner@example.com", password: password("cur-owner") } });
-	const login = await call("POST", "/api/v1/auth/login", { body: { username: "cur-owner", password: password("cur-owner") } });
+	await call("POST", "/api/v1/auth/register", { body: { email: "cur-owner@example.com", password: password("cur-owner") } });
+	const login = await call("POST", "/api/v1/auth/login", { body: { email: "cur-owner@example.com", password: password("cur-owner") } });
 	ownerToken = login.data.token;
 
 	const project = await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "cur-project" } });

@@ -74,14 +74,14 @@ beforeAll(async () => {
 		new Request("http://localhost/api/v1/auth/register", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ username: "registry-owner", email: "registry@example.com", password }),
+			body: JSON.stringify({ email: "registry-owner@example.com", password }),
 		})
 	);
 	const login = await Server.app.handle(
 		new Request("http://localhost/api/v1/auth/login", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ username: "registry-owner", password }),
+			body: JSON.stringify({ email: "registry-owner@example.com", password }),
 		})
 	);
 	token = ((await login.json()) as { data: { token: string } }).data.token;

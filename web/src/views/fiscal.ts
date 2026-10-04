@@ -389,7 +389,7 @@ export function fiscalSection(uuid: string): HTMLElement {
 			return el(
 				"tr",
 				{},
-				el("td", {}, operator.name, operator.name !== operator.username ? el("div", { class: "muted" }, operator.username) : null),
+				el("td", {}, operator.name, operator.name !== operator.email ? el("div", { class: "muted" }, operator.email) : null),
 				el("td", {}, operator.tax_number === null ? pill(t("fiscal.operator_none"), "pending") : pill(t("fiscal.operator_set"), "paid")),
 				el("td", {}, taxNumber),
 				el("td", {}, save)

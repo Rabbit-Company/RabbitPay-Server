@@ -59,8 +59,7 @@ export async function loginView(): Promise<HTMLElement> {
 	const slot = el("div", { class: "auth-slot" });
 	let mode: Mode = canRegister && params.get("mode") === "register" ? "register" : "login";
 
-	const username = input("text", { placeholder: t("login.username_placeholder"), autocomplete: "username", required: true });
-	const email = input("email", { placeholder: "you@example.com", autocomplete: "email", required: true, value: invitedEmail });
+	const email = input("email", { placeholder: "you@example.com", autocomplete: "username", required: true, maxlength: "254", value: invitedEmail });
 	const password = input("password", { placeholder: t("login.password_placeholder"), required: true });
 	const passwordInput = passwordField(password);
 	const inviteCode = input("text", { placeholder: "JOIN-XXXXX-XXXXX-XXXXX", autocomplete: "off", required: true, value: params.get("invite") ?? "" });
@@ -95,8 +94,8 @@ export async function loginView(): Promise<HTMLElement> {
 		const acceptField = legal && requiresTerms(legal) ? el("label", { class: "legal-accept" }, acceptTerms, el("span", {}, ...acceptanceText(legal))) : null;
 
 		const signIn = async (factor?: SecondFactor) => {
-			const session = await Api.login(username.value.trim(), password.value, factor);
-			storeSession(session.token, session.username, session.admin);
+			const session = await Api.login(email.value.trim(), password.value, factor);
+			storeSession(session.token, session);
 			navigate(next);
 			void checkPendingTerms();
 		};
@@ -142,7 +141,7 @@ export async function loginView(): Promise<HTMLElement> {
 
 					try {
 						if (mode === "register") {
-							await Api.register(username.value.trim(), email.value.trim(), password.value, {
+							await Api.register(email.value.trim(), password.value, {
 								invite: needsInviteCode ? inviteCode.value.trim() : undefined,
 								invitation,
 								...(legal && requiresTerms(legal) && acceptTerms.checked ? { accept_terms: true as const, legal_versions: legal.required_versions } : {}),
@@ -189,8 +188,7 @@ export async function loginView(): Promise<HTMLElement> {
 						: t("login.subtitle_register")
 			),
 			tabs,
-			field(t("login.username"), username, mode === "register" ? t("login.username_hint") : undefined),
-			mode === "register" ? field(t("login.email"), email) : null,
+			field(t("login.email"), email),
 			mode === "register" && needsInviteCode ? field(t("login.invite_code"), inviteCode, t("login.invite_code_hint")) : null,
 			field(t("login.password"), passwordInput, mode === "register" ? t("login.password_hint") : undefined),
 			mode === "register" ? acceptField : null,

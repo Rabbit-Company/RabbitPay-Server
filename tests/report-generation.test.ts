@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { SQL } from "bun";
 import { unlinkSync } from "node:fs";
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 
 const databasePath = `${import.meta.dir}/.report-generation.sqlite`;
 await prepareTest(`sqlite://${databasePath}`);
@@ -35,8 +35,8 @@ async function call(method: string, path: string, body?: unknown, token = owner)
 
 async function account(name: string) {
 	const password = new Bun.CryptoHasher("blake2b512").update(name).digest("hex");
-	await call("POST", "/api/v1/auth/register", { username: name, email: `${name}@example.com`, password });
-	return (await call("POST", "/api/v1/auth/login", { username: name, password })).data.token as string;
+	await call("POST", "/api/v1/auth/register", { email: `${name}@example.com`, password });
+	return (await call("POST", "/api/v1/auth/login", { email: `${name}@example.com`, password })).data.token as string;
 }
 
 async function project() {
@@ -280,9 +280,9 @@ describe("durable report claims", () => {
 		const generated = await call("POST", `/api/v1/projects/${uuid}/reports/financial`);
 		Cache.local.adapter = new MemoryAdapter("restarted-local");
 		Cache.external.adapter = new MemoryAdapter("restarted-shared");
-		owner = (await Auth.createSession("report-owner", "127.0.0.1"))!;
-		viewer = (await Auth.createSession("report-viewer", "127.0.0.1"))!;
-		outsider = (await Auth.createSession("report-outsider", "127.0.0.1"))!;
+		owner = (await Auth.createSession(await accountId("report-owner"), "127.0.0.1"))!;
+		viewer = (await Auth.createSession(await accountId("report-viewer"), "127.0.0.1"))!;
+		outsider = (await Auth.createSession(await accountId("report-outsider"), "127.0.0.1"))!;
 		const read = await call("GET", `/api/v1/projects/${uuid}/reports/financial`);
 		expect(read.data.report.generated_at).toBe(generated.data.generated_at);
 		expect((await call("POST", `/api/v1/projects/${uuid}/reports/financial`)).status).toBe(429);

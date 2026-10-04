@@ -5,6 +5,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
@@ -117,7 +118,7 @@ Server.app.get("/api/v1/projects/:uuid/pos/sales", Auth.required(), Permissions.
 			OR (type IN ${Database(REFUND_TYPES)} AND status IN ${Database(SETTLED_REFUND_STATUSES)})
 		)`) as CashMovement[];
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		sales: sales.map((sale) => ({ ...sale, metadata: sale.metadata === null ? null : JSON.parse(sale.metadata) })),
 		summary: summarizeSales(facts, cash),
 		total: facts.length,
@@ -210,19 +211,19 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales", Auth.required(), Permissions
 		due_date: sale.due_date,
 	});
 
-	return Utils.ok(ctx, await presentSale(sale), 201);
+	return await okWithNames(ctx, await presentSale(sale), 201);
 });
 
 Server.app.get("/api/v1/projects/:uuid/pos/sales/:sale", Auth.required(), Permissions.require(Permission.POS_SELL), async (ctx) => {
 	const sale = await findSale(ctx);
 	if (typeof sale === "number") return Utils.fail(ctx, sale);
-	return Utils.ok(ctx, await presentSale(sale));
+	return await okWithNames(ctx, await presentSale(sale));
 });
 
 Server.app.get("/api/v1/projects/:uuid/pos/sales/:sale/document", Auth.required(), Permissions.require(Permission.POS_SELL), async (ctx) => {
 	const sale = await findSale(ctx);
 	if (typeof sale === "number") return Utils.fail(ctx, sale);
-	return Utils.ok(ctx, await invoiceDocument(Permissions.project(ctx), sale));
+	return await okWithNames(ctx, await invoiceDocument(Permissions.project(ctx), sale));
 });
 
 Server.app.get("/api/v1/projects/:uuid/pos/sales/:sale/pdf", Auth.required(), Permissions.require(Permission.POS_SELL), async (ctx) => {
@@ -265,7 +266,7 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/email", Auth.required(),
 	});
 	Logger.audit(`[POS] ${account.username} emailed the receipt for ${sale.reference}`);
 
-	return Utils.ok(ctx, await findEmail(uuid), 201);
+	return await okWithNames(ctx, await findEmail(uuid), 201);
 });
 
 Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/cash", Auth.required(), Permissions.require(Permission.POS_SELL), async (ctx) => {
@@ -310,7 +311,7 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/cash", Auth.required(), 
 	Logger.audit(`[POS] ${account.username} took ${amount} ${sale.currency} in cash on ${sale.reference}`);
 	await submitNow({ invoice: sale.uuid });
 
-	return Utils.ok(ctx, await presentSale(sale));
+	return await okWithNames(ctx, await presentSale(sale));
 });
 
 Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/cancel", Auth.required(), Permissions.require(Permission.POS_SELL), async (ctx) => {
@@ -347,5 +348,5 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales/:sale/cancel", Auth.required()
 	});
 	Logger.audit(`[POS] ${account.username} canceled ${sale.reference} on ${project.uuid}`);
 
-	return Utils.ok(ctx, await presentSale(sale));
+	return await okWithNames(ctx, await presentSale(sale));
 });

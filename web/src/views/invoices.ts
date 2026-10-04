@@ -22,7 +22,7 @@ import { el, emptyState, field, input, saveFile, select, statusPill, table } fro
 import { dayStartFromDateInput, formatDate, formatDateTime, formatMoney, fromDateInput, minorUnitDigits, toDateInput } from "../money";
 import { navigate } from "../router";
 import { convertMinor, outstandingOf } from "../../../server/invoicing";
-import { confirmDialog, modal, pdfPreviewButton, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, pdfPreviewButton, reportError, toast } from "../ui";
 import { actionMenu, type MenuLink } from "../menu";
 import { loadProject, projectLayout } from "./project";
 import type { DateFormat } from "../../../server/formats";
@@ -528,7 +528,7 @@ function emailsCard(emails: EmailMessage[] | null, dateFormat: DateFormat, timez
 						el("span", { class: `pill pill-${EMAIL_STATUS_PILLS[email.status]}`, title: email.last_error ?? "" }, statusLabel(email.status)),
 						email.status !== "sent" && email.last_error ? el("div", { class: "muted" }, email.last_error) : null
 					),
-					el("td", {}, email.sent_by ?? t("ui.automatic"))
+					el("td", {}, accountName(email.sent_by_name, email.sent_by) ?? t("ui.automatic"))
 				)
 			)
 		)

@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.test.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -194,33 +194,40 @@ describe("vault", () => {
 describe("registration", () => {
 	test("creates an account", async () => {
 		const res = await call("POST", "/api/v1/auth/register", {
-			body: { username: "owner-user", email: "owner@example.com", password: password("owner") },
+			body: { email: "owner-user@example.com", password: password("owner") },
 		});
 		expect(res.status).toBe(201);
-		expect(res.data.username).toBe("owner-user");
+		expect(res.data.username).toBe(await accountId("owner-user"));
 	});
 
-	test("rejects a duplicate username", async () => {
-		const res = await call("POST", "/api/v1/auth/register", {
-			body: { username: "owner-user", email: "other@example.com", password: password("owner") },
-		});
-		expect(res.error).toBe(1007);
+	test("rejects a duplicate email whatever its letter case", async () => {
+		for (const email of ["owner-user@example.com", "Owner-User@Example.com"]) {
+			const res = await call("POST", "/api/v1/auth/register", { body: { email, password: password("owner") } });
+			expect(res.error).toBe(1007);
+		}
 	});
 
-	test("rejects an invalid username", async () => {
-		const res = await call("POST", "/api/v1/auth/register", { body: { username: "X", email: "x@example.com", password: password("x") } });
-		expect(res.error).toBe(1003);
+	test("rejects an invalid email", async () => {
+		const res = await call("POST", "/api/v1/auth/register", { body: { email: "not-an-email", password: password("x") } });
+		expect(res.error).toBe(1009);
+	});
+
+	test("gives every account a random identifier that says nothing about the email", async () => {
+		const res = await call("POST", "/api/v1/auth/register", { body: { email: "owner-user@example.org", password: password("twin") } });
+		expect(res.status).toBe(201);
+		expect(res.data.username).toMatch(/^[a-z][a-z0-9]{25}$/);
+		expect(res.data.username).not.toBe(await accountId("owner-user"));
 	});
 
 	test("rejects an unhashed password", async () => {
 		const res = await call("POST", "/api/v1/auth/register", {
-			body: { username: "plain-user", email: "plain@example.com", password: "hunter2" },
+			body: { email: "plain-user@example.com", password: "hunter2" },
 		});
 		expect(res.error).toBe(1004);
 	});
 
 	test("never stores the password as supplied", async () => {
-		const [row] = (await Database`SELECT password FROM accounts WHERE username = ${"owner-user"}`) as { password: string }[];
+		const [row] = (await Database`SELECT password FROM accounts WHERE email = ${"owner-user@example.com"}`) as { password: string }[];
 		expect(row.password).not.toBe(password("owner"));
 		expect(row.password.startsWith("$argon2")).toBe(true);
 	});
@@ -228,24 +235,29 @@ describe("registration", () => {
 
 describe("login", () => {
 	test("issues a session token", async () => {
-		const res = await call("POST", "/api/v1/auth/login", { body: { username: "owner-user", password: password("owner") } });
+		const res = await call("POST", "/api/v1/auth/login", { body: { email: "owner-user@example.com", password: password("owner") } });
 		expect(res.data.token).toHaveLength(128);
 		ownerToken = res.data.token;
 	});
 
+	test("accepts the email in any letter case", async () => {
+		const res = await call("POST", "/api/v1/auth/login", { body: { email: " Owner-User@Example.com ", password: password("owner") } });
+		expect(res.data.username).toBe(await accountId("owner-user"));
+	});
+
 	test("rejects a wrong password", async () => {
-		const res = await call("POST", "/api/v1/auth/login", { body: { username: "owner-user", password: password("wrong") } });
+		const res = await call("POST", "/api/v1/auth/login", { body: { email: "owner-user@example.com", password: password("wrong") } });
 		expect(res.error).toBe(1014);
 	});
 
 	test("reports the same error for an unknown account", async () => {
-		const res = await call("POST", "/api/v1/auth/login", { body: { username: "ghost-user", password: password("whatever") } });
+		const res = await call("POST", "/api/v1/auth/login", { body: { email: "ghost-user@example.com", password: password("whatever") } });
 		expect(res.error).toBe(1014);
 	});
 
 	test("returns the authenticated account", async () => {
 		const res = await call("GET", "/api/v1/auth/me", { token: ownerToken });
-		expect(res.data.username).toBe("owner-user");
+		expect(res.data.username).toBe(await accountId("owner-user"));
 		expect(res.data.projects).toBe(0);
 	});
 
@@ -274,7 +286,7 @@ describe("projects", () => {
 	test("creates the owner membership alongside the project", async () => {
 		const [member] = (await Database`SELECT * FROM project_members WHERE project_id = ${projectUuid}`) as any[];
 		expect(member.role).toBe("owner");
-		expect(member.account_username).toBe("owner-user");
+		expect(member.account_username).toBe(await accountId("owner-user"));
 	});
 
 	test("rejects a duplicate project name for the same owner", async () => {
@@ -719,16 +731,16 @@ describe("invoices", () => {
 describe("members and permissions", () => {
 	beforeAll(async () => {
 		await call("POST", "/api/v1/auth/register", {
-			body: { username: "viewer-user", email: "viewer@example.com", password: password("viewer") },
+			body: { email: "viewer-user@example.com", password: password("viewer") },
 		});
-		viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "viewer-user", password: password("viewer") } })).data.token;
+		viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "viewer-user@example.com", password: password("viewer") } })).data.token;
 
 		await call("POST", "/api/v1/auth/register", {
-			body: { username: "outsider-user", email: "outsider@example.com", password: password("outsider") },
+			body: { email: "outsider-user@example.com", password: password("outsider") },
 		});
-		outsiderToken = (await call("POST", "/api/v1/auth/login", { body: { username: "outsider-user", password: password("outsider") } })).data.token;
+		outsiderToken = (await call("POST", "/api/v1/auth/login", { body: { email: "outsider-user@example.com", password: password("outsider") } })).data.token;
 
-		await call("POST", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken, body: { email: "viewer@example.com", role: "viewer" } });
+		await call("POST", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken, body: { email: "viewer-user@example.com", role: "viewer" } });
 	});
 
 	test("a non member cannot see the project", async () => {
@@ -755,7 +767,7 @@ describe("members and permissions", () => {
 	test("rejects a duplicate invitation", async () => {
 		const res = await call("POST", `/api/v1/projects/${projectUuid}/members`, {
 			token: ownerToken,
-			body: { email: "viewer@example.com", role: "viewer" },
+			body: { email: "viewer-user@example.com", role: "viewer" },
 		});
 		expect(res.error).toBe(1022);
 	});
@@ -793,7 +805,8 @@ describe("members and permissions", () => {
 
 	test("an accountant can view invoices but not create them", async () => {
 		const members = await call("GET", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken });
-		const viewer = members.data.find((member: any) => member.account_username === "viewer-user");
+		const viewerId = await accountId("viewer-user");
+		const viewer = members.data.find((member: any) => member.account_username === viewerId);
 
 		await call("PATCH", `/api/v1/projects/${projectUuid}/members/${viewer.uuid}`, { token: ownerToken, body: { role: "accountant" } });
 
@@ -808,7 +821,8 @@ describe("members and permissions", () => {
 
 	test("a manager can create invoices", async () => {
 		const members = await call("GET", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken });
-		const viewer = members.data.find((member: any) => member.account_username === "viewer-user");
+		const viewerId = await accountId("viewer-user");
+		const viewer = members.data.find((member: any) => member.account_username === viewerId);
 
 		await call("PATCH", `/api/v1/projects/${projectUuid}/members/${viewer.uuid}`, { token: ownerToken, body: { role: "manager" } });
 
@@ -821,7 +835,8 @@ describe("members and permissions", () => {
 
 	test("an owner cannot remove their own membership", async () => {
 		const members = await call("GET", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken });
-		const own = members.data.find((member: any) => member.account_username === "owner-user");
+		const ownId = await accountId("owner-user");
+		const own = members.data.find((member: any) => member.account_username === ownId);
 
 		expect((await call("DELETE", `/api/v1/projects/${projectUuid}/members/${own.uuid}`, { token: ownerToken })).error).toBe(1025);
 	});
@@ -838,7 +853,8 @@ describe("members and permissions", () => {
 		expect(profile.data).toEqual({ full_name: "Owner Person", signature: PNG_SIGNATURE });
 
 		const members = await call("GET", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken });
-		const owner = members.data.find((member: any) => member.account_username === "owner-user");
+		const ownerId = await accountId("owner-user");
+		const owner = members.data.find((member: any) => member.account_username === ownerId);
 		expect(owner.full_name).toBe("Owner Person");
 		expect(owner.has_signature).toBe(true);
 		expect(JSON.stringify(owner)).not.toContain(PNG_SIGNATURE);
@@ -890,7 +906,7 @@ describe("members and permissions", () => {
 			).error
 		).toBe(0);
 		const [owner] = (await Database`
-			SELECT uuid FROM project_members WHERE project_id = ${projectUuid} AND account_username = 'owner-user'
+			SELECT uuid FROM project_members WHERE project_id = ${projectUuid} AND account_username = ${await accountId("owner-user")}
 		`) as { uuid: string }[];
 		const [restored] = (await Database`
 			SELECT
@@ -954,7 +970,8 @@ describe("members and permissions", () => {
 
 	test("an expired membership loses access", async () => {
 		const members = await call("GET", `/api/v1/projects/${projectUuid}/members`, { token: ownerToken });
-		const viewer = members.data.find((member: any) => member.account_username === "viewer-user");
+		const viewerId = await accountId("viewer-user");
+		const viewer = members.data.find((member: any) => member.account_username === viewerId);
 
 		await Database`UPDATE project_members SET expires_at = ${Date.now() - 1000} WHERE uuid = ${viewer.uuid}`;
 		expect((await call("GET", `/api/v1/projects/${projectUuid}`, { token: viewerToken })).error).toBe(1020);
@@ -966,7 +983,7 @@ describe("members and permissions", () => {
 describe("audit trail", () => {
 	test("records project creation", async () => {
 		const [entry] = (await Database`SELECT * FROM audit_log WHERE action = 'project.created' AND entity_id = ${projectUuid}`) as any[];
-		expect(entry.account).toBe("owner-user");
+		expect(entry.account).toBe(await accountId("owner-user"));
 	});
 
 	test("records invoice creation", async () => {
@@ -989,7 +1006,7 @@ describe("audit trail", () => {
 
 describe("session lifecycle", () => {
 	test("logout invalidates the token", async () => {
-		const login = await call("POST", "/api/v1/auth/login", { body: { username: "outsider-user", password: password("outsider") } });
+		const login = await call("POST", "/api/v1/auth/login", { body: { email: "outsider-user@example.com", password: password("outsider") } });
 		const token = login.data.token;
 
 		expect((await call("GET", "/api/v1/auth/me", { token })).error).toBe(0);
@@ -998,8 +1015,8 @@ describe("session lifecycle", () => {
 	});
 
 	test("logging in twice yields two independent sessions", async () => {
-		const first = (await call("POST", "/api/v1/auth/login", { body: { username: "outsider-user", password: password("outsider") } })).data.token;
-		const second = (await call("POST", "/api/v1/auth/login", { body: { username: "outsider-user", password: password("outsider") } })).data.token;
+		const first = (await call("POST", "/api/v1/auth/login", { body: { email: "outsider-user@example.com", password: password("outsider") } })).data.token;
+		const second = (await call("POST", "/api/v1/auth/login", { body: { email: "outsider-user@example.com", password: password("outsider") } })).data.token;
 
 		expect(first).not.toBe(second);
 
@@ -1008,7 +1025,7 @@ describe("session lifecycle", () => {
 	});
 
 	test("session tokens are not stored in the clear", async () => {
-		const token = (await call("POST", "/api/v1/auth/login", { body: { username: "outsider-user", password: password("outsider") } })).data.token;
+		const token = (await call("POST", "/api/v1/auth/login", { body: { email: "outsider-user@example.com", password: password("outsider") } })).data.token;
 		expect(await Cache.getString(`session_${token}`)).toBeNull();
 	});
 });
@@ -1026,7 +1043,7 @@ describe("rate limiting", () => {
 		const statuses: number[] = [];
 
 		for (let i = 0; i < 60; i++) {
-			const res = await call("POST", "/api/v1/auth/register", { body: { username: "X", email: "x@example.com", password: password("x") } });
+			const res = await call("POST", "/api/v1/auth/register", { body: { email: "X", password: password("x") } });
 			statuses.push(res.status);
 		}
 
@@ -1036,7 +1053,7 @@ describe("rate limiting", () => {
 	});
 
 	test("leaves other endpoints unaffected", async () => {
-		const res = await call("POST", "/api/v1/auth/login", { body: { username: "owner-user", password: password("owner") } });
+		const res = await call("POST", "/api/v1/auth/login", { body: { email: "owner-user@example.com", password: password("owner") } });
 		expect(res.error).toBe(0);
 	});
 });

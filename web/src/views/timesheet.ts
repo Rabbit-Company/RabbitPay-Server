@@ -21,7 +21,7 @@ import { el, emptyState, field, input, saveFile, select, table } from "../dom";
 import { formatDateTime, toMajorUnits, toMinorUnits } from "../money";
 import { can, Permission } from "../access";
 import { t, tn, type UiKey } from "../i18n";
-import { confirmDialog, modal, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import {
 	ABSENCE_KINDS,
 	absenceLabel,
@@ -184,12 +184,12 @@ function periodCard(uuid: string, project: Project, state: WorkforceState, membe
 	const actions = periodActions(uuid, state, member, period, onSaved);
 	const details = period.decided_at
 		? t("timesheet.period_decided", {
-				name: period.decided_by ?? "-",
+				name: accountName(period.decided_by_name, period.decided_by) ?? "-",
 				date: formatDateTime(period.decided_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone),
 			})
 		: period.submitted_at
 			? t("timesheet.period_submitted_by", {
-					name: period.submitted_by ?? "-",
+					name: accountName(period.submitted_by_name, period.submitted_by) ?? "-",
 					date: formatDateTime(period.submitted_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone),
 				})
 			: t("timesheet.period_draft_hint");
@@ -717,7 +717,12 @@ async function historyDialog(uuid: string, member: string, project: Project) {
 								el("td", {}, t(`timesheet.operation_${revision.operation}` as UiKey)),
 								el("td", { class: "muted" }, revisionSummary(revision.old_value)),
 								el("td", {}, revisionSummary(revision.new_value)),
-								el("td", {}, revision.changed_by ?? "-", revision.reason ? el("div", { class: "muted" }, revision.reason) : null)
+								el(
+									"td",
+									{},
+									accountName(revision.changed_by_name, revision.changed_by) ?? "-",
+									revision.reason ? el("div", { class: "muted" }, revision.reason) : null
+								)
 							)
 						)
 					);
@@ -1129,7 +1134,12 @@ export async function absencesView(uuid: string): Promise<HTMLElement> {
 				),
 				el("td", {}, `${formatDay(absence.starts_on, project)} - ${formatDay(absence.ends_on, project)}`),
 				el("td", { class: "numeric" }, absence.working_days === null ? "" : String(absence.working_days)),
-				el("td", {}, absencePill(absence.status), absence.decided_by ? el("div", { class: "muted" }, absence.decided_by) : null),
+				el(
+					"td",
+					{},
+					absencePill(absence.status),
+					absence.decided_by ? el("div", { class: "muted" }, accountName(absence.decided_by_name, absence.decided_by)) : null
+				),
 				el("td", {}, absence.note ?? "", absence.decision_note ? el("div", { class: "muted" }, absence.decision_note) : null),
 				el("td", { class: "actions" }, ...actions)
 			);

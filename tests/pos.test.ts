@@ -2,7 +2,7 @@ import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { SQL } from "bun";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.pos.sqlite`);
 
 const { Server } = await import("../server/server");
@@ -39,8 +39,8 @@ async function call(method: string, path: string, options: { token?: string; bod
 }
 
 async function account(name: string): Promise<string> {
-	await call("POST", "/api/v1/auth/register", { body: { username: name, email: `${name}@example.com`, password: password(name) } });
-	return (await call("POST", "/api/v1/auth/login", { body: { username: name, password: password(name) } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: `${name}@example.com`, password: password(name) } });
+	return (await call("POST", "/api/v1/auth/login", { body: { email: `${name}@example.com`, password: password(name) } })).data.token;
 }
 
 let ownerToken = "";
@@ -149,7 +149,7 @@ describe("selling", () => {
 		});
 		expect(res.status).toBe(201);
 		expect(res.data.source).toBe("pos");
-		expect(res.data.created_by).toBe("pos-cashier");
+		expect(res.data.created_by).toBe(await accountId("pos-cashier"));
 		expect(res.data.status).toBe("open");
 		expect(res.data.issued_at).not.toBeNull();
 		expect(res.data.items.map((item: any) => [item.unit_price, item.tax_rate, item.tax_treatment])).toEqual([
@@ -277,7 +277,7 @@ describe("own sales only", () => {
 			},
 		});
 		expect(invoice.data.source).toBe("invoice");
-		expect(invoice.data.created_by).toBe("pos-owner");
+		expect(invoice.data.created_by).toBe(await accountId("pos-owner"));
 		expect((await call("GET", `${base()}/pos/sales/${invoice.data.uuid}`, { token: ownerToken })).error).toBe(1080);
 		expect((await call("POST", `${base()}/pos/sales/${invoice.data.uuid}/cash`, { token: cashierToken, body: {} })).error).toBe(1080);
 	});
@@ -296,7 +296,10 @@ describe("cash and cancel", () => {
 		const [payment] = (await Database`SELECT * FROM transactions WHERE invoice = ${sale.uuid}`) as any[];
 		expect(payment.processor).toBe("cash");
 		expect(payment.amount).toBe(305);
-		expect(JSON.parse(payment.payment_details)).toEqual({ notes: "Cash received 10.00 EUR, change given 6.95 EUR", recorded_by: "pos-cashier" });
+		expect(JSON.parse(payment.payment_details)).toEqual({
+			notes: "Cash received 10.00 EUR, change given 6.95 EUR",
+			recorded_by: await accountId("pos-cashier"),
+		});
 	});
 
 	test("takes a part payment in cash", async () => {
@@ -352,7 +355,8 @@ describe("sales today", () => {
 
 		const mine = await call("GET", `${base()}/pos/sales?scope=all`, { token: cashierToken });
 		expect(mine.data.scope).toBe("mine");
-		expect(mine.data.sales.every((sale: any) => sale.created_by === "pos-cashier")).toBe(true);
+		const cashier = await accountId("pos-cashier");
+		expect(mine.data.sales.every((sale: any) => sale.created_by === cashier)).toBe(true);
 
 		const theirs = await call("GET", `${base()}/pos/sales`, { token: otherCashierToken });
 		expect(theirs.data.sales).toHaveLength(1);
@@ -363,8 +367,8 @@ describe("sales today", () => {
 		const all = await call("GET", `${base()}/pos/sales?scope=all`, { token: managerToken });
 		expect(all.data.scope).toBe("all");
 		const sellers = new Set(all.data.sales.map((sale: any) => sale.created_by));
-		expect(sellers.has("pos-cashier")).toBe(true);
-		expect(sellers.has("pos-cashier-two")).toBe(true);
+		expect(sellers.has(await accountId("pos-cashier"))).toBe(true);
+		expect(sellers.has(await accountId("pos-cashier-two"))).toBe(true);
 	});
 
 	test("adds up cash for the day", async () => {

@@ -252,8 +252,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "import-owner", email: "import@example.com", password: password("import-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "import-owner", password: password("import-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "import-owner@example.com", password: password("import-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "import-owner@example.com", password: password("import-owner") } })).data.token;
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "import-shop", currency: "EUR" } })).data.uuid;
 	await call("PATCH", base(), { token: ownerToken, body: { tax_country: "SI", vat_status: "registered", tax_currency: "EUR", language: "sl" } });
 	await call("PUT", `${base()}/company`, {

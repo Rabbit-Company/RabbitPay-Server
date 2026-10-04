@@ -44,16 +44,16 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 	await call("POST", "/api/v1/auth/register", {
-		body: { username: "two-factor-user", email: "two-factor@example.com", password: password("correct horse") },
+		body: { email: "two-factor-user@example.com", password: password("correct horse") },
 	});
 	firstToken = (
 		await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse") },
+			body: { email: "two-factor-user@example.com", password: password("correct horse") },
 		})
 	).data.token;
 	secondToken = (
 		await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse") },
+			body: { email: "two-factor-user@example.com", password: password("correct horse") },
 		})
 	).data.token;
 });
@@ -80,7 +80,7 @@ describe("two-factor enrollment", () => {
 		expect(setup.data.expires_in).toBe(600);
 		secret = setup.data.secret;
 
-		const [account] = (await Database`SELECT two_factor_secret FROM accounts WHERE username = ${"two-factor-user"}`) as {
+		const [account] = (await Database`SELECT two_factor_secret FROM accounts WHERE email = ${"two-factor-user@example.com"}`) as {
 			two_factor_secret: string | null;
 		}[];
 		expect(account.two_factor_secret).toBeNull();
@@ -118,7 +118,7 @@ describe("two-factor enrollment", () => {
 		expect(result.data.recovery_codes[0]).toMatch(/^[A-Z2-7]{5}-[A-Z2-7]{5}$/);
 		recoveryCodes = result.data.recovery_codes;
 
-		const [account] = (await Database`SELECT two_factor_secret FROM accounts WHERE username = ${"two-factor-user"}`) as {
+		const [account] = (await Database`SELECT two_factor_secret FROM accounts WHERE email = ${"two-factor-user@example.com"}`) as {
 			two_factor_secret: string;
 		}[];
 		expect(account.two_factor_secret).not.toContain(secret);
@@ -139,31 +139,43 @@ describe("two-factor enrollment", () => {
 describe("two-factor login and recovery", () => {
 	test("requires a second factor only after the password is valid", async () => {
 		const missing = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse") },
+			body: { email: "two-factor-user@example.com", password: password("correct horse") },
 		});
 		expect(missing.error).toBe(1133);
 
 		const wrongPassword = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("wrong") },
+			body: { email: "two-factor-user@example.com", password: password("wrong") },
 		});
 		expect(wrongPassword.error).toBe(1014);
 	});
 
 	test("rejects a wrong code and accepts a current TOTP", async () => {
 		const wrong = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse"), code: "000000" },
+			body: { email: "two-factor-user@example.com", password: password("correct horse"), code: "000000" },
 		});
 		expect(wrong.error).toBe(1134);
 
 		const valid = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse"), code: await generateTOTP(secret) },
+			body: { email: "two-factor-user@example.com", password: password("correct horse"), code: await generateTOTP(secret) },
 		});
 		expect(valid.error).toBe(0);
 		expect(valid.data.token).toHaveLength(128);
 	});
 
+	test("asks for a second factor before changing the email", async () => {
+		const token = (
+			await call("POST", "/api/v1/auth/login", {
+				body: { email: "two-factor-user@example.com", password: password("correct horse"), code: await generateTOTP(secret) },
+			})
+		).data.token;
+		const body = { email: "two-factor-moved@example.com", password: password("correct horse") };
+		expect((await call("POST", "/api/v1/auth/email", { token, body })).error).toBe(1134);
+		expect((await call("POST", "/api/v1/auth/email", { token, body: { ...body, code: "000000" } })).error).toBe(1134);
+		expect((await call("GET", "/api/v1/auth/me", { token })).data.email).toBe("two-factor-user@example.com");
+	});
+
 	test("consumes each recovery code exactly once", async () => {
-		const body = { username: "two-factor-user", password: password("correct horse"), code: recoveryCodes[0] };
+		const body = { email: "two-factor-user@example.com", password: password("correct horse"), code: recoveryCodes[0] };
 		const first = await call("POST", "/api/v1/auth/login", { body });
 		expect(first.error).toBe(0);
 		const reused = await call("POST", "/api/v1/auth/login", { body });
@@ -180,7 +192,7 @@ describe("two-factor login and recovery", () => {
 		expect(result.data.recovery_codes).not.toContain(recoveryCodes[1]);
 
 		const oldCode = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse"), code: recoveryCodes[1] },
+			body: { email: "two-factor-user@example.com", password: password("correct horse"), code: recoveryCodes[1] },
 		});
 		expect(oldCode.error).toBe(1134);
 	});
@@ -211,7 +223,7 @@ describe("disabling two-factor authentication", () => {
 		const me = await call("GET", "/api/v1/auth/me", { token: firstToken });
 		expect(me.data.two_factor_enabled).toBe(false);
 		const login = await call("POST", "/api/v1/auth/login", {
-			body: { username: "two-factor-user", password: password("correct horse") },
+			body: { email: "two-factor-user@example.com", password: password("correct horse") },
 		});
 		expect(login.error).toBe(0);
 	});

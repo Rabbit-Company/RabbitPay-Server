@@ -64,7 +64,7 @@ describe("web interface", () => {
 
 		const response = await Server.app.handle(request);
 		expect(response.status).toBe(400);
-		expect(((await response.json()) as { error: number }).error).toBe(1003);
+		expect(((await response.json()) as { error: number }).error).toBe(1009);
 	});
 
 	test("serves the app at the root", async () => {

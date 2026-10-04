@@ -4,7 +4,7 @@ import { Api, type EmailServer, type LicensePreview, type Project, type ProjectL
 import { el, field, input, select } from "../dom";
 import { dayStartFromDateInput, formatBytes, formatDate, toDateInput } from "../money";
 import { timelineCard } from "./license-timeline";
-import { confirmDialog, reportError, toast } from "../ui";
+import { accountName, confirmDialog, reportError, toast } from "../ui";
 import { can, Permission } from "../access";
 import { invalidateProject, loadProject, projectLayout } from "./project";
 import { t, tn } from "../i18n";
@@ -652,7 +652,7 @@ function historyCard(state: ProjectLicense): HTMLElement {
 					el("td", {}, describeLicense(license)),
 					el("td", {}, licensePeriod(license)),
 					el("td", {}, formatDate(license.redeemed_at)),
-					el("td", {}, license.redeemed_by ?? "")
+					el("td", {}, accountName(license.redeemed_by_name, license.redeemed_by) ?? "")
 				)
 			)
 		)

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { unlinkSync } from "node:fs";
 import { createHash, generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { generateTOTP } from "@rabbit-company/totp";
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 
 const databasePath = `${import.meta.dir}/.security-keys.sqlite`;
 await prepareTest(`sqlite://${databasePath}`);
@@ -140,14 +140,14 @@ let recoveryCodes: string[] = [];
 let totpSecret = "";
 
 async function login(username: string, pass: string, extra: Record<string, unknown> = {}) {
-	return await call("POST", "/api/v1/auth/login", { body: { username, password: pass, ...extra } });
+	return await call("POST", "/api/v1/auth/login", { body: { email: `${username}@example.com`, password: pass, ...extra } });
 }
 
 beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
-	await call("POST", "/api/v1/auth/register", { body: { username: "keys-admin", email: "keys-admin@example.com", password: adminPassword } });
-	await call("POST", "/api/v1/auth/register", { body: { username: "keys-user", email: "keys-user@example.com", password: userPassword } });
+	await call("POST", "/api/v1/auth/register", { body: { email: "keys-admin@example.com", password: adminPassword } });
+	await call("POST", "/api/v1/auth/register", { body: { email: "keys-user@example.com", password: userPassword } });
 	adminToken = (await login("keys-admin", adminPassword)).data.token;
 	userToken = (await login("keys-user", userPassword)).data.token;
 });
@@ -168,7 +168,7 @@ describe("security key registration", () => {
 		const options = await call("POST", "/api/v1/auth/two-factor/security-keys/options", { token: userToken });
 		expect(options.error).toBe(0);
 		expect(options.data.rp.id).toBe("127.0.0.1");
-		expect(options.data.user.name).toBe("keys-user");
+		expect(options.data.user.name).toBe("keys-user@example.com");
 		expect(options.data.attestation).toBe("none");
 		expect(options.data.challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
 		expect(options.data.pubKeyCredParams.map((param: { alg: number }) => param.alg)).toEqual([-7, -8, -257]);
@@ -211,7 +211,9 @@ describe("security key registration", () => {
 		expect(result.data.recovery_codes).toHaveLength(10);
 		recoveryCodes = result.data.recovery_codes;
 
-		const [stored] = (await Database`SELECT transports FROM account_security_keys WHERE account_username = ${"keys-user"}`) as { transports: string }[];
+		const [stored] = (await Database`SELECT transports FROM account_security_keys WHERE account_username = ${await accountId("keys-user")}`) as {
+			transports: string;
+		}[];
 		expect(stored.transports).toBe("usb");
 
 		const me = await call("GET", "/api/v1/auth/me", { token: userToken });
@@ -358,22 +360,24 @@ describe("combining an authenticator app with security keys", () => {
 
 describe("administrator two-factor reset", () => {
 	test("is only available to administrators and not for their own account", async () => {
-		expect((await call("DELETE", "/api/v1/admin/accounts/keys-user/two-factor", { token: userToken })).error).toBe(1098);
-		expect((await call("DELETE", "/api/v1/admin/accounts/keys-admin/two-factor", { token: adminToken })).error).toBe(1103);
+		expect((await call("DELETE", `/api/v1/admin/accounts/${await accountId("keys-user")}/two-factor`, { token: userToken })).error).toBe(1098);
+		expect((await call("DELETE", `/api/v1/admin/accounts/${await accountId("keys-admin")}/two-factor`, { token: adminToken })).error).toBe(1103);
 	});
 
 	test("lists which accounts use two-factor authentication", async () => {
 		const accounts = await call("GET", "/api/v1/admin/accounts", { token: adminToken });
-		const user = accounts.data.accounts.find((account: { username: string }) => account.username === "keys-user");
+		const user = accounts.data.accounts.find((account: { email: string }) => account.email === "keys-user@example.com");
 		expect(user.two_factor_enabled).toBe(true);
 	});
 
 	test("removes every second factor so the owner can sign in with the password", async () => {
-		const reset = await call("DELETE", "/api/v1/admin/accounts/keys-user/two-factor", { token: adminToken });
+		const reset = await call("DELETE", `/api/v1/admin/accounts/${await accountId("keys-user")}/two-factor`, { token: adminToken });
 		expect(reset.error).toBe(0);
 		expect(reset.data.two_factor_enabled).toBe(false);
 
-		const [keys] = (await Database`SELECT COUNT(*) AS count FROM account_security_keys WHERE account_username = ${"keys-user"}`) as { count: number }[];
+		const [keys] = (await Database`SELECT COUNT(*) AS count FROM account_security_keys WHERE account_username = ${await accountId("keys-user")}`) as {
+			count: number;
+		}[];
 		expect(Number(keys.count)).toBe(0);
 		expect((await login("keys-user", userPassword)).error).toBe(0);
 
@@ -382,7 +386,7 @@ describe("administrator two-factor reset", () => {
 	});
 
 	test("reports when there is nothing to reset", async () => {
-		expect((await call("DELETE", "/api/v1/admin/accounts/keys-user/two-factor", { token: adminToken })).error).toBe(1136);
+		expect((await call("DELETE", `/api/v1/admin/accounts/${await accountId("keys-user")}/two-factor`, { token: adminToken })).error).toBe(1136);
 		expect((await call("DELETE", "/api/v1/admin/accounts/nobody/two-factor", { token: adminToken })).error).toBe(1104);
 	});
 });

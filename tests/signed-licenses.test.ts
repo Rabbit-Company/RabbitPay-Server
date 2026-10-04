@@ -51,8 +51,8 @@ async function redeem(code: string) {
 beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
-	await call("POST", "/api/v1/auth/register", { body: { username: "signed-admin", email: "signed@example.com", password } });
-	token = (await call("POST", "/api/v1/auth/login", { body: { username: "signed-admin", password } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "signed-admin@example.com", password } });
+	token = (await call("POST", "/api/v1/auth/login", { body: { email: "signed-admin@example.com", password } })).data.token;
 	project = (await call("POST", "/api/v1/projects", { token, body: { name: "signed-shop" } })).data.uuid;
 });
 

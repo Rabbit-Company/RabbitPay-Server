@@ -270,7 +270,12 @@ describe("the workforce module", () => {
 			status: "returned",
 			note: "Add the customer reference",
 		});
-		expect(returned.data).toMatchObject({ status: "returned", note: "Add the customer reference", decided_by: "wf-super" });
+		expect(returned.data).toMatchObject({
+			status: "returned",
+			note: "Add the customer reference",
+			decided_by: "wf-super",
+			decided_by_name: "Sara Supervisor",
+		});
 		expect(
 			(
 				await call("PATCH", `${base()}/timesheets/${logged.data.uuid}`, tokens.employee, {
@@ -392,7 +397,7 @@ describe("the workforce module", () => {
 		const revisions = await call("GET", `${base()}/workforce/revisions?record=${created.data.uuid}`, tokens.employee);
 		expect(revisions.error).toBe(0);
 		expect(revisions.data.revisions.map((revision: { operation: string }) => revision.operation)).toEqual(["updated", "created"]);
-		expect(revisions.data.revisions[0]).toMatchObject({ changed_by: "wf-super", reason: "Stayed longer" });
+		expect(revisions.data.revisions[0]).toMatchObject({ changed_by: "wf-super", changed_by_name: "Sara Supervisor", reason: "Stayed longer" });
 		expect(revisions.data.revisions[0].old_value.end).toBe("12:00");
 
 		const all = await call("GET", `${base()}/workforce/revisions?member=${members.employee}`, tokens.supervisor);

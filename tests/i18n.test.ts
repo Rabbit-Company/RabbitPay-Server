@@ -54,8 +54,8 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "i18n-owner", email: "i18n@example.com", password: password("i18n-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "i18n-owner", password: password("i18n-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "i18n-owner@example.com", password: password("i18n-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "i18n-owner@example.com", password: password("i18n-owner") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "sl-shop", currency: "EUR" } })).data.uuid;
 

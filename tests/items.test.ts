@@ -54,11 +54,11 @@ beforeAll(async () => {
 	await updateSettings({ "reports.cooldown_minutes": 0 });
 	await initializeDatabase();
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "item-owner", email: "items@example.com", password: password("item-owner") } });
-	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "item-owner", password: password("item-owner") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "item-owner@example.com", password: password("item-owner") } });
+	ownerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "item-owner@example.com", password: password("item-owner") } })).data.token;
 
-	await call("POST", "/api/v1/auth/register", { body: { username: "item-viewer", email: "item-viewer@example.com", password: password("item-viewer") } });
-	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { username: "item-viewer", password: password("item-viewer") } })).data.token;
+	await call("POST", "/api/v1/auth/register", { body: { email: "item-viewer@example.com", password: password("item-viewer") } });
+	viewerToken = (await call("POST", "/api/v1/auth/login", { body: { email: "item-viewer@example.com", password: password("item-viewer") } })).data.token;
 
 	projectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "item-shop", currency: "EUR" } })).data.uuid;
 	otherProjectUuid = (await call("POST", "/api/v1/projects", { token: ownerToken, body: { name: "item-other", currency: "EUR" } })).data.uuid;

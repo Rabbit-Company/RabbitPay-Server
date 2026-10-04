@@ -63,3 +63,9 @@ export async function prepareTest(database = "sqlite://:memory:") {
 	const problem = await updateSettings(TEST_SETTINGS);
 	if (problem) throw new Error(`Test setting ${problem.key} is ${problem.reason}`);
 }
+
+export async function accountId(name: string): Promise<string> {
+	const { default: Database } = await import("../server/database/database");
+	const [account] = (await Database`SELECT username FROM accounts WHERE email = ${`${name}@example.com`}`) as { username: string }[];
+	return account.username;
+}

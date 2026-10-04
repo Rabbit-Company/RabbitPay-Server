@@ -5,6 +5,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { okWithNames } from "../../accounts";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { employeeSeatsFor, licensingEnforced, workforceActive } from "../../licensing";
@@ -19,7 +20,7 @@ import {
 } from "../../workforce/config";
 import { holidayCalendar, isIsoDate, isMonth, isWorkingDay } from "../../workforce/calendar";
 import { addDays, datesBetween, nationalHolidays } from "../../workforce/holidays";
-import { dailyMinutesOf, employeeOf, listPeople, personName, type Person } from "../../workforce/people";
+import { dailyMinutesOf, employeeOf, listPeople, membersWithEmail, personName, type Person } from "../../workforce/people";
 import { accessOf, requireWorkforce, subjectOf, todayIn } from "../../workforce/access";
 import {
 	anyOverlap,
@@ -104,7 +105,7 @@ Server.app.get(`${base}/workforce`, Auth.required(), Permissions.require(Permiss
 	const rules = configFor(config, employee);
 	const seats = await employeeSeatsFor(project.uuid);
 	const seatsExceeded = seats.employees_limit !== null && seats.employees_used > seats.employees_limit;
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		license: {
 			enforced: licensingEnforced(),
 			active: workforceActive(project) && !seatsExceeded,
@@ -136,7 +137,7 @@ Server.app.put(`${base}/workforce/settings`, Auth.required(), Permissions.requir
 	const previous = await workforceConfig(project.uuid);
 	await saveWorkforceConfig(project.uuid, config);
 	await audit(ctx, "workforce.settings_updated", "project", project.uuid, config, previous);
-	return Utils.ok(ctx, config);
+	return await okWithNames(ctx, config);
 });
 
 Server.app.get(`${base}/workforce/holidays`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
@@ -156,7 +157,7 @@ Server.app.get(`${base}/workforce/holidays`, Auth.required(), Permissions.requir
 			source: "project" as const,
 		})),
 	].sort((first, second) => first.date.localeCompare(second.date));
-	return Utils.ok(ctx, { year, country: project.tax_country, holidays });
+	return await okWithNames(ctx, { year, country: project.tax_country, holidays });
 });
 
 Server.app.post(`${base}/workforce/holidays`, Auth.required(), Permissions.require(Permission.TIMESHEET_EDIT), requireWorkforce(), async (ctx) => {
@@ -170,7 +171,7 @@ Server.app.post(`${base}/workforce/holidays`, Auth.required(), Permissions.requi
 	const uuid = crypto.randomUUID();
 	await Database`INSERT INTO workforce_holidays(uuid, project, holiday_date, name, created) VALUES(${uuid}, ${project.uuid}, ${date}, ${name.trim()}, ${Date.now()})`;
 	await audit(ctx, "workforce.holiday_added", "workforce_holiday", uuid, { date, name: name.trim() });
-	return Utils.ok(ctx, { uuid, date, name: name.trim() }, 201);
+	return await okWithNames(ctx, { uuid, date, name: name.trim() }, 201);
 });
 
 Server.app.delete(`${base}/workforce/holidays/:holiday`, Auth.required(), Permissions.require(Permission.TIMESHEET_EDIT), requireWorkforce(), async (ctx) => {
@@ -186,7 +187,7 @@ Server.app.delete(`${base}/workforce/holidays/:holiday`, Auth.required(), Permis
 
 Server.app.get(`${base}/workforce/people`, Auth.required(), Permissions.require(Permission.TIMESHEET_VIEW), async (ctx) => {
 	const project = Permissions.project(ctx);
-	return Utils.ok(ctx, await listPeople(project.uuid, await workforceConfig(project.uuid)));
+	return await okWithNames(ctx, await listPeople(project.uuid, await workforceConfig(project.uuid)));
 });
 
 Server.app.get(`${base}/timesheets`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
@@ -216,7 +217,7 @@ Server.app.get(`${base}/timesheets`, Auth.required(), Permissions.require(Permis
 	const periods = subject
 		? [...(await timesheetPeriods(project.uuid, [subject.uuid], [...new Set(datesBetween(range.from, range.to).map((date) => date.slice(0, 7)))])).values()]
 		: [];
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		...range,
 		member: subject?.uuid ?? null,
 		today: todayIn(project),
@@ -262,7 +263,7 @@ Server.app.post(`${base}/timesheets/periods/:period/submit`, Auth.required(), Pe
 		presented,
 		previous ? presentTimesheetPeriod(access.self.uuid, period, previous) : undefined
 	);
-	return Utils.ok(ctx, presented);
+	return await okWithNames(ctx, presented);
 });
 
 Server.app.post(
@@ -294,7 +295,7 @@ Server.app.post(
 		`;
 		const current = await timesheetPeriod(project.uuid, subject.uuid, period);
 		await audit(ctx, `timesheet.${status}`, "timesheet_period", previous.uuid, current, presentTimesheetPeriod(subject.uuid, period, previous));
-		return Utils.ok(ctx, current);
+		return await okWithNames(ctx, current);
 	}
 );
 
@@ -323,7 +324,7 @@ Server.app.post(
 		`;
 		const current = await timesheetPeriod(project.uuid, subject.uuid, period);
 		await audit(ctx, "timesheet.reopened", "timesheet_period", previous.uuid, current, presentTimesheetPeriod(subject.uuid, period, previous));
-		return Utils.ok(ctx, current);
+		return await okWithNames(ctx, current);
 	}
 );
 
@@ -396,7 +397,7 @@ Server.app.post(`${base}/timesheets`, Auth.required(), Permissions.require(Permi
 	const [row] = (await Database`SELECT * FROM time_entries WHERE uuid = ${uuid}`) as TimeEntryRow[];
 	const presented = await presentInDay(row, config);
 	await audit(ctx, "time_entry.created", "time_entry", uuid, presented);
-	return Utils.ok(ctx, presented, 201);
+	return await okWithNames(ctx, presented, 201);
 });
 
 async function editableEntry(ctx: Context<AppState>): Promise<TimeEntryRow | ErrorCode> {
@@ -422,7 +423,7 @@ Server.app.patch(`${base}/timesheets/:entry`, Auth.required(), Permissions.requi
 	const input = readEntry(data, row);
 	const reason = readReason(data.reason);
 	if (!input || reason === undefined) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
-	const [subject] = row.member ? ((await Database`SELECT * FROM project_members WHERE uuid = ${row.member}`) as ProjectMemberRow[]) : [];
+	const [subject] = row.member ? ((await Database`${membersWithEmail()} WHERE pm.uuid = ${row.member}`) as ProjectMemberRow[]) : [];
 	if (subject) {
 		const problem = await checkEntry(ctx, subject, input, row);
 		if (problem !== null) return Utils.fail(ctx, problem);
@@ -455,7 +456,7 @@ Server.app.patch(`${base}/timesheets/:entry`, Auth.required(), Permissions.requi
 	const [updated] = (await Database`SELECT * FROM time_entries WHERE uuid = ${row.uuid}`) as TimeEntryRow[];
 	const presented = await presentInDay(updated, config);
 	await audit(ctx, "time_entry.updated", "time_entry", row.uuid, presented, before);
-	return Utils.ok(ctx, presented);
+	return await okWithNames(ctx, presented);
 });
 
 Server.app.delete(`${base}/timesheets/:entry`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), requireWorkforce(), async (ctx) => {
@@ -621,7 +622,7 @@ Server.app.put(`${base}/timesheets/day`, Auth.required(), Permissions.require(Pe
 	for (const row of removed) await audit(ctx, "time_entry.deleted", "time_entry", row.uuid, undefined, presentEntry(row, config));
 	for (const row of updated) await audit(ctx, "time_entry.updated", "time_entry", row.uuid, presented.get(row.uuid), presentEntry(row, config));
 	for (const uuid of created) await audit(ctx, "time_entry.created", "time_entry", uuid, presented.get(uuid));
-	return Utils.ok(ctx, { work_date: date, member: subject.uuid, entries });
+	return await okWithNames(ctx, { work_date: date, member: subject.uuid, entries });
 });
 
 Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(Permission.TIMESHEET_EDIT), requireWorkforce(), async (ctx) => {
@@ -706,7 +707,7 @@ Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(
 		}
 	});
 	await audit(ctx, "time_entry.filled", "project_member", subject.uuid, { from, to, days, reason });
-	return Utils.ok(ctx, { filled: days.length, days, skipped });
+	return await okWithNames(ctx, { filled: days.length, days, skipped });
 });
 
 Server.app.get(`${base}/workforce/revisions`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {
@@ -728,7 +729,7 @@ Server.app.get(`${base}/workforce/revisions`, Auth.required(), Permissions.requi
 	const [total] = (await Database`
 		SELECT COUNT(*) AS count FROM workforce_revisions WHERE project = ${project.uuid} AND member = ${subject.uuid} ${recordFilter}
 	`) as { count: number }[];
-	return Utils.ok(ctx, { revisions: rows.map(presentRevision), total: Number(total.count), limit, offset });
+	return await okWithNames(ctx, { revisions: rows.map(presentRevision), total: Number(total.count), limit, offset });
 });
 
 async function absenceContext(projectId: string, row: AbsenceRow) {
@@ -810,7 +811,7 @@ Server.app.post(`${base}/absences`, Auth.required(), Permissions.require(Permiss
 	await audit(ctx, "absence.created", "absence", uuid, presented);
 	if (approved) await notifyAbsenceDecided(row, accessOf(ctx).self);
 	else await notifyAbsenceRequested(row, presented.working_days);
-	return Utils.ok(ctx, presented, 201);
+	return await okWithNames(ctx, presented, 201);
 });
 
 async function findAbsence(ctx: Context<AppState>): Promise<AbsenceRow | ErrorCode> {
@@ -856,7 +857,7 @@ Server.app.patch(`${base}/absences/:absence`, Auth.required(), Permissions.requi
 	const [updated] = (await Database`SELECT * FROM absences WHERE uuid = ${row.uuid}`) as AbsenceRow[];
 	const presented = await absenceContext(project.uuid, updated);
 	await audit(ctx, "absence.updated", "absence", row.uuid, presented, row);
-	return Utils.ok(ctx, presented);
+	return await okWithNames(ctx, presented);
 });
 
 Server.app.post(`${base}/absences/:absence/decision`, Auth.required(), Permissions.require(Permission.TIMESHEET_EDIT), requireWorkforce(), async (ctx) => {
@@ -893,7 +894,7 @@ Server.app.post(`${base}/absences/:absence/decision`, Auth.required(), Permissio
 	const presented = await absenceContext(project.uuid, updated);
 	await audit(ctx, `absence.${status}`, "absence", row.uuid, presented, row);
 	await notifyAbsenceDecided(updated, accessOf(ctx).self);
-	return Utils.ok(ctx, presented);
+	return await okWithNames(ctx, presented);
 });
 
 Server.app.post(`${base}/absences/:absence/cancel`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), requireWorkforce(), async (ctx) => {
@@ -935,7 +936,7 @@ Server.app.get(`${base}/workforce/balance`, Auth.required(), Permissions.require
 	if (typeof subject === "number") return Utils.fail(ctx, subject);
 	const config = await workforceConfig(project.uuid);
 	const daily = dailyMinutesOf(await employeeOf(subject.uuid), config);
-	return Utils.ok(ctx, { member: subject.uuid, ...(await vacationBalance(project, subject.uuid, year, daily, today)) });
+	return await okWithNames(ctx, { member: subject.uuid, ...(await vacationBalance(project, subject.uuid, year, daily, today)) });
 });
 
 function halfDays(value: unknown, allowNull: boolean): value is number | null {
@@ -965,7 +966,7 @@ Server.app.put(`${base}/workforce/balance`, Auth.required(), Permissions.require
 	await audit(ctx, "leave_balance.updated", "project_member", subject.uuid, { year, entitled_days: entitled, carried_days: carried }, previous);
 	const config = await workforceConfig(project.uuid);
 	const daily = dailyMinutesOf(await employeeOf(subject.uuid), config);
-	return Utils.ok(ctx, { member: subject.uuid, ...(await vacationBalance(project, subject.uuid, year, daily, todayIn(project))) });
+	return await okWithNames(ctx, { member: subject.uuid, ...(await vacationBalance(project, subject.uuid, year, daily, todayIn(project))) });
 });
 
 async function reportPeople(ctx: Context<AppState>, requested: string | null): Promise<Person[] | ErrorCode> {
@@ -1019,5 +1020,5 @@ Server.app.get(`${base}/timesheets/report`, Auth.required(), Permissions.require
 			},
 		});
 	}
-	return Utils.ok(ctx, report);
+	return await okWithNames(ctx, report);
 });

@@ -6,6 +6,7 @@ import Auth from "../../auth";
 import Admin from "../../admin";
 import Audit from "../../audit";
 import Utils from "../../utils";
+import { normalizeEmail, okWithNames } from "../../accounts";
 import Validate from "../../validate";
 import Vault from "../../crypto/vault";
 import TwoFactor from "../../two-factor";
@@ -218,7 +219,7 @@ Server.app.get("/api/v1/admin/overview", ...guard, async (ctx) => {
 		GROUP BY currency ORDER BY currency
 	`) as { currency: string; amount: number; count: number }[];
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		period,
 		accounts: Number(counts.accounts),
 		projects: Number(counts.projects),
@@ -237,7 +238,7 @@ async function licenseIdentity() {
 }
 
 Server.app.get("/api/v1/admin/settings", ...guard, async (ctx) => {
-	return Utils.ok(ctx, { ...presentSettings(), master_key_configured: Vault.isConfigured(), ...(await licenseIdentity()) });
+	return await okWithNames(ctx, { ...presentSettings(), master_key_configured: Vault.isConfigured(), ...(await licenseIdentity()) });
 });
 
 Server.app.patch("/api/v1/admin/settings", ...guard, async (ctx) => {
@@ -274,7 +275,7 @@ Server.app.patch("/api/v1/admin/settings", ...guard, async (ctx) => {
 	await Audit.record(ctx, { action: "settings.updated", entityType: "settings", newValue: { changed } });
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} changed settings: ${changed.join(", ") || "nothing"}`);
 
-	return Utils.ok(ctx, { ...after, master_key_configured: Vault.isConfigured(), ...(await licenseIdentity()), changed, restart_required: restart });
+	return await okWithNames(ctx, { ...after, master_key_configured: Vault.isConfigured(), ...(await licenseIdentity()), changed, restart_required: restart });
 });
 
 Server.app.post("/api/v1/admin/settings/:group/test", ...guard, async (ctx) => {
@@ -309,7 +310,7 @@ Server.app.post("/api/v1/admin/settings/:group/test", ...guard, async (ctx) => {
 		return Utils.failWithReason(ctx, ErrorCode.CONNECTION_TEST_FAILED, failureReason(error).slice(0, 300));
 	}
 
-	return Utils.ok(ctx, status);
+	return await okWithNames(ctx, status);
 });
 
 Server.app.get("/api/v1/admin/backups", ...guard, async (ctx) => {
@@ -323,7 +324,7 @@ Server.app.get("/api/v1/admin/backups", ...guard, async (ctx) => {
 			problem = error instanceof Error ? error.message : String(error);
 		}
 	}
-	return Utils.ok(ctx, { supported, enabled: Settings.backups.enabled, running: backupRunning(), destinations, problem });
+	return await okWithNames(ctx, { supported, enabled: Settings.backups.enabled, running: backupRunning(), destinations, problem });
 });
 
 Server.app.post("/api/v1/admin/backups", ...guard, async (ctx) => {
@@ -344,7 +345,7 @@ Server.app.post("/api/v1/admin/backups", ...guard, async (ctx) => {
 	if (result.stored.length === 0) {
 		return Utils.failWithReason(ctx, ErrorCode.BACKUP_FAILED, result.failed.map((failure) => `${failure.target}: ${failure.error}`).join("; "), result);
 	}
-	return Utils.ok(ctx, result);
+	return await okWithNames(ctx, result);
 });
 
 Server.app.get("/api/v1/admin/licenses", ...guard, async (ctx) => {
@@ -376,7 +377,7 @@ Server.app.get("/api/v1/admin/licenses", ...guard, async (ctx) => {
 		WHERE 1 = 1 ${byStatus} ${byType} ${bySearch}
 	`) as { count: number }[];
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		licenses: rows.map((row) => ({ ...presentLicense(row, true), project_name: row.project_name })),
 		total: Number(total.count),
 		limit,
@@ -472,7 +473,7 @@ Server.app.patch("/api/v1/admin/licenses/:license", ...guard, async (ctx) => {
 	`;
 	await Audit.record(ctx, { action: "license.updated", entityType: "license_key", entityId: license.uuid, newValue: purchase });
 
-	return Utils.ok(ctx, presentLicense((await findLicense(license.uuid))!, true));
+	return await okWithNames(ctx, presentLicense((await findLicense(license.uuid))!, true));
 });
 
 Server.app.post("/api/v1/admin/licenses/:license/revoke", ...guard, async (ctx) => {
@@ -489,7 +490,7 @@ Server.app.post("/api/v1/admin/licenses/:license/revoke", ...guard, async (ctx) 
 	await Audit.record(ctx, { action: "license.revoked", entityType: "license_key", entityId: license.uuid });
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} revoked license ${license.uuid}`);
 
-	return Utils.ok(ctx, presentLicense((await findLicense(license.uuid))!, true));
+	return await okWithNames(ctx, presentLicense((await findLicense(license.uuid))!, true));
 });
 
 Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
@@ -499,7 +500,8 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 		pattern === null
 			? Database``
 			: Database`AND (LOWER(name) LIKE ${pattern} OR LOWER(COALESCE(display_name, '')) LIKE ${pattern}
-				OR LOWER(created_by) LIKE ${pattern} OR LOWER(uuid) LIKE ${pattern})`;
+				OR LOWER(created_by) LIKE ${pattern} OR LOWER(uuid) LIKE ${pattern}
+				OR created_by IN (SELECT username FROM accounts WHERE LOWER(email) LIKE ${pattern}))`;
 
 	await meterAll();
 
@@ -524,7 +526,7 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 	const usageByProject = new Map(usage.map((row) => [row.project, row]));
 	const storage = await Promise.all(rows.map((row) => storageFor(row.uuid)));
 
-	return Utils.ok(ctx, {
+	return await okWithNames(ctx, {
 		projects: rows.map((project, index) => {
 			const used = usageByProject.get(project.uuid);
 			const allowance = freeAllowance(project);
@@ -611,7 +613,7 @@ Server.app.patch("/api/v1/admin/projects/:project", ...guard, async (ctx) => {
 		});
 	}
 
-	return Utils.ok(ctx, await presentProject((await findProject(project.uuid))!));
+	return await okWithNames(ctx, await presentProject((await findProject(project.uuid))!));
 });
 
 Server.app.post("/api/v1/admin/projects/:project/licenses/preview", ...guard, async (ctx) => {
@@ -629,7 +631,7 @@ Server.app.post("/api/v1/admin/projects/:project/licenses/preview", ...guard, as
 
 	const result = await previewLicense(project.uuid, data.code.trim());
 	if (typeof result === "number") return Utils.fail(ctx, result);
-	return Utils.ok(ctx, result);
+	return await okWithNames(ctx, result);
 });
 
 Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx) => {
@@ -668,7 +670,7 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 	});
 	Logger.audit(`[ADMIN] ${account.username} applied a ${result.type} license to ${project.uuid}`);
 
-	return Utils.ok(ctx, await presentProject((await findProject(project.uuid))!));
+	return await okWithNames(ctx, await presentProject((await findProject(project.uuid))!));
 });
 
 Server.app.get("/api/v1/admin/invites", ...guard, async (ctx) => {
@@ -687,7 +689,7 @@ Server.app.get("/api/v1/admin/invites", ...guard, async (ctx) => {
 		WHERE 1 = 1 ${bySearch}
 	`) as { count: number }[];
 
-	return Utils.ok(ctx, { invites: rows.map(presentInvite), total: Number(total.count), limit, offset });
+	return await okWithNames(ctx, { invites: rows.map(presentInvite), total: Number(total.count), limit, offset });
 });
 
 Server.app.post("/api/v1/admin/invites", ...guard, async (ctx) => {
@@ -717,7 +719,7 @@ Server.app.post("/api/v1/admin/invites", ...guard, async (ctx) => {
 	});
 	Logger.audit(`[ADMIN] ${account.username} created registration invite ${invite.uuid}`);
 
-	return Utils.ok(ctx, presentInvite(invite), 201);
+	return await okWithNames(ctx, presentInvite(invite), 201);
 });
 
 Server.app.post("/api/v1/admin/invites/:invite/revoke", ...guard, async (ctx) => {
@@ -737,7 +739,7 @@ Server.app.post("/api/v1/admin/invites/:invite/revoke", ...guard, async (ctx) =>
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} revoked registration invite ${invite.uuid}`);
 
 	const [updated] = (await Database`SELECT * FROM registration_invites WHERE uuid = ${invite.uuid}`) as RegistrationInviteRow[];
-	return Utils.ok(ctx, presentInvite(updated));
+	return await okWithNames(ctx, presentInvite(updated));
 });
 
 Server.app.get("/api/v1/admin/accounts", ...guard, async (ctx) => {
@@ -760,7 +762,7 @@ Server.app.get("/api/v1/admin/accounts", ...guard, async (ctx) => {
 		WHERE 1 = 1 ${bySearch}
 	`) as { count: number }[];
 
-	return Utils.ok(ctx, { accounts: rows.map(presentAccount), total: Number(total.count), limit, offset });
+	return await okWithNames(ctx, { accounts: rows.map(presentAccount), total: Number(total.count), limit, offset });
 });
 
 Server.app.patch("/api/v1/admin/accounts/:username", ...guard, async (ctx) => {
@@ -797,7 +799,7 @@ Server.app.patch("/api/v1/admin/accounts/:username", ...guard, async (ctx) => {
 	Logger.audit(`[ADMIN] ${actor.username} set ${username} to admin=${admin === 1} status=${status}`);
 
 	const [updated] = (await Database`SELECT * FROM accounts WHERE username = ${username}`) as AccountRow[];
-	return Utils.ok(ctx, presentAccount(updated));
+	return await okWithNames(ctx, presentAccount(updated));
 });
 
 Server.app.delete("/api/v1/admin/accounts/:username/two-factor", ...guard, async (ctx) => {
@@ -821,7 +823,7 @@ Server.app.delete("/api/v1/admin/accounts/:username/two-factor", ...guard, async
 	Logger.audit(`[ADMIN] ${actor.username} reset two-factor authentication for ${username}`);
 
 	const [updated] = (await Database`SELECT * FROM accounts WHERE username = ${username}`) as AccountRow[];
-	return Utils.ok(ctx, presentAccount(updated));
+	return await okWithNames(ctx, presentAccount(updated));
 });
 
 async function targetAccount(ctx: Context<any, any>, allowSelf = false): Promise<AccountRow | ErrorCode> {
@@ -837,13 +839,13 @@ Server.app.get("/api/v1/admin/accounts/:username/export", ...guard, async (ctx) 
 	if (typeof account === "number") return Utils.fail(ctx, account);
 	await Audit.record(ctx, { action: "account.data_exported_by_admin", entityType: "account", entityId: account.username });
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} exported the data of ${account.username}`);
-	return exportResponse(await exportAccount(account), account.username);
+	return exportResponse(await exportAccount(account), account.email);
 });
 
 Server.app.get("/api/v1/admin/accounts/:username/deletion", ...guard, async (ctx) => {
 	const account = await targetAccount(ctx);
 	if (typeof account === "number") return Utils.fail(ctx, account);
-	return Utils.ok(ctx, await deletionPlan(account.username));
+	return await okWithNames(ctx, await deletionPlan(account.username));
 });
 
 Server.app.delete("/api/v1/admin/accounts/:username", ...guard, async (ctx) => {
@@ -856,7 +858,7 @@ Server.app.delete("/api/v1/admin/accounts/:username", ...guard, async (ctx) => {
 	} catch {
 		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	}
-	if (data.confirm !== account.username) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	if (normalizeEmail(data.confirm) !== normalizeEmail(account.email)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
 	const plan = await deletionPlan(account.username);
 	if (plan.shared.length > 0)
@@ -871,5 +873,5 @@ Server.app.delete("/api/v1/admin/accounts/:username", ...guard, async (ctx) => {
 	});
 	Logger.audit(`[ADMIN] ${Auth.account(ctx).username} deleted account ${account.username} and closed ${plan.closing.length} projects`);
 
-	return Utils.ok(ctx, { deleted: account.username, closed_projects: plan.closing });
+	return await okWithNames(ctx, { deleted: account.username, closed_projects: plan.closing });
 });

@@ -2,7 +2,7 @@ import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { createHmac } from "node:crypto";
 import { unlinkSync } from "node:fs";
 
-import { prepareTest } from "./environment";
+import { accountId, prepareTest } from "./environment";
 await prepareTest(`sqlite://${import.meta.dir}/.burrowgate-origin-user.sqlite`);
 
 const secret = "origin-signing-secret-for-origin-user-tests";
@@ -47,7 +47,7 @@ beforeAll(async () => {
 	await Cache.initialize();
 	await initializeDatabase();
 	const { response: registered } = await call("POST", "/api/v1/auth/register", {
-		body: { username: "bg-user", email: "bg-user@example.com", password: password("bg-user") },
+		body: { email: "bg-user@example.com", password: password("bg-user") },
 	});
 	expect(registered.status).toBe(201);
 });
@@ -66,16 +66,16 @@ afterAll(async () => {
 
 describe("reporting the signed-in user to BurrowGate", () => {
 	test("the login response names the user", async () => {
-		const { response, signature } = await call("POST", "/api/v1/auth/login", { body: { username: "bg-user", password: password("bg-user") } });
+		const { response, signature } = await call("POST", "/api/v1/auth/login", { body: { email: "bg-user@example.com", password: password("bg-user") } });
 		expect(response.status).toBe(200);
 		token = ((await response.json()) as { data: { token: string } }).data.token;
-		expectReported(response, "bg-user", signature);
+		expectReported(response, await accountId("bg-user"), signature);
 	});
 
 	test("authenticated responses name the user and are bound to their request", async () => {
 		const { response, signature } = await call("GET", "/api/v1/auth/me", { token });
 		expect(response.status).toBe(200);
-		expectReported(response, "bg-user", signature);
+		expectReported(response, await accountId("bg-user"), signature);
 	});
 
 	test("anonymous and rejected requests name nobody", async () => {
@@ -86,7 +86,7 @@ describe("reporting the signed-in user to BurrowGate", () => {
 		const { response: rejected } = await call("GET", "/api/v1/auth/me", { token: "not-a-real-token" });
 		expect(rejected.headers.has("x-burrowgate-origin-user")).toBe(false);
 
-		const { response: failedLogin } = await call("POST", "/api/v1/auth/login", { body: { username: "bg-user", password: password("wrong") } });
+		const { response: failedLogin } = await call("POST", "/api/v1/auth/login", { body: { email: "bg-user@example.com", password: password("wrong") } });
 		expect(failedLogin.headers.has("x-burrowgate-origin-user")).toBe(false);
 	});
 });

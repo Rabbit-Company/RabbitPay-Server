@@ -3,6 +3,7 @@ import { Server } from "../../server";
 import Database from "../../database/database";
 import Auth from "../../auth";
 import Audit from "../../audit";
+import { accountNames } from "../../accounts";
 import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
@@ -31,8 +32,9 @@ async function findInvitation(token: string | undefined): Promise<Invitation | n
 	return invitation ?? null;
 }
 
-function describe(invitation: Invitation) {
+async function describe(invitation: Invitation) {
 	const role = invitation.role as ProjectRole;
+	const inviters = await accountNames([invitation.invited_by], invitation.project_id);
 	return {
 		project: invitation.project_id,
 		project_name: displayNameOf(invitation),
@@ -40,7 +42,7 @@ function describe(invitation: Invitation) {
 		role_name: ROLE_DESCRIPTIONS[role]?.name ?? role,
 		role_description: ROLE_DESCRIPTIONS[role]?.description ?? "",
 		invitation_email: invitation.invitation_email,
-		invited_by: invitation.invited_by,
+		invited_by: inviters.get(invitation.invited_by ?? "") ?? null,
 		expired: invitation.expires_at !== null && invitation.expires_at <= Date.now(),
 		created: invitation.created,
 	};
@@ -49,7 +51,7 @@ function describe(invitation: Invitation) {
 Server.app.get("/api/v1/invitations/:token", invitationLimit, async (ctx) => {
 	const invitation = await findInvitation(ctx.params["token"]);
 	if (!invitation) return Utils.fail(ctx, ErrorCode.INVITATION_NOT_FOUND);
-	return Utils.ok(ctx, describe(invitation));
+	return Utils.ok(ctx, await describe(invitation));
 });
 
 Server.app.post("/api/v1/invitations/:token/accept", invitationLimit, Auth.required(), async (ctx) => {
@@ -88,7 +90,7 @@ Server.app.post("/api/v1/invitations/:token/accept", invitationLimit, Auth.requi
 	});
 	Logger.audit(`[MEMBERS] ${account.username} accepted an invitation to ${invitation.project_id} as ${invitation.role}`);
 
-	return Utils.ok(ctx, { ...describe(invitation), account_username: account.username });
+	return Utils.ok(ctx, { ...(await describe(invitation)), account_username: account.username });
 });
 
 Server.app.post("/api/v1/invitations/:token/decline", invitationLimit, Auth.required(), async (ctx) => {
