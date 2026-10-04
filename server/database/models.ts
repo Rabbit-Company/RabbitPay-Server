@@ -1069,6 +1069,7 @@ export interface TicketRow {
 	kind: TicketKind;
 	status: TicketStatus;
 	priority: TicketPriority;
+	sort_order: number;
 	customer: string | null;
 	customer_visible: number;
 	estimate_minutes: number | null;

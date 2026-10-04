@@ -509,6 +509,15 @@ export const MIGRATIONS: Migration[] = [
 			`;
 		},
 	},
+	{
+		version: 49,
+		name: "custom ticket ordering",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE tickets ADD COLUMN sort_order ${types.int64} NOT NULL DEFAULT 0`);
+			await sql`UPDATE tickets SET sort_order = number`;
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

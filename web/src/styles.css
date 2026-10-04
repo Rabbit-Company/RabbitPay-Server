@@ -4377,6 +4377,32 @@ img.zoomable {
 	gap: 0.6rem;
 	min-height: 4rem;
 }
+.ticket-board-cards.custom-order {
+	gap: 0;
+}
+.ticket-board-drop-line {
+	position: relative;
+	flex: 0 0 0.65rem;
+	height: 0.65rem;
+}
+.ticket-board-drop-line::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 0.2rem;
+	right: 0.2rem;
+	height: 2px;
+	border-radius: 999px;
+	background: transparent;
+	transform: translateY(-50%);
+	transition:
+		background 0.12s ease,
+		box-shadow 0.12s ease;
+}
+.ticket-board-drop-line.drag-over::after {
+	background: var(--accent);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+}
 .ticket-board-card {
 	display: flex;
 	flex-direction: column;

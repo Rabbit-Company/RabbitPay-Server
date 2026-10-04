@@ -36,6 +36,7 @@ import type { AppState, CustomerRow, TicketCommentRow, TicketPortalAccessRow, Ti
 
 const base = "/api/v1/projects/:uuid";
 const DAY = 24 * 60 * 60 * 1000;
+const TICKET_SORTS = ["custom", "priority", "created", "updated"] as const;
 
 async function body(ctx: Context<AppState>): Promise<Record<string, unknown> | null> {
 	try {
@@ -97,7 +98,9 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 	const customer = query.get("customer");
 	const assignee = query.get("assignee");
 	const search = query.get("search")?.trim();
+	const sort = query.get("sort") ?? "updated";
 	if (status !== "active" && status !== "all" && !TICKET_STATUSES.includes(status as TicketStatus)) return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
+	if (!TICKET_SORTS.includes(sort as (typeof TICKET_SORTS)[number])) return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
 	if (customer !== null && !Validate.uuid(customer)) return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
 
 	const assigned = assignee === "me" ? Permissions.member(ctx).uuid : assignee;
@@ -115,11 +118,19 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 			? Database`AND LOWER(t.title) LIKE ${pattern} ESCAPE '!'`
 			: Database`AND (LOWER(t.title) LIKE ${pattern} ESCAPE '!' OR t.number = ${ticketNumber})`
 		: Database``;
+	const orderBy =
+		sort === "custom"
+			? Database`t.sort_order DESC, t.number DESC`
+			: sort === "priority"
+				? Database`CASE t.priority WHEN 'urgent' THEN 4 WHEN 'high' THEN 3 WHEN 'normal' THEN 2 ELSE 1 END DESC, t.updated DESC, t.number DESC`
+				: sort === "created"
+					? Database`t.created DESC, t.number DESC`
+					: Database`t.updated DESC, t.number DESC`;
 
 	const rows = (await Database`
 		SELECT t.*, c.name AS customer_name, c.email AS customer_email FROM tickets t LEFT JOIN customers c ON c.uuid = t.customer
 		WHERE t.project = ${project.uuid} ${statusFilter} ${customerFilter} ${assigneeFilter} ${searchFilter}
-		ORDER BY t.updated DESC, t.number DESC LIMIT ${limit} OFFSET ${offset}
+		ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}
 	`) as (TicketRow & { customer_name: string | null; customer_email: string | null })[];
 	const [total] = (await Database`
 		SELECT COUNT(*) AS count FROM tickets t WHERE t.project = ${project.uuid} ${statusFilter} ${customerFilter} ${assigneeFilter} ${searchFilter}
@@ -253,6 +264,33 @@ Server.app.patch(`${base}/tickets/:ticket`, Auth.required(), Permissions.require
 	);
 	if (row.status !== ticket.status) await notifyCustomerStatus(row, Auth.account(ctx).username);
 	return Utils.ok(ctx, updated);
+});
+
+Server.app.post(`${base}/tickets/:ticket/order`, Auth.required(), Permissions.require(Permission.TICKET_WORK), requireWorkforce(), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const ticket = await findTicket(ctx);
+	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
+	const data = await body(ctx);
+	const before = data?.before ?? null;
+	if (before !== null && (typeof before !== "string" || !Validate.uuid(before) || before === ticket.uuid)) {
+		return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
+	}
+
+	const ordered = (await Database`
+		SELECT uuid FROM tickets WHERE project = ${project.uuid} ORDER BY sort_order DESC, number DESC
+	`) as Pick<TicketRow, "uuid">[];
+	const without = ordered.filter((row) => row.uuid !== ticket.uuid);
+	const index = before === null ? without.length : without.findIndex((row) => row.uuid === before);
+	if (index < 0) return Utils.fail(ctx, ErrorCode.INVALID_TICKET);
+	without.splice(index, 0, { uuid: ticket.uuid });
+
+	await Database.begin(async (tx) => {
+		for (const [position, row] of without.entries()) {
+			await tx`UPDATE tickets SET sort_order = ${(without.length - position) * 1000} WHERE uuid = ${row.uuid}`;
+		}
+	});
+	await audit(ctx, "ticket.reordered", ticket.uuid, { before });
+	return Utils.ok(ctx);
 });
 
 Server.app.delete(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {

@@ -164,6 +164,7 @@ function ticketCanBeInvoiced(ticket: Ticket): boolean {
 }
 
 type TicketViewMode = "list" | "board";
+type TicketSort = "custom" | "priority" | "created" | "updated";
 
 const TICKET_VIEW_KEY = "rabbitpay.tickets.view";
 
@@ -183,7 +184,32 @@ function saveTicketView(view: TicketViewMode) {
 	}
 }
 
-function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, showPricing: boolean, onMove: (status: TicketStatus) => void): HTMLElement {
+function savedTicketSort(uuid: string): TicketSort {
+	try {
+		const value = localStorage.getItem(`rabbitpay.tickets.sort:${uuid}`);
+		return (["custom", "priority", "created", "updated"] as TicketSort[]).includes(value as TicketSort) ? (value as TicketSort) : "updated";
+	} catch {
+		return "updated";
+	}
+}
+
+function saveTicketSort(uuid: string, sort: TicketSort) {
+	try {
+		localStorage.setItem(`rabbitpay.tickets.sort:${uuid}`, sort);
+	} catch {
+		void 0;
+	}
+}
+
+function ticketBoardCard(
+	project: Project,
+	ticket: Ticket,
+	movable: boolean,
+	showPricing: boolean,
+	onMove: (status: TicketStatus) => void,
+	onDragStart: () => void,
+	onDragEnd: () => void
+): HTMLElement {
 	const card = el(
 		"article",
 		{ class: `ticket-board-card priority-${ticket.priority}` },
@@ -202,6 +228,7 @@ function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, sho
 		),
 		ticket.customer_name ? el("div", { class: "ticket-board-detail muted" }, ticket.customer_name) : null,
 		el("div", { class: "ticket-board-detail" }, assigneeNames(ticket) || t("ticket.unassigned")),
+		el("div", { class: "ticket-board-detail muted" }, `${t("ticket.updated")}: ${when(project, ticket.updated)}`),
 		ticket.due_on || ticket.logged_minutes || (showPricing && ticket.fixed_price !== null)
 			? el(
 					"div",
@@ -220,10 +247,14 @@ function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, sho
 		card.draggable = true;
 		card.addEventListener("dragstart", (event) => {
 			card.classList.add("dragging");
+			onDragStart();
 			event.dataTransfer?.setData("text/plain", ticket.uuid);
 			if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 		});
-		card.addEventListener("dragend", () => card.classList.remove("dragging"));
+		card.addEventListener("dragend", () => {
+			card.classList.remove("dragging");
+			onDragEnd();
+		});
 
 		const move = select(statusOptions(), ticket.status);
 		move.className = "ticket-board-move";
@@ -250,6 +281,12 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 			state.me.own && !can(project, Permission.TICKET_MANAGE) ? "me" : ""
 		);
 		const search = input("search", { placeholder: t("ticket.search") });
+		const sorting = select(
+			(["custom", "priority", "created", "updated"] as TicketSort[]).map((value) => ({ value, label: t(`ticket.sort_${value}`) })),
+			savedTicketSort(uuid)
+		);
+		sorting.setAttribute("aria-label", t("ticket.sort"));
+		const sortHint = el("p", { class: "muted" }, t("ticket.custom_order_hint"));
 		const body = el("div", {});
 		const surface = el("div", { class: "card" }, body);
 		const controls = pagination(() => load());
@@ -257,6 +294,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 		const showPricing = can(project, Permission.TICKET_MANAGE);
 		let view = savedTicketView();
 		let debounce: ReturnType<typeof setTimeout>;
+		let draggingTicket: Ticket | null = null;
 		let boardTickets: Record<TicketStatus, Ticket[]> = { open: [], in_progress: [], waiting: [], resolved: [], closed: [] };
 		let boardTotals: Record<TicketStatus, number> = { open: 0, in_progress: 0, waiting: 0, resolved: 0, closed: 0 };
 		const moving = new Set<string>();
@@ -282,6 +320,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						status: ticketStatus,
 						assignee: assignee.value || undefined,
 						search: search.value.trim() || undefined,
+						sort: sorting.value,
 						limit: 200,
 						offset: boardTickets[ticketStatus].length,
 					});
@@ -294,6 +333,21 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 				} finally {
 					loadingColumns.delete(ticketStatus);
 					if (version === boardVersion) renderBoard();
+				}
+			};
+
+			const orderBoardTicket = async (ticket: Ticket, before: Ticket | null, nextStatus: TicketStatus) => {
+				if (moving.has(ticket.uuid) || before?.uuid === ticket.uuid) return;
+				moving.add(ticket.uuid);
+				renderBoard();
+				try {
+					if (ticket.status !== nextStatus) await Api.updateTicket(uuid, ticket.uuid, { status: nextStatus });
+					await Api.orderTicket(uuid, ticket.uuid, before?.uuid ?? null);
+				} catch (error) {
+					reportError(error);
+				} finally {
+					moving.delete(ticket.uuid);
+					void load();
 				}
 			};
 
@@ -325,6 +379,57 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 
 			const columns = TICKET_STATUSES.map((ticketStatus) => {
 				const headingId = `ticket-board-${ticketStatus}`;
+				const dropTargets: { line: HTMLElement; before: Ticket | null }[] = [];
+				const dropLine = (before: Ticket | null) => {
+					const line = el("div", { class: "ticket-board-drop-line" });
+					line.setAttribute("aria-label", before ? t("ticket.drop_before", { ticket: before.title }) : t("ticket.drop_last"));
+					dropTargets.push({ line, before });
+					return line;
+				};
+				const customOrder = sorting.value === "custom" && canMove;
+				const cardNodes = boardTickets[ticketStatus].flatMap((ticket) => [
+					customOrder ? dropLine(ticket) : null,
+					ticketBoardCard(
+						project,
+						ticket,
+						canMove && !moving.has(ticket.uuid),
+						showPricing,
+						(nextStatus) => {
+							if (sorting.value === "custom") {
+								const first = boardTickets[nextStatus].find((candidate) => candidate.uuid !== ticket.uuid) ?? null;
+								void orderBoardTicket(ticket, first, nextStatus);
+							} else void moveTicket(ticket, nextStatus);
+						},
+						() => {
+							draggingTicket = ticket;
+						},
+						() => {
+							draggingTicket = null;
+							body.querySelectorAll(".ticket-board-drop-line.drag-over").forEach((line) => line.classList.remove("drag-over"));
+						}
+					),
+				]);
+				if (customOrder) cardNodes.push(dropLine(null));
+				const cards = el(
+					"div",
+					{ class: `ticket-board-cards${customOrder ? " custom-order" : ""}` },
+					...cardNodes,
+					boardTickets[ticketStatus].length === 0 ? el("p", { class: "ticket-board-empty muted" }, t("ticket.column_empty")) : null,
+					boardTickets[ticketStatus].length < boardTotals[ticketStatus]
+						? el(
+								"button",
+								{
+									class: "button ghost small ticket-board-more",
+									type: "button",
+									disabled: loadingColumns.has(ticketStatus),
+									onClick: () => void loadMore(ticketStatus),
+								},
+								loadingColumns.has(ticketStatus)
+									? t("ui.loading")
+									: t("ticket.load_more", { count: boardTotals[ticketStatus] - boardTickets[ticketStatus].length })
+							)
+						: null
+				);
 				const column = el(
 					"section",
 					{ class: "ticket-board-column" },
@@ -334,31 +439,51 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						el("h3", { id: headingId }, ticketPill(ticketStatus)),
 						el("span", { class: "ticket-board-count" }, boardTotals[ticketStatus].toLocaleString())
 					),
-					el(
-						"div",
-						{ class: "ticket-board-cards" },
-						...boardTickets[ticketStatus].map((ticket) =>
-							ticketBoardCard(project, ticket, canMove && !moving.has(ticket.uuid), showPricing, (nextStatus) => void moveTicket(ticket, nextStatus))
-						),
-						boardTickets[ticketStatus].length === 0 ? el("p", { class: "ticket-board-empty muted" }, t("ticket.column_empty")) : null,
-						boardTickets[ticketStatus].length < boardTotals[ticketStatus]
-							? el(
-									"button",
-									{
-										class: "button ghost small ticket-board-more",
-										type: "button",
-										disabled: loadingColumns.has(ticketStatus),
-										onClick: () => void loadMore(ticketStatus),
-									},
-									loadingColumns.has(ticketStatus)
-										? t("ui.loading")
-										: t("ticket.load_more", { count: boardTotals[ticketStatus] - boardTickets[ticketStatus].length })
-								)
-							: null
-					)
+					cards
 				);
 				column.setAttribute("aria-labelledby", headingId);
-				if (canMove) {
+				if (customOrder) {
+					const clearDropLines = () => {
+						for (const target of dropTargets) target.line.classList.remove("drag-over");
+					};
+					const closestDropTarget = (clientY: number) => {
+						const tickets = boardTickets[ticketStatus];
+						const currentIndex = draggingTicket?.status === ticketStatus ? tickets.findIndex((ticket) => ticket.uuid === draggingTicket?.uuid) : -1;
+						const nextTicket = currentIndex >= 0 ? (tickets[currentIndex + 1] ?? null) : undefined;
+						const available = dropTargets.filter((target) => {
+							if (target.before?.uuid === draggingTicket?.uuid) return false;
+							if (currentIndex < 0) return true;
+							if (nextTicket === null) return target.before !== null;
+							return target.before?.uuid !== nextTicket?.uuid;
+						});
+						if (available.length === 0) return null;
+						return available.reduce(
+							(closest, target) => {
+								const bounds = target.line.getBoundingClientRect();
+								const distance = Math.abs(clientY - (bounds.top + bounds.bottom) / 2);
+								return distance < closest.distance ? { target, distance } : closest;
+							},
+							{ target: available[0], distance: Number.POSITIVE_INFINITY }
+						).target;
+					};
+					column.addEventListener("dragover", (event) => {
+						event.preventDefault();
+						if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+						clearDropLines();
+						closestDropTarget(event.clientY)?.line.classList.add("drag-over");
+					});
+					column.addEventListener("dragleave", (event) => {
+						if (!column.contains(event.relatedTarget as Node | null)) clearDropLines();
+					});
+					column.addEventListener("drop", (event) => {
+						event.preventDefault();
+						const target = closestDropTarget(event.clientY);
+						clearDropLines();
+						const ticket = findBoardTicket(event.dataTransfer?.getData("text/plain") ?? "");
+						if (ticket && target && ticket.uuid !== target.before?.uuid) void orderBoardTicket(ticket, target.before, ticketStatus);
+					});
+					column.addEventListener("dragend", clearDropLines);
+				} else if (canMove) {
 					column.addEventListener("dragover", (event) => {
 						event.preventDefault();
 						if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
@@ -371,7 +496,8 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						event.preventDefault();
 						column.classList.remove("drag-over");
 						const ticket = findBoardTicket(event.dataTransfer?.getData("text/plain") ?? "");
-						if (ticket) void moveTicket(ticket, ticketStatus);
+						if (!ticket) return;
+						void moveTicket(ticket, ticketStatus);
 					});
 				}
 				return column;
@@ -390,6 +516,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 								status: ticketStatus,
 								assignee: assignee.value || undefined,
 								search: search.value.trim() || undefined,
+								sort: sorting.value,
 								limit: 200,
 							})
 						)
@@ -406,6 +533,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 					status: status.value,
 					assignee: assignee.value || undefined,
 					search: search.value.trim() || undefined,
+					sort: sorting.value,
 					limit: PAGE_SIZE,
 					offset: controls.state.offset,
 				});
@@ -423,7 +551,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 									t("ticket.customer"),
 									t("ticket.assignees"),
 									t("ticket.logged"),
-									t("ticket.updated"),
+									sorting.value === "created" ? t("ticket.opened") : t("ticket.updated"),
 								],
 								result.tickets.map((ticket) =>
 									el(
@@ -441,7 +569,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 										el("td", {}, ticket.customer_name ?? ""),
 										el("td", {}, assigneeNames(ticket)),
 										el("td", { class: "numeric mono" }, ticket.logged_minutes ? formatHours(ticket.logged_minutes) : ""),
-										el("td", {}, when(project, ticket.updated))
+										el("td", {}, when(project, sorting.value === "created" ? ticket.created : ticket.updated))
 									)
 								)
 							)
@@ -478,6 +606,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 		const syncView = () => {
 			status.hidden = view === "board";
 			controls.element.hidden = view === "board";
+			sortHint.hidden = sorting.value !== "custom";
 			surface.className = view === "board" ? "ticket-board-surface" : "card";
 			for (const choice of viewChoices) {
 				choice.button.classList.toggle("active", choice.value === view);
@@ -486,6 +615,11 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 		};
 		status.addEventListener("change", reload);
 		assignee.addEventListener("change", reload);
+		sorting.addEventListener("change", () => {
+			saveTicketSort(uuid, sorting.value as TicketSort);
+			syncView();
+			reload();
+		});
 		search.addEventListener("input", () => {
 			clearTimeout(debounce);
 			debounce = setTimeout(reload, 250);
@@ -503,6 +637,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 				status,
 				assignee,
 				search,
+				sorting,
 				viewToggle,
 				creates
 					? el(
@@ -516,6 +651,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						)
 					: null
 			),
+			sortHint,
 			surface,
 			controls.element
 		);

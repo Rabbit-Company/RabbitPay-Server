@@ -681,6 +681,33 @@ describe("the workforce module", () => {
 		expect(inbox.data.tickets.find((row: { number: number }) => row.number === 3)).toMatchObject({ reported_by: "client@acme.test", customer });
 	});
 
+	test("tickets sort by custom order, priority, creation and last activity", async () => {
+		await Database`UPDATE tickets SET priority = 'low', created = 100, updated = 1 WHERE project = ${project} AND number = 1`;
+		await Database`UPDATE tickets SET priority = 'urgent', created = 300, updated = 1 WHERE project = ${project} AND number = 2`;
+		await Database`UPDATE tickets SET priority = 'high', created = 200, updated = 1 WHERE project = ${project} AND number = 3`;
+
+		const numbers = async (sort: string) =>
+			(await call("GET", `${base()}/tickets?status=all&sort=${sort}`, tokens.employee)).data.tickets.map((ticket: { number: number }) => ticket.number);
+		expect(await numbers("priority")).toEqual([2, 3, 1]);
+		expect(await numbers("created")).toEqual([2, 3, 1]);
+
+		const [first] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 1`;
+		const [second] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 2`;
+		const [third] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 3`;
+		expect(
+			(await call("POST", `${base()}/tickets/${first.uuid}/comments`, tokens.employee, { body: "This changed most recently", internal: true })).status
+		).toBe(201);
+		expect((await numbers("updated"))[0]).toBe(1);
+
+		expect((await call("POST", `${base()}/tickets/${first.uuid}/order`, tokens.employee, { before: third.uuid })).error).toBe(0);
+		expect(await numbers("custom")).toEqual([1, 3, 2]);
+		expect((await call("POST", `${base()}/tickets/${second.uuid}/order`, tokens.employee, { before: first.uuid })).error).toBe(0);
+		expect(await numbers("custom")).toEqual([2, 1, 3]);
+		expect((await call("POST", `${base()}/tickets/${second.uuid}/order`, tokens.employee, { before: null })).error).toBe(0);
+		expect(await numbers("custom")).toEqual([1, 3, 2]);
+		expect((await call("GET", `${base()}/tickets?sort=unknown`, tokens.employee)).error).toBe(1201);
+	});
+
 	test("turning the ticket portal off hides tickets and stops ticket emails to the customer", async () => {
 		const portal = await customerLogin("client@acme.test");
 		const [bug] = await Database`SELECT uuid FROM tickets WHERE project = ${project} AND number = 3`;

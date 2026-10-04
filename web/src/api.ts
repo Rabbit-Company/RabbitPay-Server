@@ -783,6 +783,7 @@ export interface Ticket {
 	kind: TicketKind;
 	status: TicketStatus;
 	priority: TicketPriority;
+	sort_order: number;
 	customer: string | null;
 	customer_name: string | null;
 	customer_visible: boolean;
@@ -3398,7 +3399,10 @@ export const Api = {
 		return requestFile(`/projects/${uuid}/timesheets/report${listQuery({ month, member, format: "pdf" })}`, `timesheet-${month}.pdf`);
 	},
 
-	tickets(uuid: string, options: { status?: string; customer?: string; assignee?: string; search?: string; limit?: number; offset?: number } = {}) {
+	tickets(
+		uuid: string,
+		options: { status?: string; customer?: string; assignee?: string; search?: string; sort?: string; limit?: number; offset?: number } = {}
+	) {
 		return request<{ tickets: Ticket[]; total: number }>("GET", `/projects/${uuid}/tickets${listQuery(options)}`);
 	},
 
@@ -3412,6 +3416,10 @@ export const Api = {
 
 	updateTicket(uuid: string, ticket: string, changes: TicketInput) {
 		return request<Ticket>("PATCH", `/projects/${uuid}/tickets/${ticket}`, changes);
+	},
+
+	orderTicket(uuid: string, ticket: string, before: string | null) {
+		return request<null>("POST", `/projects/${uuid}/tickets/${ticket}/order`, { before });
 	},
 
 	deleteTicket(uuid: string, ticket: string) {

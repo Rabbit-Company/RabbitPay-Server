@@ -103,9 +103,9 @@ export async function insertTicket(projectId: string, input: TicketInput, author
 			await Database.begin(async (tx) => {
 				const number = await nextTicketNumber(tx, projectId);
 				await tx`
-					INSERT INTO tickets(uuid, project, number, title, description, kind, status, priority, customer, customer_visible, estimate_minutes,
+					INSERT INTO tickets(uuid, project, number, title, description, kind, status, priority, sort_order, customer, customer_visible, estimate_minutes,
 						hourly_rate, fixed_price, due_on, created_by, reported_by, closed_at, created, updated)
-					VALUES(${uuid}, ${projectId}, ${number}, ${input.title}, ${input.description}, ${input.kind}, ${input.status}, ${input.priority},
+					VALUES(${uuid}, ${projectId}, ${number}, ${input.title}, ${input.description}, ${input.kind}, ${input.status}, ${input.priority}, ${number},
 						${input.customer}, ${input.customer_visible ? 1 : 0}, ${input.estimate_minutes}, ${input.hourly_rate}, ${input.fixed_price}, ${input.due_on},
 						${author.username}, ${author.email}, ${isClosedStatus(input.status) ? now : null}, ${now}, ${now})
 				`;
@@ -188,6 +188,7 @@ export function presentTicket(
 		kind: row.kind,
 		status: row.status,
 		priority: row.priority,
+		sort_order: row.sort_order,
 		customer: row.customer,
 		customer_name: customerName ?? null,
 		customer_visible: Boolean(row.customer_visible),
