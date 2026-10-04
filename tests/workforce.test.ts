@@ -572,6 +572,7 @@ describe("the workforce module", () => {
 		const statusOnly = await call("PATCH", `${base()}/tickets/${ticket}`, tokens.employee, { status: "in_progress" });
 		expect(statusOnly.data.status).toBe("in_progress");
 		expect(statusOnly.data.logged_minutes).toBe(150);
+		expect(statusOnly.data).toMatchObject({ hourly_rate: null, fixed_price: null, fixed_price_invoiced: false });
 		const retitle = await call("PATCH", `${base()}/tickets/${ticket}`, tokens.employee, { title: "Other" });
 		expect(retitle.error).toBe(9999);
 
@@ -582,6 +583,8 @@ describe("the workforce module", () => {
 
 		const mine = await call("GET", `${base()}/tickets?assignee=me&search=mail`, tokens.employee);
 		expect(mine.data.tickets.map((row: { number: number }) => row.number)).toEqual([1]);
+		expect(mine.data.tickets[0]).toMatchObject({ hourly_rate: null, fixed_price: null, fixed_price_invoiced: false });
+		expect((await call("GET", `${base()}/tickets/${ticket}`, tokens.employee)).data).toMatchObject({ hourly_rate: null, fixed_price: null });
 		const byNumber = await call("GET", `${base()}/tickets?search=1`, tokens.employee);
 		expect(byNumber.data.tickets.map((row: { number: number }) => row.number)).toEqual([1]);
 		const byHashNumber = await call("GET", `${base()}/tickets?search=%231`, tokens.employee);
@@ -768,6 +771,11 @@ describe("the workforce module", () => {
 			unit: "C62",
 		});
 		expect((await call("GET", `${base()}/tickets/${ticket.data.uuid}`, tokens.owner)).data.fixed_price_invoiced).toBe(true);
+		expect((await call("GET", `${base()}/tickets/${ticket.data.uuid}`, tokens.employee)).data).toMatchObject({
+			hourly_rate: null,
+			fixed_price: null,
+			fixed_price_invoiced: false,
+		});
 		expect((await call("POST", `${base()}/tickets/${ticket.data.uuid}/invoice`, tokens.owner, {})).error).toBe(1206);
 
 		expect((await call("DELETE", `${base()}/invoices/${created.data.invoice}`, tokens.owner)).status).toBe(200);

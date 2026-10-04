@@ -183,7 +183,7 @@ function saveTicketView(view: TicketViewMode) {
 	}
 }
 
-function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, onMove: (status: TicketStatus) => void): HTMLElement {
+function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, showPricing: boolean, onMove: (status: TicketStatus) => void): HTMLElement {
 	const card = el(
 		"article",
 		{ class: `ticket-board-card priority-${ticket.priority}` },
@@ -202,12 +202,12 @@ function ticketBoardCard(project: Project, ticket: Ticket, movable: boolean, onM
 		),
 		ticket.customer_name ? el("div", { class: "ticket-board-detail muted" }, ticket.customer_name) : null,
 		el("div", { class: "ticket-board-detail" }, assigneeNames(ticket) || t("ticket.unassigned")),
-		ticket.due_on || ticket.logged_minutes || ticket.fixed_price !== null
+		ticket.due_on || ticket.logged_minutes || (showPricing && ticket.fixed_price !== null)
 			? el(
 					"div",
 					{ class: "ticket-board-card-foot muted" },
 					ticket.due_on ? el("span", {}, `${t("ticket.due")}: ${formatDay(ticket.due_on, project)}`) : null,
-					ticket.fixed_price !== null
+					showPricing && ticket.fixed_price !== null
 						? el("span", {}, `${t("ticket.fixed_price_short")}: ${formatMoney(ticket.fixed_price, project.currency)}`)
 						: ticket.logged_minutes
 							? el("span", { class: "mono" }, `${t("ticket.logged")}: ${formatHours(ticket.logged_minutes)}`)
@@ -254,6 +254,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 		const surface = el("div", { class: "card" }, body);
 		const controls = pagination(() => load());
 		const canMove = state.license.active && can(project, Permission.TICKET_WORK);
+		const showPricing = can(project, Permission.TICKET_MANAGE);
 		let view = savedTicketView();
 		let debounce: ReturnType<typeof setTimeout>;
 		let boardTickets: Record<TicketStatus, Ticket[]> = { open: [], in_progress: [], waiting: [], resolved: [], closed: [] };
@@ -337,7 +338,7 @@ export async function ticketsView(uuid: string): Promise<HTMLElement> {
 						"div",
 						{ class: "ticket-board-cards" },
 						...boardTickets[ticketStatus].map((ticket) =>
-							ticketBoardCard(project, ticket, canMove && !moving.has(ticket.uuid), (nextStatus) => void moveTicket(ticket, nextStatus))
+							ticketBoardCard(project, ticket, canMove && !moving.has(ticket.uuid), showPricing, (nextStatus) => void moveTicket(ticket, nextStatus))
 						),
 						boardTickets[ticketStatus].length === 0 ? el("p", { class: "ticket-board-empty muted" }, t("ticket.column_empty")) : null,
 						boardTickets[ticketStatus].length < boardTotals[ticketStatus]
@@ -725,10 +726,16 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 			[t("ticket.estimate"), ticket.estimate_minutes ? formatHours(ticket.estimate_minutes) : "-"],
 			[t("ticket.logged"), formatHours(ticket.logged_minutes)],
 			[t("ticket.uninvoiced"), formatHours(ticket.uninvoiced_minutes)],
-			[t("ticket.rate_short"), ticket.fixed_price !== null || ticket.hourly_rate === null ? "-" : formatMoney(ticket.hourly_rate, project.currency)],
-			[t("ticket.fixed_price_short"), ticket.fixed_price === null ? "-" : formatMoney(ticket.fixed_price, project.currency)],
 			[t("ticket.opened"), `${when(project, ticket.created)} | ${ticket.reported_by ?? ticket.created_by ?? ""}`],
 		];
+		if (manages) {
+			facts.splice(
+				facts.length - 1,
+				0,
+				[t("ticket.rate_short"), ticket.fixed_price !== null || ticket.hourly_rate === null ? "-" : formatMoney(ticket.hourly_rate, project.currency)],
+				[t("ticket.fixed_price_short"), ticket.fixed_price === null ? "-" : formatMoney(ticket.fixed_price, project.currency)]
+			);
+		}
 
 		const actions = el(
 			"div",

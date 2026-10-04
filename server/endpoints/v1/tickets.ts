@@ -10,7 +10,7 @@ import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { Logger } from "../../logger";
 import { createInvoice } from "../../invoice-service";
-import { memberConfigs, workforceConfig } from "../../workforce/config";
+import { memberConfigs } from "../../workforce/config";
 import { isIsoDate } from "../../workforce/calendar";
 import { findMember, personName } from "../../workforce/people";
 import { requireWorkforce } from "../../workforce/access";
@@ -69,7 +69,7 @@ async function validReferences(projectId: string, input: TicketInput): Promise<E
 	return null;
 }
 
-async function detailed(ticket: TicketRow) {
+async function detailed(ticket: TicketRow, showPricing = true) {
 	const [assignees, time, fixedInvoices] = await Promise.all([
 		assigneesOf([ticket.uuid]),
 		timeOf(ticket.project, [ticket.uuid]),
@@ -83,7 +83,8 @@ async function detailed(ticket: TicketRow) {
 		assignees.get(ticket.uuid) ?? [],
 		time.get(ticket.uuid),
 		customer ? (customer.name ?? customer.email) : null,
-		fixedInvoices.has(ticket.uuid)
+		fixedInvoices.has(ticket.uuid),
+		showPricing
 	);
 }
 
@@ -124,10 +125,11 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 		SELECT COUNT(*) AS count FROM tickets t WHERE t.project = ${project.uuid} ${statusFilter} ${customerFilter} ${assigneeFilter} ${searchFilter}
 	`) as { count: number }[];
 	const ids = rows.map((row) => row.uuid);
+	const showPricing = Permissions.has(Permissions.member(ctx), Permission.TICKET_MANAGE);
 	const [assignees, time, fixedInvoices] = await Promise.all([assigneesOf(ids), timeOf(project.uuid, ids), fixedPriceInvoicesOf(ids)]);
 	return Utils.ok(ctx, {
 		tickets: rows.map((row) =>
-			presentTicket(row, assignees.get(row.uuid) ?? [], time.get(row.uuid), row.customer_name ?? row.customer_email, fixedInvoices.has(row.uuid))
+			presentTicket(row, assignees.get(row.uuid) ?? [], time.get(row.uuid), row.customer_name ?? row.customer_email, fixedInvoices.has(row.uuid), showPricing)
 		),
 		total: Number(total.count),
 		limit,
@@ -198,6 +200,7 @@ Server.app.get(`${base}/tickets/report`, Auth.required(), Permissions.require(Pe
 Server.app.get(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(Permission.TICKET_VIEW), async (ctx) => {
 	const ticket = await findTicket(ctx);
 	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
+	const showPricing = Permissions.has(Permissions.member(ctx), Permission.TICKET_MANAGE);
 	const comments = (await Database`SELECT * FROM ticket_comments WHERE ticket = ${ticket.uuid} ORDER BY created ASC, uuid ASC`) as TicketCommentRow[];
 	const entries = (await Database`SELECT * FROM time_entries WHERE ticket = ${ticket.uuid} ORDER BY work_date DESC, start_minute DESC`) as TimeEntryRow[];
 	const configOf = await memberConfigs(
@@ -207,7 +210,7 @@ Server.app.get(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(P
 	const people = new Map<string, number>();
 	for (const entry of entries) people.set(entry.person, (people.get(entry.person) ?? 0) + workedMinutes(entry, configOf(entry.member)));
 	return Utils.ok(ctx, {
-		...(await detailed(ticket)),
+		...(await detailed(ticket, showPricing)),
 		comments: comments.map(presentComment),
 		time_by_person: [...people].map(([person, minutes]) => ({ person, minutes })),
 	});
@@ -226,7 +229,7 @@ Server.app.patch(`${base}/tickets/:ticket`, Auth.required(), Permissions.require
 	const problem = await validReferences(project.uuid, input);
 	if (problem !== null) return Utils.fail(ctx, problem);
 
-	const before = await detailed(ticket);
+	const before = await detailed(ticket, manages);
 	const now = Date.now();
 	const closedAt = isClosedStatus(input.status) ? (ticket.closed_at ?? now) : null;
 	await Database.begin(async (tx) => {
@@ -240,7 +243,7 @@ Server.app.patch(`${base}/tickets/:ticket`, Auth.required(), Permissions.require
 		if (input.assignees !== null) await replaceAssignees(tx, ticket.uuid, input.assignees);
 	});
 	const [row] = (await Database`SELECT * FROM tickets WHERE uuid = ${ticket.uuid}`) as TicketRow[];
-	const updated = await detailed(row);
+	const updated = await detailed(row, manages);
 	await audit(ctx, "ticket.updated", ticket.uuid, updated, before);
 	const previous = new Set(before.assignees.map((assignee) => assignee.member));
 	await notifyAssigned(

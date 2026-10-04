@@ -172,7 +172,14 @@ export async function fixedPriceInvoicesOf(ticketIds: string[]): Promise<Set<str
 	return new Set(rows.map((row) => row.ticket));
 }
 
-export function presentTicket(row: TicketRow, assignees: Assignee[], time: TicketTime | undefined, customerName?: string | null, fixedPriceInvoiced = false) {
+export function presentTicket(
+	row: TicketRow,
+	assignees: Assignee[],
+	time: TicketTime | undefined,
+	customerName?: string | null,
+	fixedPriceInvoiced = false,
+	showPricing = true
+) {
 	return {
 		uuid: row.uuid,
 		number: row.number,
@@ -185,9 +192,9 @@ export function presentTicket(row: TicketRow, assignees: Assignee[], time: Ticke
 		customer_name: customerName ?? null,
 		customer_visible: Boolean(row.customer_visible),
 		estimate_minutes: row.estimate_minutes,
-		hourly_rate: row.hourly_rate,
-		fixed_price: row.fixed_price,
-		fixed_price_invoiced: fixedPriceInvoiced,
+		hourly_rate: showPricing ? row.hourly_rate : null,
+		fixed_price: showPricing ? row.fixed_price : null,
+		fixed_price_invoiced: showPricing && fixedPriceInvoiced,
 		due_on: row.due_on,
 		assignees,
 		logged_minutes: time?.minutes ?? 0,
