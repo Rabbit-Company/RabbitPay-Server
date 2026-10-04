@@ -327,7 +327,8 @@ function payrollTable(project: Project, lines: PayrollLine[]): HTMLElement {
 					line.person,
 					line.salary === null
 						? el("div", { class: "warn-text" }, t("payroll.no_salary"))
-						: el("div", { class: "muted" }, t("payroll.rate", { rate: money(line.hourly_rate ?? 0) }))
+						: el("div", { class: "muted" }, t("payroll.rate", { rate: money(line.hourly_rate ?? 0) })),
+					line.approval_status !== "approved" ? el("div", { class: "warn-text" }, t("payroll.warning_timesheet_not_approved")) : null
 				),
 				el(
 					"td",

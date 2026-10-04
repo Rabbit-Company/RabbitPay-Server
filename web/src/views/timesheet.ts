@@ -10,6 +10,8 @@ import {
 	type TimeEntry,
 	type TimeEntryActivity,
 	type TimeEntryKind,
+	type TimesheetPeriod,
+	type TimesheetPeriodStatus,
 	type TimesheetDayEntry,
 	type WorkforceConfig,
 	type WorkforceHoliday,
@@ -49,10 +51,155 @@ function paidBreakOf(state: WorkforceState, member: string): number {
 	return state.people.find((person) => person.member === member)?.paid_break_minutes ?? state.config.paid_break_minutes;
 }
 
-function editableDay(state: WorkforceState, member: string, date: string): boolean {
+function editDaysOf(state: WorkforceState, member: string): number {
+	if (member === state.me.member) return state.me.edit_days;
+	return state.people.find((person) => person.member === member)?.edit_days ?? state.config.edit_days;
+}
+
+function lateDay(state: WorkforceState, member: string, date: string): boolean {
+	return date <= state.today && date < shiftDate(state.today, -editDaysOf(state, member));
+}
+
+function editableDay(state: WorkforceState, member: string, date: string, periodStatus: TimesheetPeriodStatus = "draft"): boolean {
+	if (periodStatus === "submitted" || periodStatus === "approved") return false;
 	if (!state.license.active) return false;
 	if (state.me.edit) return true;
-	return state.me.own && member === state.me.member && date <= state.today && date >= shiftDate(state.today, -state.me.edit_days);
+	return state.me.own && member === state.me.member && date <= state.today;
+}
+
+function timesheetPeriodPill(status: TimesheetPeriodStatus): HTMLElement {
+	const className = status === "approved" ? "pill-paid" : status === "submitted" ? "pill-pending" : status === "returned" ? "pill-overdue" : "pill-draft";
+	return el("span", { class: `pill ${className}` }, t(`timesheet.period_${status}` as UiKey));
+}
+
+function periodNoteDialog(uuid: string, period: TimesheetPeriod, member: string, action: "returned" | "reopen", onSaved: () => void) {
+	const note = el("textarea", { rows: "3", maxlength: "500", required: true });
+	const submit = el(
+		"button",
+		{ class: action === "returned" ? "button danger" : "button primary", type: "submit" },
+		t(action === "returned" ? "timesheet.return" : "timesheet.reopen")
+	);
+	const form = el(
+		"form",
+		{
+			class: "stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					if (action === "returned") await Api.decideTimesheetPeriod(uuid, period.period, member, "returned", note.value.trim());
+					else await Api.reopenTimesheetPeriod(uuid, period.period, member, note.value.trim());
+					toast(t(action === "returned" ? "timesheet.returned" : "timesheet.reopened"), "success");
+					dialog.close();
+					onSaved();
+				} catch (error) {
+					reportError(error);
+				} finally {
+					submit.disabled = false;
+				}
+			},
+		},
+		el("p", {}, t(action === "returned" ? "timesheet.return_body" : "timesheet.reopen_body", { period: period.period })),
+		field(t("timesheet.decision_note"), note),
+		el("div", { class: "form-actions" }, submit)
+	);
+	const dialog = modal(t(action === "returned" ? "timesheet.return_title" : "timesheet.reopen_title"), form);
+}
+
+function periodActions(uuid: string, state: WorkforceState, member: string, period: TimesheetPeriod, onSaved: () => void): HTMLElement[] {
+	const own = member === state.me.member && state.me.own;
+	const actions: HTMLElement[] = [];
+	if (state.license.active && own && (period.status === "draft" || period.status === "returned") && period.period <= state.today.slice(0, 7)) {
+		actions.push(
+			el(
+				"button",
+				{
+					class: "button primary small",
+					type: "button",
+					onClick: async () => {
+						const confirmed = await confirmDialog({
+							title: t("timesheet.submit_title"),
+							body: t("timesheet.submit_body", { period: period.period }),
+							confirmLabel: t("timesheet.submit"),
+						});
+						if (!confirmed) return;
+						try {
+							await Api.submitTimesheetPeriod(uuid, period.period);
+							toast(t("timesheet.submitted"), "success");
+							onSaved();
+						} catch (error) {
+							reportError(error);
+						}
+					},
+				},
+				t("timesheet.submit")
+			)
+		);
+	}
+	if (state.license.active && state.me.edit && period.status === "submitted") {
+		actions.push(
+			el(
+				"button",
+				{
+					class: "button primary small",
+					type: "button",
+					onClick: async () => {
+						const confirmed = await confirmDialog({
+							title: t("timesheet.approve_title"),
+							body: t("timesheet.approve_body", { period: period.period }),
+							confirmLabel: t("timesheet.approve"),
+						});
+						if (!confirmed) return;
+						try {
+							await Api.decideTimesheetPeriod(uuid, period.period, member, "approved", null);
+							toast(t("timesheet.approved"), "success");
+							onSaved();
+						} catch (error) {
+							reportError(error);
+						}
+					},
+				},
+				t("timesheet.approve")
+			),
+			el(
+				"button",
+				{ class: "button ghost small", type: "button", onClick: () => periodNoteDialog(uuid, period, member, "returned", onSaved) },
+				t("timesheet.return")
+			)
+		);
+	}
+	if (state.license.active && state.me.edit && period.status === "approved") {
+		actions.push(
+			el(
+				"button",
+				{ class: "button ghost small", type: "button", onClick: () => periodNoteDialog(uuid, period, member, "reopen", onSaved) },
+				t("timesheet.reopen")
+			)
+		);
+	}
+	return actions;
+}
+
+function periodCard(uuid: string, project: Project, state: WorkforceState, member: string, period: TimesheetPeriod, onSaved: () => void): HTMLElement {
+	const actions = periodActions(uuid, state, member, period, onSaved);
+	const details = period.decided_at
+		? t("timesheet.period_decided", {
+				name: period.decided_by ?? "-",
+				date: formatDateTime(period.decided_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone),
+			})
+		: period.submitted_at
+			? t("timesheet.period_submitted_by", {
+					name: period.submitted_by ?? "-",
+					date: formatDateTime(period.submitted_at, project.date_format as DateFormat, project.time_format as TimeFormat, project.timezone),
+				})
+			: t("timesheet.period_draft_hint");
+	return el(
+		"div",
+		{ class: "card timesheet-period-card" },
+		el("div", { class: "timesheet-period-main" }, el("strong", {}, period.period), timesheetPeriodPill(period.status), el("span", { class: "muted" }, details)),
+		period.note ? el("div", { class: "timesheet-period-note" }, period.note) : null,
+		actions.length ? el("div", { class: "actions" }, ...actions) : null
+	);
 }
 
 function ticketLabel(ticket: Pick<Ticket, "number" | "title">): string {
@@ -161,6 +308,8 @@ function dayEditor(options: {
 	const tbody = el("tbody", {});
 	const total = el("strong", { class: "mono" });
 	const reason = input("text", { maxlength: "500", placeholder: t("timesheet.reason_placeholder") });
+	const reasonRequired = lateDay(state, member, date);
+	reason.required = reasonRequired;
 	const submit = el("button", { class: "button primary", type: "submit" }, t("ui.save"));
 	const columns = [
 		t("timesheet.start"),
@@ -430,7 +579,16 @@ function dayEditor(options: {
 			el("div", { class: "totals-row" }, el("span", {}, t("timesheet.day_worked")), total)
 		),
 		el("p", { class: "muted" }, t("timesheet.activity_hint"), " ", t("timesheet.overnight_hint"), " ", t("timesheet.break_hint", { minutes: paidBreak })),
-		state.me.edit && (foreign || options.entries.length > 0) ? field(t("timesheet.reason"), reason, t("timesheet.reason_hint")) : null,
+		reasonRequired
+			? el(
+					"div",
+					{ class: "stack-tight" },
+					el("p", { class: "warn-text" }, t("timesheet.late_reason_required", { days: tn("count.days", editDaysOf(state, member)) })),
+					field(t("timesheet.reason"), reason, t("timesheet.reason_hint"))
+				)
+			: state.me.edit && (foreign || options.entries.length > 0)
+				? field(t("timesheet.reason"), reason, t("timesheet.reason_hint"))
+				: null,
 		el("div", { class: "form-actions" }, el("button", { class: "button ghost", type: "button", onClick: () => dialog.close() }, t("ui.cancel")), submit)
 	);
 	const person = foreign ? state.people.find((candidate) => candidate.member === member)?.name : null;
@@ -633,6 +791,7 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 		const picker = state.me.view ? personPicker(state, member, false) : null;
 		const range = el("strong", {});
 		const body = el("div", { class: "stack" });
+		const approvalSlot = el("div", { class: "timesheet-periods" });
 		const balanceSlot = el("div", {});
 		const activeTickets = can(project, Permission.TICKET_VIEW)
 			? (await Api.tickets(uuid, { status: "active", limit: 200 })).tickets.map(({ uuid, number, title, status }) => ({ uuid, number, title, status }))
@@ -648,6 +807,7 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 					holidaysBetween(uuid, start, end),
 				]);
 				const tickets = new Map([...activeTickets, ...sheet.tickets].map((ticket) => [ticket.uuid, ticket]));
+				const approvals = new Map(sheet.periods.map((period) => [period.period, period]));
 				const daily = dailyMinutesOf(state, member);
 				let worked = 0;
 				let expected = 0;
@@ -669,6 +829,7 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 						].filter((notice): notice is HTMLDivElement => notice !== null);
 					const openDay = () =>
 						dayEditor({ uuid, project, state, member, date, entries, tickets, activeTickets, notices: notices(), onSaved: () => void load() });
+					const periodStatus = approvals.get(date.slice(0, 7))?.status ?? "draft";
 					return el(
 						"tr",
 						{ class: weekend || holiday?.work_free ? "muted-row" : "" },
@@ -684,7 +845,7 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 						el(
 							"td",
 							{ class: "actions" },
-							editableDay(state, member, date)
+							editableDay(state, member, date, periodStatus)
 								? el(
 										"button",
 										{ class: "button ghost small", type: "button", onClick: openDay },
@@ -708,10 +869,13 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 						state.me.edit
 							? t("timesheet.edit_rule_supervisor")
 							: member === state.me.member
-								? t("timesheet.edit_rule", { days: tn("count.days", state.me.edit_days) })
+								? sheet.periods.some((period) => period.status === "returned")
+									? t("timesheet.edit_rule_returned")
+									: t("timesheet.edit_rule", { days: tn("count.days", state.me.edit_days) })
 								: ""
 					)
 				);
+				approvalSlot.replaceChildren(...sheet.periods.map((period) => periodCard(uuid, project, state, member, period, () => void load())));
 				balanceSlot.replaceChildren(await balanceCard(uuid, state, member, Number(start.slice(0, 4)), () => void load()));
 			} catch (error) {
 				reportError(error);
@@ -771,6 +935,7 @@ export async function timesheetView(uuid: string): Promise<HTMLElement> {
 						)
 					: null
 			),
+			approvalSlot,
 			el("div", { class: "card" }, body),
 			balanceSlot
 		);
@@ -1006,7 +1171,7 @@ export async function absencesView(uuid: string): Promise<HTMLElement> {
 	});
 }
 
-function reportCard(project: Project, person: MonthReport["people"][number]): HTMLElement {
+function reportCard(project: Project, person: MonthReport["people"][number], actions: HTMLElement[] = []): HTMLElement {
 	const totals = person.totals;
 	const absences = ABSENCE_KINDS.filter((kind) => totals.absence_minutes[kind] > 0);
 	const activities = ENTRY_ACTIVITIES.filter((activity) => totals.activity_minutes[activity] > 0);
@@ -1050,7 +1215,14 @@ function reportCard(project: Project, person: MonthReport["people"][number]): HT
 	return el(
 		"div",
 		{ class: "card stack" },
-		el("h2", {}, person.person),
+		el(
+			"div",
+			{ class: "toolbar" },
+			el("h2", { class: "toolbar-title" }, person.person),
+			timesheetPeriodPill(person.approval.status),
+			actions.length ? el("div", { class: "actions" }, ...actions) : null
+		),
+		person.approval.note ? el("p", { class: "muted" }, person.approval.note) : null,
 		el("dl", { class: "facts" }, ...facts.flatMap(([label, value]) => [el("dt", {}, label), el("dd", { class: "mono" }, value)])),
 		el(
 			"details",
@@ -1084,7 +1256,17 @@ export async function timesheetReportView(uuid: string): Promise<HTMLElement> {
 			if (!month.value) return;
 			try {
 				const report = await Api.timesheetReport(uuid, month.value, member());
-				body.replaceChildren(...(report.people.length ? report.people.map((person) => reportCard(project, person)) : [emptyState(t("report.empty"))]));
+				body.replaceChildren(
+					...(report.people.length
+						? report.people.map((person) =>
+								reportCard(
+									project,
+									person,
+									periodActions(uuid, state, person.member, person.approval, () => void load())
+								)
+							)
+						: [emptyState(t("report.empty"))])
+				);
 			} catch (error) {
 				reportError(error);
 			}

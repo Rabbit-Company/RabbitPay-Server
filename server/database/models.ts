@@ -1031,6 +1031,23 @@ export interface TimeEntryRow {
 	updated: number;
 }
 
+export type TimesheetPeriodStatus = "draft" | "submitted" | "approved" | "returned";
+
+export interface TimesheetPeriodRow {
+	uuid: string;
+	project: string;
+	member: string;
+	period: string;
+	status: TimesheetPeriodStatus;
+	note: string | null;
+	submitted_by: string | null;
+	submitted_at: number | null;
+	decided_by: string | null;
+	decided_at: number | null;
+	created: number;
+	updated: number;
+}
+
 export type AbsenceKind = "vacation" | "sick" | "injury" | "paid_leave" | "unpaid" | "parental" | "other";
 
 export type AbsenceStatus = "pending" | "approved" | "rejected" | "canceled";

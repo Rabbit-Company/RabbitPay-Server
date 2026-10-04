@@ -518,6 +518,35 @@ export const MIGRATIONS: Migration[] = [
 			await sql`UPDATE tickets SET sort_order = number`;
 		},
 	},
+	{
+		version: 50,
+		name: "timesheet approvals",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS timesheet_periods(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					member ${types.text("member")} NOT NULL,
+					period ${types.text("period")} NOT NULL,
+					status ${types.text("status")} NOT NULL CHECK (status IN ('draft', 'submitted', 'approved', 'returned')),
+					note ${types.text("note")},
+					submitted_by ${types.text("submitted_by")},
+					submitted_at ${types.int64},
+					decided_by ${types.text("decided_by")},
+					decided_at ${types.int64},
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (member) REFERENCES project_members(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (submitted_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					FOREIGN KEY (decided_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					UNIQUE(project, member, period)
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_timesheet_periods_project ON timesheet_periods(project, period, status)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

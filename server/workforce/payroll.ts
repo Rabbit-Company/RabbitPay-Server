@@ -3,6 +3,7 @@ import type { WorkforceConfig } from "./config";
 import type { EmployeePrivate } from "./employees";
 import type { PersonMonth } from "./reports";
 import type { EmployeeRow } from "../database/models";
+import type { TimesheetPeriodStatus } from "../database/models";
 
 export interface PayrollMinutes {
 	worked: number;
@@ -39,6 +40,7 @@ export interface PayrollAmounts {
 
 export interface PayrollLine {
 	member: string;
+	approval_status: TimesheetPeriodStatus;
 	days: { worked: number; meal: number; commute: number };
 	fund_minutes: number;
 	person: string;
@@ -133,6 +135,7 @@ export function payrollLine(
 
 	return {
 		member: month.member,
+		approval_status: month.approval?.status ?? "draft",
 		days: { worked: totals.days_worked, meal: totals.meal_days, commute: totals.commute_days },
 		fund_minutes: fullFund,
 		person: month.person,

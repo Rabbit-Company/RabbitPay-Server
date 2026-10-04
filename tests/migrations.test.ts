@@ -19,6 +19,9 @@ describe("schema migrations", () => {
 		expect(await migrate(sql, "sqlite")).toEqual([]);
 		expect(await appliedVersions(sql)).toEqual(MIGRATIONS.map((migration) => migration.version));
 		expect(await columns(sql, "accounts")).toContain("username");
+		expect(await columns(sql, "timesheet_periods")).toEqual(
+			expect.arrayContaining(["project", "member", "period", "status", "submitted_by", "submitted_at", "decided_by", "decided_at"])
+		);
 		await sql.close();
 	});
 

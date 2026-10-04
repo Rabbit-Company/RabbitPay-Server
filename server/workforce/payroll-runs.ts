@@ -171,6 +171,7 @@ export function calculateLine(
 			: 0;
 	if (employed && rates && rates.minimum_contribution_base == null) warnings.push("minimum_base_missing");
 	if (employed && hours.salary !== null && regularMinutes === 0) warnings.push("no_hours");
+	if (hours.approval_status !== "approved") warnings.push("timesheet_not_approved");
 	const accountedMinutes = regularMinutes + hours.minutes.sick_insurance + hours.minutes.unpaid;
 	if (employed && hours.pay_type === "monthly" && hours.salary !== null && accountedMinutes > 0 && accountedMinutes < hours.fund_minutes) {
 		warnings.push("hours_shortfall");

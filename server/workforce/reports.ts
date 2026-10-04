@@ -8,6 +8,7 @@ import { configFor, type WorkforceConfig } from "./config";
 import type { Person } from "./people";
 import type { AbsenceKind, AbsenceRow, EmployeeRow, LeaveBalanceRow, ProjectRow, TimeEntryActivity, TimeEntryRow } from "../database/models";
 import { TIME_ENTRY_ACTIVITIES } from "./timesheets";
+import { timesheetPeriods, type TimesheetPeriod } from "./approvals";
 
 export interface DayAbsence {
 	uuid: string;
@@ -55,6 +56,7 @@ export interface PersonMonth {
 	member: string;
 	person: string;
 	daily_minutes: number;
+	approval?: TimesheetPeriod;
 	days: DayReport[];
 	totals: MonthTotals;
 }
@@ -92,7 +94,8 @@ export function personMonth(
 	entries: TimeEntryRow[],
 	absences: AbsenceRow[],
 	calendar: HolidayCalendar,
-	config: WorkforceConfig
+	config: WorkforceConfig,
+	approval?: TimesheetPeriod
 ): PersonMonth {
 	const days = new Map<string, DayReport>(
 		datesBetween(range.from, range.to).map((date) => {
@@ -205,7 +208,24 @@ export function personMonth(
 	const absent = Object.values(totals.absence_minutes).reduce((sum, minutes) => sum + minutes, 0);
 	totals.balance_minutes = totals.worked_minutes + totals.overtime_minutes + totals.holiday_minutes + absent - totals.fund_minutes;
 
-	return { member: person.member, person: person.name, daily_minutes: person.daily_minutes, days: [...days.values()], totals };
+	return {
+		member: person.member,
+		person: person.name,
+		daily_minutes: person.daily_minutes,
+		approval: approval ?? {
+			member: person.member,
+			period: range.from.slice(0, 7),
+			status: "draft",
+			note: null,
+			submitted_by: null,
+			submitted_at: null,
+			decided_by: null,
+			decided_at: null,
+			updated: null,
+		},
+		days: [...days.values()],
+		totals,
+	};
 }
 
 export async function monthReport(
@@ -230,6 +250,7 @@ export async function monthReport(
 		ORDER BY starts_on ASC
 	`) as AbsenceRow[];
 	const employees = (await Database`SELECT * FROM employees WHERE member IN ${Database(members)}`) as EmployeeRow[];
+	const approvals = await timesheetPeriods(project.uuid, members, [month]);
 	const earliest = absences.reduce((first, absence) => (absence.starts_on < first ? absence.starts_on : first), range.from);
 	const calendar = await holidayCalendar(project, earliest, range.to);
 
@@ -245,7 +266,8 @@ export async function monthReport(
 				entries.filter((entry) => entry.member === person.member),
 				absences.filter((absence) => absence.member === person.member),
 				calendar,
-				configFor(config, employee)
+				configFor(config, employee),
+				approvals.get(`${person.member}:${month}`)
 			);
 		}),
 	};

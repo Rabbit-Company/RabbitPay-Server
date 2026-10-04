@@ -90,7 +90,7 @@ async function customerLogin(email: string): Promise<string> {
 }
 
 function entry(date: string, start: string, end: string, extra: Record<string, unknown> = {}) {
-	return { work_date: date, start, end, break_minutes: 30, ...extra };
+	return { work_date: date, start, end, break_minutes: 30, reason: "Test time entry", ...extra };
 }
 
 beforeAll(async () => {
@@ -192,16 +192,23 @@ describe("the workforce module", () => {
 		await Database`UPDATE accounts SET admin = 0 WHERE username = 'wf-owner'`;
 	});
 
-	test("employees log their own time within the edit window", async () => {
-		const logged = await call("POST", `${base()}/timesheets`, tokens.employee, entry(today, "08:00", "16:00", { note: "Support desk" }));
+	test("employees can correct older time when they provide a reason", async () => {
+		const logged = await call("POST", `${base()}/timesheets`, tokens.employee, entry(today, "08:00", "16:00", { note: "Support desk", reason: null }));
 		expect(logged.status).toBe(201);
 		expect(logged.data).toMatchObject({ member: members.employee, person: "Eva Employee", worked_minutes: 480, start: "08:00", end: "16:00" });
 
-		const yesterday = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -1), "09:00", "17:00"));
+		const yesterday = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -1), "09:00", "17:00", { reason: null }));
 		expect(yesterday.status).toBe(201);
 
-		const older = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -3), "09:00", "17:00"));
-		expect(older.error).toBe(1193);
+		const older = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -3), "09:00", "17:00", { reason: null }));
+		expect(older.error).toBe(1299);
+		const corrected = await call(
+			"POST",
+			`${base()}/timesheets`,
+			tokens.employee,
+			entry(addDays(today, -3), "09:00", "17:00", { reason: "Forgot to record this day" })
+		);
+		expect(corrected.status).toBe(201);
 		const future = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, 1), "09:00", "17:00"));
 		expect(future.error).toBe(1193);
 
@@ -219,8 +226,96 @@ describe("the workforce module", () => {
 
 		const mine = await call("GET", `${base()}/timesheets?from=${addDays(today, -7)}&to=${today}`, tokens.employee);
 		expect(mine.error).toBe(0);
-		expect(mine.data.entries).toHaveLength(2);
+		expect(mine.data.entries).toHaveLength(3);
 		expect(mine.data.edit_days).toBe(1);
+		expect((await call("DELETE", `${base()}/timesheets/${corrected.data.uuid}?reason=Test%20cleanup`, tokens.employee)).error).toBe(0);
+	});
+
+	test("timesheet months are submitted, reviewed, locked and reopened", async () => {
+		const date = "2025-02-10";
+		const period = date.slice(0, 7);
+		const logged = await call("POST", `${base()}/timesheets`, tokens.supervisor, {
+			...entry(date, "08:00", "16:00"),
+			member: members.employee,
+			reason: "Historical correction",
+		});
+		expect(logged.error).toBe(0);
+		const sheet = await call("GET", `${base()}/timesheets?from=${date}&to=${date}`, tokens.employee);
+		expect(sheet.data.periods).toEqual([expect.objectContaining({ member: members.employee, period, status: "draft", submitted_at: null, decided_at: null })]);
+
+		const draftDecision = await call("POST", `${base()}/timesheets/periods/${period}/decision`, tokens.supervisor, {
+			member: members.employee,
+			status: "approved",
+			note: null,
+		});
+		expect(draftDecision.error).toBe(1298);
+
+		const submitted = await call("POST", `${base()}/timesheets/periods/${period}/submit`, tokens.employee, {});
+		expect(submitted.data).toMatchObject({ member: members.employee, period, status: "submitted", submitted_by: "wf-employee" });
+		expect(submitted.data.submitted_at).toBeGreaterThan(0);
+		expect((await call("POST", `${base()}/timesheets/periods/${period}/submit`, tokens.employee, {})).error).toBe(1298);
+		expect((await call("PATCH", `${base()}/timesheets/${logged.data.uuid}`, tokens.supervisor, { note: "Should stay locked" })).error).toBe(1297);
+		expect(
+			(
+				await call("POST", `${base()}/timesheets/periods/${period}/decision`, tokens.supervisor, {
+					member: members.employee,
+					status: "returned",
+					note: null,
+				})
+			).error
+		).toBe(1296);
+
+		const returned = await call("POST", `${base()}/timesheets/periods/${period}/decision`, tokens.supervisor, {
+			member: members.employee,
+			status: "returned",
+			note: "Add the customer reference",
+		});
+		expect(returned.data).toMatchObject({ status: "returned", note: "Add the customer reference", decided_by: "wf-super" });
+		expect(
+			(
+				await call("PATCH", `${base()}/timesheets/${logged.data.uuid}`, tokens.employee, {
+					note: "Support desk corrected",
+					reason: "Added the requested customer reference",
+				})
+			).error
+		).toBe(0);
+
+		expect((await call("POST", `${base()}/timesheets/periods/${period}/submit`, tokens.employee, {})).data.status).toBe("submitted");
+		const approved = await call("POST", `${base()}/timesheets/periods/${period}/decision`, tokens.supervisor, {
+			member: members.employee,
+			status: "approved",
+			note: null,
+		});
+		expect(approved.data).toMatchObject({ status: "approved", decided_by: "wf-super" });
+		expect((await call("PUT", `${base()}/timesheets/day`, tokens.supervisor, { member: members.employee, work_date: date, entries: [] })).error).toBe(1297);
+
+		const report = await call("GET", `${base()}/timesheets/report?month=${period}&member=${members.employee}`, tokens.supervisor);
+		expect(report.data.people[0].approval).toMatchObject({ status: "approved", member: members.employee, period });
+		expect((await call("POST", `${base()}/timesheets/periods/${period}/reopen`, tokens.employee, { member: members.employee, note: "No" })).error).toBe(9999);
+		const reopened = await call("POST", `${base()}/timesheets/periods/${period}/reopen`, tokens.supervisor, {
+			member: members.employee,
+			note: "Payroll correction requested",
+		});
+		expect(reopened.data).toMatchObject({ status: "draft", note: "Payroll correction requested", decided_by: "wf-super" });
+		expect(
+			(
+				await call("PATCH", `${base()}/timesheets/${logged.data.uuid}`, tokens.supervisor, {
+					note: "Support desk",
+					reason: "Remove the temporary customer reference",
+				})
+			).error
+		).toBe(0);
+		expect((await call("DELETE", `${base()}/timesheets/${logged.data.uuid}?reason=Test%20cleanup`, tokens.supervisor)).error).toBe(0);
+		const approvalAudit = (await Database`
+			SELECT action FROM audit_log WHERE project = ${project} AND entity_type = 'timesheet_period' ORDER BY created ASC
+		`) as { action: string }[];
+		expect(approvalAudit.map((row) => row.action)).toEqual([
+			"timesheet.submitted",
+			"timesheet.returned",
+			"timesheet.submitted",
+			"timesheet.approved",
+			"timesheet.reopened",
+		]);
 	});
 
 	test("paid availability is separate from ticket work and formal waiting at home is supervisor controlled", async () => {
@@ -286,7 +381,7 @@ describe("the workforce module", () => {
 		expect(planned.status).toBe(201);
 
 		const blocked = await call("PATCH", `${base()}/timesheets/${created.data.uuid}`, tokens.employee, { end: "13:00" });
-		expect(blocked.error).toBe(1193);
+		expect(blocked.error).toBe(1299);
 		const corrected = await call("PATCH", `${base()}/timesheets/${created.data.uuid}`, tokens.supervisor, { end: "13:00", reason: "Stayed longer" });
 		expect(corrected.error).toBe(0);
 		expect(corrected.data.worked_minutes).toBe(300);
@@ -309,7 +404,13 @@ describe("the workforce module", () => {
 	test("a whole day is saved at once with breaks as their own rows", async () => {
 		const day = "2025-06-10";
 		const saveDay = (token: string, entries: Record<string, unknown>[], extra: Record<string, unknown> = {}) =>
-			call("PUT", `${base()}/timesheets/day`, token, { member: members.colleague, work_date: day, entries, ...extra });
+			call("PUT", `${base()}/timesheets/day`, token, {
+				member: members.colleague,
+				work_date: day,
+				entries,
+				reason: "Historical test correction",
+				...extra,
+			});
 
 		const first = await saveDay(tokens.supervisor, [
 			{ start: "07:00", end: "08:30", kind: "regular" },
@@ -364,8 +465,14 @@ describe("the workforce module", () => {
 		const unknown = await saveDay(tokens.supervisor, [{ uuid: crypto.randomUUID(), start: "08:00", end: "12:00" }]);
 		expect(unknown.error).toBe(1191);
 
-		const locked = await saveDay(tokens.colleague, [{ start: "08:00", end: "12:00" }]);
-		expect(locked.error).toBe(1193);
+		const missingReason = await call("PUT", `${base()}/timesheets/day`, tokens.colleague, {
+			member: members.colleague,
+			work_date: day,
+			entries: [{ start: "08:00", end: "12:00" }],
+		});
+		expect(missingReason.error).toBe(1299);
+		const correctedByEmployee = await saveDay(tokens.colleague, [{ start: "08:00", end: "12:00" }], { reason: "Correct my old work day" });
+		expect(correctedByEmployee.error).toBe(0);
 		const foreign = await call("PUT", `${base()}/timesheets/day`, tokens.employee, { member: members.colleague, work_date: today, entries: [] });
 		expect(foreign.error).toBe(9999);
 
@@ -373,19 +480,26 @@ describe("the workforce module", () => {
 			member: members.colleague,
 			work_date: "2025-06-12",
 			entries: [{ start: "22:00", end: "06:00" }],
+			reason: "Historical overnight entry",
 		});
 		expect(night.data.entries[0]).toMatchObject({ overnight: true, worked_minutes: 480 });
 		const intoNight = await call("PUT", `${base()}/timesheets/day`, tokens.supervisor, {
 			member: members.colleague,
 			work_date: "2025-06-13",
 			entries: [{ start: "05:00", end: "08:00" }],
+			reason: "Historical overlapping entry",
 		});
 		expect(intoNight.error).toBe(1192);
 
 		const cleared = await saveDay(tokens.supervisor, []);
 		expect(cleared.error).toBe(0);
 		expect(cleared.data.entries).toHaveLength(0);
-		const nightCleared = await call("PUT", `${base()}/timesheets/day`, tokens.supervisor, { member: members.colleague, work_date: "2025-06-12", entries: [] });
+		const nightCleared = await call("PUT", `${base()}/timesheets/day`, tokens.supervisor, {
+			member: members.colleague,
+			work_date: "2025-06-12",
+			entries: [],
+			reason: "Historical test cleanup",
+		});
 		expect(nightCleared.data.entries).toHaveLength(0);
 	});
 
@@ -408,6 +522,7 @@ describe("the workforce module", () => {
 			member: members.colleague,
 			work_date: "2025-12-01",
 			entries: [{ start: "09:00", end: "13:00" }],
+			reason: "Existing historical work entry",
 		});
 		expect(logged.error).toBe(0);
 		const now = Date.now();
@@ -447,7 +562,7 @@ describe("the workforce module", () => {
 		await Database`DELETE FROM absences WHERE uuid = ${absence}`;
 	});
 
-	test("the supervisor controls how many days back employees can edit", async () => {
+	test("the supervisor controls when a correction reason becomes mandatory", async () => {
 		const settings = await call("GET", `${base()}/workforce`, tokens.supervisor);
 		expect(settings.data.people.map((person: { name: string }) => person.name)).toEqual(
 			expect.arrayContaining(["Eva Employee", "Cene Colleague", "Sara Supervisor"])
@@ -459,11 +574,15 @@ describe("the workforce module", () => {
 		const saved = await call("PUT", `${base()}/workforce/settings`, tokens.supervisor, { ...settings.data.config, edit_days: 7 });
 		expect(saved.error).toBe(0);
 
-		const older = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -3), "09:00", "17:00"));
+		const older = await call("POST", `${base()}/timesheets`, tokens.employee, entry(addDays(today, -3), "09:00", "17:00", { reason: null }));
 		expect(older.status).toBe(201);
 		await call("PUT", `${base()}/workforce/settings`, tokens.supervisor, { ...settings.data.config, edit_days: 1 });
 		const locked = await call("DELETE", `${base()}/timesheets/${older.data.uuid}`, tokens.employee);
-		expect(locked.error).toBe(1193);
+		expect(locked.error).toBe(1299);
+		const removed = await call("DELETE", `${base()}/timesheets/${older.data.uuid}?reason=Incorrect%20day`, tokens.employee);
+		expect(removed.error).toBe(0);
+		const history = await call("GET", `${base()}/workforce/revisions?member=${members.employee}&record=${older.data.uuid}`, tokens.supervisor);
+		expect(history.data.revisions[0]).toMatchObject({ operation: "deleted", changed_by: "wf-employee", reason: "Incorrect day" });
 	});
 
 	test("absences are requested by employees and decided by supervisors", async () => {
@@ -891,6 +1010,7 @@ describe("the workforce module", () => {
 		const payroll = await call("GET", `${base()}/payroll?month=2026-04`, tokens.owner);
 		expect(payroll.error).toBe(0);
 		expect(payroll.data.lines).toHaveLength(1);
+		expect(payroll.data.lines[0].approval_status).toBe("draft");
 		expect(payroll.data.lines[0].amounts).toEqual({
 			regular: 145455,
 			waiting_home: 0,
@@ -977,6 +1097,7 @@ describe("the workforce module", () => {
 		expect(created.data.lines).toHaveLength(1);
 		const line = created.data.lines[0];
 		expect(line.calculation.gross).toBe(220001);
+		expect(line.calculation.warnings).toContain("timesheet_not_approved");
 		expect(line.calculation.net).toEqual(netPay({ gross: 220001, claims_general_relief: true, dependents: 0 }, SLOVENIA_PRESET.rates));
 		expect(line.calculation.payout).toBe(line.calculation.net.net + line.calculation.reimbursements);
 		const duplicate = await call("POST", `${base()}/payroll/runs`, tokens.owner, { period: "2026-04" });

@@ -40,6 +40,7 @@ import { monthReport, monthReportCsv, vacationBalance } from "../../workforce/re
 import { notifyAbsenceDecided, notifyAbsenceRequested } from "../../workforce/notifications";
 import { monthReportPdf } from "../../workforce/report-pdf";
 import { pdfResponse } from "../../invoice-pdf";
+import { locksTimesheet, presentTimesheetPeriod, timesheetPeriod, timesheetPeriodLocked, timesheetPeriods } from "../../workforce/approvals";
 import type {
 	AbsenceRow,
 	AppState,
@@ -48,6 +49,7 @@ import type {
 	ProjectMemberRow,
 	TicketRow,
 	TimeEntryRow,
+	TimesheetPeriodRow,
 	WorkforceHolidayRow,
 	WorkforceRevisionRow,
 } from "../../database/models";
@@ -70,6 +72,10 @@ function readReason(value: unknown): string | null | undefined {
 	if (value === undefined || value === null) return null;
 	if (typeof value !== "string" || value.length > 500) return undefined;
 	return value.trim() || null;
+}
+
+function lateReasonRequired(reason: string | null, dates: string[], today: string, editDays: number): boolean {
+	return reason === null && dates.some((date) => date <= today && !withinEditWindow(date, today, editDays));
 }
 
 function readRange(ctx: Context<AppState>): { from: string; to: string } | null {
@@ -207,6 +213,9 @@ Server.app.get(`${base}/timesheets`, Auth.required(), Permissions.require(Permis
 			>[])
 		: [];
 	const configOf = await memberConfigs(project.uuid, [subject?.uuid ?? null, ...rows.map((row) => row.member)]);
+	const periods = subject
+		? [...(await timesheetPeriods(project.uuid, [subject.uuid], [...new Set(datesBetween(range.from, range.to).map((date) => date.slice(0, 7)))])).values()]
+		: [];
 	return Utils.ok(ctx, {
 		...range,
 		member: subject?.uuid ?? null,
@@ -214,8 +223,109 @@ Server.app.get(`${base}/timesheets`, Auth.required(), Permissions.require(Permis
 		edit_days: configOf(subject?.uuid ?? null).edit_days,
 		entries: presentEntries(rows, configOf),
 		tickets,
+		periods,
 	});
 });
+
+Server.app.post(`${base}/timesheets/periods/:period/submit`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), requireWorkforce(), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const access = accessOf(ctx);
+	const period = ctx.params.period;
+	if (!access.own) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
+	if (!isMonth(period) || period > todayIn(project).slice(0, 7)) return Utils.fail(ctx, ErrorCode.INVALID_TIMESHEET_PERIOD);
+	const [previous] = (await Database`
+		SELECT * FROM timesheet_periods WHERE project = ${project.uuid} AND member = ${access.self.uuid} AND period = ${period}
+	`) as TimesheetPeriodRow[];
+	if (previous && previous.status !== "draft" && previous.status !== "returned") return Utils.fail(ctx, ErrorCode.TIMESHEET_PERIOD_STATE);
+
+	const now = Date.now();
+	const account = Auth.account(ctx).username;
+	const uuid = previous?.uuid ?? crypto.randomUUID();
+	if (previous) {
+		await Database`
+			UPDATE timesheet_periods SET status = 'submitted', note = NULL, submitted_by = ${account}, submitted_at = ${now},
+				decided_by = NULL, decided_at = NULL, updated = ${now} WHERE uuid = ${uuid}
+		`;
+	} else {
+		await Database`
+			INSERT INTO timesheet_periods(uuid, project, member, period, status, note, submitted_by, submitted_at, created, updated)
+			VALUES(${uuid}, ${project.uuid}, ${access.self.uuid}, ${period}, 'submitted', NULL, ${account}, ${now}, ${now}, ${now})
+		`;
+	}
+	const [row] = (await Database`SELECT * FROM timesheet_periods WHERE uuid = ${uuid}`) as TimesheetPeriodRow[];
+	const presented = presentTimesheetPeriod(access.self.uuid, period, row);
+	await audit(
+		ctx,
+		"timesheet.submitted",
+		"timesheet_period",
+		uuid,
+		presented,
+		previous ? presentTimesheetPeriod(access.self.uuid, period, previous) : undefined
+	);
+	return Utils.ok(ctx, presented);
+});
+
+Server.app.post(
+	`${base}/timesheets/periods/:period/decision`,
+	Auth.required(),
+	Permissions.require(Permission.TIMESHEET_EDIT),
+	requireWorkforce(),
+	async (ctx) => {
+		const project = Permissions.project(ctx);
+		const period = ctx.params.period;
+		const data = await body(ctx);
+		const status = data?.status;
+		const note = readReason(data?.note);
+		if (!isMonth(period) || (status !== "approved" && status !== "returned") || note === undefined || (status === "returned" && note === null)) {
+			return Utils.fail(ctx, ErrorCode.INVALID_TIMESHEET_PERIOD);
+		}
+		const subject = await subjectOf(ctx, data?.member, "edit");
+		if (typeof subject === "number") return Utils.fail(ctx, subject);
+		const [previous] = (await Database`
+			SELECT * FROM timesheet_periods WHERE project = ${project.uuid} AND member = ${subject.uuid} AND period = ${period}
+		`) as TimesheetPeriodRow[];
+		if (!previous || previous.status !== "submitted") return Utils.fail(ctx, ErrorCode.TIMESHEET_PERIOD_STATE);
+
+		const now = Date.now();
+		const account = Auth.account(ctx).username;
+		await Database`
+			UPDATE timesheet_periods SET status = ${status}, note = ${note}, decided_by = ${account}, decided_at = ${now}, updated = ${now}
+			WHERE uuid = ${previous.uuid}
+		`;
+		const current = await timesheetPeriod(project.uuid, subject.uuid, period);
+		await audit(ctx, `timesheet.${status}`, "timesheet_period", previous.uuid, current, presentTimesheetPeriod(subject.uuid, period, previous));
+		return Utils.ok(ctx, current);
+	}
+);
+
+Server.app.post(
+	`${base}/timesheets/periods/:period/reopen`,
+	Auth.required(),
+	Permissions.require(Permission.TIMESHEET_EDIT),
+	requireWorkforce(),
+	async (ctx) => {
+		const project = Permissions.project(ctx);
+		const period = ctx.params.period;
+		const data = await body(ctx);
+		const note = readReason(data?.note);
+		if (!isMonth(period) || note === undefined || note === null) return Utils.fail(ctx, ErrorCode.INVALID_TIMESHEET_PERIOD);
+		const subject = await subjectOf(ctx, data?.member, "edit");
+		if (typeof subject === "number") return Utils.fail(ctx, subject);
+		const [previous] = (await Database`
+			SELECT * FROM timesheet_periods WHERE project = ${project.uuid} AND member = ${subject.uuid} AND period = ${period}
+		`) as TimesheetPeriodRow[];
+		if (!previous || previous.status === "draft" || previous.status === "returned") return Utils.fail(ctx, ErrorCode.TIMESHEET_PERIOD_STATE);
+
+		const now = Date.now();
+		await Database`
+			UPDATE timesheet_periods SET status = 'draft', note = ${note}, decided_by = ${Auth.account(ctx).username}, decided_at = ${now}, updated = ${now}
+			WHERE uuid = ${previous.uuid}
+		`;
+		const current = await timesheetPeriod(project.uuid, subject.uuid, period);
+		await audit(ctx, "timesheet.reopened", "timesheet_period", previous.uuid, current, presentTimesheetPeriod(subject.uuid, period, previous));
+		return Utils.ok(ctx, current);
+	}
+);
 
 async function presentInDay(row: TimeEntryRow, config: WorkforceConfig) {
 	const day = (await Database`SELECT * FROM time_entries WHERE member = ${row.member} AND work_date = ${row.work_date}`) as TimeEntryRow[];
@@ -229,12 +339,16 @@ async function presentInDay(row: TimeEntryRow, config: WorkforceConfig) {
 async function checkEntry(ctx: Context<AppState>, subject: ProjectMemberRow, input: EntryInput, previous: TimeEntryRow | null): Promise<ErrorCode | null> {
 	const project = Permissions.project(ctx);
 	const access = accessOf(ctx);
+	const inputPeriod = await timesheetPeriod(project.uuid, subject.uuid, input.work_date.slice(0, 7));
+	const previousPeriod =
+		previous && previous.work_date.slice(0, 7) !== input.work_date.slice(0, 7)
+			? await timesheetPeriod(project.uuid, subject.uuid, previous.work_date.slice(0, 7))
+			: inputPeriod;
+	if (locksTimesheet(inputPeriod.status) || (previous && locksTimesheet(previousPeriod.status))) return ErrorCode.TIMESHEET_PERIOD_LOCKED;
 	if (input.activity === "waiting_home" && previous?.activity !== "waiting_home" && !access.edit) return ErrorCode.INSUFFICIENT_PERMISSIONS;
 	if (!access.edit) {
-		const config = await memberConfig(project.uuid, subject.uuid);
 		const today = todayIn(project);
-		if (!withinEditWindow(input.work_date, today, config.edit_days)) return ErrorCode.TIMESHEET_LOCKED;
-		if (previous && !withinEditWindow(previous.work_date, today, config.edit_days)) return ErrorCode.TIMESHEET_LOCKED;
+		if (input.work_date > today || (previous && previous.work_date > today)) return ErrorCode.TIMESHEET_LOCKED;
 	}
 	if (!(await validTicket(project.uuid, input.ticket))) return ErrorCode.TICKET_NOT_FOUND;
 	if (await overlapsExisting(subject.uuid, input, previous?.uuid ?? null)) return ErrorCode.TIME_ENTRY_OVERLAPS;
@@ -254,6 +368,10 @@ Server.app.post(`${base}/timesheets`, Auth.required(), Permissions.require(Permi
 	if (problem !== null) return Utils.fail(ctx, problem);
 	const reason = readReason(data.reason);
 	if (reason === undefined) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
+	const config = await memberConfig(project.uuid, subject.uuid);
+	if (lateReasonRequired(reason, [input.work_date], todayIn(project), config.edit_days)) {
+		return Utils.fail(ctx, ErrorCode.TIMESHEET_REASON_REQUIRED);
+	}
 
 	const uuid = crypto.randomUUID();
 	const now = Date.now();
@@ -276,7 +394,7 @@ Server.app.post(`${base}/timesheets`, Auth.required(), Permissions.require(Permi
 		});
 	});
 	const [row] = (await Database`SELECT * FROM time_entries WHERE uuid = ${uuid}`) as TimeEntryRow[];
-	const presented = await presentInDay(row, await memberConfig(project.uuid, subject.uuid));
+	const presented = await presentInDay(row, config);
 	await audit(ctx, "time_entry.created", "time_entry", uuid, presented);
 	return Utils.ok(ctx, presented, 201);
 });
@@ -289,6 +407,7 @@ async function editableEntry(ctx: Context<AppState>): Promise<TimeEntryRow | Err
 	if (row.member === access.self.uuid ? !access.own && !access.edit : !access.edit) {
 		return access.view || row.member === access.self.uuid ? ErrorCode.INSUFFICIENT_PERMISSIONS : ErrorCode.TIME_ENTRY_NOT_FOUND;
 	}
+	if (await timesheetPeriodLocked(project.uuid, row.member, row.work_date)) return ErrorCode.TIMESHEET_PERIOD_LOCKED;
 	if (row.invoice !== null) return ErrorCode.TIME_ENTRY_INVOICED;
 	return row;
 }
@@ -310,6 +429,9 @@ Server.app.patch(`${base}/timesheets/:entry`, Auth.required(), Permissions.requi
 	} else if (!(await validTicket(project.uuid, input.ticket))) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
 
 	const config = await memberConfig(project.uuid, row.member);
+	if (lateReasonRequired(reason, [row.work_date, input.work_date], todayIn(project), config.edit_days)) {
+		return Utils.fail(ctx, ErrorCode.TIMESHEET_REASON_REQUIRED);
+	}
 	const before = presentEntry(row, config);
 	await Database.begin(async (tx) => {
 		await tx`
@@ -343,9 +465,15 @@ Server.app.delete(`${base}/timesheets/:entry`, Auth.required(), Permissions.requ
 	if (typeof row === "number") return Utils.fail(ctx, row);
 	const access = accessOf(ctx);
 	const config = await memberConfig(project.uuid, row.member);
-	if (!access.edit && !withinEditWindow(row.work_date, todayIn(project), config.edit_days)) return Utils.fail(ctx, ErrorCode.TIMESHEET_LOCKED);
+	if (!access.edit) {
+		const today = todayIn(project);
+		if (row.work_date > today) return Utils.fail(ctx, ErrorCode.TIMESHEET_LOCKED);
+	}
 	const reason = readReason(ctx.query().get("reason") ?? undefined);
 	if (reason === undefined) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
+	if (lateReasonRequired(reason, [row.work_date], todayIn(project), config.edit_days)) {
+		return Utils.fail(ctx, ErrorCode.TIMESHEET_REASON_REQUIRED);
+	}
 
 	const before = presentEntry(row, config);
 	await Database.begin(async (tx) => {
@@ -394,10 +522,18 @@ Server.app.put(`${base}/timesheets/day`, Auth.required(), Permissions.require(Pe
 	}
 	const subject = await subjectOf(ctx, data.member, "edit");
 	if (typeof subject === "number") return Utils.fail(ctx, subject);
+	const approval = await timesheetPeriod(project.uuid, subject.uuid, date.slice(0, 7));
+	if (locksTimesheet(approval.status)) return Utils.fail(ctx, ErrorCode.TIMESHEET_PERIOD_LOCKED);
 	const config = await memberConfig(project.uuid, subject.uuid);
-	if (!access.edit && !withinEditWindow(date, todayIn(project), config.edit_days)) return Utils.fail(ctx, ErrorCode.TIMESHEET_LOCKED);
+	if (!access.edit) {
+		const today = todayIn(project);
+		if (date > today) return Utils.fail(ctx, ErrorCode.TIMESHEET_LOCKED);
+	}
 	const reason = readReason(data.reason);
 	if (reason === undefined) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
+	if (lateReasonRequired(reason, [date], todayIn(project), config.edit_days)) {
+		return Utils.fail(ctx, ErrorCode.TIMESHEET_REASON_REQUIRED);
+	}
 
 	const nearby = (await Database`
 		SELECT * FROM time_entries WHERE member = ${subject.uuid} AND work_date >= ${addDays(date, -1)} AND work_date <= ${addDays(date, 1)}
@@ -505,6 +641,8 @@ Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(
 	if (reason === undefined) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
 	const subject = await subjectOf(ctx, data.member, "edit");
 	if (typeof subject === "number") return Utils.fail(ctx, subject);
+	const approvalPeriods = await timesheetPeriods(project.uuid, [subject.uuid], [...new Set(datesBetween(from, to).map((date) => date.slice(0, 7)))]);
+	if ([...approvalPeriods.values()].some((period) => locksTimesheet(period.status))) return Utils.fail(ctx, ErrorCode.TIMESHEET_PERIOD_LOCKED);
 
 	const employee = await employeeOf(subject.uuid);
 	const config = configFor(await workforceConfig(project.uuid), employee);
@@ -540,6 +678,10 @@ Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(
 		}
 		planned.push(entries);
 	}
+	const days = planned.map((entries) => entries[0].work_date);
+	if (lateReasonRequired(reason, days, todayIn(project), config.edit_days)) {
+		return Utils.fail(ctx, ErrorCode.TIMESHEET_REASON_REQUIRED);
+	}
 
 	const now = Date.now();
 	await Database.begin(async (tx) => {
@@ -563,7 +705,6 @@ Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(
 			});
 		}
 	});
-	const days = planned.map((entries) => entries[0].work_date);
 	await audit(ctx, "time_entry.filled", "project_member", subject.uuid, { from, to, days, reason });
 	return Utils.ok(ctx, { filled: days.length, days, skipped });
 });

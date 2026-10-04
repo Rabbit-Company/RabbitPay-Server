@@ -659,6 +659,20 @@ export interface TimesheetDay {
 	entries: TimeEntry[];
 }
 
+export type TimesheetPeriodStatus = "draft" | "submitted" | "approved" | "returned";
+
+export interface TimesheetPeriod {
+	member: string;
+	period: string;
+	status: TimesheetPeriodStatus;
+	note: string | null;
+	submitted_by: string | null;
+	submitted_at: number | null;
+	decided_by: string | null;
+	decided_at: number | null;
+	updated: number | null;
+}
+
 export interface TicketReference {
 	uuid: string;
 	number: number;
@@ -674,6 +688,7 @@ export interface Timesheet {
 	edit_days: number;
 	entries: TimeEntry[];
 	tickets: TicketReference[];
+	periods: TimesheetPeriod[];
 }
 
 export interface Absence {
@@ -766,7 +781,7 @@ export interface MonthReport {
 	month: string;
 	from: string;
 	to: string;
-	people: { member: string; person: string; daily_minutes: number; days: ReportDay[]; totals: MonthTotals }[];
+	people: { member: string; person: string; daily_minutes: number; approval: TimesheetPeriod; days: ReportDay[]; totals: MonthTotals }[];
 }
 
 export interface TicketAssignee {
@@ -889,6 +904,7 @@ export interface EmployeeInput {
 
 export interface PayrollLine {
 	member: string;
+	approval_status: TimesheetPeriodStatus;
 	person: string;
 	employment_type: EmploymentType;
 	pay_type: PayType;
@@ -3353,6 +3369,18 @@ export const Api = {
 
 	saveTimesheetDay(uuid: string, day: { member: string; work_date: string; entries: TimesheetDayEntry[]; reason: string | null }) {
 		return request<TimesheetDay>("PUT", `/projects/${uuid}/timesheets/day`, day);
+	},
+
+	submitTimesheetPeriod(uuid: string, period: string) {
+		return request<TimesheetPeriod>("POST", `/projects/${uuid}/timesheets/periods/${period}/submit`, {});
+	},
+
+	decideTimesheetPeriod(uuid: string, period: string, member: string, status: "approved" | "returned", note: string | null) {
+		return request<TimesheetPeriod>("POST", `/projects/${uuid}/timesheets/periods/${period}/decision`, { member, status, note });
+	},
+
+	reopenTimesheetPeriod(uuid: string, period: string, member: string, note: string) {
+		return request<TimesheetPeriod>("POST", `/projects/${uuid}/timesheets/periods/${period}/reopen`, { member, note });
 	},
 
 	workforceRevisions(uuid: string, options: { member?: string; record?: string; limit?: number; offset?: number }) {
