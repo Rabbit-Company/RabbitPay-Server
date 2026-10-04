@@ -164,6 +164,9 @@ export enum Error {
 	INVALID_IDEMPOTENCY_KEY = 1285,
 	IDEMPOTENCY_KEY_REUSED = 1286,
 	CUSTOMER_IDENTITY_MISSING = 1287,
+	INVALID_INVOICE_EXPORT = 1288,
+	INVOICE_EXPORT_EMPTY = 1289,
+	INVOICE_EXPORT_TOO_LARGE = 1290,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -672,6 +675,9 @@ namespace Errors {
 		1281: { message: "Foreign currency items for this year are already revalued. Reverse that entry before revaluing again.", httpCode: 409 },
 		1282: { message: "The connection test failed.", httpCode: 502 },
 		1287: { message: "Enter a name or an email address for the customer.", httpCode: 400 },
+		1288: { message: "Choose a period, or the first and the last invoice number.", httpCode: 400 },
+		1289: { message: "No issued invoices match this selection.", httpCode: 404 },
+		1290: { message: "One download holds up to 1000 invoices. Choose a shorter period or range and download the rest separately.", httpCode: 400 },
 		1285: { message: "The Idempotency-Key header takes 1 to 128 letters, digits, dots, colons, hyphens or underscores.", httpCode: 400 },
 		1286: {
 			message:

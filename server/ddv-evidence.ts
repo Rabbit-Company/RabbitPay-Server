@@ -17,6 +17,7 @@ import { convertMinor, LATE_VAT_HANDLING } from "./tax-reporting";
 import { canSubmitSlovenianDdvEvidence, isTaxTreatment, splitVatNumber, type TaxTreatment } from "./tax";
 import type { InvoiceRecipient } from "./invoice-recipient";
 import { DEFAULT_TIMEZONE, isCompleteLocalVatPeriod, localDate, zonedParts } from "./timezone";
+import { zipArchive } from "./zip";
 
 export interface DdvExportOptions {
 	from: number;
@@ -561,83 +562,8 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 	};
 }
 
-function crc32(data: Uint8Array): number {
-	let crc = 0xffffffff;
-	for (const byte of data) {
-		crc ^= byte;
-		for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
-	}
-	return (crc ^ 0xffffffff) >>> 0;
-}
-
-function dosDateTime(timestamp: number): { date: number; time: number } {
-	const value = new Date(timestamp);
-	return {
-		date: ((Math.max(1980, value.getUTCFullYear()) - 1980) << 9) | ((value.getUTCMonth() + 1) << 5) | value.getUTCDate(),
-		time: (value.getUTCHours() << 11) | (value.getUTCMinutes() << 5) | Math.floor(value.getUTCSeconds() / 2),
-	};
-}
-
 export function zipFile(name: string, content: Uint8Array, timestamp = Date.now()): Uint8Array {
-	const fileName = new TextEncoder().encode(name);
-	const checksum = crc32(content);
-	const stamp = dosDateTime(timestamp);
-	const localSize = 30 + fileName.length + content.length;
-	const centralSize = 46 + fileName.length;
-	const output = new Uint8Array(localSize + centralSize + 22);
-	const view = new DataView(output.buffer);
-	let offset = 0;
-	const write16 = (value: number) => {
-		view.setUint16(offset, value, true);
-		offset += 2;
-	};
-	const write32 = (value: number) => {
-		view.setUint32(offset, value, true);
-		offset += 4;
-	};
-	write32(0x04034b50);
-	write16(20);
-	write16(0x800);
-	write16(0);
-	write16(stamp.time);
-	write16(stamp.date);
-	write32(checksum);
-	write32(content.length);
-	write32(content.length);
-	write16(fileName.length);
-	write16(0);
-	output.set(fileName, offset);
-	offset += fileName.length;
-	output.set(content, offset);
-	offset += content.length;
-	write32(0x02014b50);
-	write16(20);
-	write16(20);
-	write16(0x800);
-	write16(0);
-	write16(stamp.time);
-	write16(stamp.date);
-	write32(checksum);
-	write32(content.length);
-	write32(content.length);
-	write16(fileName.length);
-	write16(0);
-	write16(0);
-	write16(0);
-	write16(0);
-	write32(0);
-	write32(0);
-	output.set(fileName, offset);
-	offset += fileName.length;
-	write32(0x06054b50);
-	write16(0);
-	write16(0);
-	write16(1);
-	write16(1);
-	write32(centralSize);
-	write32(localSize);
-	write16(0);
-	return output;
+	return zipArchive([{ name, data: content }], timestamp);
 }
 
 export function ddvExportView(row: DdvExportRow) {

@@ -1780,6 +1780,21 @@ export interface VatReport {
 	missing_details: { invoice: string; reference: string; reason: string }[];
 }
 
+export type InvoiceExportSelection = { kind: "period"; from: string; to: string } | { kind: "numbers"; first: string; last: string };
+
+export interface InvoiceExportSummary {
+	count: number;
+	limit: number;
+	first: { reference: string; issued_at: number } | null;
+	last: { reference: string; issued_at: number } | null;
+}
+
+function invoiceExportQuery(selection: InvoiceExportSelection): string {
+	const values: Record<string, string> =
+		selection.kind === "period" ? { from: selection.from, to: selection.to } : { first: selection.first, last: selection.last };
+	return new URLSearchParams(values).toString();
+}
+
 export interface CurrencyTotal {
 	currency: string;
 	count: number;
@@ -2865,6 +2880,14 @@ export const Api = {
 
 	invoice(uuid: string, invoice: string) {
 		return request<Invoice>("GET", `/projects/${uuid}/invoices/${invoice}`);
+	},
+
+	invoiceExportSummary(uuid: string, selection: InvoiceExportSelection) {
+		return request<InvoiceExportSummary>("GET", `/projects/${uuid}/invoice-export?${invoiceExportQuery(selection)}`);
+	},
+
+	invoiceExportZip(uuid: string, selection: InvoiceExportSelection) {
+		return requestFile(`/projects/${uuid}/invoice-export/zip?${invoiceExportQuery(selection)}`, "invoices.zip");
 	},
 
 	recurringList(uuid: string, options: { status?: RecurringStatus; customer?: string; search?: string } = {}) {

@@ -236,6 +236,30 @@ and they are gone.
 The endpoint returns the whole document as data, so the page is one request and
 the same shape can feed a PDF service later.
 
+## Downloading invoices in bulk
+
+Download PDFs on the invoice list packs the PDFs of issued invoices into one ZIP
+file, for bookkeeping done outside RabbitPay. Choose either the dates the
+invoices were issued on, with shortcuts for the previous month, quarter and
+year, or the first and the last invoice number. The dialog shows how many
+invoices the choice holds before anything is downloaded.
+
+Drafts, pro forma invoices and order confirmations are left out. Canceled
+invoices are included, since their numbers were used. A range of numbers holds
+both invoices and every invoice issued between them, in either order. Each file
+is the archived PDF, the same bytes a single download returns. One ZIP holds up
+to 1000 invoices, and a larger choice is refused with error `1290` so nothing is
+left out silently.
+
+| Method | Path                                        | Permission     |
+| ------ | ------------------------------------------- | -------------- |
+| `GET`  | `/api/v1/projects/:uuid/invoice-export`     | `invoice.view` |
+| `GET`  | `/api/v1/projects/:uuid/invoice-export/zip` | `invoice.view` |
+
+Both take either `from` and `to` as `YYYY-MM-DD` dates in the project timezone,
+or `first` and `last` as invoice numbers. The first returns `count`, `limit` and
+the `first` and `last` invoice of the selection, the second returns the ZIP.
+
 ## Digital products and license keys
 
 An item in the catalogue can carry a list of license keys, and then selling it

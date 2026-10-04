@@ -29,6 +29,7 @@ import type { DateFormat } from "../../../server/formats";
 import { convertAmount, currencyRates } from "../currencies";
 import { invoiceEditor } from "./invoice-editor";
 import { customerFilter, rememberFilters, searchFilter } from "./list-filters";
+import { invoiceExportDialog } from "./invoice-export";
 import { isTaxTreatment } from "../../../server/tax";
 import { referenceDocumentOf, type ReferenceDocumentColumns, type ReferenceDocumentInput } from "../../../server/reference-document";
 import { taxTreatmentName, unitLabel } from "../options";
@@ -170,6 +171,7 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 	const creates = can(project, Permission.INVOICE_CREATE);
 	const newInvoice = el("a", { class: "button primary" }, t("invoices.new"));
 	newInvoice.hidden = !creates;
+	const exportInvoices = el("button", { class: "button ghost", type: "button", onClick: () => invoiceExportDialog(uuid, project) }, t("export.open"));
 	let round = 0;
 
 	const syncControls = () => {
@@ -215,7 +217,8 @@ export async function invoicesView(uuid: string): Promise<HTMLElement> {
 	const content = el(
 		"div",
 		{ class: "stack" },
-		el("div", { class: "toolbar" }, referenceSearch, documentFilter, statusFilter, customers.combo.element, customers.clear, customerLink, newInvoice),
+		el("div", { class: "toolbar filter-bar" }, referenceSearch, documentFilter, statusFilter, customers.combo.element, customers.clear),
+		el("div", { class: "toolbar" }, el("div", { class: "line-actions" }, exportInvoices, customerLink), newInvoice),
 		body
 	);
 

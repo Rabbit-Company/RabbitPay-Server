@@ -21,6 +21,10 @@ export function creditNoteFilename(reference: string, language: string, extensio
 	return documentFilename(translator(language)("credit.title"), reference, extension);
 }
 
+export function invoiceArchiveFilename(first: string, last: string, language: string): string {
+	return documentFilename(translator(language)("invoice.archive_title"), first === last ? first : `${first} - ${last}`, "zip");
+}
+
 export async function renderInvoicePdf(document: InvoiceDocument, logo: LogoSource | null, options: { payLink: boolean }): Promise<Uint8Array> {
 	return await RenderPool.render({ kind: "invoice", document, logo, payLink: options.payLink });
 }

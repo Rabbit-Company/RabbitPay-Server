@@ -2540,6 +2540,15 @@ select:not([multiple]) {
 	width: auto;
 	min-width: 8.5rem;
 }
+.toolbar.filter-bar > input,
+.toolbar.filter-bar > select,
+.toolbar.filter-bar > .combo {
+	flex: 1 1 180px;
+	max-width: none;
+}
+.toolbar.filter-bar > :last-child {
+	margin-left: 0;
+}
 @media (max-width: 720px) {
 	.toolbar > .combo {
 		max-width: none;

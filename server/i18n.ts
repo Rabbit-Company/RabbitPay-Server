@@ -13,6 +13,7 @@ export function isLanguage(value: unknown): value is Language {
 
 const en = {
 	"invoice.title": "Invoice",
+	"invoice.archive_title": "Invoices",
 	"invoice.issued": "Issued",
 	"invoice.supplied": "Supplied",
 	"invoice.due": "Due",
@@ -446,6 +447,7 @@ export type TranslationKey = keyof typeof en;
 
 const sl: Record<TranslationKey, string> = {
 	"invoice.title": "Račun",
+	"invoice.archive_title": "Računi",
 	"invoice.issued": "Datum izdaje",
 	"invoice.supplied": "Datum opravljene storitve",
 	"invoice.due": "Rok plačila",
