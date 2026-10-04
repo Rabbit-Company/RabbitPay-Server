@@ -147,13 +147,14 @@ export function calculateLine(
 	const benefits = sum("benefit");
 	const mealPaid = hours.amounts.meal;
 	const commutePaid = hours.amounts.commute;
+	const commuteDays = hours.days.commute ?? hours.days.worked;
 	const mealLimit = rates?.meal_exempt_daily == null ? mealPaid : hours.days.meal * rates.meal_exempt_daily;
 	const commuteLimit =
 		rates?.commute_exempt_per_km == null
 			? commutePaid
 			: details.commute_km == null
 				? commutePaid
-				: hours.days.worked * details.commute_km * rates.commute_exempt_per_km;
+				: commuteDays * details.commute_km * rates.commute_exempt_per_km;
 	if (commutePaid > 0 && rates?.commute_exempt_per_km != null && details.commute_km == null) warnings.push("commute_distance_missing");
 	const exempt = { meal: Math.min(mealPaid, mealLimit), commute: Math.min(commutePaid, commuteLimit) };
 	const taxableReimbursements = { meal: mealPaid - exempt.meal, commute: commutePaid - exempt.commute };
@@ -161,7 +162,8 @@ export function calculateLine(
 	const otherReimbursements = sum("reimbursement");
 	const gross = salaryGross + taxableExtra;
 
-	const regularMinutes = hours.minutes.worked + hours.minutes.holiday + hours.minutes.vacation + hours.minutes.paid_leave + hours.minutes.sick_employer;
+	const regularMinutes =
+		hours.minutes.worked + hours.minutes.waiting_home + hours.minutes.holiday + hours.minutes.vacation + hours.minutes.paid_leave + hours.minutes.sick_employer;
 	const fullTimeFund = weekdaysIn(period) * 480;
 	const floor =
 		employed && rates?.minimum_contribution_base != null && fullTimeFund > 0
@@ -169,6 +171,10 @@ export function calculateLine(
 			: 0;
 	if (employed && rates && rates.minimum_contribution_base == null) warnings.push("minimum_base_missing");
 	if (employed && hours.salary !== null && regularMinutes === 0) warnings.push("no_hours");
+	const accountedMinutes = regularMinutes + hours.minutes.sick_insurance + hours.minutes.unpaid;
+	if (employed && hours.pay_type === "monthly" && hours.salary !== null && accountedMinutes > 0 && accountedMinutes < hours.fund_minutes) {
+		warnings.push("hours_shortfall");
+	}
 
 	const net =
 		employed && rates
@@ -446,12 +452,14 @@ export function payrollCsv(run: PayrollRunRow, lines: PayrollCalculation[]): str
 		"iban",
 		"employment_type",
 		"hours_worked",
+		"hours_waiting_home",
 		"hours_overtime",
 		"hours_holiday",
 		"hours_leave",
 		"hours_sick_employer",
 		"hours_sick_insurance",
 		"regular",
+		"waiting_home",
 		"overtime",
 		"holidays",
 		"leave",
@@ -504,12 +512,14 @@ export function payrollCsv(run: PayrollRunRow, lines: PayrollCalculation[]): str
 			line.employee.iban,
 			line.employee.employment_type,
 			hours(minutes.worked),
+			hours(minutes.waiting_home),
 			hours(minutes.overtime),
 			hours(minutes.holiday),
 			hours(minutes.vacation + minutes.paid_leave),
 			hours(minutes.sick_employer),
 			hours(minutes.sick_insurance),
 			major(amounts.regular),
+			major(amounts.waiting_home),
 			major(amounts.overtime),
 			major(amounts.holidays),
 			major(amounts.leave),

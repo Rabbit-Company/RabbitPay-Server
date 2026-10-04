@@ -553,6 +553,7 @@ import type {
 	TicketKind,
 	TicketPriority,
 	TicketStatus,
+	TimeEntryActivity,
 	TimeEntryKind,
 } from "../../server/database/models";
 export type {
@@ -563,6 +564,7 @@ export type {
 	TicketKind,
 	TicketPriority,
 	TicketStatus,
+	TimeEntryActivity,
 	TimeEntryKind,
 	WorkforceConfig,
 	WorkforceOverrides,
@@ -629,6 +631,7 @@ export interface TimeEntry {
 	break_minutes: number;
 	worked_minutes: number;
 	kind: TimeEntryKind;
+	activity: TimeEntryActivity | null;
 	remote: boolean;
 	ticket: string | null;
 	note: string | null;
@@ -644,6 +647,7 @@ export interface TimesheetDayEntry {
 	start: string;
 	end: string;
 	kind: TimeEntryKind;
+	activity: TimeEntryActivity | null;
 	remote: boolean;
 	ticket: string | null;
 	note: string | null;
@@ -734,6 +738,8 @@ export interface ReportDay {
 	overtime_minutes: number;
 	night_minutes: number;
 	break_minutes: number;
+	onsite_minutes: number;
+	activity_minutes: Record<TimeEntryActivity, number>;
 	entries: number;
 	shifts: string[];
 	absences: { uuid: string; kind: AbsenceKind; status: AbsenceStatus; minutes: number; case_day: number }[];
@@ -747,9 +753,12 @@ export interface MonthTotals {
 	sunday_minutes: number;
 	holiday_work_minutes: number;
 	holiday_minutes: number;
+	onsite_minutes: number;
+	activity_minutes: Record<TimeEntryActivity, number>;
 	absence_minutes: Record<AbsenceKind, number>;
 	days_worked: number;
 	meal_days: number;
+	commute_days: number;
 	balance_minutes: number;
 }
 
@@ -885,11 +894,23 @@ export interface PayrollLine {
 	salary: number | null;
 	hourly_rate: number | null;
 	minutes: Record<
-		"worked" | "overtime" | "holiday" | "vacation" | "paid_leave" | "sick_employer" | "sick_insurance" | "unpaid" | "night" | "sunday" | "holiday_work",
+		| "worked"
+		| "waiting_home"
+		| "overtime"
+		| "holiday"
+		| "vacation"
+		| "paid_leave"
+		| "sick_employer"
+		| "sick_insurance"
+		| "unpaid"
+		| "night"
+		| "sunday"
+		| "holiday_work",
 		number
 	>;
 	amounts: Record<
 		| "regular"
+		| "waiting_home"
 		| "overtime"
 		| "holidays"
 		| "leave"

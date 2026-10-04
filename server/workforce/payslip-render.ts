@@ -388,6 +388,7 @@ function drawPayslip(
 	const hourly = (value: number | null) => (value === null ? "" : money(Math.round(value)));
 	const earnings: TableRow[] = [
 		[t("payslip.regular"), hours(minutes.worked), hourly(rate), money(amounts.regular)],
+		[t("payslip.waiting_home"), hours(minutes.waiting_home), "", money(amounts.waiting_home)],
 		[t("payslip.overtime"), hours(minutes.overtime), hourly(rate), money(amounts.overtime)],
 		[t("payslip.holidays"), hours(minutes.holiday), hourly(rate), money(amounts.holidays)],
 		[t("payslip.leave"), hours(minutes.vacation + minutes.paid_leave), hourly(rate), money(amounts.leave)],
@@ -414,7 +415,7 @@ function drawPayslip(
 		rows: earnings,
 		footer: [
 			t("payslip.gross"),
-			hours(minutes.worked + minutes.overtime + minutes.holiday + minutes.vacation + minutes.paid_leave + minutes.sick_employer),
+			hours(minutes.worked + minutes.waiting_home + minutes.overtime + minutes.holiday + minutes.vacation + minutes.paid_leave + minutes.sick_employer),
 			"",
 			money(line.gross),
 		],

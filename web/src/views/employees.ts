@@ -333,6 +333,7 @@ function payrollTable(project: Project, lines: PayrollLine[]): HTMLElement {
 					"td",
 					{ class: "mono" },
 					el("div", {}, t("payroll.hours_worked", { hours: formatHours(line.minutes.worked + line.minutes.overtime) })),
+					line.minutes.waiting_home ? el("div", { class: "muted" }, t("payroll.hours_waiting_home", { hours: formatHours(line.minutes.waiting_home) })) : null,
 					el(
 						"div",
 						{ class: "muted" },
@@ -346,7 +347,12 @@ function payrollTable(project: Project, lines: PayrollLine[]): HTMLElement {
 							)
 						: null
 				),
-				el("td", { class: "numeric mono" }, money(amounts.regular + amounts.overtime + amounts.holidays + amounts.leave)),
+				el(
+					"td",
+					{ class: "numeric mono" },
+					money(amounts.regular + amounts.waiting_home + amounts.overtime + amounts.holidays + amounts.leave),
+					amounts.waiting_home ? el("div", { class: "muted" }, `${t("payroll.waiting_home")} ${money(amounts.waiting_home)}`) : null
+				),
 				el(
 					"td",
 					{ class: "numeric mono" },

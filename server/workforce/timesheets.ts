@@ -3,7 +3,7 @@ import Database from "../database/database";
 import { addDays } from "./holidays";
 import { isIsoDate } from "./calendar";
 import type { ConfigOf, WorkforceConfig } from "./config";
-import type { TimeEntryKind, TimeEntryRow, WorkforceRevisionRow } from "../database/models";
+import type { TimeEntryActivity, TimeEntryKind, TimeEntryRow, WorkforceRevisionRow } from "../database/models";
 
 export interface EntryInput {
 	work_date: string;
@@ -11,6 +11,7 @@ export interface EntryInput {
 	end_minute: number;
 	break_minutes: number;
 	kind: TimeEntryKind;
+	activity: TimeEntryActivity | null;
 	remote: boolean;
 	ticket: string | null;
 	note: string | null;
@@ -24,6 +25,7 @@ export interface DaySegment {
 }
 
 const KINDS: TimeEntryKind[] = ["regular", "overtime", "break"];
+export const TIME_ENTRY_ACTIVITIES: TimeEntryActivity[] = ["ticket", "internal", "administration", "training", "available", "waiting_home"];
 export const MAX_NOTE_LENGTH = 2000;
 
 export function parseClock(value: unknown): number | null {
@@ -50,6 +52,7 @@ export function readEntry(data: Record<string, unknown>, previous?: TimeEntryRow
 	const kind = data.kind ?? previous?.kind ?? "regular";
 	const remote = data.remote ?? (previous ? Boolean(previous.remote) : false);
 	const ticket = data.ticket === undefined ? (previous?.ticket ?? null) : data.ticket;
+	const requestedActivity = data.activity === undefined ? previous?.activity : data.activity;
 	const note = data.note === undefined ? (previous?.note ?? null) : data.note;
 
 	if (!isIsoDate(workDate) || start === null || endClock === null) return null;
@@ -59,6 +62,10 @@ export function readEntry(data: Record<string, unknown>, previous?: TimeEntryRow
 	if (typeof breakMinutes !== "number" || !Number.isSafeInteger(breakMinutes) || breakMinutes < 0 || breakMinutes >= end - start) return null;
 	if (!KINDS.includes(kind as TimeEntryKind) || typeof remote !== "boolean") return null;
 	if (ticket !== null && typeof ticket !== "string") return null;
+	const activity = pause ? null : (requestedActivity ?? (ticket ? "ticket" : "internal"));
+	if (activity !== null && !TIME_ENTRY_ACTIVITIES.includes(activity as TimeEntryActivity)) return null;
+	if (!pause && (activity === "ticket") !== (ticket !== null)) return null;
+	if (activity === "waiting_home" && (kind !== "regular" || !remote)) return null;
 	if (note !== null && (typeof note !== "string" || note.length > MAX_NOTE_LENGTH)) return null;
 
 	return {
@@ -67,6 +74,7 @@ export function readEntry(data: Record<string, unknown>, previous?: TimeEntryRow
 		end_minute: end,
 		break_minutes: breakMinutes,
 		kind: kind as TimeEntryKind,
+		activity: activity as TimeEntryActivity | null,
 		remote: pause ? false : remote,
 		ticket: pause ? null : ticket,
 		note: typeof note === "string" && note.trim() ? note.trim() : null,
@@ -138,13 +146,13 @@ export function workdayEntries(date: string, start: number, breakStart: number |
 	const end = start + dailyMinutes;
 	if (dailyMinutes <= 0 || dailyMinutes > 1440) return null;
 	const shared = { work_date: date, break_minutes: 0, remote: false, ticket: null, note: null };
-	if (breakStart === null || breakMinutes === 0) return [{ ...shared, start_minute: start, end_minute: end, kind: "regular" }];
+	if (breakStart === null || breakMinutes === 0) return [{ ...shared, activity: "internal", start_minute: start, end_minute: end, kind: "regular" }];
 	const resume = breakStart + breakMinutes;
 	if (breakStart <= start || resume >= end) return null;
 	return [
-		{ ...shared, start_minute: start, end_minute: breakStart, kind: "regular" },
-		{ ...shared, start_minute: breakStart, end_minute: resume, kind: "break" },
-		{ ...shared, start_minute: resume, end_minute: end, kind: "regular" },
+		{ ...shared, activity: "internal", start_minute: start, end_minute: breakStart, kind: "regular" },
+		{ ...shared, activity: null, start_minute: breakStart, end_minute: resume, kind: "break" },
+		{ ...shared, activity: "internal", start_minute: resume, end_minute: end, kind: "regular" },
 	];
 }
 
@@ -171,6 +179,7 @@ export function presentEntry(row: TimeEntryRow, config: WorkforceConfig, paid = 
 		break_minutes: row.break_minutes,
 		worked_minutes: row.kind === "break" ? (paid.get(row.uuid) ?? 0) : workedMinutes(row, config),
 		kind: row.kind,
+		activity: row.activity,
 		remote: Boolean(row.remote),
 		ticket: row.ticket,
 		note: row.note,

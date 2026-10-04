@@ -6,7 +6,8 @@ import { ABSENCE_KINDS } from "./absence-kinds";
 import { formatClock, nightMinutesOf, paidBreaks, segmentsOf, workedMinutes } from "./timesheets";
 import { configFor, type WorkforceConfig } from "./config";
 import type { Person } from "./people";
-import type { AbsenceKind, AbsenceRow, EmployeeRow, LeaveBalanceRow, ProjectRow, TimeEntryRow } from "../database/models";
+import type { AbsenceKind, AbsenceRow, EmployeeRow, LeaveBalanceRow, ProjectRow, TimeEntryActivity, TimeEntryRow } from "../database/models";
+import { TIME_ENTRY_ACTIVITIES } from "./timesheets";
 
 export interface DayAbsence {
 	uuid: string;
@@ -26,6 +27,8 @@ export interface DayReport {
 	overtime_minutes: number;
 	night_minutes: number;
 	break_minutes: number;
+	onsite_minutes: number;
+	activity_minutes: Record<TimeEntryActivity, number>;
 	entries: number;
 	shifts: string[];
 	absences: DayAbsence[];
@@ -39,9 +42,12 @@ export interface MonthTotals {
 	sunday_minutes: number;
 	holiday_work_minutes: number;
 	holiday_minutes: number;
+	onsite_minutes: number;
+	activity_minutes: Record<TimeEntryActivity, number>;
 	absence_minutes: Record<AbsenceKind, number>;
 	days_worked: number;
 	meal_days: number;
+	commute_days: number;
 	balance_minutes: number;
 }
 
@@ -62,6 +68,10 @@ export interface MonthReport {
 
 function emptyAbsenceMinutes(): Record<AbsenceKind, number> {
 	return Object.fromEntries(ABSENCE_KINDS.map((kind) => [kind, 0])) as Record<AbsenceKind, number>;
+}
+
+function emptyActivityMinutes(): Record<TimeEntryActivity, number> {
+	return Object.fromEntries(TIME_ENTRY_ACTIVITIES.map((activity) => [activity, 0])) as Record<TimeEntryActivity, number>;
 }
 
 function employedOn(date: string, employee: Pick<EmployeeRow, "started_on" | "ended_on"> | null): boolean {
@@ -99,6 +109,8 @@ export function personMonth(
 					overtime_minutes: 0,
 					night_minutes: 0,
 					break_minutes: 0,
+					onsite_minutes: 0,
+					activity_minutes: emptyActivityMinutes(),
 					entries: 0,
 					shifts: [],
 					absences: [],
@@ -114,9 +126,12 @@ export function personMonth(
 		sunday_minutes: 0,
 		holiday_work_minutes: 0,
 		holiday_minutes: 0,
+		onsite_minutes: 0,
+		activity_minutes: emptyActivityMinutes(),
 		absence_minutes: emptyAbsenceMinutes(),
 		days_worked: 0,
 		meal_days: 0,
+		commute_days: 0,
 		balance_minutes: 0,
 	};
 
@@ -138,6 +153,14 @@ export function personMonth(
 			if (!day) continue;
 			const minutes = Math.round(segment.minutes * share);
 			const night = Math.round(nightMinutesOf(segment, config) * share);
+			if (entry.activity) {
+				day.activity_minutes[entry.activity] += minutes;
+				totals.activity_minutes[entry.activity] += minutes;
+			}
+			if (!pause && !entry.remote && entry.activity !== "waiting_home") {
+				day.onsite_minutes += minutes;
+				totals.onsite_minutes += minutes;
+			}
 			if (entry.kind === "overtime") day.overtime_minutes += minutes;
 			else day.worked_minutes += minutes;
 			day.night_minutes += night;
@@ -167,8 +190,10 @@ export function personMonth(
 		totals.worked_minutes += day.worked_minutes;
 		totals.overtime_minutes += day.overtime_minutes;
 		const present = day.worked_minutes + day.overtime_minutes;
-		if (present > 0) totals.days_worked += 1;
-		if (present > 0 && present >= config.meal_min_minutes) totals.meal_days += 1;
+		const activeWork = Math.max(0, present - day.activity_minutes.waiting_home);
+		if (activeWork > 0) totals.days_worked += 1;
+		if (activeWork >= config.meal_min_minutes) totals.meal_days += 1;
+		if (day.onsite_minutes > 0) totals.commute_days += 1;
 		if (!day.employed || day.weekday === 0 || day.weekday === 6) continue;
 		totals.fund_minutes += person.daily_minutes;
 		if (isPaidHoliday(day.date, calendar)) totals.holiday_minutes += person.daily_minutes;
@@ -295,7 +320,25 @@ function hours(minutes: number): string {
 
 export function monthReportCsv(report: MonthReport): string {
 	const rows: (string | number)[][] = [
-		["person", "date", "holiday", "worked_hours", "overtime_hours", "night_hours", "break_minutes", "absence", "absence_hours", "absence_status"],
+		[
+			"person",
+			"date",
+			"holiday",
+			"paid_work_hours",
+			"onsite_hours",
+			"ticket_hours",
+			"internal_hours",
+			"administration_hours",
+			"training_hours",
+			"available_hours",
+			"waiting_home_hours",
+			"overtime_hours",
+			"night_hours",
+			"break_minutes",
+			"absence",
+			"absence_hours",
+			"absence_status",
+		],
 	];
 	for (const person of report.people) {
 		for (const day of person.days) {
@@ -305,6 +348,13 @@ export function monthReportCsv(report: MonthReport): string {
 				day.date,
 				day.holiday?.name.sl ?? "",
 				hours(day.worked_minutes),
+				hours(day.onsite_minutes),
+				hours(day.activity_minutes.ticket),
+				hours(day.activity_minutes.internal),
+				hours(day.activity_minutes.administration),
+				hours(day.activity_minutes.training),
+				hours(day.activity_minutes.available),
+				hours(day.activity_minutes.waiting_home),
 				hours(day.overtime_minutes),
 				hours(day.night_minutes),
 				day.break_minutes,
@@ -319,6 +369,13 @@ export function monthReportCsv(report: MonthReport): string {
 			"total",
 			`fund ${hours(totals.fund_minutes)}; holidays ${hours(totals.holiday_minutes)}; balance ${hours(totals.balance_minutes)}`,
 			hours(totals.worked_minutes),
+			hours(totals.onsite_minutes),
+			hours(totals.activity_minutes.ticket),
+			hours(totals.activity_minutes.internal),
+			hours(totals.activity_minutes.administration),
+			hours(totals.activity_minutes.training),
+			hours(totals.activity_minutes.available),
+			hours(totals.activity_minutes.waiting_home),
 			hours(totals.overtime_minutes),
 			hours(totals.night_minutes),
 			"",

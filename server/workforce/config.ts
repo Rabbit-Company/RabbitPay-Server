@@ -6,6 +6,7 @@ export interface WorkforceRates {
 	night: number;
 	sunday: number;
 	holiday: number;
+	waiting_home: number;
 	sick: number;
 	injury: number;
 }
@@ -32,7 +33,7 @@ export const DEFAULT_WORKFORCE_CONFIG: WorkforceConfig = {
 	daily_minutes: 480,
 	night_from: 22 * 60,
 	night_to: 6 * 60,
-	rates: { overtime: 30, night: 50, sunday: 50, holiday: 100, sick: 80, injury: 100 },
+	rates: { overtime: 30, night: 50, sunday: 50, holiday: 100, waiting_home: 80, sick: 80, injury: 100 },
 	sick_employer_days: 20,
 	seniority_rate: 0.5,
 	meal_allowance: 0,

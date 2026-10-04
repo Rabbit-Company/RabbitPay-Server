@@ -168,6 +168,13 @@ function drawPerson(
 	const summary: [string, string][] = [
 		[t("timesheet_pdf.fund"), hours(totals.fund_minutes) || "0:00"],
 		[t("timesheet_pdf.worked_total"), hours(totals.worked_minutes) || "0:00"],
+		[t("timesheet_pdf.onsite_total"), hours(totals.onsite_minutes) || "0:00"],
+		[t("timesheet_pdf.ticket_total"), hours(totals.activity_minutes.ticket) || "0:00"],
+		[t("timesheet_pdf.internal_total"), hours(totals.activity_minutes.internal) || "0:00"],
+		[t("timesheet_pdf.administration_total"), hours(totals.activity_minutes.administration) || "0:00"],
+		[t("timesheet_pdf.training_total"), hours(totals.activity_minutes.training) || "0:00"],
+		[t("timesheet_pdf.available_total"), hours(totals.activity_minutes.available) || "0:00"],
+		[t("timesheet_pdf.waiting_home_total"), hours(totals.activity_minutes.waiting_home) || "0:00"],
 		[t("timesheet_pdf.overtime_total"), hours(totals.overtime_minutes) || "0:00"],
 		[t("timesheet_pdf.holidays"), hours(totals.holiday_minutes) || "0:00"],
 		...ABSENCE_KINDS.filter((kind) => totals.absence_minutes[kind] > 0).map((kind): [string, string] => [
@@ -177,6 +184,7 @@ function drawPerson(
 		[t("timesheet_pdf.night_total"), hours(totals.night_minutes) || "0:00"],
 		[t("timesheet_pdf.sunday"), hours(totals.sunday_minutes) || "0:00"],
 		[t("timesheet_pdf.holiday_work"), hours(totals.holiday_work_minutes) || "0:00"],
+		[t("timesheet_pdf.commute_days"), String(totals.commute_days)],
 		[t("timesheet_pdf.balance"), hours(totals.balance_minutes) || "0:00"],
 	];
 	const half = Math.ceil(summary.length / 2);

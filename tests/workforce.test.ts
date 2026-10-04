@@ -223,6 +223,54 @@ describe("the workforce module", () => {
 		expect(mine.data.edit_days).toBe(1);
 	});
 
+	test("paid availability is separate from ticket work and formal waiting at home is supervisor controlled", async () => {
+		const denied = await call(
+			"POST",
+			`${base()}/timesheets`,
+			tokens.employee,
+			entry(today, "17:00", "18:00", { break_minutes: 0, activity: "waiting_home", remote: true })
+		);
+		expect(denied.error).toBe(9999);
+
+		const date = "2025-08-12";
+		const saved = await call("PUT", `${base()}/timesheets/day`, tokens.supervisor, {
+			member: members.colleague,
+			work_date: date,
+			entries: [
+				{ start: "08:00", end: "12:00", kind: "regular", activity: "available", remote: false, ticket: null, note: "No assigned work" },
+				{ start: "12:00", end: "16:00", kind: "regular", activity: "waiting_home", remote: true, ticket: null, note: "Employer order" },
+			],
+			reason: "Record paid availability separately",
+		});
+		expect(saved.error).toBe(0);
+		const remoteDate = "2025-08-13";
+		const remoteOnly = await call("POST", `${base()}/timesheets`, tokens.supervisor, {
+			...entry(remoteDate, "08:00", "16:00", { break_minutes: 0, activity: "available", remote: true }),
+			member: members.colleague,
+		});
+		expect(remoteOnly.error).toBe(0);
+
+		const report = await call("GET", `${base()}/timesheets/report?month=2025-08&member=${members.colleague}`, tokens.supervisor);
+		expect(report.error).toBe(0);
+		expect(report.data.people[0].totals).toMatchObject({
+			worked_minutes: 960,
+			onsite_minutes: 240,
+			activity_minutes: { available: 720, waiting_home: 240 },
+			days_worked: 2,
+			commute_days: 1,
+		});
+		const line = payrollLine(
+			report.data.people[0],
+			{ from: "2025-08-01", to: "2025-08-31" },
+			{ employment_type: "full_time", pay_type: "hourly" },
+			{ salary: 6000, commute_per_day: 500 },
+			DEFAULT_WORKFORCE_CONFIG
+		);
+		expect(line.minutes).toMatchObject({ worked: 720, waiting_home: 240 });
+		expect(line.amounts).toMatchObject({ regular: 72000, waiting_home: 19200, commute: 500 });
+		await Database`DELETE FROM time_entries WHERE member = ${members.colleague} AND work_date IN (${date}, ${remoteDate})`;
+	});
+
 	test("supervisors correct anyone's timesheet on any date and every change is kept", async () => {
 		const back = addDays(today, -10);
 		const created = await call("POST", `${base()}/timesheets`, tokens.supervisor, {
@@ -818,6 +866,7 @@ describe("the workforce module", () => {
 		expect(payroll.data.lines).toHaveLength(1);
 		expect(payroll.data.lines[0].amounts).toEqual({
 			regular: 145455,
+			waiting_home: 0,
 			overtime: 2273,
 			holidays: 18182,
 			leave: 45455,
@@ -1143,6 +1192,8 @@ describe("the workforce module", () => {
 			overtime_minutes: 0,
 			night_minutes: 0,
 			break_minutes: 0,
+			onsite_minutes: 0,
+			activity_minutes: { ticket: 0, internal: 0, administration: 0, training: 0, available: 0, waiting_home: 0 },
 			entries: 0,
 			shifts: [],
 			absences: [{ uuid: "case", kind: "sick" as const, status: "approved" as const, minutes: 480, case_day: index + 1 }],
@@ -1161,9 +1212,12 @@ describe("the workforce module", () => {
 					sunday_minutes: 0,
 					holiday_work_minutes: 0,
 					holiday_minutes: 0,
+					onsite_minutes: 0,
+					activity_minutes: { ticket: 0, internal: 0, administration: 0, training: 0, available: 0, waiting_home: 0 },
 					absence_minutes: { vacation: 0, sick: 25 * 480, injury: 0, paid_leave: 0, unpaid: 0, parental: 0, other: 0 },
 					days_worked: 0,
 					meal_days: 0,
+					commute_days: 0,
 					balance_minutes: 0,
 				},
 			},
@@ -1194,6 +1248,8 @@ describe("the workforce module", () => {
 			overtime_minutes: 0,
 			night_minutes: 0,
 			break_minutes: 0,
+			onsite_minutes: 480,
+			activity_minutes: { ticket: 0, internal: 480, administration: 0, training: 0, available: 0, waiting_home: 0 },
 			entries: 1,
 			shifts: [],
 			absences: [],
@@ -1211,9 +1267,12 @@ describe("the workforce module", () => {
 				sunday_minutes: 0,
 				holiday_work_minutes: 0,
 				holiday_minutes: 2 * 480,
+				onsite_minutes: 20 * 480,
+				activity_minutes: { ticket: 0, internal: 20 * 480, administration: 0, training: 0, available: 0, waiting_home: 0 },
 				absence_minutes: { vacation: 0, sick: 0, injury: 0, paid_leave: 0, unpaid: 0, parental: 0, other: 0 },
 				days_worked: 20,
 				meal_days: 20,
+				commute_days: 20,
 				balance_minutes: 0,
 			},
 		};

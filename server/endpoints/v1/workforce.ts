@@ -229,6 +229,7 @@ async function presentInDay(row: TimeEntryRow, config: WorkforceConfig) {
 async function checkEntry(ctx: Context<AppState>, subject: ProjectMemberRow, input: EntryInput, previous: TimeEntryRow | null): Promise<ErrorCode | null> {
 	const project = Permissions.project(ctx);
 	const access = accessOf(ctx);
+	if (input.activity === "waiting_home" && previous?.activity !== "waiting_home" && !access.edit) return ErrorCode.INSUFFICIENT_PERMISSIONS;
 	if (!access.edit) {
 		const config = await memberConfig(project.uuid, subject.uuid);
 		const today = todayIn(project);
@@ -258,10 +259,10 @@ Server.app.post(`${base}/timesheets`, Auth.required(), Permissions.require(Permi
 	const now = Date.now();
 	await Database.begin(async (tx) => {
 		await tx`
-			INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, remote, ticket, note,
+			INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, activity, remote, ticket, note,
 				created_by, updated_by, created, updated)
 			VALUES(${uuid}, ${project.uuid}, ${subject.uuid}, ${personName(subject)}, ${input.work_date}, ${input.start_minute}, ${input.end_minute},
-				${input.break_minutes}, ${input.kind}, ${input.remote ? 1 : 0}, ${input.ticket}, ${input.note}, ${account.username}, ${account.username}, ${now}, ${now})
+				${input.break_minutes}, ${input.kind}, ${input.activity}, ${input.remote ? 1 : 0}, ${input.ticket}, ${input.note}, ${account.username}, ${account.username}, ${now}, ${now})
 		`;
 		await recordRevision(tx, {
 			project: project.uuid,
@@ -313,7 +314,7 @@ Server.app.patch(`${base}/timesheets/:entry`, Auth.required(), Permissions.requi
 	await Database.begin(async (tx) => {
 		await tx`
 			UPDATE time_entries SET work_date = ${input.work_date}, start_minute = ${input.start_minute}, end_minute = ${input.end_minute},
-				break_minutes = ${input.break_minutes}, kind = ${input.kind}, remote = ${input.remote ? 1 : 0}, ticket = ${input.ticket}, note = ${input.note},
+				break_minutes = ${input.break_minutes}, kind = ${input.kind}, activity = ${input.activity}, remote = ${input.remote ? 1 : 0}, ticket = ${input.ticket}, note = ${input.note},
 				updated_by = ${account.username}, updated = ${Date.now()}
 			WHERE uuid = ${row.uuid}
 		`;
@@ -370,6 +371,7 @@ function sameEntry(row: TimeEntryRow, input: EntryInput): boolean {
 		row.end_minute === input.end_minute &&
 		row.break_minutes === input.break_minutes &&
 		row.kind === input.kind &&
+		row.activity === input.activity &&
 		Boolean(row.remote) === input.remote &&
 		row.ticket === input.ticket &&
 		row.note === input.note
@@ -416,6 +418,7 @@ Server.app.put(`${base}/timesheets/day`, Auth.required(), Permissions.require(Pe
 		}
 		const input = readEntry({ ...fields, work_date: date }, row ?? undefined);
 		if (!input) return Utils.fail(ctx, ErrorCode.INVALID_TIME_ENTRY);
+		if (input.activity === "waiting_home" && row?.activity !== "waiting_home" && !access.edit) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
 		if (!(await validTicket(project.uuid, input.ticket))) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
 		planned.push({ row, input });
 	}
@@ -445,7 +448,7 @@ Server.app.put(`${base}/timesheets/day`, Auth.required(), Permissions.require(Pe
 			if (row) {
 				await tx`
 					UPDATE time_entries SET start_minute = ${input.start_minute}, end_minute = ${input.end_minute}, break_minutes = ${input.break_minutes},
-						kind = ${input.kind}, remote = ${input.remote ? 1 : 0}, ticket = ${input.ticket}, note = ${input.note}, updated_by = ${account.username},
+						kind = ${input.kind}, activity = ${input.activity}, remote = ${input.remote ? 1 : 0}, ticket = ${input.ticket}, note = ${input.note}, updated_by = ${account.username},
 						updated = ${now}
 					WHERE uuid = ${row.uuid}
 				`;
@@ -453,10 +456,10 @@ Server.app.put(`${base}/timesheets/day`, Auth.required(), Permissions.require(Pe
 			} else {
 				const uuid = crypto.randomUUID();
 				await tx`
-					INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, remote, ticket, note,
+					INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, activity, remote, ticket, note,
 						created_by, updated_by, created, updated)
 					VALUES(${uuid}, ${project.uuid}, ${subject.uuid}, ${personName(subject)}, ${date}, ${input.start_minute}, ${input.end_minute},
-						${input.break_minutes}, ${input.kind}, ${input.remote ? 1 : 0}, ${input.ticket}, ${input.note}, ${account.username}, ${account.username}, ${now}, ${now})
+						${input.break_minutes}, ${input.kind}, ${input.activity}, ${input.remote ? 1 : 0}, ${input.ticket}, ${input.note}, ${account.username}, ${account.username}, ${now}, ${now})
 				`;
 				created.push(uuid);
 			}
@@ -543,10 +546,10 @@ Server.app.post(`${base}/timesheets/fill`, Auth.required(), Permissions.require(
 		for (const entry of planned.flat()) {
 			const uuid = crypto.randomUUID();
 			await tx`
-				INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, remote, ticket, note,
+				INSERT INTO time_entries(uuid, project, member, person, work_date, start_minute, end_minute, break_minutes, kind, activity, remote, ticket, note,
 					created_by, updated_by, created, updated)
 				VALUES(${uuid}, ${project.uuid}, ${subject.uuid}, ${personName(subject)}, ${entry.work_date}, ${entry.start_minute}, ${entry.end_minute}, 0,
-					${entry.kind}, 0, NULL, NULL, ${account.username}, ${account.username}, ${now}, ${now})
+					${entry.kind}, ${entry.activity}, 0, NULL, NULL, ${account.username}, ${account.username}, ${now}, ${now})
 			`;
 			await recordRevision(tx, {
 				project: project.uuid,

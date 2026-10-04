@@ -493,6 +493,22 @@ export const MIGRATIONS: Migration[] = [
 			]);
 		},
 	},
+	{
+		version: 48,
+		name: "time entry activities",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE time_entries ADD COLUMN activity ${types.text("activity")}`);
+			await sql`
+				UPDATE time_entries
+				SET activity = CASE
+					WHEN kind = 'break' THEN NULL
+					WHEN ticket IS NOT NULL THEN 'ticket'
+					ELSE 'internal'
+				END
+			`;
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

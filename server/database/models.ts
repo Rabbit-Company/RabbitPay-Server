@@ -1008,6 +1008,7 @@ export interface LeaveBalanceRow {
 }
 
 export type TimeEntryKind = "regular" | "overtime" | "break";
+export type TimeEntryActivity = "ticket" | "internal" | "administration" | "training" | "available" | "waiting_home";
 
 export interface TimeEntryRow {
 	uuid: string;
@@ -1019,6 +1020,7 @@ export interface TimeEntryRow {
 	end_minute: number;
 	break_minutes: number;
 	kind: TimeEntryKind;
+	activity: TimeEntryActivity | null;
 	remote: number;
 	ticket: string | null;
 	note: string | null;

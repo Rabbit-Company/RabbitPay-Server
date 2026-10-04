@@ -4255,6 +4255,9 @@ img.zoomable {
 .dialog-large {
 	max-width: 1180px;
 }
+.dialog-xlarge {
+	max-width: 1440px;
+}
 .items-table th,
 .items-table td {
 	padding: 0.45rem 0.5rem;

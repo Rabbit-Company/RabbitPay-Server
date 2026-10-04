@@ -6,6 +6,7 @@ import type { EmployeeRow } from "../database/models";
 
 export interface PayrollMinutes {
 	worked: number;
+	waiting_home: number;
 	overtime: number;
 	holiday: number;
 	vacation: number;
@@ -20,6 +21,7 @@ export interface PayrollMinutes {
 
 export interface PayrollAmounts {
 	regular: number;
+	waiting_home: number;
 	overtime: number;
 	holidays: number;
 	leave: number;
@@ -37,7 +39,7 @@ export interface PayrollAmounts {
 
 export interface PayrollLine {
 	member: string;
-	days: { worked: number; meal: number };
+	days: { worked: number; meal: number; commute: number };
 	fund_minutes: number;
 	person: string;
 	employment_type: EmployeeRow["employment_type"];
@@ -97,7 +99,8 @@ export function payrollLine(
 	}
 
 	const minutes: PayrollMinutes = {
-		worked: totals.worked_minutes,
+		worked: Math.max(0, totals.worked_minutes - totals.activity_minutes.waiting_home),
+		waiting_home: totals.activity_minutes.waiting_home,
 		overtime: totals.overtime_minutes,
 		holiday: employed ? totals.holiday_minutes : 0,
 		vacation: employed ? totals.absence_minutes.vacation : 0,
@@ -112,6 +115,7 @@ export function payrollLine(
 
 	const pay = (count: number, percent = 100) => Math.round(count * perMinute * (percent / 100));
 	const regular = pay(minutes.worked);
+	const waitingHome = pay(minutes.waiting_home, config.rates.waiting_home);
 	const overtime = pay(minutes.overtime);
 	const holidays = pay(minutes.holiday);
 	const leave = pay(minutes.vacation + minutes.paid_leave);
@@ -122,14 +126,14 @@ export function payrollLine(
 	const holidaySupplement = pay(minutes.holiday_work, config.rates.holiday);
 	const service = employed ? serviceSpan(employee.started_on, employee.prior_service_months ?? 0, addDays(range.from, -1)) : null;
 	const seniorityPercent = service === null ? 0 : Math.round(Math.floor(service.months / 12) * config.seniority_rate * 100) / 100;
-	const seniority = Math.round(((regular + holidays + leave) * seniorityPercent) / 100);
+	const seniority = Math.round(((regular + waitingHome + holidays + leave) * seniorityPercent) / 100);
 	const reimbursed = employee.employment_type !== "contractor";
 	const meal = reimbursed ? totals.meal_days * config.meal_allowance : 0;
-	const commute = reimbursed ? totals.days_worked * (details.commute_per_day ?? 0) : 0;
+	const commute = reimbursed ? totals.commute_days * (details.commute_per_day ?? 0) : 0;
 
 	return {
 		member: month.member,
-		days: { worked: totals.days_worked, meal: totals.meal_days },
+		days: { worked: totals.days_worked, meal: totals.meal_days, commute: totals.commute_days },
 		fund_minutes: fullFund,
 		person: month.person,
 		employment_type: employee.employment_type,
@@ -142,6 +146,7 @@ export function payrollLine(
 		minutes,
 		amounts: {
 			regular,
+			waiting_home: waitingHome,
 			overtime,
 			holidays,
 			leave,
@@ -151,7 +156,8 @@ export function payrollLine(
 			sunday_supplement: sundaySupplement,
 			holiday_supplement: holidaySupplement,
 			seniority,
-			gross: regular + overtime + holidays + leave + sick + overtimeSupplement + nightSupplement + sundaySupplement + holidaySupplement + seniority,
+			gross:
+				regular + waitingHome + overtime + holidays + leave + sick + overtimeSupplement + nightSupplement + sundaySupplement + holidaySupplement + seniority,
 			meal,
 			commute,
 			reimbursements: meal + commute,

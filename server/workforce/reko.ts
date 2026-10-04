@@ -196,7 +196,7 @@ function salaryItem(line: PayrollCalculation, range: { from: string; to: string 
 	const overtime = pay.overtime + pay.overtime_supplement;
 	const supplements = overtime + pay.night_supplement + pay.sunday_supplement + pay.holiday_supplement;
 	const leaveMinutes = minutes.holiday + minutes.vacation + minutes.paid_leave;
-	const regularMinutes = minutes.worked + leaveMinutes;
+	const regularMinutes = minutes.worked + minutes.waiting_home + leaveMinutes;
 	const paidMinutes = regularMinutes + minutes.overtime + minutes.sick_employer;
 	const taxableReimbursements = line.taxable_reimbursements.meal + line.taxable_reimbursements.commute;
 	const otherBase = line.benefits + taxableReimbursements;

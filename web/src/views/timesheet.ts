@@ -8,6 +8,7 @@ import {
 	type Ticket,
 	type TicketReference,
 	type TimeEntry,
+	type TimeEntryActivity,
 	type TimeEntryKind,
 	type TimesheetDayEntry,
 	type WorkforceConfig,
@@ -58,6 +59,23 @@ function ticketLabel(ticket: Pick<Ticket, "number" | "title">): string {
 	return `#${ticket.number} ${ticket.title}`;
 }
 
+function rememberedRemote(uuid: string, member: string): boolean | null {
+	try {
+		const value = localStorage.getItem(`rabbitpay.timesheet.remote:${uuid}:${member}`);
+		return value === null ? null : value === "true";
+	} catch {
+		return null;
+	}
+}
+
+function rememberRemote(uuid: string, member: string, remote: boolean) {
+	try {
+		localStorage.setItem(`rabbitpay.timesheet.remote:${uuid}:${member}`, String(remote));
+	} catch {
+		void 0;
+	}
+}
+
 async function holidaysBetween(uuid: string, from: string, to: string): Promise<Map<string, WorkforceHoliday>> {
 	const years = [...new Set([from.slice(0, 4), to.slice(0, 4)])].map(Number);
 	const lists = await Promise.all(years.map((year) => Api.workforceHolidays(uuid, year)));
@@ -89,15 +107,21 @@ function spanOf(start: string, end: string): { start: number; minutes: number } 
 }
 
 const ENTRY_KINDS: TimeEntryKind[] = ["regular", "overtime", "break"];
+const ENTRY_ACTIVITIES: TimeEntryActivity[] = ["ticket", "internal", "administration", "training", "available", "waiting_home"];
 
 function kindLabel(kind: TimeEntryKind): string {
 	return t(`timesheet.kind_${kind}` as UiKey);
+}
+
+function activityLabel(activity: TimeEntryActivity): string {
+	return t(`timesheet.activity_${activity}` as UiKey);
 }
 
 function entrySummary(entry: TimeEntry): string {
 	return [
 		`${entry.start}-${entry.end}${entry.overnight ? ` (${t("timesheet.next_day")})` : ""}`,
 		entry.kind === "regular" ? null : kindLabel(entry.kind),
+		entry.activity ? activityLabel(entry.activity) : null,
 		entry.break_minutes ? t("timesheet.break_short", { minutes: entry.break_minutes }) : null,
 		entry.remote ? t("timesheet.remote_short") : null,
 	]
@@ -133,6 +157,7 @@ function dayEditor(options: {
 	const showTickets = options.activeTickets.length > 0 || options.entries.some((entry) => entry.ticket !== null);
 	const ticketChoices = [...new Map([...options.activeTickets, ...options.tickets.values()].map((ticket) => [ticket.uuid, ticket])).values()];
 	const rows: DayRow[] = [];
+	let preferredRemote = rememberedRemote(uuid, member);
 	const tbody = el("tbody", {});
 	const total = el("strong", { class: "mono" });
 	const reason = input("text", { maxlength: "500", placeholder: t("timesheet.reason_placeholder") });
@@ -143,6 +168,7 @@ function dayEditor(options: {
 		t("timesheet.kind"),
 		t("timesheet.remote_column"),
 		showTickets ? t("timesheet.ticket") : null,
+		t("timesheet.activity"),
 		t("timesheet.note"),
 		t("timesheet.worked"),
 		"",
@@ -150,6 +176,11 @@ function dayEditor(options: {
 	const emptyCell = el("td", { class: "muted" }, t("timesheet.day_empty"));
 	emptyCell.colSpan = columns.length;
 	const emptyRow = el("tr", {}, emptyCell);
+	const reorderRows = () => {
+		const startOf = (node: HTMLTableRowElement) => rows.find((row) => row.node === node)?.span()?.start ?? Number(node.dataset.start ?? 0);
+		const nodes = [...tbody.children].filter((node): node is HTMLTableRowElement => node instanceof HTMLTableRowElement && node !== emptyRow);
+		for (const node of nodes.sort((first, second) => startOf(first) - startOf(second))) tbody.append(node);
+	};
 
 	const refresh = () => {
 		let paidLeft = paidBreak - locked.filter((entry) => entry.kind === "break").reduce((sum, entry) => sum + entry.worked_minutes, 0);
@@ -172,11 +203,12 @@ function dayEditor(options: {
 		total.textContent = formatHours(sum);
 		if (rows.length === 0 && locked.length === 0) tbody.append(emptyRow);
 		else emptyRow.remove();
+		reorderRows();
 	};
 
 	const lockedRow = (entry: TimeEntry): HTMLTableRowElement => {
 		const ticket = entry.ticket ? options.tickets.get(entry.ticket) : null;
-		return el(
+		const node = el(
 			"tr",
 			{ class: "muted-row" },
 			el("td", { class: "mono" }, entry.start),
@@ -184,10 +216,13 @@ function dayEditor(options: {
 			el("td", {}, kindLabel(entry.kind)),
 			el("td", { class: "center" }, entry.remote ? icon("check", 16) : ""),
 			showTickets ? el("td", {}, ticket ? ticketLabel(ticket) : "") : null,
+			el("td", {}, entry.activity ? activityLabel(entry.activity) : ""),
 			el("td", {}, entry.note ?? ""),
 			el("td", { class: "numeric mono" }, formatHours(entry.worked_minutes)),
 			el("td", { class: "actions" }, el("span", { class: "pill pill-paid" }, t("timesheet.invoiced")))
 		);
+		node.dataset.start = String(clockMinutes(entry.start) ?? 0);
+		return node;
 	};
 
 	const addRow = (entry: TimeEntry | null, defaults?: { start: string; end: string; kind: TimeEntryKind }) => {
@@ -199,7 +234,14 @@ function dayEditor(options: {
 			entry?.kind ?? defaults?.kind ?? "regular"
 		);
 		const remote = input("checkbox", { title: t("timesheet.remote") });
-		remote.checked = entry?.remote ?? false;
+		remote.checked = entry?.remote ?? preferredRemote ?? false;
+		const activityChoices = ENTRY_ACTIVITIES.filter(
+			(value) => (value !== "ticket" || ticketChoices.length > 0) && (value !== "waiting_home" || state.me.edit || entry?.activity === "waiting_home")
+		);
+		const activity = select(
+			activityChoices.map((value) => ({ value, label: activityLabel(value) })),
+			entry?.activity ?? (entry?.ticket ? "ticket" : "internal")
+		);
 		const ticket = select(
 			[{ value: "", label: t("timesheet.no_ticket") }, ...ticketChoices.map((choice) => ({ value: choice.uuid, label: ticketLabel(choice) }))],
 			entry?.ticket ?? ""
@@ -215,11 +257,35 @@ function dayEditor(options: {
 			el("td", {}, kind),
 			el("td", { class: "center" }, remote),
 			showTickets ? el("td", {}, ticket) : null,
+			el("td", {}, activity),
 			el("td", {}, note),
 			worked,
 			el(
 				"td",
 				{ class: "actions" },
+				el(
+					"button",
+					{
+						class: "icon-button",
+						type: "button",
+						title: t("timesheet.insert_after"),
+						onClick: () => {
+							const from = clockMinutes(end.value) ?? 0;
+							const next = [
+								...rows.filter((candidate) => candidate !== row).map((candidate) => candidate.span()?.start),
+								...locked.map((candidate) => clockMinutes(candidate.start)),
+							]
+								.filter((minute): minute is number => minute !== null && minute !== undefined && minute > from)
+								.sort((first, second) => first - second)[0];
+							addRow(null, {
+								start: end.value,
+								end: next === undefined ? clockAfter(end.value, 60) : clockAfter("00:00", next),
+								kind: "regular",
+							}).focus();
+						},
+					},
+					icon("plus", 16)
+				),
 				el(
 					"button",
 					{
@@ -236,15 +302,28 @@ function dayEditor(options: {
 				)
 			)
 		);
+		const applyActivity = () => {
+			const pause = kind.value === "break";
+			const ticketWork = !pause && activity.value === "ticket";
+			const waiting = !pause && activity.value === "waiting_home";
+			ticket.disabled = !ticketWork;
+			ticket.required = ticketWork;
+			remote.disabled = pause || waiting;
+			if (!ticketWork) ticket.value = "";
+			if (waiting) {
+				kind.value = "regular";
+				remote.checked = true;
+			}
+		};
 		const applyKind = () => {
 			const pause = kind.value === "break";
 			node.classList.toggle("break-row", pause);
-			remote.disabled = pause;
-			ticket.disabled = pause;
+			activity.disabled = pause;
 			if (pause) {
 				remote.checked = false;
 				ticket.value = "";
 			}
+			applyActivity();
 		};
 
 		const row: DayRow = {
@@ -258,6 +337,7 @@ function dayEditor(options: {
 				start: start.value,
 				end: end.value,
 				kind: kind.value as TimeEntryKind,
+				activity: kind.value === "break" ? null : (activity.value as TimeEntryActivity),
 				remote: remote.checked,
 				ticket: ticket.value || null,
 				note: note.value.trim() || null,
@@ -267,6 +347,15 @@ function dayEditor(options: {
 		kind.addEventListener("change", () => {
 			applyKind();
 			refresh();
+		});
+		activity.addEventListener("change", applyActivity);
+		remote.addEventListener("change", () => {
+			if (kind.value !== "break" && activity.value !== "waiting_home") preferredRemote = remote.checked;
+		});
+		ticket.addEventListener("change", () => {
+			if (ticket.value) activity.value = "ticket";
+			else if (activity.value === "ticket") activity.value = "internal";
+			applyActivity();
 		});
 		applyKind();
 		rows.push(row);
@@ -282,8 +371,19 @@ function dayEditor(options: {
 	if (options.entries.length === 0) addRow(null);
 
 	const append = (kind: TimeEntryKind, minutes: number) => {
-		const previous = rows[rows.length - 1]?.payload().end;
-		const start = previous ?? "08:00";
+		const latest = [
+			...rows.map((row) => {
+				const span = row.span();
+				return span ? { end: row.payload().end, total: span.start + span.minutes } : null;
+			}),
+			...locked.map((entry) => {
+				const span = spanOf(entry.start, entry.end);
+				return span ? { end: entry.end, total: span.start + span.minutes } : null;
+			}),
+		]
+			.filter((value): value is { end: string; total: number } => value !== null)
+			.sort((first, second) => second.total - first.total)[0];
+		const start = latest?.end ?? "08:00";
 		addRow(null, { start, end: clockAfter(start, minutes), kind }).focus();
 	};
 
@@ -298,9 +398,10 @@ function dayEditor(options: {
 					await Api.saveTimesheetDay(uuid, {
 						member,
 						work_date: date,
-						entries: rows.map((row) => row.payload()),
+						entries: [...rows].sort((first, second) => (first.span()?.start ?? 0) - (second.span()?.start ?? 0)).map((row) => row.payload()),
 						reason: reason.value.trim() || null,
 					});
+					if (preferredRemote !== null) rememberRemote(uuid, member, preferredRemote);
 					toast(t("timesheet.saved"), "success");
 					dialog.close();
 					options.onSaved();
@@ -328,13 +429,13 @@ function dayEditor(options: {
 			),
 			el("div", { class: "totals-row" }, el("span", {}, t("timesheet.day_worked")), total)
 		),
-		el("p", { class: "muted" }, t("timesheet.overnight_hint"), " ", t("timesheet.break_hint", { minutes: paidBreak })),
+		el("p", { class: "muted" }, t("timesheet.activity_hint"), " ", t("timesheet.overnight_hint"), " ", t("timesheet.break_hint", { minutes: paidBreak })),
 		state.me.edit && (foreign || options.entries.length > 0) ? field(t("timesheet.reason"), reason, t("timesheet.reason_hint")) : null,
 		el("div", { class: "form-actions" }, el("button", { class: "button ghost", type: "button", onClick: () => dialog.close() }, t("ui.cancel")), submit)
 	);
 	const person = foreign ? state.people.find((candidate) => candidate.member === member)?.name : null;
 	const title = [`${weekdayName(date)} ${formatDay(date, options.project)}`, person].filter(Boolean).join(" | ");
-	const dialog = modal(title, form, undefined, "dialog-large");
+	const dialog = modal(title, form, undefined, "dialog-xlarge");
 }
 
 function monthEnd(date: string): string {
@@ -429,6 +530,9 @@ function revisionSummary(value: Record<string, unknown> | null): string {
 		parts.push(`${formatHours(value.start_minute)}-${formatHours(value.end_minute % 1440)}`);
 	if (typeof value.starts_on === "string" && typeof value.ends_on === "string") parts.push(`${value.starts_on} - ${value.ends_on}`);
 	if (typeof value.kind === "string") parts.push(value.kind);
+	if (typeof value.activity === "string" && ENTRY_ACTIVITIES.includes(value.activity as TimeEntryActivity)) {
+		parts.push(activityLabel(value.activity as TimeEntryActivity));
+	}
 	if (typeof value.status === "string") parts.push(value.status);
 	return parts.join(" | ");
 }
@@ -905,9 +1009,12 @@ export async function absencesView(uuid: string): Promise<HTMLElement> {
 function reportCard(project: Project, person: MonthReport["people"][number]): HTMLElement {
 	const totals = person.totals;
 	const absences = ABSENCE_KINDS.filter((kind) => totals.absence_minutes[kind] > 0);
+	const activities = ENTRY_ACTIVITIES.filter((activity) => totals.activity_minutes[activity] > 0);
 	const facts: [string, string][] = [
 		[t("report.fund"), formatHours(totals.fund_minutes)],
-		[t("report.worked"), formatHours(totals.worked_minutes)],
+		[t("report.paid_time"), formatHours(totals.worked_minutes)],
+		[t("report.onsite"), formatHours(totals.onsite_minutes)],
+		...activities.map((activity): [string, string] => [activityLabel(activity), formatHours(totals.activity_minutes[activity])]),
 		[t("report.overtime"), formatHours(totals.overtime_minutes)],
 		[t("report.holidays"), formatHours(totals.holiday_minutes)],
 		...absences.map((kind): [string, string] => [absenceLabel(kind), formatHours(totals.absence_minutes[kind])]),
@@ -916,6 +1023,7 @@ function reportCard(project: Project, person: MonthReport["people"][number]): HT
 		[t("report.holiday_work"), formatHours(totals.holiday_work_minutes)],
 		[t("report.days_worked"), String(totals.days_worked)],
 		[t("report.meal_days"), String(totals.meal_days)],
+		[t("report.commute_days"), String(totals.commute_days)],
 		[t("report.balance"), formatHours(totals.balance_minutes)],
 	];
 	const rows = person.days.map((day) => {
@@ -923,11 +1031,16 @@ function reportCard(project: Project, person: MonthReport["people"][number]): HT
 			day.holiday ? holidayName(day.holiday.name) : null,
 			...day.absences.map((absence) => `${absenceLabel(absence.kind)}${absence.status === "pending" ? ` (${t("absence.status_pending")})` : ""}`),
 		].filter(Boolean);
+		const activitySummary = ENTRY_ACTIVITIES.filter((activity) => day.activity_minutes[activity] > 0)
+			.map((activity) => `${activityLabel(activity)}: ${formatHours(day.activity_minutes[activity])}`)
+			.join(", ");
 		return el(
 			"tr",
 			{ class: day.working_day ? "" : "muted-row" },
 			el("td", {}, `${weekdayName(day.date)} ${formatDay(day.date, project)}`),
 			el("td", {}, notes.join(", ")),
+			el("td", {}, activitySummary),
+			el("td", { class: "numeric mono" }, day.onsite_minutes ? formatHours(day.onsite_minutes) : ""),
 			el("td", { class: "numeric mono" }, day.worked_minutes ? formatHours(day.worked_minutes) : ""),
 			el("td", { class: "numeric mono" }, day.overtime_minutes ? formatHours(day.overtime_minutes) : ""),
 			el("td", { class: "numeric mono" }, day.night_minutes ? formatHours(day.night_minutes) : ""),
@@ -943,7 +1056,19 @@ function reportCard(project: Project, person: MonthReport["people"][number]): HT
 			"details",
 			{},
 			el("summary", {}, t("report.daily")),
-			table([t("timesheet.day"), t("report.notes"), t("report.worked"), t("report.overtime"), t("report.night"), t("report.breaks")], rows)
+			table(
+				[
+					t("timesheet.day"),
+					t("report.notes"),
+					t("timesheet.activity"),
+					t("report.onsite"),
+					t("report.paid_time"),
+					t("report.overtime"),
+					t("report.night"),
+					t("report.breaks"),
+				],
+				rows
+			)
 		)
 	);
 }
@@ -1029,6 +1154,7 @@ function settingsForm(project: Project, uuid: string, config: WorkforceConfig): 
 		night: number(config.rates.night, "0", "500", "0.01"),
 		sunday: number(config.rates.sunday, "0", "500", "0.01"),
 		holiday: number(config.rates.holiday, "0", "500", "0.01"),
+		waiting_home: number(config.rates.waiting_home, "0", "500", "0.01"),
 		sick: number(config.rates.sick, "0", "500", "0.01"),
 		injury: number(config.rates.injury, "0", "500", "0.01"),
 	};
@@ -1067,6 +1193,7 @@ function settingsForm(project: Project, uuid: string, config: WorkforceConfig): 
 							night: Number(rates.night.value),
 							sunday: Number(rates.sunday.value),
 							holiday: Number(rates.holiday.value),
+							waiting_home: Number(rates.waiting_home.value),
 							sick: Number(rates.sick.value),
 							injury: Number(rates.injury.value),
 						},
@@ -1102,6 +1229,7 @@ function settingsForm(project: Project, uuid: string, config: WorkforceConfig): 
 			field(t("workforce.rate_night"), rates.night),
 			field(t("workforce.rate_sunday"), rates.sunday),
 			field(t("workforce.rate_holiday"), rates.holiday),
+			field(t("workforce.rate_waiting_home"), rates.waiting_home),
 			field(t("workforce.rate_sick"), rates.sick),
 			field(t("workforce.rate_injury"), rates.injury)
 		),
