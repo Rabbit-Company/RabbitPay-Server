@@ -31,7 +31,7 @@ const STORE_TABS: { suffix: string; label: UiKey; permission: Permission }[] = [
 	{ suffix: "/products", label: "store.tab_products", permission: Permission.ITEM_VIEW },
 	{ suffix: "/categories", label: "store.tab_categories", permission: Permission.ITEM_VIEW },
 	{ suffix: "/coupons", label: "store.tab_coupons", permission: Permission.ITEM_VIEW },
-	{ suffix: "/translations", label: "store.tab_translations", permission: Permission.PROJECT_VIEW },
+	{ suffix: "/translations", label: "store.tab_translations", permission: Permission.PROJECT_EDIT },
 	{ suffix: "/orders", label: "store.tab_orders", permission: Permission.INVOICE_VIEW },
 ];
 

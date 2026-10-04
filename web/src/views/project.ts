@@ -23,6 +23,8 @@ export function invalidateProject(uuid: string) {
 
 type TabGroup = "sales" | "finance" | "work" | "project";
 
+export const STORE_PERMISSIONS = [Permission.PROJECT_EDIT, Permission.ITEM_VIEW, Permission.INVOICE_VIEW];
+
 const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[]; group?: TabGroup; workforce?: boolean; accounting?: boolean }[] = [
 	{ id: "overview", label: "nav.overview", suffix: "", permissions: [Permission.PROJECT_VIEW] },
 	{ id: "invoices", label: "nav.invoices", suffix: "/invoices", permissions: [Permission.INVOICE_VIEW], group: "sales" },
@@ -31,7 +33,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 	{ id: "emails", label: "nav.emails", suffix: "/emails", permissions: [Permission.EMAIL_VIEW], group: "sales" },
 	{ id: "customers", label: "nav.customers", suffix: "/customers", permissions: [Permission.CUSTOMER_VIEW], group: "sales" },
 	{ id: "items", label: "nav.items", suffix: "/items", permissions: [Permission.ITEM_VIEW], group: "sales" },
-	{ id: "store", label: "nav.store", suffix: "/store", permissions: [Permission.PROJECT_VIEW], group: "sales" },
+	{ id: "store", label: "nav.store", suffix: "/store", permissions: STORE_PERMISSIONS, group: "sales" },
 	{ id: "pos", label: "nav.terminal", suffix: "/pos", permissions: [Permission.POS_SELL], group: "sales" },
 	{ id: "expenses", label: "nav.expenses", suffix: "/expenses", permissions: [Permission.EXPENSE_VIEW], group: "finance" },
 	{ id: "statistics", label: "nav.statistics", suffix: "/statistics", permissions: [Permission.REPORT_VIEW], group: "finance" },

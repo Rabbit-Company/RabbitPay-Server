@@ -16,7 +16,7 @@ import { customerCreditNoteView, customerInvoiceView, customerInvoicesView, cust
 import { projectsView } from "./views/projects";
 import { landingEnabled, landingView } from "./views/landing";
 import { checkPendingTerms, legalDocumentView, legalNoticeView } from "./views/legal";
-import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS } from "./views/project";
+import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS, STORE_PERMISSIONS } from "./views/project";
 import { canAny, Permission, sellsOnly, terminalPath, timesheetPath, worksOnly } from "./access";
 import { customersView } from "./views/customers";
 import { customerView } from "./views/customer";
@@ -429,7 +429,7 @@ define(
 );
 define(
 	"/projects/:uuid/store",
-	projectRoute([Permission.PROJECT_VIEW], (params) => storeSettingsView(params.uuid))
+	projectRoute(STORE_PERMISSIONS, (params) => storeSettingsView(params.uuid))
 );
 define(
 	"/projects/:uuid/store/products",
@@ -449,11 +449,11 @@ define(
 );
 define(
 	"/projects/:uuid/store/translations",
-	projectRoute([Permission.PROJECT_VIEW], (params) => storeTranslationsView(params.uuid))
+	projectRoute([Permission.PROJECT_EDIT], (params) => storeTranslationsView(params.uuid))
 );
 define(
 	"/projects/:uuid/store/translations/:language",
-	projectRoute([Permission.PROJECT_VIEW], (params) => storeTranslationView(params.uuid, params.language))
+	projectRoute([Permission.PROJECT_EDIT], (params) => storeTranslationView(params.uuid, params.language))
 );
 define(
 	"/projects/:uuid/store/orders",
