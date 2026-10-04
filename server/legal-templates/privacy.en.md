@@ -47,6 +47,7 @@ We also disclose data to public authorities, courts and our bank where the law r
 - **Account data:** while the account exists. After you ask us to delete the account, we delete it within 30 days, except for data we must keep by law.
 - **Invoices, payments and other accounting records:** 10 years after the end of the year they relate to, as required by Slovenian tax and accounting law (ZDavP-2 and ZDDV-1).
 - **Access logs:** {{access_log_days}} days in the live database, then in an encrypted archive until {{access_log_years}} full calendar years have passed after the year of the entry.
+- **Content of emails sent from the Service:** {{email_content_retention}}
 - **Audit trail of changes to business records:** as long as the related records must be kept.
 - **Terms acceptance records:** while the account exists.
 - **Sign-in sessions:** expire after {{session_minutes}} minutes without activity.

@@ -47,6 +47,7 @@ Podatke posredujemo tudi javnim organom, sodiščem in naši banki, kadar to zah
 - **Podatki o računu:** dokler račun obstaja. Ko zahtevate izbris računa, ga izbrišemo v 30 dneh, razen podatkov, ki jih moramo hraniti po zakonu.
 - **Računi, plačila in druge računovodske listine:** 10 let po koncu leta, na katerega se nanašajo, kot zahteva slovenska davčna in računovodska zakonodaja (ZDavP-2 in ZDDV-1).
 - **Dnevniki dostopov:** {{access_log_days}} dni v delujoči bazi, nato v šifriranem arhivu do konca {{access_log_years}}. koledarskega leta po letu nastanka zapisa.
+- **Vsebina e-poštnih sporočil, poslanih iz storitve:** {{email_content_retention}}
 - **Revizijska sled sprememb poslovnih evidenc:** dokler je treba hraniti povezane evidence.
 - **Evidence o sprejemu pogojev:** dokler račun obstaja.
 - **Prijavne seje:** potečejo po {{session_minutes}} minutah nedejavnosti.

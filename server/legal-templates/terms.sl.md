@@ -36,9 +36,9 @@ Storitev na naslovu {{service_url}} (v nadaljevanju: storitev) zagotavlja:
 
 ## 5. Brezplačna kvota in licenčni ključi
 
-5.1. Vsak projekt vključuje mesečno brezplačno kvoto, trenutno {{free_payments}} zaključenih plačil na mesec in {{free_storage}} GB prostora za dokumente. Brezplačno kvoto lahko spremenimo z vsaj 30-dnevnim predhodnim obvestilom.
+5.1. Vsak projekt vključuje mesečno brezplačno kvoto, trenutno {{free_payments}} zaključenih plačil na mesec in {{free_storage}} GB prostora za dokumente.{{email_allowance}} Brezplačno kvoto lahko spremenimo z vsaj 30-dnevnim predhodnim obvestilom.
 
-5.2. Licenčni ključi razširijo projekt, na primer z dodatnimi plačili, prostorom, lastno blagovno znamko, spletno trgovino ali evidenco časa in plačami. Vsebina in cena posameznega ključa sta navedeni v ponudbi ali na računu.
+5.2. Licenčni ključi razširijo projekt, na primer z dodatnimi plačili, e-poštnimi sporočili, prostorom, lastno blagovno znamko, spletno trgovino ali evidenco časa in plačami. Vsebina in cena posameznega ključa sta navedeni v ponudbi ali na računu.
 
 5.3. Licenčni ključi se plačajo z bančnim nakazilom na podlagi računa, ki ga izdamo. Ključ dostavimo, ko prejmemo celotno plačilo.
 

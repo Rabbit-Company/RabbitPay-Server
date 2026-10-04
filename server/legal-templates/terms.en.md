@@ -36,9 +36,9 @@ The service at {{service_url}} (the "Service") is provided by:
 
 ## 5. Free allowance and license keys
 
-5.1. Each project includes a free monthly allowance, currently {{free_payments}} completed payments per month and {{free_storage}} GB of document storage. We may change the free allowance with at least 30 days' notice.
+5.1. Each project includes a free monthly allowance, currently {{free_payments}} completed payments per month and {{free_storage}} GB of document storage.{{email_allowance}} We may change the free allowance with at least 30 days' notice.
 
-5.2. License keys extend a project, for example with additional payments, storage, white labeling, the online store or timesheets and payroll. The content and price of each license key are stated in the offer or on the invoice.
+5.2. License keys extend a project, for example with additional payments, emails, storage, white labeling, the online store or timesheets and payroll. The content and price of each license key are stated in the offer or on the invoice.
 
 5.3. License keys are paid by bank transfer based on an invoice we issue. We deliver a key after we receive the full payment.
 

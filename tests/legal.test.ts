@@ -119,6 +119,28 @@ describe("templates", () => {
 		expect(sl.data.content).toContain("1. odstavka 94. člena ZDDV-1");
 	});
 
+	test("state the free emails and how long email content is kept", async () => {
+		const template = async (kind: string, language: string) =>
+			(await call("GET", `/api/v1/admin/legal/${kind}/template?language=${language}`, { token: adminToken })).data.content as string;
+		const allowance = Settings.licensing.free_emails;
+		const retention = Settings.email.body_retention_days;
+
+		expect(await template("terms", "en")).toContain(`document storage. It also includes ${allowance} emails per month to the Customer's own customers`);
+		expect(await template("terms", "sl")).toContain(`največ ${allowance} na mesec. Brezplačno kvoto`);
+		expect(await template("privacy", "en")).toContain(`**Content of emails sent from the Service:** ${retention} days, after which`);
+		expect(await template("privacy", "sl")).toContain(`poslanih iz storitve:** ${retention} dni, nato`);
+
+		Settings.licensing.enabled = false;
+		Settings.email.body_retention_days = 0;
+		try {
+			expect(await template("terms", "en")).toContain("GB of document storage. We may change");
+			expect(await template("privacy", "en")).toContain("**Content of emails sent from the Service:** while the project exists.");
+		} finally {
+			Settings.licensing.enabled = true;
+			Settings.email.body_retention_days = retention;
+		}
+	});
+
 	test("rejects unknown documents and languages", async () => {
 		expect((await call("GET", "/api/v1/admin/legal/cookies/template?language=en", { token: adminToken })).error).toBe(1237);
 		expect((await call("GET", "/api/v1/admin/legal/terms/template?language=de", { token: adminToken })).error).toBe(1237);

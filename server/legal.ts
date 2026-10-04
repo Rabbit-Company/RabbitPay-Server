@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import Database from "./database/database";
 import { Settings } from "./settings";
 import Utils from "./utils";
-import { includedPayments, includedStorageGb } from "./licensing";
+import { emailsMetered, includedPayments, includedStorageGb } from "./licensing";
 import type { LegalDocumentRow, LegalKind } from "./database/models";
 import termsEn from "./legal-templates/terms.en.md" with { type: "text" };
 import termsSl from "./legal-templates/terms.sl.md" with { type: "text" };
@@ -251,6 +251,22 @@ export function formatLegalDate(language: LegalLanguage, timestamp: number): str
 		: date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+function emailAllowanceClause(language: LegalLanguage): string {
+	if (!emailsMetered()) return "";
+	const emails = Settings.licensing.free_emails;
+	return language === "sl"
+		? ` Vključuje tudi e-poštna sporočila naročnikovim kupcem, poslana prek našega poštnega strežnika, največ ${emails} na mesec.`
+		: ` It also includes ${emails} emails per month to the Customer's own customers, sent through our email server.`;
+}
+
+function emailContentRetention(language: LegalLanguage): string {
+	const days = Settings.email.body_retention_days;
+	if (days <= 0) return language === "sl" ? "dokler projekt obstaja." : "while the project exists.";
+	return language === "sl"
+		? `${days} dni, nato ostane samo zapis o tem, kaj je bilo komu poslano.`
+		: `${days} days, after which only the record of what was sent to whom is kept.`;
+}
+
 export function legalTemplate(kind: LegalKind, language: LegalLanguage): string {
 	const backupDays = Math.max(1, Math.round((Settings.backups.keep * Settings.backups.interval_hours) / 24));
 	const values: Record<string, string> = {
@@ -261,6 +277,8 @@ export function legalTemplate(kind: LegalKind, language: LegalLanguage): string 
 		vat_clause: vatClause(language),
 		free_payments: String(includedPayments()),
 		free_storage: String(includedStorageGb()),
+		email_allowance: emailAllowanceClause(language),
+		email_content_retention: emailContentRetention(language),
 		access_log_days: String(Settings.access_logs.online_days),
 		access_log_years: String(Settings.access_logs.retention_years),
 		backup_days: String(backupDays),
