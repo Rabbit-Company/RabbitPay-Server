@@ -234,6 +234,48 @@ describe("recording payments", () => {
 		await pay(invoice, 10000);
 		expect((await invoiceOf(invoice)).data.status).toBe("paid");
 	});
+
+	test("a payment is dated now unless a payment date is given", async () => {
+		const invoice = await createInvoice(10000);
+		const before = Date.now();
+		const res = await pay(invoice, 10000);
+
+		expect(res.data.completed_at).toBeGreaterThanOrEqual(before);
+		expect((await invoiceOf(invoice)).data.paid_date).toBeGreaterThanOrEqual(before);
+	});
+
+	test("a past payment date dates the payment and the invoice", async () => {
+		const invoice = await createInvoice(10000, { dueDate: Date.now() - 1000 });
+		const paidAt = Date.now() - 3 * 24 * 60 * 60 * 1000;
+		const res = await pay(invoice, 10000, { paid_at: paidAt });
+
+		expect(res.status).toBe(201);
+		expect(res.data.confirmed_at).toBe(paidAt);
+		expect(res.data.completed_at).toBe(paidAt);
+		expect(res.data.created).toBeGreaterThan(paidAt);
+
+		const after = await invoiceOf(invoice);
+		expect(after.data.status).toBe("paid");
+		expect(after.data.paid_date).toBe(paidAt);
+	});
+
+	test("a pending payment ignores the payment date", async () => {
+		const invoice = await createInvoice(10000);
+		const res = await pay(invoice, 10000, { status: "pending", paid_at: Date.now() - 24 * 60 * 60 * 1000 });
+
+		expect(res.status).toBe(201);
+		expect(res.data.confirmed_at).toBeNull();
+		expect(res.data.completed_at).toBeNull();
+	});
+
+	test("rejects a payment date in the future or one that is not a timestamp", async () => {
+		const invoice = await createInvoice(10000);
+
+		for (const paid_at of [Date.now() + 60 * 60 * 1000, 0, -5, 1.5, "2026-01-01"]) {
+			expect((await pay(invoice, 10000, { paid_at })).error).toBe(1302);
+		}
+		expect((await invoiceOf(invoice)).data.status).toBe("open");
+	});
 });
 
 describe("refunds", () => {

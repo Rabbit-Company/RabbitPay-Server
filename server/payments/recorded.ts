@@ -57,7 +57,7 @@ export async function recordPayment(payment: RecordedPayment): Promise<{ uuid: s
 				${JSON.stringify(details)}, ${settled ? settledAt : null}, ${payment.status === "completed" ? settledAt : null}, ${timestamp}, ${timestamp})
 		`;
 
-		return await applyBalance(tx, invoice.uuid);
+		return await applyBalance(tx, invoice.uuid, settledAt);
 	});
 
 	enqueueLater(invoice.project, settled ? "payment.confirmed" : "payment.received", {

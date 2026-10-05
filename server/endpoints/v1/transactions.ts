@@ -19,7 +19,7 @@ import { creditRemaining } from "../../credit-notes";
 import { t } from "../../i18n";
 import { enqueueLater } from "../../webhooks/events";
 import type { InvoiceRow, TransactionRow } from "../../database/models";
-import { accountingPeriodLocked } from "../../accounting-periods";
+import { accountingPeriodLocked, closedYear } from "../../accounting-periods";
 import { prepareIssuePresentation } from "../../invoice-snapshot";
 import { archiveIssuedCreditNote } from "../../credit-note-archive";
 import { hasStorageCapacity } from "../../licensing";
@@ -34,6 +34,7 @@ interface RecordPaymentBody {
 	payment_method?: string | null;
 	status?: "pending" | "confirmed" | "completed";
 	notes?: string | null;
+	paid_at?: number | null;
 }
 
 interface RefundBody {
@@ -155,6 +156,9 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 	if (!Validate.optionalText(data.processor_tx_id, 255)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	if (!Validate.optionalText(data.notes, 2000)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
+	const paidAt = data.paid_at ?? null;
+	if (paidAt !== null && (!Number.isSafeInteger(paidAt) || paidAt <= 0 || paidAt > Date.now())) return Utils.fail(ctx, ErrorCode.INVALID_PAYMENT_DATE);
+
 	const [invoice] = (await Database`
 		SELECT * FROM invoices WHERE uuid = ${data.invoice!} AND project = ${project.uuid}
 	`) as InvoiceRow[];
@@ -166,6 +170,9 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 	if (!["pending", "confirmed", "completed"].includes(status)) return Utils.fail(ctx, ErrorCode.INVALID_TRANSACTION_STATUS);
 	if (FISCAL_PROCESSORS.has(data.processor!) && (await fiscalBlocked(Database, project.uuid))) return Utils.fail(ctx, ErrorCode.FISCAL_NOT_CONFIGURED);
 
+	const backdated = paidAt !== null && status !== "pending";
+	if (backdated && (await closedYear(project.uuid, paidAt))) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+
 	const { uuid, balance } = await recordPayment({
 		invoice,
 		processor: data.processor!,
@@ -176,6 +183,7 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 		status,
 		notes: data.notes ?? null,
 		recordedBy: account.username,
+		...(backdated ? { settledAt: paidAt } : {}),
 	});
 
 	await Audit.record(ctx, {
@@ -183,7 +191,14 @@ Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissi
 		action: "payment.recorded",
 		entityType: "transaction",
 		entityId: uuid,
-		newValue: { invoice: invoice.reference, amount: data.amount, currency: invoice.currency, processor: data.processor, status },
+		newValue: {
+			invoice: invoice.reference,
+			amount: data.amount,
+			currency: invoice.currency,
+			processor: data.processor,
+			status,
+			...(backdated ? { paid_at: paidAt } : {}),
+		},
 	});
 	Logger.audit(`[PAYMENTS] ${account.username} recorded ${data.amount} ${invoice.currency} on ${invoice.reference}`);
 	if (invoice.status === "draft" && status !== "pending") {

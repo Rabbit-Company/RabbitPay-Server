@@ -1910,6 +1910,8 @@ export interface Transaction {
 	net_amount: number | null;
 	payment_method: string | null;
 	payment_details: Record<string, unknown> | null;
+	confirmed_at: number | null;
+	completed_at: number | null;
 	created: number;
 	invoice_reference?: string | null;
 	customer_name?: string | null;
@@ -3152,7 +3154,16 @@ export const Api = {
 
 	recordPayment(
 		uuid: string,
-		payment: { invoice: string; processor: string; amount: number; fee_amount: number; processor_tx_id: string | null; status: string; notes: string | null }
+		payment: {
+			invoice: string;
+			processor: string;
+			amount: number;
+			fee_amount: number;
+			processor_tx_id: string | null;
+			status: string;
+			notes: string | null;
+			paid_at: number | null;
+		}
 	) {
 		return request<Transaction & { invoice_balance: { status: string } }>("POST", `/projects/${uuid}/transactions`, payment);
 	},

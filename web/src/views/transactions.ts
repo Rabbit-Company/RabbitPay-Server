@@ -2,7 +2,7 @@ import { outstandingOf } from "../../../server/invoicing";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { Api, type Invoice, type Transaction } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
-import { formatDateTime, formatMoney, minorUnitDigits, toMajorUnits } from "../money";
+import { dayStartFromDateInput, formatDateTime, formatMoney, minorUnitDigits, toDateInput, toMajorUnits } from "../money";
 import { modal, reportError, toast } from "../ui";
 import { loadProject, projectLayout } from "./project";
 import { processorLabel, statusLabel, t, tn, transactionTypeLabel } from "../i18n";
@@ -23,7 +23,11 @@ function paymentStatusOptions() {
 	];
 }
 
-export function recordPaymentDialog(projectUuid: string, invoice: Invoice, onRecorded: () => void) {
+export function settledAt(transaction: Transaction): number {
+	return transaction.completed_at ?? transaction.confirmed_at ?? transaction.created;
+}
+
+export function recordPaymentDialog(projectUuid: string, invoice: Invoice, timezone: string, onRecorded: () => void) {
 	const digits = minorUnitDigits(invoice.currency);
 	const outstanding = outstandingOf(invoice);
 
@@ -31,6 +35,11 @@ export function recordPaymentDialog(projectUuid: string, invoice: Invoice, onRec
 	const fee = input("number", { value: "0", min: "0", step: "0.01" });
 	const processor = select(processorOptions(), "bank_transfer");
 	const status = select(paymentStatusOptions(), "completed");
+	const today = toDateInput(Date.now(), timezone);
+	const paidDate = input("date", { value: today, max: today, required: true });
+	status.addEventListener("change", () => {
+		paidDate.disabled = status.value === "pending";
+	});
 	const reference = input("text", { placeholder: t("payments.reference_placeholder") });
 	const notes = el("textarea", { rows: "2", placeholder: t("payments.notes_placeholder") });
 
@@ -52,6 +61,7 @@ export function recordPaymentDialog(projectUuid: string, invoice: Invoice, onRec
 						processor_tx_id: reference.value.trim() || null,
 						status: status.value,
 						notes: (notes as HTMLTextAreaElement).value.trim() || null,
+						paid_at: paidDate.disabled || paidDate.value === today ? null : dayStartFromDateInput(paidDate.value, timezone),
 					});
 
 					dialog.close();
@@ -74,7 +84,7 @@ export function recordPaymentDialog(projectUuid: string, invoice: Invoice, onRec
 		),
 		el("div", { class: "form-grid" }, field(t("converter.amount"), amount, invoice.currency), field(t("payments.fee"), fee, t("payments.fee_hint"))),
 		el("div", { class: "form-grid" }, field(t("payments.processor"), processor), field(t("payments.status"), status)),
-		field(t("payments.reference"), reference),
+		el("div", { class: "form-grid" }, field(t("payments.paid_date"), paidDate, t("payments.paid_date_hint")), field(t("payments.reference"), reference)),
 		field(t("payments.notes"), notes),
 		el("div", { class: "dialog-actions" }, submit)
 	);
@@ -213,7 +223,7 @@ export async function transactionsView(uuid: string): Promise<HTMLElement> {
 							: el("span", { class: "muted" }, "-")
 					),
 					withCustomer ? el("td", {}, customerLabel(transaction)) : null,
-					el("td", {}, formatDateTime(transaction.created))
+					el("td", {}, formatDateTime(settledAt(transaction)))
 				);
 			});
 

@@ -447,6 +447,12 @@ ignored. `status` may be `completed` (the default), `confirmed`, or `pending`.
 A pending payment is recorded but does not count towards the balance, which is
 what a crypto payment looks like before it has enough confirmations.
 
+A payment is dated now unless `paid_at` carries the moment the money arrived, as
+a timestamp in milliseconds that is not in the future. The date sets when the
+invoice counts as paid and where the payment lands in reports and the ledger. A
+date in a closed business year is refused, and a pending payment has no payment
+date yet.
+
 ```bash
 curl -X POST localhost:8085/api/v1/projects/$UUID/transactions \
   -H "Authorization: Bearer $TOKEN" \

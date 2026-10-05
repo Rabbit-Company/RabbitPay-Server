@@ -34,7 +34,7 @@ import { isTaxTreatment } from "../../../server/tax";
 import { referenceDocumentOf, type ReferenceDocumentColumns, type ReferenceDocumentInput } from "../../../server/reference-document";
 import { taxTreatmentName, unitLabel } from "../options";
 import { processorLabel, statusLabel, t, tn, transactionTypeLabel, type UiKey } from "../i18n";
-import { recordPaymentDialog, refundDialog } from "./transactions";
+import { recordPaymentDialog, refundDialog, settledAt } from "./transactions";
 
 const STATUS_VALUES = ["draft", "open", "overdue", "partially_paid", "paid", "canceled", "refunded"];
 
@@ -1193,7 +1193,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 				el("td", { class: "mono" }, `${transaction.type === "payment" ? "" : "-"}${formatMoney(transaction.amount, transaction.currency)}`),
 				el("td", {}, processorLabel(transaction.processor)),
 				el("td", {}, el("span", { class: `pill pill-${transaction.status}` }, statusLabel(transaction.status))),
-				el("td", {}, formatDate(transaction.created, project.date_format as DateFormat, project.timezone)),
+				el("td", {}, formatDate(settledAt(transaction), project.date_format as DateFormat, project.timezone)),
 				el(
 					"td",
 					{ class: "actions" },
@@ -1402,7 +1402,7 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 		} else if (payable && can(project, Permission.PAYMENT_CREATE)) {
 			primaryAction = el(
 				"button",
-				{ class: "button primary", type: "button", onClick: () => recordPaymentDialog(uuid, invoice, () => void render()) },
+				{ class: "button primary", type: "button", onClick: () => recordPaymentDialog(uuid, invoice, project.timezone, () => void render()) },
 				t("payments.record")
 			);
 		}

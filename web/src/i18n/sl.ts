@@ -646,6 +646,8 @@ export const sl: UiDictionary = {
 	"payments.status_completed": "Zaključeno",
 	"payments.status_confirmed": "Potrjeno",
 	"payments.status_pending": "V čakanju, še se ne šteje",
+	"payments.paid_date": "Datum plačila",
+	"payments.paid_date_hint": "Kdaj je denar prispel",
 	"payments.reference": "Sklic",
 	"payments.reference_placeholder": "Bančni sklic ali ID ponudnika",
 	"payments.notes": "Opombe",
@@ -4004,5 +4006,6 @@ export const sl: UiDictionary = {
 	"error.1299": "Za spremembo ur po nastavljenem obdobju za popravke vnesite razlog.",
 	"error.1300": "To je že e-poštni naslov vašega računa.",
 	"error.1301": "Povezava za potrditev je napačna ali je potekla. Znova zahtevajte spremembo e-pošte.",
+	"error.1302": "Datum plačila ne sme biti v prihodnosti.",
 	"license.emails_unlimited": "Na tem strežniku e-pošta ni omejena. Pošilja se prek njegovega poštnega strežnika.",
 };

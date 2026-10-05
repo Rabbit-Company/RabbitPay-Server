@@ -60,11 +60,11 @@ const STATUS_EVENTS: Partial<Record<InvoiceStatus, WebhookEvent>> = {
 	overdue: "invoice.overdue",
 };
 
-export async function applyBalance(sql: SQL, invoiceId: string): Promise<InvoiceBalance> {
+export async function applyBalance(sql: SQL, invoiceId: string, paidAt = Date.now()): Promise<InvoiceBalance> {
 	const [invoice] = (await sql`SELECT * FROM invoices WHERE uuid = ${invoiceId}`) as InvoiceRow[];
 	const balance = await balanceFor(sql, invoice);
 
-	const paidDate = balance.status === "paid" ? (invoice.paid_date ?? Date.now()) : null;
+	const paidDate = balance.status === "paid" ? (invoice.paid_date ?? paidAt) : null;
 
 	await sql`
 		UPDATE invoices SET

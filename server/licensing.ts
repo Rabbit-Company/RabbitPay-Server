@@ -183,9 +183,9 @@ export async function billEmail(projectId: string, emailId: string, sentAt: numb
 	});
 }
 
-async function billPayment(sql: SQL, project: Pick<ProjectRow, "uuid" | "free_transactions">, payment: { uuid: string; settled_at: number }) {
+async function billPayment(sql: SQL, project: Pick<ProjectRow, "uuid" | "free_transactions">, payment: { uuid: string; settled_at: number; created: number }) {
 	const enforced = licensingEnforced();
-	const period = periodOf(payment.settled_at);
+	const period = periodOf(Math.max(Number(payment.settled_at), Number(payment.created)));
 	const usage = enforced ? await usageRow(sql, project.uuid, period) : null;
 	const billing: LicenseBilling = usage === null ? "unmetered" : usage.free_used < freeAllowance(project) ? "free" : "paid";
 
@@ -205,10 +205,10 @@ export async function meterProject(projectId: string): Promise<number> {
 
 	for (;;) {
 		const pending = (await Database`
-			SELECT uuid, COALESCE(completed_at, confirmed_at) AS settled_at FROM transactions
+			SELECT uuid, COALESCE(completed_at, confirmed_at) AS settled_at, created FROM transactions
 			WHERE project = ${projectId} AND type = 'payment' AND (completed_at IS NOT NULL OR confirmed_at IS NOT NULL) AND license_billing IS NULL
 			ORDER BY settled_at ASC LIMIT ${METER_BATCH}
-		`) as { uuid: string; settled_at: number }[];
+		`) as { uuid: string; settled_at: number; created: number }[];
 		if (pending.length === 0) return billed;
 
 		await Database.begin(async (tx) => {

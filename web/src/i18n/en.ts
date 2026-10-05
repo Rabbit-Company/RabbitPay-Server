@@ -645,6 +645,8 @@ export const en = {
 	"payments.status_completed": "Completed",
 	"payments.status_confirmed": "Confirmed",
 	"payments.status_pending": "Pending, does not count yet",
+	"payments.paid_date": "Payment date",
+	"payments.paid_date_hint": "When the money arrived",
 	"payments.reference": "Reference",
 	"payments.reference_placeholder": "Bank reference or processor id",
 	"payments.notes": "Notes",
@@ -4002,5 +4004,6 @@ export const en = {
 	"error.1299": "Enter a reason for changing time after the configured correction period.",
 	"error.1300": "This is already the email address of your account.",
 	"error.1301": "This confirmation link is wrong or has expired. Request the email change again.",
+	"error.1302": "The payment date cannot be in the future.",
 	"license.emails_unlimited": "Emails are not limited on this server. They are sent through its own email server.",
 } as const;

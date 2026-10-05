@@ -178,6 +178,7 @@ export enum Error {
 	TIMESHEET_REASON_REQUIRED = 1299,
 	EMAIL_UNCHANGED = 1300,
 	EMAIL_LINK_EXPIRED = 1301,
+	INVALID_PAYMENT_DATE = 1302,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -694,6 +695,7 @@ namespace Errors {
 		1299: { message: "Enter a reason for changing time after the configured correction period.", httpCode: 400 },
 		1300: { message: "This is already the email address of your account.", httpCode: 400 },
 		1301: { message: "This confirmation link is wrong or has expired. Request the email change again.", httpCode: 400 },
+		1302: { message: "The payment date must be a timestamp in milliseconds that is not in the future.", httpCode: 400 },
 		1285: { message: "The Idempotency-Key header takes 1 to 128 letters, digits, dots, colons, hyphens or underscores.", httpCode: 400 },
 		1286: {
 			message:
