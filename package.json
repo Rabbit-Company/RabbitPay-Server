@@ -13,7 +13,7 @@
 		"logs:export": "bun run server/storage-cli.ts export-access-logs",
 		"license:keygen": "bun run server/license-cli.ts keygen",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
-		"build:web": "bun build web/index.html --outdir web/dist --minify --public-path=/ && cp web/embed.js web/dist/embed.js",
+		"build:web": "bun build web/index.html --outdir web/dist --minify --public-path=/ && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
 		"watch:web": "bun build web/index.html --outdir web/dist --public-path=/ --watch",
 		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
 	},
