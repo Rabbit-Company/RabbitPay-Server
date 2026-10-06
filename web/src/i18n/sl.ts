@@ -4008,4 +4008,9 @@ export const sl: UiDictionary = {
 	"error.1301": "Povezava za potrditev je napačna ali je potekla. Znova zahtevajte spremembo e-pošte.",
 	"error.1302": "Datum plačila ne sme biti v prihodnosti.",
 	"license.emails_unlimited": "Na tem strežniku e-pošta ni omejena. Pošilja se prek njegovega poštnega strežnika.",
+	"help.title": "Pomoč",
+	"help.all": "Vsi članki pomoči",
+	"help.articles": "Vodniki",
+	"help.on_this_page": "Na tej strani",
+	"help.not_found": "Ta članek pomoči ne obstaja.",
 };

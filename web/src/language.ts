@@ -4,7 +4,7 @@ import { render } from "./router";
 
 let sequence = 0;
 
-export function languageSwitcher(): HTMLElement {
+export function languageSwitcher(onChange: (next: UiLanguage) => void = () => void render()): HTMLElement {
 	const id = `language-${++sequence}`;
 	const current = language();
 	const currentLabel = UI_LANGUAGES.find((option) => option.value === current)?.label ?? current;
@@ -65,7 +65,7 @@ export function languageSwitcher(): HTMLElement {
 		trigger.focus();
 		if (value === current) return;
 		setLanguage(value);
-		void render();
+		onChange(value);
 	}
 
 	trigger.addEventListener("click", () => (list.hidden ? open() : close()));

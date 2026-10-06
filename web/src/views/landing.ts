@@ -367,6 +367,7 @@ export async function landingView(): Promise<HTMLElement> {
 				{ class: "landing-footer-links" },
 				el("a", { href: "/login" }, t("login.sign_in")),
 				el("a", { href: "/customer/login" }, t("portal.title")),
+				el("a", { href: "/help" }, t("help.title")),
 				el("a", { href: REPOSITORY, target: "_blank", rel: "noopener" }, "GitHub")
 			)
 		),

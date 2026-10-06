@@ -24,6 +24,28 @@ that computes the authoritative one on save.
 
 To work on it, run `bun run watch:web` alongside `bun run watch`.
 
+## Help articles
+
+The help section at `/help` is built from [`docs/help`](help), with one Markdown
+file per article in each language: `docs/help/en/invoices.md` and
+`docs/help/sl/invoices.md` are the same article, served at `/help/en/invoices`
+and `/help/sl/invoices`. The first `# ` heading is the title, the first
+paragraph is the description shown on the index and to search engines, and
+every `## ` heading becomes an entry under On this page.
+
+To add an article, write it in both languages under the same file name and
+register both files in `SOURCES` in [`server/help.ts`](../server/help.ts). The
+file name is the address, so keep it in lowercase English with dashes.
+[`tests/help.test.ts`](../tests/help.test.ts) fails when an article is missing
+in one language, is not registered, has a different number of sections in the
+two languages, or links to a section or an article that does not exist. Link to
+another article by its file name alone, as in `[Payments](payments)`, so the
+link stays in the reader's language.
+
+Write for somebody using the dashboard: start from what they want to do, name
+buttons and menus exactly as the interface does in that language, and leave
+API details to [`api.md`](api.md).
+
 ## Commands
 
 ```bash

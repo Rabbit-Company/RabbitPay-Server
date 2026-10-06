@@ -10,6 +10,7 @@ import "./v1/customer-portal";
 import "./v1/documents";
 import "./v1/einvoice";
 import "./v1/emails";
+import "./v1/help";
 import "./v1/hooks";
 import "./v1/invitations";
 import "./v1/invoices";

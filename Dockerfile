@@ -12,6 +12,7 @@ WORKDIR /app
 COPY --from=build /app/package.json /app/bun.lockb ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server ./server
+COPY --from=build /app/docs/help ./docs/help
 COPY --from=build /app/web/dist ./web/dist
 COPY --from=build /app/web/src/i18n ./web/src/i18n
 RUN mkdir -p /app/data

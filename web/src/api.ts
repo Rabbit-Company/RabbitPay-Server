@@ -472,6 +472,22 @@ export interface Account {
 	accessed: number;
 }
 
+export interface HelpSummary {
+	slug: string;
+	title: string;
+	description: string;
+}
+
+export interface HelpArticle extends HelpSummary {
+	content: string;
+}
+
+export interface HelpIndex {
+	title: string;
+	description: string;
+	articles: HelpSummary[];
+}
+
 export type LegalKind = "terms" | "privacy";
 
 export interface LegalOperator {
@@ -2506,6 +2522,14 @@ export const Api = {
 
 	legal() {
 		return request<LegalInfo>("GET", "/legal");
+	},
+
+	help(language: string) {
+		return request<HelpIndex>("GET", `/help/${language}`);
+	},
+
+	helpArticle(language: string, slug: string) {
+		return request<HelpArticle>("GET", `/help/${language}/${encodeURIComponent(slug)}`);
 	},
 
 	acceptTerms(versions: LegalVersions) {

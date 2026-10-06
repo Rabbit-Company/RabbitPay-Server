@@ -7,6 +7,7 @@ import { escapeHtml } from "./markdown";
 import { normalizeHost, slugForHost, storeBySlug, storeUrl } from "./store/store";
 import { sitemapStores, storeLocation, storePageMeta, storeRoot, storeSitemap, STORE_PRIVATE_PATHS, type StorePageMeta } from "./store/seo";
 import { includedPayments, includedStorageGb, licensingEnforced } from "./licensing";
+import { HELP_LANGUAGES, helpArticle, helpIndex, helpSlugs, isHelpLanguage } from "./help";
 
 const IMMUTABLE_ASSET = /-[a-z0-9]{8,}\.(js|css|woff2?|ttf|png|svg|jpg|jpeg|webp|ico)$/i;
 
@@ -113,12 +114,52 @@ function storefrontHtml(html: string, request: StoreRequest, meta: StorePageMeta
 const HOME_DESCRIPTION =
 	"Invoicing and payments for Slovenian businesses, with FURS fiscal verification, e-SLOG e-invoices and VAT reports built in. Accept cards, PayPal, bank transfers and crypto.";
 
+const HELP_PATH = /^\/help\/([a-z]{2})(?:\/([a-z0-9]+(?:-[a-z0-9]+)*))?\/?$/;
+const HELP_DEFAULT_LANGUAGE = "en";
+
+function helpUrl(language: string, slug: string | null): string {
+	return `${Utils.publicUrl()}/help/${language}${slug === null ? "" : `/${slug}`}`;
+}
+
+function helpUrls(): string[] {
+	return HELP_LANGUAGES.flatMap((language) => [helpUrl(language, null), ...helpSlugs().map((slug) => helpUrl(language, slug))]);
+}
+
+function helpHtml(html: string, pathname: string): string | null {
+	const [, language, slug = null] = pathname.match(HELP_PATH) ?? [];
+	if (!isHelpLanguage(language)) return null;
+	const page = slug === null ? helpIndex(language) : helpArticle(language, slug);
+	if (page === null) return null;
+
+	const title = slug === null ? `${page.title} | RabbitPay` : `${page.title} | ${helpIndex(language).title} | RabbitPay`;
+	const url = helpUrl(language, slug);
+	const tags = [
+		`<meta name="description" content="${escapeHtml(page.description)}" />`,
+		`<link rel="canonical" href="${escapeHtml(url)}" />`,
+		...HELP_LANGUAGES.map((alternate) => `<link rel="alternate" hreflang="${alternate}" href="${escapeHtml(helpUrl(alternate, slug))}" />`),
+		`<link rel="alternate" hreflang="x-default" href="${escapeHtml(helpUrl(HELP_DEFAULT_LANGUAGE, slug))}" />`,
+		`<meta property="og:site_name" content="RabbitPay" />`,
+		`<meta property="og:title" content="${escapeHtml(title)}" />`,
+		`<meta property="og:description" content="${escapeHtml(page.description)}" />`,
+		`<meta property="og:type" content="${slug === null ? "website" : "article"}" />`,
+		`<meta property="og:url" content="${escapeHtml(url)}" />`,
+	].join("");
+	return html
+		.replace(/<html lang="[^"]*">/, `<html lang="${language}">`)
+		.replace(/<meta name="robots"[^>]*>/, robotsTag(true))
+		.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`)
+		.replace("</head>", `${tags}</head>`);
+}
+
 function applicationHtml(html: string, pathname: string): string {
 	if (Settings.web?.landing_page === false) return html;
 	const licensing = licensingEnforced();
 	const store = licensing && isWebUrl(Settings.web?.license_store_url ?? "") ? Settings.web.license_store_url : "";
 	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" data-license-store="${escapeHtml(store)}" />`;
-	if (pathname !== "/" && pathname !== "/index.html") return html.replace("</head>", `${flag}</head>`);
+	if (pathname !== "/" && pathname !== "/index.html") {
+		const flagged = html.replace("</head>", `${flag}</head>`);
+		return helpHtml(flagged, pathname) ?? flagged;
+	}
 
 	const tags = [
 		flag,
@@ -238,7 +279,14 @@ async function searchFile(pathname: string, host: string | null): Promise<Respon
 	if (pathname === "/sitemap.xml") return textResponse(await sitemapIndex(), "application/xml");
 	if (pathname === "/sitemap-home.xml") {
 		if (Settings.web?.landing_page === false) return null;
-		return textResponse(xmlDocument("urlset", [`<url><loc>${escapeHtml(Utils.publicUrl())}/</loc></url>`]), "application/xml");
+		const locations = [`${Utils.publicUrl()}/`, ...helpUrls()];
+		return textResponse(
+			xmlDocument(
+				"urlset",
+				locations.map((location) => `<url><loc>${escapeHtml(location)}</loc></url>`)
+			),
+			"application/xml"
+		);
 	}
 
 	const slug = pathname.match(STORE_SITEMAP_PATH)?.[1];

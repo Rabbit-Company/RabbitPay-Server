@@ -15,6 +15,15 @@ export function escapeHtml(value: string): string {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+export function headingAnchor(text: string): string {
+	return text
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+}
+
 export function safeUrl(url: string, images = false): string | null {
 	const trimmed = url.trim();
 	if (trimmed === "" || /[\u0000-\u001f\s]/.test(trimmed)) return null;

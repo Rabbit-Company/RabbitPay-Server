@@ -171,7 +171,7 @@ Server ID shown under Admin, Overview and can be redeemed once. See
 - [Online store](docs/online-store.md): store settings, products, categories, checkout, orders, privacy
 - [Customer portal](docs/customer-portal.md): email sign-in, invoices, saved details, data export, support tickets
 - [Timesheets, tickets and payroll](docs/workforce.md): roles, timesheets, absences, reports, tickets, employee records, payroll
-- [Development](docs/development.md): web interface, commands, endpoints, queries, schema changes
+- [Development](docs/development.md): web interface, help articles, commands, endpoints, queries, schema changes
 
 ## Development
 

@@ -10,12 +10,13 @@ import { logo } from "./logo";
 import { applyAccent, applyTheme } from "./theme";
 import { resetBranding } from "./branding";
 import { accountMenu, type MenuLink } from "./account-menu";
-import { language, t } from "./i18n";
+import { isUiLanguage, language, t } from "./i18n";
 import { loginView } from "./views/login";
 import { customerCreditNoteView, customerInvoiceView, customerInvoicesView, customerLoginView, customerRoute } from "./views/customer-portal";
 import { projectsView } from "./views/projects";
 import { landingEnabled, landingView } from "./views/landing";
 import { checkPendingTerms, legalDocumentView, legalNoticeView } from "./views/legal";
+import { helpArticleView, helpIndexView } from "./views/help";
 import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS, STORE_PERMISSIONS } from "./views/project";
 import { canAny, Permission, sellsOnly, terminalPath, timesheetPath, worksOnly } from "./access";
 import { customersView } from "./views/customers";
@@ -102,6 +103,7 @@ function header(): HTMLElement {
 					links: [
 						{ label: t("account.title"), href: "/account", current: window.location.pathname === "/account" },
 						{ label: t("portal.title"), href: "/customer" },
+						{ label: t("help.title"), href: "/help", newTab: true },
 						{ label: t("shortcuts.open"), hint: "F1", onSelect: showShortcutModal },
 					],
 				},
@@ -127,6 +129,8 @@ function isStandalone(): boolean {
 		path === "/legal" ||
 		path === "/terms" ||
 		path === "/privacy" ||
+		path === "/help" ||
+		path.startsWith("/help/") ||
 		path.endsWith("/print") ||
 		/^\/projects\/[^/]+\/pos$/.test(path)
 	);
@@ -210,6 +214,26 @@ define("/login", () => loginView(), false);
 define("/legal", () => legalNoticeView(), false);
 define("/terms", () => legalDocumentView("terms"), false);
 define("/privacy", () => legalDocumentView("privacy"), false);
+define(
+	"/help",
+	() => {
+		navigate(`/help/${language()}`, true);
+		return el("div");
+	},
+	false
+);
+define(
+	"/help/:language",
+	(params) => helpIndexView(params.language),
+	false,
+	(params) => isUiLanguage(params.language)
+);
+define(
+	"/help/:language/:article",
+	(params) => helpArticleView(params.language, params.article),
+	false,
+	(params) => isUiLanguage(params.language)
+);
 define("/customer/login", () => customerLoginView(), false);
 define("/customer", () => customerRoute(customerInvoicesView), false);
 define("/customer/invoices/:invoice", (params) => customerRoute(() => customerInvoiceView(params.invoice)), false);

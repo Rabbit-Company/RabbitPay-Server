@@ -4006,4 +4006,9 @@ export const en = {
 	"error.1301": "This confirmation link is wrong or has expired. Request the email change again.",
 	"error.1302": "The payment date cannot be in the future.",
 	"license.emails_unlimited": "Emails are not limited on this server. They are sent through its own email server.",
+	"help.title": "Help",
+	"help.all": "All help articles",
+	"help.articles": "Guides",
+	"help.on_this_page": "On this page",
+	"help.not_found": "This help article does not exist.",
 } as const;
