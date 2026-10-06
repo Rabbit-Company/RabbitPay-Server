@@ -1,3 +1,5 @@
+import startEn from "../docs/help/en/getting-started.md" with { type: "text" };
+import startSl from "../docs/help/sl/getting-started.md" with { type: "text" };
 import invoicesEn from "../docs/help/en/invoices.md" with { type: "text" };
 import invoicesSl from "../docs/help/sl/invoices.md" with { type: "text" };
 import paymentsEn from "../docs/help/en/payments.md" with { type: "text" };
@@ -12,9 +14,10 @@ import workforceEn from "../docs/help/en/workforce.md" with { type: "text" };
 import workforceSl from "../docs/help/sl/workforce.md" with { type: "text" };
 import sloveniaEn from "../docs/help/en/slovenia.md" with { type: "text" };
 import sloveniaSl from "../docs/help/sl/slovenia.md" with { type: "text" };
-import { markdownText } from "./markdown";
+import { escapeHtml, markdownText, renderMarkdown } from "./markdown";
 
 export const HELP_LANGUAGES = ["en", "sl"] as const;
+export const HELP_SEED_ID = "rabbitpay-help";
 export type HelpLanguage = (typeof HELP_LANGUAGES)[number];
 
 export interface HelpSummary {
@@ -34,6 +37,7 @@ export interface HelpIndex {
 }
 
 const SOURCES: Record<string, Record<HelpLanguage, string>> = {
+	"getting-started": { en: startEn, sl: startSl },
 	invoices: { en: invoicesEn, sl: invoicesSl },
 	payments: { en: paymentsEn, sl: paymentsSl },
 	"expenses-and-reports": { en: expensesEn, sl: expensesSl },
@@ -77,4 +81,23 @@ export function helpArticle(language: HelpLanguage, slug: string): HelpArticle |
 export function helpIndex(language: HelpLanguage): HelpIndex {
 	const articles = [...(ARTICLES.get(language)?.values() ?? [])].map(({ slug, title, description }) => ({ slug, title, description }));
 	return { ...INDEX[language], articles };
+}
+
+export function helpMarkup(language: HelpLanguage, slug: string | null): string {
+	const index = helpIndex(language);
+	const article = slug === null ? null : helpArticle(language, slug);
+	const link = (entry: HelpSummary, className: string, content: string) =>
+		`<a class="${className}" href="/help/${language}/${entry.slug}"${entry.slug === slug ? ' aria-current="page"' : ""}>${content}</a>`;
+	const bar = `<header class="help-bar"><a class="landing-brand" href="/">RabbitPay</a><a class="help-bar-title" href="/help/${language}">${escapeHtml(index.title)}</a></header>`;
+
+	const body =
+		article === null
+			? `<main class="help-main help-index"><h1>${escapeHtml(index.title)}</h1><p class="help-lead">${escapeHtml(index.description)}</p><div class="help-cards">${index.articles
+					.map((entry) => link(entry, "card help-card", `<h2>${escapeHtml(entry.title)}</h2><p class="muted">${escapeHtml(entry.description)}</p>`))
+					.join("")}</div></main>`
+			: `<nav class="help-nav">${index.articles.map((entry) => link(entry, "help-nav-link", escapeHtml(entry.title))).join("")}</nav><main class="help-main"><h1>${escapeHtml(
+					article.title
+				)}</h1><div class="sf-prose markdown-body legal-body help-article">${renderMarkdown(article.content)}</div></main>`;
+
+	return `<div class="help-page">${bar}<div class="help-body">${body}</div></div>`;
 }

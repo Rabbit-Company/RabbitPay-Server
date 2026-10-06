@@ -42,6 +42,14 @@ two languages, or links to a section or an article that does not exist. Link to
 another article by its file name alone, as in `[Payments](payments)`, so the
 link stays in the reader's language.
 
+The server sends a help page with the article already in it, along with its
+title, description and language alternates, so it reads before the interface
+loads and search engines index the text. The interface then takes over the page
+from the same data, without asking the API again. The home page follows the same
+idea for its title and description: `/` is English and `/sl` is Slovenian, each
+pointing at the other, as listed in `HOME_PAGES` in
+[`server/web.ts`](../server/web.ts).
+
 Write for somebody using the dashboard: start from what they want to do, name
 buttons and menus exactly as the interface does in that language, and leave
 API details to [`api.md`](api.md).

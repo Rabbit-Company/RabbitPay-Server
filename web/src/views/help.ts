@@ -9,10 +9,28 @@ import { themeSwitcher } from "../theme-switcher";
 import { headingAnchor } from "../../../server/markdown";
 import { legalInfo, legalLinks } from "./legal";
 
+const HELP_SEED_ID = "rabbitpay-help";
 const ARTICLE_LINK = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const indexes = new Map<string, Promise<HelpIndex>>();
 const articles = new Map<string, Promise<HelpArticle | null>>();
+
+function seedFromPage() {
+	try {
+		const seed = JSON.parse(document.getElementById(HELP_SEED_ID)?.textContent ?? "null") as {
+			language: string;
+			index: HelpIndex;
+			article: HelpArticle | null;
+		} | null;
+		if (seed === null) return;
+		indexes.set(seed.language, Promise.resolve(seed.index));
+		if (seed.article) articles.set(`${seed.language}/${seed.article.slug}`, Promise.resolve(seed.article));
+	} catch {
+		void 0;
+	}
+}
+
+seedFromPage();
 
 function remembered<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
 	let pending = cache.get(key);

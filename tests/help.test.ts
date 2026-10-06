@@ -11,7 +11,7 @@ await prepareTest();
 mkdirSync(FIXTURE, { recursive: true });
 writeFileSync(
 	`${FIXTURE}/index.html`,
-	'<!doctype html><html lang="en"><head><meta name="robots" content="noindex, nofollow" /><title>RabbitPay</title></head><body></body></html>'
+	'<!doctype html><html lang="en"><head><meta name="robots" content="noindex, nofollow" /><title>RabbitPay</title></head><body><div id="app"></div></body></html>'
 );
 
 const { Settings } = await import("../server/settings");
@@ -92,6 +92,7 @@ describe("help articles", () => {
 		expect(helpIndex("sl").title).toBe("Pomoč");
 		expect(helpIndex("sl").articles.map((article) => article.slug)).toEqual(helpSlugs());
 		expect(helpIndex("sl").articles.find((article) => article.slug === "invoices")?.title).toBe("Računi");
+		expect(helpSlugs()[0]).toBe("getting-started");
 	});
 });
 
@@ -113,6 +114,11 @@ describe("help endpoints", () => {
 		expect(data.content).toContain("## Create an invoice");
 	});
 
+	test("let the browser keep an article for a few minutes", async () => {
+		expect((await get("/api/v1/help/en")).headers.get("Cache-Control")).toBe("public, max-age=300");
+		expect((await get("/api/v1/help/en/invoices")).headers.get("Cache-Control")).toBe("public, max-age=300");
+	});
+
 	test("answer 404 for an unknown language or article", async () => {
 		expect((await get("/api/v1/help/de")).status).toBe(404);
 		expect((await get("/api/v1/help/de/invoices")).status).toBe(404);
@@ -129,6 +135,36 @@ describe("help pages", () => {
 		expect(html).toContain(`<link rel="canonical" href="${Utils.publicUrl()}/help/sl/invoices" />`);
 		expect(html).toContain('hreflang="en"');
 		expect(html).toContain('hreflang="x-default"');
+	});
+
+	test("carry the article itself, so it reads without waiting for the interface", async () => {
+		const html = await (await get("/help/sl/invoices")).text();
+		expect(html).toContain('<div id="app"><div class="help-page">');
+		expect(html).toContain("<h1>Računi</h1>");
+		expect(html).toContain("<h2>Ustvarite račun</h2>");
+		expect(html).toContain('<a class="help-nav-link" href="/help/sl/invoices" aria-current="page">Računi</a>');
+
+		const seed = JSON.parse(html.match(/<script type="application\/json" id="rabbitpay-help">(.*?)<\/script>/s)![1]) as {
+			language: string;
+			index: { articles: unknown[] };
+			article: { slug: string; content: string };
+		};
+		expect(seed.language).toBe("sl");
+		expect(seed.index.articles.length).toBe(helpSlugs().length);
+		expect(seed.article.slug).toBe("invoices");
+		expect(seed.article.content).toBe(helpArticle("sl", "invoices")!.content);
+	});
+
+	test("carry the list of articles on the index", async () => {
+		const html = await (await get("/help/en")).text();
+		expect(html).toContain('<a class="card help-card" href="/help/en/payments"><h2>Payments</h2>');
+		expect(html).toContain('"article":null');
+	});
+
+	test("leave other pages empty for the interface to fill", async () => {
+		for (const path of ["/", "/login", "/help", "/help/en/nothing-here"]) {
+			expect(await (await get(path)).text()).toContain('<div id="app"></div>');
+		}
 	});
 
 	test("describe the index", async () => {
@@ -159,6 +195,44 @@ describe("help pages", () => {
 		for (const language of HELP_LANGUAGES) {
 			expect(sitemap).toContain(`/help/${language}</loc>`);
 			expect(sitemap).toContain(`/help/${language}/invoices</loc>`);
+		}
+	});
+});
+
+describe("home page", () => {
+	test("is described in English at the root", async () => {
+		const html = await (await get("/")).text();
+		expect(html).toContain('<html lang="en">');
+		expect(html).toContain("<title>RabbitPay | Invoicing and payments</title>");
+		expect(html).toContain(`<link rel="canonical" href="${Utils.publicUrl()}/" />`);
+		expect(html).toContain(`<link rel="alternate" hreflang="sl" href="${Utils.publicUrl()}/sl" />`);
+		expect(html).toContain(`<link rel="alternate" hreflang="x-default" href="${Utils.publicUrl()}/" />`);
+	});
+
+	test("is described in Slovenian at its own address", async () => {
+		for (const path of ["/sl", "/sl/"]) {
+			const html = await (await get(path)).text();
+			expect(html).toContain('<html lang="sl">');
+			expect(html).toContain("<title>RabbitPay | Računi in plačila</title>");
+			expect(html).toContain('<meta name="robots" content="index, follow" />');
+			expect(html).toContain('<meta name="description" content="Izdajanje računov in plačila za slovenska podjetja');
+			expect(html).toContain(`<link rel="canonical" href="${Utils.publicUrl()}/sl" />`);
+			expect(html).toContain(`<link rel="alternate" hreflang="en" href="${Utils.publicUrl()}/" />`);
+		}
+	});
+
+	test("is in the sitemap in both languages", async () => {
+		const sitemap = await (await get("/sitemap-home.xml")).text();
+		expect(sitemap).toContain(`<loc>${Utils.publicUrl()}/</loc>`);
+		expect(sitemap).toContain(`<loc>${Utils.publicUrl()}/sl</loc>`);
+	});
+
+	test("stays out of search in Slovenian too when the landing page is off", async () => {
+		Settings.web.landing_page = false;
+		try {
+			expect(await (await get("/sl")).text()).toContain('<meta name="robots" content="noindex, nofollow" />');
+		} finally {
+			Settings.web.landing_page = true;
 		}
 	});
 });

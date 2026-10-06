@@ -1,6 +1,7 @@
 import { Api, type LegalInfo, type RegistrationMode } from "../api";
 import { el } from "../dom";
-import { t, type UiKey } from "../i18n";
+import { DEFAULT_UI_LANGUAGE, t, type UiKey, type UiLanguage } from "../i18n";
+import { navigate } from "../router";
 import { languageSwitcher } from "../language";
 import { logo } from "../logo";
 import { themeSwitcher } from "../theme-switcher";
@@ -41,6 +42,10 @@ function glyph(name: string, size = 22): HTMLElement {
 	const node = el("span", { class: "landing-icon" });
 	node.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 	return node;
+}
+
+export function landingPath(language: UiLanguage): string {
+	return language === DEFAULT_UI_LANGUAGE ? "/" : `/${language}`;
 }
 
 function landingFlag(): HTMLMetaElement | null {
@@ -324,7 +329,7 @@ export async function landingView(): Promise<HTMLElement> {
 				"div",
 				{ class: "landing-actions" },
 				themeSwitcher(),
-				languageSwitcher(),
+				languageSwitcher((next) => navigate(landingPath(next))),
 				signIn("button ghost small"),
 				canRegister ? el("a", { class: "button primary small landing-nav-register", href: "/login?mode=register" }, t("landing.get_started")) : null
 			)

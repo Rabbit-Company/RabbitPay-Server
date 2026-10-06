@@ -10,11 +10,11 @@ import { logo } from "./logo";
 import { applyAccent, applyTheme } from "./theme";
 import { resetBranding } from "./branding";
 import { accountMenu, type MenuLink } from "./account-menu";
-import { isUiLanguage, language, t } from "./i18n";
+import { DEFAULT_UI_LANGUAGE, isUiLanguage, language, setLanguage, t, UI_LANGUAGES, type UiLanguage } from "./i18n";
 import { loginView } from "./views/login";
 import { customerCreditNoteView, customerInvoiceView, customerInvoicesView, customerLoginView, customerRoute } from "./views/customer-portal";
 import { projectsView } from "./views/projects";
-import { landingEnabled, landingView } from "./views/landing";
+import { landingEnabled, landingPath, landingView } from "./views/landing";
 import { checkPendingTerms, legalDocumentView, legalNoticeView } from "./views/legal";
 import { helpArticleView, helpIndexView } from "./views/help";
 import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS, STORE_PERMISSIONS } from "./views/project";
@@ -244,16 +244,21 @@ define("/customer/tickets", () => customerRoute(customerTicketsView), false);
 define("/customer/tickets/:ticket", (params) => customerRoute(() => customerTicketView(params.ticket)), false);
 define("/pay/:invoice", (params) => payView(params.invoice), false);
 define("/invite/:token", (params) => inviteView(params.token), false);
-define(
-	"/",
-	() => {
-		if (getToken() !== null) return projectsView();
-		if (landingEnabled()) return landingView();
-		navigate("/login", true);
+function landingRoute(routeLanguage: UiLanguage | null): Promise<HTMLElement> | HTMLElement {
+	if (getToken() !== null && routeLanguage === null) return projectsView();
+	const target = getToken() !== null ? "/" : landingEnabled() ? landingPath(routeLanguage ?? language()) : "/login";
+	if (target !== window.location.pathname) {
+		navigate(target, true);
 		return el("div");
-	},
-	false
-);
+	}
+	if (routeLanguage !== null && routeLanguage !== language()) setLanguage(routeLanguage);
+	return landingView();
+}
+
+define("/", () => landingRoute(null), false);
+for (const option of UI_LANGUAGES) {
+	if (option.value !== DEFAULT_UI_LANGUAGE) define(landingPath(option.value), () => landingRoute(option.value), false);
+}
 define("/account", () => accountView());
 define("/account/email", () => confirmEmailView(), false);
 define("/converter", () => converterView());
@@ -531,7 +536,7 @@ setUnauthorizedHandler(() => {
 document.documentElement.lang = language();
 applyTheme();
 
-root.appendChild(shell);
+root.replaceChildren(shell);
 mountShell();
 installKeyboardShortcuts();
 installSelectPicker();

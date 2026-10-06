@@ -7,7 +7,7 @@ import { escapeHtml } from "./markdown";
 import { normalizeHost, slugForHost, storeBySlug, storeUrl } from "./store/store";
 import { sitemapStores, storeLocation, storePageMeta, storeRoot, storeSitemap, STORE_PRIVATE_PATHS, type StorePageMeta } from "./store/seo";
 import { includedPayments, includedStorageGb, licensingEnforced } from "./licensing";
-import { HELP_LANGUAGES, helpArticle, helpIndex, helpSlugs, isHelpLanguage } from "./help";
+import { HELP_LANGUAGES, HELP_SEED_ID, helpArticle, helpIndex, helpMarkup, helpSlugs, isHelpLanguage } from "./help";
 
 const IMMUTABLE_ASSET = /-[a-z0-9]{8,}\.(js|css|woff2?|ttf|png|svg|jpg|jpeg|webp|ico)$/i;
 
@@ -111,11 +111,42 @@ function storefrontHtml(html: string, request: StoreRequest, meta: StorePageMeta
 	return described.replace("</head>", `${tags.join("")}</head>`);
 }
 
-const HOME_DESCRIPTION =
-	"Invoicing and payments for Slovenian businesses, with FURS fiscal verification, e-SLOG e-invoices and VAT reports built in. Accept cards, PayPal, bank transfers and crypto.";
+interface HomePage {
+	language: string;
+	path: string;
+	title: string;
+	description: string;
+}
+
+const HOME_PAGES: HomePage[] = [
+	{
+		language: "en",
+		path: "/",
+		title: "RabbitPay | Invoicing and payments",
+		description:
+			"Invoicing and payments for Slovenian businesses, with FURS fiscal verification, e-SLOG e-invoices and VAT reports built in. Accept cards, PayPal, bank transfers and crypto.",
+	},
+	{
+		language: "sl",
+		path: "/sl",
+		title: "RabbitPay | Računi in plačila",
+		description:
+			"Izdajanje računov in plačila za slovenska podjetja, z davčnim potrjevanjem računov pri FURS, e-računi e-SLOG in poročili DDV. Sprejemajte kartice, PayPal, bančna nakazila in kriptovalute.",
+	},
+];
+
+function homePage(pathname: string): HomePage | null {
+	const path = pathname === "/index.html" ? "/" : pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
+	return HOME_PAGES.find((page) => page.path === path) ?? null;
+}
+
+function homeUrl(page: HomePage): string {
+	return `${Utils.publicUrl()}${page.path}`;
+}
 
 const HELP_PATH = /^\/help\/([a-z]{2})(?:\/([a-z0-9]+(?:-[a-z0-9]+)*))?\/?$/;
 const HELP_DEFAULT_LANGUAGE = "en";
+const APP_ROOT = '<div id="app"></div>';
 
 function helpUrl(language: string, slug: string | null): string {
 	return `${Utils.publicUrl()}/help/${language}${slug === null ? "" : `/${slug}`}`;
@@ -128,7 +159,9 @@ function helpUrls(): string[] {
 function helpHtml(html: string, pathname: string): string | null {
 	const [, language, slug = null] = pathname.match(HELP_PATH) ?? [];
 	if (!isHelpLanguage(language)) return null;
-	const page = slug === null ? helpIndex(language) : helpArticle(language, slug);
+	const index = helpIndex(language);
+	const article = slug === null ? null : helpArticle(language, slug);
+	const page = slug === null ? index : article;
 	if (page === null) return null;
 
 	const title = slug === null ? `${page.title} | RabbitPay` : `${page.title} | ${helpIndex(language).title} | RabbitPay`;
@@ -143,12 +176,14 @@ function helpHtml(html: string, pathname: string): string | null {
 		`<meta property="og:description" content="${escapeHtml(page.description)}" />`,
 		`<meta property="og:type" content="${slug === null ? "website" : "article"}" />`,
 		`<meta property="og:url" content="${escapeHtml(url)}" />`,
+		`<script type="application/json" id="${HELP_SEED_ID}">${jsonLd({ language, index, article })}</script>`,
 	].join("");
 	return html
 		.replace(/<html lang="[^"]*">/, `<html lang="${language}">`)
 		.replace(/<meta name="robots"[^>]*>/, robotsTag(true))
 		.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`)
-		.replace("</head>", `${tags}</head>`);
+		.replace("</head>", `${tags}</head>`)
+		.replace(APP_ROOT, `<div id="app">${helpMarkup(language, slug)}</div>`);
 }
 
 function applicationHtml(html: string, pathname: string): string {
@@ -156,23 +191,27 @@ function applicationHtml(html: string, pathname: string): string {
 	const licensing = licensingEnforced();
 	const store = licensing && isWebUrl(Settings.web?.license_store_url ?? "") ? Settings.web.license_store_url : "";
 	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" data-license-store="${escapeHtml(store)}" />`;
-	if (pathname !== "/" && pathname !== "/index.html") {
+	const home = homePage(pathname);
+	if (home === null) {
 		const flagged = html.replace("</head>", `${flag}</head>`);
 		return helpHtml(flagged, pathname) ?? flagged;
 	}
 
 	const tags = [
 		flag,
-		`<meta name="description" content="${escapeHtml(HOME_DESCRIPTION)}" />`,
+		`<meta name="description" content="${escapeHtml(home.description)}" />`,
 		`<meta property="og:title" content="RabbitPay" />`,
-		`<meta property="og:description" content="${escapeHtml(HOME_DESCRIPTION)}" />`,
+		`<meta property="og:description" content="${escapeHtml(home.description)}" />`,
 		`<meta property="og:type" content="website" />`,
-		`<meta property="og:url" content="${escapeHtml(Utils.publicUrl())}/" />`,
-		`<link rel="canonical" href="${escapeHtml(Utils.publicUrl())}/" />`,
+		`<meta property="og:url" content="${escapeHtml(homeUrl(home))}" />`,
+		`<link rel="canonical" href="${escapeHtml(homeUrl(home))}" />`,
+		...HOME_PAGES.map((page) => `<link rel="alternate" hreflang="${page.language}" href="${escapeHtml(homeUrl(page))}" />`),
+		`<link rel="alternate" hreflang="x-default" href="${escapeHtml(homeUrl(HOME_PAGES[0]))}" />`,
 	].join("");
 	return html
-		.replace(/<meta name="robots"[^>]*>/, `<meta name="robots" content="index, follow" />`)
-		.replace(/<title>[^<]*<\/title>/, "<title>RabbitPay | Invoicing and payments</title>")
+		.replace(/<html lang="[^"]*">/, `<html lang="${home.language}">`)
+		.replace(/<meta name="robots"[^>]*>/, robotsTag(true))
+		.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(home.title)}</title>`)
 		.replace("</head>", `${tags}</head>`);
 }
 
@@ -279,7 +318,7 @@ async function searchFile(pathname: string, host: string | null): Promise<Respon
 	if (pathname === "/sitemap.xml") return textResponse(await sitemapIndex(), "application/xml");
 	if (pathname === "/sitemap-home.xml") {
 		if (Settings.web?.landing_page === false) return null;
-		const locations = [`${Utils.publicUrl()}/`, ...helpUrls()];
+		const locations = [...HOME_PAGES.map(homeUrl), ...helpUrls()];
 		return textResponse(
 			xmlDocument(
 				"urlset",
