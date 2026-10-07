@@ -16,6 +16,7 @@ import type { AppState } from "./database/models";
 const STORE_IMAGE_UPLOAD = /^\/api\/v1\/projects\/[^/]+\/store\/(?:images\/(?:logo|hero)|products\/[^/]+\/images)$/;
 const ACCOUNTING_IMPORT =
 	/^\/api\/v1\/projects\/[^/]+\/(?:(?:recorded-invoices\/import|accounting\/bank-statements|expenses\/import|expenses\/import-csv)(?:\/preview)?|(?:recorded-invoices|expenses)\/[^/]+\/attachment)$/;
+const FILE_PART_UPLOAD = /^\/api\/v1\/projects\/[^/]+\/files\/[^/]+\/parts\/\d+$/;
 
 export namespace Server {
 	export const app = new Web<AppState>();
@@ -59,7 +60,7 @@ export namespace Server {
 				maxSize: 256 * 1024,
 				skip: (ctx) => {
 					const path = new URL(ctx.req.url).pathname;
-					return STORE_IMAGE_UPLOAD.test(path) || ACCOUNTING_IMPORT.test(path);
+					return STORE_IMAGE_UPLOAD.test(path) || ACCOUNTING_IMPORT.test(path) || FILE_PART_UPLOAD.test(path);
 				},
 			})
 		);

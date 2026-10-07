@@ -53,6 +53,34 @@ Ure, zabeležene na zahtevku, se prikažejo v evidencah delovnega časa. Zaraču
 2. Pritisnite **Zaračunaj zahtevek**. Izberete lahko več zahtevkov iste stranke in jih združite na enem računu.
 3. Preverite ustvarjeni osnutek računa in ga izdajte.
 
+### Zahtevku pripnite datoteke
+
+Odprite zahtevek in pritisnite **Pripni datoteke** ali posnetek zaslona prilepite kjerkoli na strani. Datoteka je lahko velika do 25 MB, razen če lastnik ali administrator to spremeni pod **Datoteke**, **Prostor in omejitve**. Slike do 10 MB imajo predogled, vse ostalo se prenese.
+
+Slike PNG in BMP se shranijo kot WebP brez izgub, kadar so tako manjše. Ne spremeni se niti ena slikovna pika, le ime datoteke se konča z .webp. Fotografije in videoposnetki se shranijo nespremenjeni.
+
+Datoteko lahko odstrani oseba, ki jo je naložila, pa tudi nadzorniki, administratorji in lastniki. Na zahtevku ostane zapis, kdo jo je odstranil in kdaj. Stranke pripetih datotek ne vidijo.
+
+Pripete datoteke uporabljajo **Prostor za datoteke**, ki je ločen od prostora za dokumente, zato poln prostor za datoteke nikoli ne ustavi izdaje računov. Z licenco za delovno silo dobite 10 GB, ključ za datoteke pa doda več. Lastniki in administratorji vidijo vse datoteke, največje najprej, pod **Licenca**, **Upravljanje datotek**, kjer jih lahko odstranijo in sprostijo prostor.
+
+## Shranjujte in delite datoteke
+
+**Datoteke** so skupen prostor za dokumente, slike in videoposnetke. Ustvarite mape, datoteke naložite z gumbom **Naloži datoteke**, jih spustite na stran ali prilepite posnetek zaslona.
+
+- Svoje datoteke in mape vidite samo vi, dokler jih ne delite.
+- Za deljenje pritisnite **Deli** ob katerikoli mapi ali posamezni datoteki, na katerikoli ravni. Izberite **Vsi v projektu** ali **Izbrane osebe**.
+- Deljenje mape velja za vse v njej in kdor lahko mapo odpre, lahko vanjo tudi dodaja datoteke.
+- Kar drugi delijo z vami, je v mapi **Deljeno z mano**, razvrščeno po osebi, ki ji pripada. Vaše stvari ostanejo na vrhu Datotek.
+- Deljenje samo dodaja osebe. Če delite eno podmapo ali eno datoteko, izbrane osebe pod vašim imenom v mapi Deljeno z mano vidijo samo ta element, ne pa mape okoli njega. Kdor lahko odpre mapo okoli njega, lahko element še vedno odpre.
+- **Deli**, **Preimenuj**, **Premakni** in **Izbriši** so na voljo osebi, ki je element dodala, in tistemu, ki je ustvaril katero od map nad njim. Z izbrisom mape se izbriše vse, kar je v njej.
+- Lastniki in administratorji projekta lahko odprejo vse. Datoteke drugih najdejo v mapi **Datoteke vseh**, razvrščene po osebah.
+
+Datoteke uporabljajo isti **Prostor za datoteke** kot priloge zahtevkov. Lastniki in administratorji pod **Prostor in omejitve** vidijo vse datoteke, največje najprej, in nastavijo:
+
+1. **Največja datoteka v MB**, največjo posamezno datoteko, ki jo lahko kdo naloži.
+2. **Prostor na osebo v MB**, koliko lahko vsaka oseba hrani v Datotekah. Pustite prazno, če omejitve ni.
+3. **Lastno omejitev** za eno osebo, kadar nekdo potrebuje več ali manj kot ostali.
+
 Stranka vidi zahtevek na portalu za kupce šele, ko ji omogočite dostop in zahtevek označite kot viden zanjo. Glejte [Portal za kupce](customer-portal).
 
 ## Vodite podatke o zaposlenih

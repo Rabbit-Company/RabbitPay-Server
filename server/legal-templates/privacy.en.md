@@ -12,6 +12,8 @@ We have not appointed a data protection officer because the law does not require
 
 Businesses use the Service to manage their own customers, employees and suppliers. For that data, the business is the controller and we process it only on its behalf, under the data processing terms in our Terms of Service. If you received an invoice, a payment link or an email from a business that uses RabbitPay, please contact that business about your data.
 
+The same applies to files that members of a business's team attach to tickets or keep in Files. The business decides who can use these features. Its project owners and administrators can open every file stored in its project, including files a team member has not shared with anyone.
+
 ## 3. What we process, why and on what basis
 
 | Data | Purpose | Legal basis |
@@ -46,6 +48,7 @@ We also disclose data to public authorities, courts and our bank where the law r
 
 - **Account data:** while the account exists. After you ask us to delete the account, we delete it within 30 days, except for data we must keep by law.
 - **Invoices, payments and other accounting records:** 10 years after the end of the year they relate to, as required by Slovenian tax and accounting law (ZDavP-2 and ZDDV-1).
+- **Files uploaded by a business's team:** until the business deletes them. A deleted file is removed from the storage of the Service.
 - **Access logs:** {{access_log_days}} days in the live database, then in an encrypted archive until {{access_log_years}} full calendar years have passed after the year of the entry.
 - **Content of emails sent from the Service:** {{email_content_retention}}
 - **Audit trail of changes to business records:** as long as the related records must be kept.

@@ -145,6 +145,16 @@ function rowsOf(state: ProjectLicense, now: number): Row[] {
 		total: { grants: storage, included: state.storage_included / STORAGE_GB_BYTES, format: gigabytes },
 	});
 	for (const grant of storage) rows.push(keyRow(t("license.timeline_storage_key"), grant, gigabytes(grant.amount), now));
+	const files = state.file_storage_grants.map((grant) => ({ amount: grant.storage_gb, from: grant.from, until: grant.until }));
+	if (state.file_storage_included > 0 || files.length > 0) {
+		rows.push({
+			label: t("license.files"),
+			key: false,
+			bars: [],
+			total: { grants: files, included: state.file_storage_included / STORAGE_GB_BYTES, format: gigabytes },
+		});
+		for (const grant of files) rows.push(keyRow(t("license.timeline_files_key"), grant, gigabytes(grant.amount), now));
+	}
 	return rows;
 }
 

@@ -85,6 +85,8 @@ export interface ProjectRow {
 	free_emails: number | null;
 	paid_emails: number;
 	paid_storage_bytes: number;
+	max_file_bytes: number | null;
+	max_member_file_bytes: number | null;
 	white_label_until: number | null;
 	store_until: number | null;
 	workforce_until: number | null;
@@ -585,7 +587,7 @@ export interface TransactionRow {
 
 export type LicenseBilling = "free" | "paid" | "unmetered";
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files";
 
 export type LicenseStatus = "available" | "redeemed" | "revoked";
 
@@ -1111,6 +1113,44 @@ export interface TicketCommentRow {
 	internal: number;
 	created: number;
 	updated: number;
+}
+
+export interface ProjectFileRow {
+	uuid: string;
+	project: string;
+	storage_key: string;
+	file_name: string;
+	content_type: string;
+	byte_size: number;
+	parts: number;
+	parts_received: number;
+	status: "uploading" | "ready";
+	explorer: number;
+	access: FolderAccess;
+	folder: string | null;
+	created_by: string | null;
+	created: number;
+	removed_by: string | null;
+	removed_at: number | null;
+}
+
+export type FolderAccess = "private" | "everyone" | "members";
+
+export interface FileFolderRow {
+	uuid: string;
+	project: string;
+	parent: string | null;
+	name: string;
+	access: FolderAccess;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface TicketFileRow {
+	ticket: string;
+	file: string;
+	created: number;
 }
 
 export interface TicketPortalAccessRow {

@@ -24,7 +24,7 @@ Storitev na naslovu {{service_url}} (v nadaljevanju: storitev) zagotavlja:
 
 ## 4. Storitev
 
-4.1. Storitev naročniku omogoča izdajanje računov, sprejemanje in evidentiranje plačil, vodenje strank, izdelkov, stroškov in drugih evidenc ter uporabo drugih funkcij, ki so na voljo v danem trenutku.
+4.1. Storitev naročniku omogoča izdajanje računov, sprejemanje in evidentiranje plačil, vodenje strank, izdelkov, stroškov in drugih evidenc, shranjevanje in deljenje datotek znotraj ekipe ter uporabo drugih funkcij, ki so na voljo v danem trenutku.
 
 4.2. Storitev zagotavljamo s potrebno skrbnostjo, vendar ne jamčimo, da bo delovala brez prekinitev ali napak. Vzdrževalna dela lahko izvajamo, po možnosti v času manjše uporabe, daljše načrtovane prekinitve pa bomo poskušali vnaprej napovedati.
 
@@ -38,13 +38,15 @@ Storitev na naslovu {{service_url}} (v nadaljevanju: storitev) zagotavlja:
 
 5.1. Vsak projekt vključuje mesečno brezplačno kvoto, trenutno {{free_payments}} zaključenih plačil na mesec in {{free_storage}} GB prostora za dokumente.{{email_allowance}} Brezplačno kvoto lahko spremenimo z vsaj 30-dnevnim predhodnim obvestilom.
 
-5.2. Licenčni ključi razširijo projekt, na primer z dodatnimi plačili, e-poštnimi sporočili, prostorom, lastno blagovno znamko, spletno trgovino ali evidenco časa in plačami. Vsebina in cena posameznega ključa sta navedeni v ponudbi ali na računu.
+5.2. Licenčni ključi razširijo projekt, na primer z dodatnimi plačili, e-poštnimi sporočili, prostorom za dokumente, prostorom za datoteke, lastno blagovno znamko, spletno trgovino ali evidenco časa in plačami. Vsebina in cena posameznega ključa sta navedeni v ponudbi ali na računu.
 
 5.3. Licenčni ključi se plačajo z bančnim nakazilom na podlagi računa, ki ga izdamo. Ključ dostavimo, ko prejmemo celotno plačilo.
 
 5.4. Licenčni ključ je enkraten nakup in se nikoli samodejno ne podaljša. Ključ z omejenim trajanjem začne teči, ko je unovčen na projektu.
 
 5.5. Ključ je mogoče unovčiti na kateremkoli projektu. Po unovčenju ostane vezan na ta projekt in ga ni mogoče prenesti ali zamenjati.
+
+5.6. Datoteke, ki jih naročnikova ekipa pripne zahtevkom ali hrani v Datotekah, uporabljajo prostor za datoteke, ki se šteje ločeno od prostora za dokumente. Projekt z veljavno licenco za evidenco časa in plače trenutno vključuje {{free_file_storage}} GB prostora za datoteke, licenčni ključi za prostor za datoteke pa ga dodajo več. Vključeno količino lahko spremenimo z vsaj 30-dnevnim predhodnim obvestilom. Ko je prostor za datoteke poln ali ko ključ za prostor za datoteke poteče in projekt hrani več, kot ga ostane, se nova nalaganja zavrnejo, dokler se prostor ne sprosti ali doda. Že shranjene datoteke ostanejo na voljo in jih iz tega razloga ne izbrišemo. Na izdajanje računov in vse drugo, kar uporablja prostor za dokumente, to ne vpliva.
 
 ## 6. Cene in plačilo
 
@@ -72,9 +74,10 @@ Storitev na naslovu {{service_url}} (v nadaljevanju: storitev) zagotavlja:
 - za goljufije, pranje denarja, financiranje terorizma ali prodajo prepovedanega blaga ali storitev,
 - za pošiljanje nezaželenih komercialnih sporočil,
 - za nalaganje zlonamerne kode ali za preizkušanje, preobremenjevanje ali obhod varnosti ali licenciranja storitve,
+- za shranjevanje ali deljenje datotek, ki so nezakonite ali kršijo avtorske ali druge pravice drugih, ali za uporabo prostora za datoteke kot javne storitve za gostovanje ali razširjanje datotek,
 - za nadaljnjo prodajo dostopa do storitve brez našega pisnega soglasja.
 
-8.3. Dostop do storitve lahko začasno onemogočimo, če naročnik huje krši te pogoje ali če to zahteva zakon. Kadar je mogoče, naročnika najprej obvestimo in mu omogočimo, da kršitev odpravi.
+8.3. Dostop do storitve lahko začasno onemogočimo, če naročnik huje krši te pogoje ali če to zahteva zakon. Kadar je mogoče, naročnika najprej obvestimo in mu omogočimo, da kršitev odpravi. Datoteko lahko odstranimo ali onemogočimo dostop do nje, če izvemo, da je nezakonita, ali če to zahteva zakon.
 
 ## 9. Pogodba o obdelavi osebnih podatkov
 
@@ -86,7 +89,7 @@ Ta člen je pogodba o obdelavi osebnih podatkov po 28. členu Splošne uredbe o 
 
 9.3. **Narava in namen.** Hramba, urejanje, priklic, posredovanje (na primer pošiljanje računov po e-pošti), varnostno kopiranje in brisanje, izključno za zagotavljanje storitve.
 
-9.4. **Vrste podatkov.** Imena, naslovi, e-poštni naslovi, telefonske številke, davčne in matične številke, bančni podatki, podatki o računih in plačilih, naročilih, sporočila podpore ter, če naročnik uporablja evidenco časa in plače, podatki o zaposlenih, kot so delovni čas, odsotnosti in podatki o plačah.
+9.4. **Vrste podatkov.** Imena, naslovi, e-poštni naslovi, telefonske številke, davčne in matične številke, bančni podatki, podatki o računih in plačilih, naročilih, sporočila podpore ter, če naročnik uporablja evidenco časa in plače, podatki o zaposlenih, kot so delovni čas, odsotnosti in podatki o plačah, ter vsi osebni podatki v datotekah, ki jih naloži naročnikova ekipa.
 
 9.5. **Posamezniki, na katere se nanašajo podatki.** Naročnikove stranke in njihove kontaktne osebe, zaposleni, dobavitelji in druge osebe, katerih podatke vnese naročnik.
 

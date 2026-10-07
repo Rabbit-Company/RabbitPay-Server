@@ -9,7 +9,8 @@ const { default: Cache } = await import("../server/cache");
 const { Settings } = await import("../server/settings");
 const { setTransport } = await import("../server/email/mailer");
 const { default: Auth } = await import("../server/auth");
-const { generateLicenseCode } = await import("../server/licensing");
+const { generateLicenseCode, hasStorageCapacity } = await import("../server/licensing");
+const { discardAbandonedUploads } = await import("../server/files");
 const { localDate } = await import("../server/timezone");
 const { addDays, easterSunday, nationalHolidays } = await import("../server/workforce/holidays");
 const { DEFAULT_WORKFORCE_CONFIG } = await import("../server/workforce/config");
@@ -1560,5 +1561,489 @@ describe("employee seats", () => {
 		for (const uuid of seatMembers) expect((await call("DELETE", `${base()}/members/${uuid}`, tokens.owner)).error).toBe(0);
 		const restored = (await call("GET", `${base()}/workforce`, tokens.owner)).data;
 		expect(restored.license).toMatchObject({ active: true, seats_exceeded: false, employees_used: 4, employees_limit: 5 });
+	});
+});
+
+describe("ticket files", () => {
+	let ticket = "";
+	let file = "";
+
+	async function sendPart(uuid: string, index: number, bytes: Uint8Array, token: string): Promise<Result> {
+		const response = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1${base()}/files/${uuid}/parts/${index}`, {
+				method: "PUT",
+				headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" },
+				body: bytes,
+			})
+		);
+		return { status: response.status, ...((await response.json()) as Omit<Result, "status">) };
+	}
+
+	async function attach(name: string, type: string, bytes: Uint8Array, token = tokens.employee): Promise<Result> {
+		const begun = await call("POST", `${base()}/tickets/${ticket}/files`, token, { name, type, size: bytes.length });
+		if (begun.error !== 0) return begun;
+		let stored = begun;
+		for (let index = 0; index < begun.data.parts; index++) {
+			stored = await sendPart(begun.data.uuid, index, bytes.subarray(index * begun.data.part_bytes, (index + 1) * begun.data.part_bytes), token);
+			if (stored.error !== 0) return stored;
+		}
+		return stored;
+	}
+
+	const text = (value: string) => new TextEncoder().encode(value);
+
+	test("files are attached to tickets and downloaded as attachments", async () => {
+		ticket = (await call("POST", `${base()}/tickets`, tokens.supervisor, { title: "Broken printer" })).data.uuid;
+		const uploaded = await attach("C:\\photos\\printer.png", "image/png", text("screenshot bytes"));
+		expect(uploaded.error).toBe(0);
+		expect(uploaded.data).toMatchObject({ file_name: "printer.png", content_type: "image/png", byte_size: 16, ready: true, removed: false });
+		expect(uploaded.data.created_by_name).toBe("Eva Employee");
+		file = uploaded.data.uuid;
+
+		const detail = await call("GET", `${base()}/tickets/${ticket}`, tokens.colleague);
+		expect(detail.data.files.map((row: { uuid: string }) => row.uuid)).toEqual([file]);
+		expect(detail.data.max_file_bytes).toBe(25_000_000);
+
+		const response = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1${base()}/files/${file}`, { headers: { Authorization: `Bearer ${tokens.colleague}` } })
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Disposition")).toContain('attachment; filename="printer.png"');
+		expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+		expect(await response.text()).toBe("screenshot bytes");
+
+		const link = await call("POST", `${base()}/files/${file}/link`, tokens.colleague);
+		expect(link.data.path).toMatch(/^\/api\/v1\/file-downloads\/[0-9a-f]{64}$/);
+		const linked = await Server.app.handle(new Request(`http://127.0.0.1${link.data.path}`));
+		expect(linked.status).toBe(200);
+		expect(await linked.text()).toBe("screenshot bytes");
+		const guessed = await Server.app.handle(new Request(`http://127.0.0.1/api/v1/file-downloads/${"0".repeat(64)}`));
+		expect(guessed.status).toBe(404);
+	});
+
+	test("large files arrive in ordered parts and unfinished uploads stay hidden", async () => {
+		await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 40 });
+		const bytes = new Uint8Array(16_000_000 + 5);
+		bytes.fill(7);
+		bytes[bytes.length - 1] = 9;
+		const begun = await call("POST", `${base()}/tickets/${ticket}/files`, tokens.employee, { name: "clip.mp4", type: "video/mp4", size: bytes.length });
+		expect(begun.data).toMatchObject({ parts: 2, part_bytes: 16_000_000, ready: false });
+		const uuid = begun.data.uuid;
+
+		expect((await sendPart(uuid, 1, bytes.subarray(16_000_000), tokens.employee)).error).toBe(1308);
+		expect((await sendPart(uuid, 0, bytes.subarray(0, 100), tokens.employee)).error).toBe(1308);
+		expect((await sendPart(uuid, 0, bytes.subarray(0, 16_000_000), tokens.colleague)).error).toBe(9999);
+		expect((await sendPart(uuid, 0, bytes.subarray(0, 16_000_000), tokens.employee)).data.ready).toBe(false);
+		expect((await call("GET", `${base()}/tickets/${ticket}`, tokens.employee)).data.files).toHaveLength(1);
+		expect((await call("GET", `${base()}/files/${uuid}`, tokens.employee)).error).toBe(1305);
+		expect((await call("GET", `${base()}/license`, tokens.owner)).data.file_storage_used).toBe(16 + bytes.length);
+		expect((await sendPart(uuid, 0, bytes.subarray(0, 16_000_000), tokens.employee)).error).toBe(0);
+		expect((await sendPart(uuid, 1, bytes.subarray(16_000_000), tokens.employee)).data.ready).toBe(true);
+		expect((await sendPart(uuid, 1, bytes.subarray(16_000_000), tokens.employee)).error).toBe(1308);
+
+		const response = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1${base()}/files/${uuid}`, { headers: { Authorization: `Bearer ${tokens.employee}` } })
+		);
+		expect(response.headers.get("Content-Length")).toBe(String(bytes.length));
+		const downloaded = new Uint8Array(await response.arrayBuffer());
+		expect(downloaded.length).toBe(bytes.length);
+		expect(downloaded[0]).toBe(7);
+		expect(downloaded[downloaded.length - 1]).toBe(9);
+		expect((await call("DELETE", `${base()}/files/${uuid}`, tokens.employee)).error).toBe(0);
+
+		const abandoned = await call("POST", `${base()}/tickets/${ticket}/files`, tokens.employee, { name: "half.mp4", type: "video/mp4", size: 1000 });
+		await Database`UPDATE project_files SET created = ${Date.now() - 25 * 3600000} WHERE uuid = ${abandoned.data.uuid}`;
+		expect(await discardAbandonedUploads()).toBe(1);
+		expect((await call("GET", `${base()}/license`, tokens.owner)).data.file_storage_used).toBe(16);
+		await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 25 });
+	});
+
+	test("the project chooses its largest file up to what the server allows", async () => {
+		const path = `${base()}/tickets/${ticket}/files`;
+		expect((await call("POST", path, tokens.employee, { name: "big.mov", type: "video/quicktime", size: 25_000_001 })).error).toBe(1307);
+		expect((await call("PUT", `${base()}/files/settings`, tokens.supervisor, { max_file_mb: 100 })).error).toBe(9999);
+		expect((await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 0 })).error).toBe(1309);
+		expect((await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 5001 })).error).toBe(1309);
+		const raised = await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 2000 });
+		expect(raised.data).toEqual({ max_file_bytes: 2_000_000_000, max_file_bytes_ceiling: 5_000_000_000, max_member_file_bytes: null });
+		const begun = await call("POST", path, tokens.employee, { name: "big.mov", type: "video/quicktime", size: 25_000_001 });
+		expect(begun.status).toBe(201);
+		expect(begun.data.parts).toBe(2);
+		expect((await call("DELETE", `${base()}/files/${begun.data.uuid}`, tokens.employee)).error).toBe(0);
+
+		Settings.licensing.max_file_mb = 10;
+		try {
+			expect((await call("GET", `${base()}/tickets/${ticket}`, tokens.employee)).data.max_file_bytes).toBe(10_000_000);
+			expect((await call("POST", path, tokens.employee, { name: "big.mov", type: "video/quicktime", size: 10_000_001 })).error).toBe(1307);
+		} finally {
+			Settings.licensing.max_file_mb = 5000;
+		}
+		await call("PUT", `${base()}/files/settings`, tokens.owner, { max_file_mb: 25 });
+	});
+
+	test("invalid uploads are refused", async () => {
+		const path = `${base()}/tickets/${ticket}/files`;
+		expect((await call("POST", path, tokens.employee, { name: "", type: "image/png", size: 1 })).error).toBe(1304);
+		expect((await call("POST", path, tokens.employee, { name: "empty.txt", type: "text/plain", size: 0 })).error).toBe(1304);
+		expect((await call("POST", path, tokens.employee, { name: "odd.txt", type: "text/plain", size: 1.5 })).error).toBe(1304);
+		expect((await call("POST", `${base()}/tickets/${crypto.randomUUID()}/files`, tokens.employee, { name: "a.txt", size: 1 })).error).toBe(1202);
+		const untyped = await attach("notes", "<script>", text("plain"));
+		expect(untyped.data.content_type).toBe("application/octet-stream");
+		expect((await call("DELETE", `${base()}/files/${untyped.data.uuid}`, tokens.employee)).error).toBe(0);
+	});
+
+	test("file storage has its own limit that never blocks invoices", async () => {
+		const state = (await call("GET", `${base()}/license`, tokens.owner)).data;
+		expect(state).toMatchObject({ file_storage_included: 10_000_000_000, file_storage_licensed: 0, file_storage_used: 16, file_storage_grants: [] });
+		expect(state.storage_used).toBe(0);
+
+		Settings.licensing.free_file_storage_gb = 0;
+		try {
+			const full = await attach("more.txt", "text/plain", text("more"));
+			expect(full.status).toBe(402);
+			expect(full.error).toBe(1303);
+			expect((await call("GET", `${base()}/files/${file}`, tokens.employee)).status).toBe(200);
+			expect(await hasStorageCapacity(project)).toBe(true);
+
+			const code = generateLicenseCode();
+			const now = Date.now();
+			await Database`INSERT INTO license_keys(uuid, code, type, duration_days, storage_gb, status, created, updated)
+				VALUES(${crypto.randomUUID()}, ${code}, 'files', 30, 5, 'available', ${now}, ${now})`;
+			const redeemed = await call("POST", `${base()}/license/redeem`, tokens.owner, { code });
+			expect(redeemed.data).toMatchObject({ file_storage_included: 0, file_storage_licensed: 5_000_000_000, storage_licensed: 0 });
+			expect(redeemed.data.file_storage_grants).toHaveLength(1);
+			expect((await attach("more.txt", "text/plain", text("more"))).data.ready).toBe(true);
+		} finally {
+			Settings.licensing.free_file_storage_gb = 10;
+		}
+	});
+
+	test("administrators see the largest files and removing one leaves a trace on the ticket", async () => {
+		expect((await call("GET", `${base()}/files`, tokens.supervisor)).error).toBe(9999);
+		const list = await call("GET", `${base()}/files`, tokens.owner);
+		expect(list.data.total).toBe(2);
+		expect(list.data.files.map((row: { file_name: string }) => row.file_name)).toEqual(["printer.png", "more.txt"]);
+		expect(list.data.files[0].tickets).toMatchObject([{ uuid: ticket, title: "Broken printer" }]);
+		expect(list.data).toMatchObject({ file_storage_used: 20, max_file_bytes: 25_000_000, max_file_bytes_ceiling: 5_000_000_000 });
+
+		expect((await call("DELETE", `${base()}/files/${file}`, tokens.colleague)).error).toBe(9999);
+		const removed = await call("DELETE", `${base()}/files/${file}`, tokens.owner);
+		expect(removed.data).toMatchObject({ uuid: file, removed: true, removed_by: "wf-owner" });
+		expect((await call("DELETE", `${base()}/files/${file}`, tokens.owner)).error).toBe(1306);
+		const gone = await call("GET", `${base()}/files/${file}`, tokens.employee);
+		expect(gone.status).toBe(410);
+		expect(gone.error).toBe(1306);
+
+		const detail = await call("GET", `${base()}/tickets/${ticket}`, tokens.employee);
+		expect(detail.data.files[0]).toMatchObject({ uuid: file, file_name: "printer.png", removed: true });
+		expect(detail.data.files[0].removed_at).toBeGreaterThan(0);
+		const after = await call("GET", `${base()}/files`, tokens.owner);
+		expect(after.data.total).toBe(1);
+		expect(after.data.file_storage_used).toBe(4);
+	});
+
+	test("customers do not see ticket files and deleting a ticket frees its files", async () => {
+		await call("PATCH", `${base()}/tickets/${ticket}`, tokens.supervisor, { customer, customer_visible: true });
+		await call("PUT", `${base()}/customers/${customer}/ticket-access`, tokens.supervisor, { enabled: true, kinds: [] });
+		const portal = await customerLogin("client@acme.test");
+		const seen = await call("GET", `/customer/tickets/${ticket}`, portal);
+		expect(seen.error).toBe(0);
+		expect(seen.data.files).toBeUndefined();
+
+		expect((await call("DELETE", `${base()}/tickets/${ticket}`, tokens.supervisor)).error).toBe(0);
+		const [left] = await Database`SELECT COUNT(*) AS count FROM project_files WHERE project = ${project}`;
+		expect(Number(left.count)).toBe(0);
+		expect((await call("GET", `${base()}/license`, tokens.owner)).data.file_storage_used).toBe(0);
+	});
+});
+
+describe("file explorer", () => {
+	let contracts = "";
+	let drafts = "";
+	let contract = "";
+
+	async function store(name: string, bytes: Uint8Array, token: string, folder: string | null = null): Promise<Result> {
+		const begun = await call("POST", `${base()}/explorer/files`, token, { name, type: "text/plain", size: bytes.length, folder });
+		if (begun.error !== 0) return begun;
+		const response = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1${base()}/files/${begun.data.uuid}/parts/0`, {
+				method: "PUT",
+				headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" },
+				body: bytes,
+			})
+		);
+		return { status: response.status, ...((await response.json()) as Omit<Result, "status">) };
+	}
+
+	const names = (rows: { name?: string; file_name?: string }[]) => rows.map((row) => row.name ?? row.file_name);
+	const sharedBy = async (owner: string, token: string) => {
+		const listed = await call("GET", `${base()}/explorer?scope=shared&owner=${owner}`, token);
+		return listed.error === 1311 ? { folders: [], files: [] } : listed.data;
+	};
+	const text = (value: string) => new TextEncoder().encode(value);
+
+	test("folders and files start out private to the person who made them", async () => {
+		const created = await call("POST", `${base()}/explorer/folders`, tokens.employee, { name: " Contracts " });
+		expect(created.status).toBe(201);
+		expect(created.data).toMatchObject({ name: "Contracts", parent: null, access: "private", members: [], can_manage: true });
+		contracts = created.data.uuid;
+		expect((await call("POST", `${base()}/explorer/folders`, tokens.employee, { name: "a/b" })).error).toBe(1312);
+		expect((await call("POST", `${base()}/explorer/folders`, tokens.employee, { name: "" })).error).toBe(1312);
+
+		const stored = await store("agreement.txt", text("signed agreement"), tokens.employee, contracts);
+		expect(stored.data).toMatchObject({ file_name: "agreement.txt", ready: true });
+		contract = stored.data.uuid;
+		expect((await store("notes.txt", text("my notes"), tokens.employee)).error).toBe(0);
+
+		const mine = await call("GET", `${base()}/explorer`, tokens.employee);
+		expect(names(mine.data.folders)).toEqual(["Contracts"]);
+		expect(names(mine.data.files)).toEqual(["notes.txt"]);
+		expect(mine.data).toMatchObject({ used: 24, limit: null, folder: null, path: [] });
+		const inside = await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.employee);
+		expect(names(inside.data.files)).toEqual(["agreement.txt"]);
+		expect(inside.data.path).toEqual([{ uuid: contracts, name: "Contracts" }]);
+
+		const other = await call("GET", `${base()}/explorer`, tokens.colleague);
+		expect(other.data.folders).toEqual([]);
+		expect(other.data.files).toEqual([]);
+		expect((await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.colleague)).error).toBe(1311);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.colleague)).error).toBe(1305);
+		expect((await call("POST", `${base()}/files/${contract}/link`, tokens.colleague)).error).toBe(1305);
+		expect((await call("DELETE", `${base()}/files/${contract}`, tokens.colleague)).error).toBe(1305);
+		expect((await store("sneak.txt", text("x"), tokens.colleague, contracts)).error).toBe(1311);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.owner)).status).toBe(200);
+	});
+
+	test("a top folder is shared with everyone or with chosen people", async () => {
+		const everyone = await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { access: "everyone" });
+		expect(everyone.data).toMatchObject({ access: "everyone", members: [] });
+		expect(names((await sharedBy("wf-employee", tokens.colleague)).folders)).toEqual(["Contracts"]);
+		const landing = await call("GET", `${base()}/explorer`, tokens.colleague);
+		expect(landing.data).toMatchObject({ folders: [], files: [], shared_people: 1, everyone_people: null, scope: null });
+		const givers = await call("GET", `${base()}/explorer?scope=shared`, tokens.colleague);
+		expect(givers.data.people).toEqual([{ username: "wf-employee", name: "Eva Employee", email: "wf-employee@team.test", items: 1 }]);
+		expect((await call("GET", `${base()}/explorer?scope=all`, tokens.colleague)).error).toBe(1311);
+		const opened = await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.colleague);
+		expect(opened.data.origin).toEqual({ scope: "shared", owner: { username: "wf-employee", name: "Eva Employee", email: "wf-employee@team.test" } });
+		expect((await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.employee)).data.origin).toBe(null);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.colleague)).status).toBe(200);
+		expect((await call("DELETE", `${base()}/files/${contract}`, tokens.colleague)).error).toBe(9999);
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.colleague, { access: "private" })).error).toBe(9999);
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.colleague, { name: "Mine now" })).error).toBe(9999);
+		expect((await store("addendum.txt", text("addendum"), tokens.colleague, contracts)).data.ready).toBe(true);
+
+		const chosen = await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, {
+			access: "members",
+			members: ["wf-super", "wf-super", "nobody-here"],
+		});
+		expect(chosen.data).toMatchObject({ access: "members", members: ["wf-super"] });
+		expect((await sharedBy("wf-employee", tokens.colleague)).folders).toEqual([]);
+		expect((await call("GET", `${base()}/explorer`, tokens.colleague)).data.shared_people).toBe(0);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.colleague)).error).toBe(1305);
+		const shared = await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.supervisor);
+		expect(names(shared.data.files)).toEqual(["addendum.txt", "agreement.txt"]);
+		expect(shared.data.sharing).toEqual([{ uuid: contracts, name: "Contracts", access: "members", members: ["wf-super"] }]);
+		expect(shared.data.folder).toMatchObject({ can_manage: false });
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { access: "nobody" })).error).toBe(1312);
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.owner, { access: "everyone" })).data.access).toBe("everyone");
+	});
+
+	test("folders nest, move and rename without ending up inside themselves", async () => {
+		drafts = (await call("POST", `${base()}/explorer/folders`, tokens.colleague, { name: "Drafts", parent: contracts })).data.uuid;
+		const nested = await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.supervisor);
+		expect(nested.data.path.map((step: { name: string }) => step.name)).toEqual(["Contracts", "Drafts"]);
+		expect(nested.data.folder).toMatchObject({ access: "private", can_manage: false });
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { parent: drafts })).error).toBe(1313);
+		expect((await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { parent: contracts })).error).toBe(1313);
+
+		const renamed = await call("PATCH", `${base()}/explorer/folders/${drafts}`, tokens.colleague, { name: "Old drafts" });
+		expect(renamed.data.name).toBe("Old drafts");
+		const moved = await call("PATCH", `${base()}/explorer/files/${contract}`, tokens.employee, { folder: drafts, name: "agreement-v2.txt" });
+		expect(moved.data.file_name).toBe("agreement-v2.txt");
+		expect(names((await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.colleague)).data.files)).toEqual(["agreement-v2.txt"]);
+		expect((await call("PATCH", `${base()}/explorer/files/${contract}`, tokens.supervisor, { name: "taken.txt" })).error).toBe(9999);
+
+		const picker = await call("GET", `${base()}/explorer/folders`, tokens.supervisor);
+		expect(picker.data.map((row: { path: string[] }) => row.path.join(" / "))).toEqual(["Contracts", "Contracts / Old drafts"]);
+
+		const archive = (await call("POST", `${base()}/explorer/folders`, tokens.employee, { name: "Archive" })).data.uuid;
+		const tucked = await call("PATCH", `${base()}/explorer/folders/${archive}`, tokens.employee, { parent: drafts });
+		expect(tucked.data).toMatchObject({ parent: drafts, access: "private" });
+		const surfaced = await call("PATCH", `${base()}/explorer/folders/${archive}`, tokens.employee, { parent: null });
+		expect(surfaced.data).toMatchObject({ parent: null, access: "private" });
+		expect((await call("DELETE", `${base()}/explorer/folders/${archive}`, tokens.employee)).data.files).toBe(0);
+	});
+
+	test("a subfolder or a single file is shared without opening the folder around it", async () => {
+		await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { access: "private" });
+		expect((await call("GET", `${base()}/explorer`, tokens.supervisor)).data.shared_people).toBe(0);
+		expect((await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.supervisor)).error).toBe(1311);
+
+		const shared = await call("PATCH", `${base()}/explorer/folders/${drafts}`, tokens.employee, { access: "members", members: ["wf-super"] });
+		expect(shared.data).toMatchObject({ parent: contracts, access: "members", members: ["wf-super"] });
+		const top = { data: await sharedBy("wf-colleague", tokens.supervisor) };
+		expect(names(top.data.folders)).toEqual(["Old drafts"]);
+		expect(top.data.folders[0]).toMatchObject({ can_manage: false, access: "members" });
+		const inside = await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.supervisor);
+		expect(inside.data.path).toEqual([{ uuid: drafts, name: "Old drafts" }]);
+		expect(names(inside.data.files)).toEqual(["agreement-v2.txt"]);
+		expect(inside.data.sharing).toEqual([{ uuid: drafts, name: "Old drafts", access: "members", members: ["wf-super"] }]);
+		expect((await call("GET", `${base()}/explorer?folder=${contracts}`, tokens.supervisor)).error).toBe(1311);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.supervisor)).status).toBe(200);
+		const picker = await call("GET", `${base()}/explorer/folders`, tokens.supervisor);
+		expect(picker.data.map((row: { path: string[] }) => row.path.join(" / "))).toEqual(["Old drafts"]);
+		expect((await call("PATCH", `${base()}/explorer/folders/${drafts}`, tokens.supervisor, { access: "everyone" })).error).toBe(9999);
+		expect((await store("review.txt", text("looks fine"), tokens.supervisor, drafts)).data.ready).toBe(true);
+		const review = (await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.supervisor)).data.files.find(
+			(file: { file_name: string }) => file.file_name === "review.txt"
+		);
+		expect((await call("DELETE", `${base()}/files/${review.uuid}`, tokens.supervisor)).error).toBe(0);
+
+		await call("PATCH", `${base()}/explorer/folders/${drafts}`, tokens.employee, { access: "private" });
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.supervisor)).error).toBe(1305);
+		const single = await call("PATCH", `${base()}/explorer/files/${contract}`, tokens.employee, { access: "members", members: ["wf-super"] });
+		expect(single.data).toMatchObject({ access: "members", members: ["wf-super"], folder: drafts });
+		const alone = { data: await sharedBy("wf-employee", tokens.supervisor) };
+		expect(alone.data.folders).toEqual([]);
+		expect(names(alone.data.files)).toEqual(["agreement-v2.txt"]);
+		expect(alone.data.files[0]).toMatchObject({ can_manage: false, access: "members" });
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.supervisor)).status).toBe(200);
+		expect((await call("PATCH", `${base()}/explorer/files/${contract}`, tokens.supervisor, { name: "mine.txt" })).error).toBe(9999);
+		expect((await call("DELETE", `${base()}/files/${contract}`, tokens.supervisor)).error).toBe(9999);
+		expect((await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.supervisor)).error).toBe(1311);
+
+		const notes = (await call("GET", `${base()}/explorer`, tokens.employee)).data.files.find((file: { file_name: string }) => file.file_name === "notes.txt");
+		expect((await call("PATCH", `${base()}/explorer/files/${notes.uuid}`, tokens.employee, { access: "everyone" })).data.access).toBe("everyone");
+		expect(names((await sharedBy("wf-employee", tokens.colleague)).files)).toEqual(["notes.txt"]);
+		expect(names((await call("GET", `${base()}/explorer`, tokens.colleague)).data.files)).toEqual(["addendum.txt"]);
+		expect((await call("PATCH", `${base()}/explorer/files/${notes.uuid}`, tokens.employee, { access: "nobody" })).error).toBe(1312);
+
+		await call("PATCH", `${base()}/explorer/files/${notes.uuid}`, tokens.employee, { access: "private" });
+		await call("PATCH", `${base()}/explorer/files/${contract}`, tokens.employee, { access: "private" });
+		expect((await call("GET", `${base()}/explorer`, tokens.supervisor)).data.shared_people).toBe(0);
+		expect((await sharedBy("wf-employee", tokens.colleague)).files).toEqual([]);
+		await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.owner, { access: "everyone" });
+	});
+
+	test("administrators browse everyone's files by person next to what was shared with them", async () => {
+		const landing = await call("GET", `${base()}/explorer`, tokens.owner);
+		expect(landing.data).toMatchObject({ folders: [], files: [], shared_people: 1, everyone_people: 1 });
+		const everyone = await call("GET", `${base()}/explorer?scope=all`, tokens.owner);
+		expect(everyone.data.people).toEqual([{ username: "wf-employee", name: "Eva Employee", email: "wf-employee@team.test", items: 2 }]);
+		const theirs = await call("GET", `${base()}/explorer?scope=all&owner=wf-employee`, tokens.owner);
+		expect(names(theirs.data.folders)).toEqual(["Contracts"]);
+		expect(names(theirs.data.files)).toEqual(["notes.txt"]);
+		expect(theirs.data.files[0].can_manage).toBe(true);
+		expect(theirs.data.origin).toMatchObject({ scope: "all", owner: { username: "wf-employee" } });
+		expect((await call("GET", `${base()}/explorer?scope=all&owner=wf-super`, tokens.owner)).error).toBe(1311);
+
+		await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.employee, { access: "private" });
+		expect((await call("GET", `${base()}/explorer`, tokens.owner)).data).toMatchObject({ shared_people: 0, everyone_people: 1 });
+		const inside = await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.owner);
+		expect(inside.data.origin).toMatchObject({ scope: "all", owner: { username: "wf-employee" } });
+		expect(inside.data.path.map((step: { name: string }) => step.name)).toEqual(["Contracts", "Old drafts"]);
+		await call("PATCH", `${base()}/explorer/folders/${contracts}`, tokens.owner, { access: "everyone" });
+	});
+
+	test("each person has a storage limit that administrators set and override", async () => {
+		expect((await call("PUT", `${base()}/files/settings`, tokens.supervisor, { max_member_file_mb: 1 })).error).toBe(9999);
+		expect((await call("PUT", `${base()}/files/settings`, tokens.owner, { max_member_file_mb: 1.5 })).error).toBe(1309);
+		const limited = await call("PUT", `${base()}/files/settings`, tokens.owner, { max_member_file_mb: 1 });
+		expect(limited.data).toMatchObject({ max_file_bytes: 25_000_000, max_member_file_bytes: 1_000_000 });
+		expect((await call("GET", `${base()}/explorer`, tokens.employee)).data).toMatchObject({ used: 24, limit: 1_000_000 });
+
+		const large = new Uint8Array(600_000);
+		expect((await store("first.bin", large, tokens.employee)).data.ready).toBe(true);
+		const refused = await store("second.bin", large, tokens.employee);
+		expect(refused.status).toBe(403);
+		expect(refused.error).toBe(1310);
+		expect((await store("theirs.bin", large, tokens.colleague)).data.ready).toBe(true);
+
+		const raised = await call("PUT", `${base()}/file-limits/wf-employee`, tokens.owner, { max_mb: 2 });
+		expect(raised.data).toEqual({ username: "wf-employee", max_bytes: 2_000_000 });
+		expect((await call("PUT", `${base()}/file-limits/nobody-here`, tokens.owner, { max_mb: 2 })).error).toBe(1208);
+		expect((await store("second.bin", large, tokens.employee)).data.ready).toBe(true);
+
+		const people = await call("GET", `${base()}/file-limits`, tokens.owner);
+		expect(people.data.max_member_file_bytes).toBe(1_000_000);
+		expect(people.data.people[0]).toEqual({ username: "wf-employee", name: "Eva Employee", used: 1_200_024, max_bytes: 2_000_000 });
+		expect(people.data.people.find((row: { username: string }) => row.username === "wf-colleague")).toMatchObject({ used: 600_008, max_bytes: null });
+		expect((await call("GET", `${base()}/file-limits`, tokens.supervisor)).error).toBe(9999);
+
+		await call("PUT", `${base()}/file-limits/wf-employee`, tokens.owner, { max_mb: null });
+		expect((await call("GET", `${base()}/explorer`, tokens.employee)).data.limit).toBe(1_000_000);
+		await call("PUT", `${base()}/files/settings`, tokens.owner, { max_member_file_mb: null });
+		expect((await call("GET", `${base()}/explorer`, tokens.employee)).data.limit).toBe(null);
+	});
+
+	test("administrators see where every file lives and deleting a folder frees everything in it", async () => {
+		const list = await call("GET", `${base()}/files?sort=created`, tokens.owner);
+		const located = Object.fromEntries(list.data.files.map((row: { file_name: string; location: string[] }) => [row.file_name, row.location]));
+		expect(located["agreement-v2.txt"]).toEqual(["Contracts", "Old drafts"]);
+		expect(located["notes.txt"]).toEqual([]);
+		expect(list.data.file_storage_used).toBe(1_800_032);
+
+		expect((await call("DELETE", `${base()}/explorer/folders/${contracts}`, tokens.supervisor)).error).toBe(9999);
+		const deleted = await call("DELETE", `${base()}/explorer/folders/${contracts}`, tokens.employee);
+		expect(deleted.data.files).toBe(2);
+		expect((await call("GET", `${base()}/explorer?folder=${drafts}`, tokens.employee)).error).toBe(1311);
+		expect((await call("GET", `${base()}/files/${contract}`, tokens.owner)).error).toBe(1305);
+		expect((await call("GET", `${base()}/license`, tokens.owner)).data.file_storage_used).toBe(1_800_008);
+
+		const mine = await call("GET", `${base()}/explorer`, tokens.employee);
+		for (const file of mine.data.files) expect((await call("DELETE", `${base()}/files/${file.uuid}`, tokens.employee)).error).toBe(0);
+		expect((await call("GET", `${base()}/explorer`, tokens.employee)).data).toMatchObject({ files: [], used: 0 });
+	});
+});
+
+describe("permanent project deletion", () => {
+	test("an administrator removes a deleted project with all of its records and stored files", async () => {
+		const { documentStorage } = await import("../server/document-storage");
+		await Database`UPDATE accounts SET admin = 1 WHERE username = 'wf-supervisor-admin'`;
+		const now = Date.now();
+		await Database`INSERT INTO accounts(username, email, password, admin, created, updated, accessed) VALUES('wf-admin', 'wf-admin@team.test', 'unused', 1, ${now}, ${now}, ${now})`;
+		const admin = (await Auth.createSession("wf-admin", ""))!;
+
+		const ticket = (await call("POST", `${base()}/tickets`, tokens.supervisor, { title: "Last ticket" })).data.uuid;
+		const begun = await call("POST", `${base()}/tickets/${ticket}/files`, tokens.employee, { name: "last.txt", type: "text/plain", size: 4 });
+		const part = await Server.app.handle(
+			new Request(`http://127.0.0.1/api/v1${base()}/files/${begun.data.uuid}/parts/0`, {
+				method: "PUT",
+				headers: { Authorization: `Bearer ${tokens.employee}`, "Content-Type": "application/octet-stream" },
+				body: new TextEncoder().encode("last"),
+			})
+		);
+		expect(part.status).toBe(200);
+		const [stored] = await Database`SELECT storage_key FROM project_files WHERE uuid = ${begun.data.uuid}`;
+		expect(await documentStorage().exists(`${stored.storage_key}/0`)).toBe(true);
+		const [name] = await Database`SELECT name FROM projects WHERE uuid = ${project}`;
+
+		expect((await call("DELETE", `/admin/projects/${project}`, tokens.owner, { name: name.name })).status).toBe(403);
+		expect((await call("DELETE", `/admin/projects/${project}`, admin, { name: name.name })).error).toBe(1314);
+		expect((await call("GET", "/admin/projects?deleted=1", admin)).data.projects).toEqual([]);
+
+		expect((await call("DELETE", base(), tokens.owner)).error).toBe(0);
+		const listed = await call("GET", "/admin/projects?deleted=1", admin);
+		expect(listed.data.projects.map((row: { uuid: string; status: string }) => [row.uuid, row.status])).toEqual([[project, "deleted"]]);
+		expect((await call("GET", "/admin/projects", admin)).data.projects.some((row: { uuid: string }) => row.uuid === project)).toBe(false);
+		expect((await call("DELETE", `/admin/projects/${project}`, admin, { name: "something else" })).error).toBe(1315);
+		expect((await call("DELETE", `/admin/projects/${crypto.randomUUID()}`, admin, { name: name.name })).status).toBe(404);
+
+		const purged = await call("DELETE", `/admin/projects/${project}`, admin, { name: name.name });
+		expect(purged.error).toBe(0);
+		expect(purged.data).toMatchObject({ missed_files: 0 });
+		expect(purged.data.stored_files).toBeGreaterThan(0);
+
+		expect(await documentStorage().exists(`${stored.storage_key}/0`)).toBe(false);
+		for (const table of ["projects", "project_members", "tickets", "time_entries", "invoices", "customers", "project_files", "employees"]) {
+			const column = table === "projects" ? "uuid" : table === "project_members" ? "project_id" : "project";
+			const [left] = await Database.unsafe(`SELECT COUNT(*) AS count FROM ${table} WHERE ${column} = '${project}'`);
+			expect([table, Number(left.count)]).toEqual([table, 0]);
+		}
+		const [trail] = await Database`SELECT COUNT(*) AS count FROM audit_log WHERE project = ${project}`;
+		expect(Number(trail.count)).toBe(0);
+		const [record] = await Database`SELECT old_value FROM audit_log WHERE action = 'project.purged' AND entity_id = ${project}`;
+		expect(JSON.parse(record.old_value).name).toBe(name.name);
+		expect((await Database.unsafe("PRAGMA foreign_key_check")).length).toBe(0);
 	});
 });

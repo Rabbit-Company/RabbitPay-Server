@@ -264,6 +264,7 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 	const extras: UiKey[] = [
 		"landing.license_payments",
 		"landing.license_storage",
+		"landing.license_files",
 		"landing.license_store",
 		"landing.license_workforce",
 		"landing.license_accounting",

@@ -12,6 +12,8 @@ Pooblaščene osebe za varstvo podatkov nismo imenovali, ker nam tega zakon ne n
 
 Podjetja v storitvi upravljajo podatke o svojih strankah, zaposlenih in dobaviteljih. Za te podatke je upravljavec podjetje, mi pa jih obdelujemo le v njegovem imenu, na podlagi določb o obdelavi podatkov v Splošnih pogojih uporabe. Če ste račun, povezavo za plačilo ali e-pošto prejeli od podjetja, ki uporablja RabbitPay, se glede svojih podatkov obrnite nanj.
 
+Enako velja za datoteke, ki jih člani ekipe podjetja pripnejo zahtevkom ali hranijo v Datotekah. O tem, kdo lahko te funkcije uporablja, odloča podjetje. Lastniki in administratorji njegovega projekta lahko odprejo vsako datoteko, shranjeno v projektu, tudi tiste, ki jih član ekipe ni delil z nikomer.
+
 ## 3. Katere podatke obdelujemo, zakaj in na kateri podlagi
 
 | Podatki | Namen | Pravna podlaga |
@@ -46,6 +48,7 @@ Podatke posredujemo tudi javnim organom, sodiščem in naši banki, kadar to zah
 
 - **Podatki o računu:** dokler račun obstaja. Ko zahtevate izbris računa, ga izbrišemo v 30 dneh, razen podatkov, ki jih moramo hraniti po zakonu.
 - **Računi, plačila in druge računovodske listine:** 10 let po koncu leta, na katerega se nanašajo, kot zahteva slovenska davčna in računovodska zakonodaja (ZDavP-2 in ZDDV-1).
+- **Datoteke, ki jih naloži ekipa podjetja:** dokler jih podjetje ne izbriše. Izbrisana datoteka se odstrani iz shrambe storitve.
 - **Dnevniki dostopov:** {{access_log_days}} dni v delujoči bazi, nato v šifriranem arhivu do konca {{access_log_years}}. koledarskega leta po letu nastanka zapisa.
 - **Vsebina e-poštnih sporočil, poslanih iz storitve:** {{email_content_retention}}
 - **Revizijska sled sprememb poslovnih evidenc:** dokler je treba hraniti povezane evidence.

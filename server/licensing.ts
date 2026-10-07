@@ -12,9 +12,9 @@ export { MAX_LICENSE_DAYS, MAX_LICENSE_EMAILS, MAX_LICENSE_EMPLOYEES, MAX_LICENS
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails"];
-export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage"];
-export const SCHEDULED_LICENSE_TYPES: LicenseType[] = ["employees", "storage"];
+export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails", "files"];
+export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage", "files"];
+export const SCHEDULED_LICENSE_TYPES: LicenseType[] = ["employees", "storage", "files"];
 export const ADD_ON_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "accounting"];
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
@@ -77,6 +77,10 @@ export function includedPayments(): number {
 
 export function includedStorageGb(): number {
 	return isLicenseIssuer() ? Settings.licensing.free_storage_gb : DEFAULT_SETTINGS.licensing.free_storage_gb;
+}
+
+export function includedFileStorageGb(): number {
+	return isLicenseIssuer() ? Settings.licensing.free_file_storage_gb : DEFAULT_SETTINGS.licensing.free_file_storage_gb;
 }
 
 export function includedEmployees(): number {
@@ -262,6 +266,12 @@ export interface ProjectUsage {
 	storage_limit: number | null;
 	storage_remaining: number | null;
 	storage_grants: StorageGrant[];
+	file_storage_included: number;
+	file_storage_licensed: number;
+	file_storage_used: number;
+	file_storage_limit: number | null;
+	file_storage_remaining: number | null;
+	file_storage_grants: StorageGrant[];
 	scheduled: ScheduledAddOn[];
 	emails_metered: boolean;
 	emails_free_allowance: number;
@@ -398,6 +408,45 @@ export async function storageFor(projectId: string, now = Date.now()): Promise<P
 	};
 }
 
+export interface ProjectFileStorageUsage {
+	file_storage_included: number;
+	file_storage_licensed: number;
+	file_storage_used: number;
+	file_storage_limit: number | null;
+	file_storage_remaining: number | null;
+	file_storage_grants: StorageGrant[];
+}
+
+export async function fileStorageGrants(projectId: string, now = Date.now()): Promise<StorageGrant[]> {
+	return (await scheduledKeys(projectId, "files", now)).map(({ storage_gb, from, until }) => ({ storage_gb, from, until }));
+}
+
+export async function fileStorageFor(projectId: string, now = Date.now()): Promise<ProjectFileStorageUsage> {
+	const grants = await fileStorageGrants(projectId, now);
+	const [project] = (await Database`SELECT workforce_until FROM projects WHERE uuid = ${projectId}`) as Pick<ProjectRow, "workforce_until">[];
+	const [totals] = (await Database`
+		SELECT COALESCE(SUM(byte_size), 0) AS files FROM project_files WHERE project = ${projectId} AND removed_at IS NULL
+	`) as { files: number }[];
+	const included = project && workforceActive(project, now) ? includedFileStorageGb() * STORAGE_GB_BYTES : 0;
+	const licensed = grants.filter((grant) => grant.from <= now).reduce((total, grant) => total + grant.storage_gb, 0) * STORAGE_GB_BYTES;
+	const used = safeStorageBytes(totals.files);
+	const limit = included + licensed;
+	return {
+		file_storage_included: included,
+		file_storage_licensed: licensed,
+		file_storage_used: used,
+		file_storage_limit: licensingEnforced() ? limit : null,
+		file_storage_remaining: licensingEnforced() ? limit - used : null,
+		file_storage_grants: grants,
+	};
+}
+
+export async function hasFileStorageCapacity(projectId: string, bytes: number): Promise<boolean> {
+	if (!Number.isSafeInteger(bytes) || bytes < 0) return false;
+	if (!licensingEnforced()) return true;
+	return bytes <= ((await fileStorageFor(projectId)).file_storage_remaining ?? 0);
+}
+
 function safeStorageBytes(value: number): number {
 	const bytes = Number(value);
 	if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("Invalid stored document size");
@@ -438,6 +487,7 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		accounting_until: project.accounting_until,
 		...(await employeeSeatsFor(projectId, now)),
 		...storage,
+		...(await fileStorageFor(projectId, now)),
 		scheduled: await scheduledAddOns(projectId, project, now),
 		...(await emailUsageFor(projectId, now)),
 	};

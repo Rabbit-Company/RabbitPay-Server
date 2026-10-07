@@ -54,6 +54,40 @@ small jobs are combined on one invoice, with each ticket kept as its own line.
 A ticket can instead have a fixed price, which is billed once regardless of
 the time logged on it.
 
+People who work on tickets can attach files to a ticket, either with the Attach
+files button or by pasting a screenshot. A file can be up to 25 MB by default.
+Owners and administrators raise or lower that for their project under License,
+Manage files, up to the maximum the server allows. Files are sent in 16 MB
+parts, so large videos do not need a large request. The browser stores PNG and
+BMP pictures as lossless WebP when that is smaller. Pictures up to 10 MB get a
+preview. The uploader, supervisors, administrators and owners can remove a
+file, which deletes it from storage and leaves a note on the ticket saying who
+removed it and when. Customers do not see attached files. Files use the
+project's file storage, which is separate from document storage (see
+[Administration](administration.md)).
+
+## Files
+
+Files is a file manager for the team, open to every role except viewer,
+developer and cashier. People create folders, upload files of any type and
+move or rename them. A person's own files and folders are visible only to them
+until they share them. Any folder and any single file, at any depth, can be
+shared with everyone in the project or with chosen people. Sharing a folder
+covers everything inside it, and whoever can open a folder can add to it.
+Sharing only adds people: someone who was given one subfolder or one file sees
+that item without the folder around it. Everything other people shared with a
+person is in the built-in Shared with me folder, grouped by the person the
+items belong to, so the top of Files holds only a person's own things. Owners
+and administrators also get Everyone's files, which lists what every other
+person keeps in Files, grouped the same way. The person
+who added an item and whoever made a folder above it can share, rename, move
+and delete it. Owners and administrators can open everything.
+
+Files and ticket attachments share the project's file storage. Owners and
+administrators can also limit how much each person keeps in Files, with one
+limit for everyone and a separate limit for individual people. Ticket
+attachments do not count toward a person's limit.
+
 A customer can see tickets in the [customer portal](customer-portal.md) only
 after a project member gives them access and marks the tickets they may see. The
 project also chooses which kinds of ticket customers may open themselves.

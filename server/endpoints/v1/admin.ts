@@ -13,7 +13,7 @@ import TwoFactor from "../../two-factor";
 import { deleteAccount, deletionPlan, exportAccount, exportResponse } from "../../account-data";
 import { isLicenseIssuer } from "../../license-signing";
 import { normalizeServerId, serverId } from "../../server-identity";
-import { hostedOnly } from "../../license-pricing";
+import { hostedOnly, storesGigabytes } from "../../license-pricing";
 import Errors, { ErrorCode } from "../../errors";
 import { Logger } from "../../logger";
 import { presentSettings, settingsWith, updateSettings, type ServerSettings } from "../../settings";
@@ -43,6 +43,7 @@ import {
 	readLicenseStart,
 	redeemLicense,
 	storageFor,
+	fileStorageFor,
 	usageFor,
 	storeActive,
 	LICENSE_TYPES,
@@ -52,6 +53,7 @@ import {
 	type NewLicense,
 } from "../../licensing";
 import { MAX_INVITE_USES, createInvite, presentInvite } from "../../registration";
+import { purgeProject } from "../../project-purge";
 import type { AccountRow, LicenseKeyRow, LicenseStatus, ProjectRow, RegistrationInviteRow } from "../../database/models";
 
 const guard = [Auth.required(), Admin.required()] as const;
@@ -182,6 +184,12 @@ async function presentProject(project: ProjectRow) {
 		storage_limit: usage.storage_limit,
 		storage_remaining: usage.storage_remaining,
 		storage_grants: usage.storage_grants,
+		file_storage_included: usage.file_storage_included,
+		file_storage_licensed: usage.file_storage_licensed,
+		file_storage_used: usage.file_storage_used,
+		file_storage_limit: usage.file_storage_limit,
+		file_storage_remaining: usage.file_storage_remaining,
+		file_storage_grants: usage.file_storage_grants,
 	};
 }
 
@@ -405,13 +413,13 @@ Server.app.post("/api/v1/admin/licenses", ...guard, async (ctx) => {
 
 	const transactions = data.type === "transactions" ? data.transactions : null;
 	const durationDays = TIMED_LICENSE_TYPES.includes(data.type) ? data.duration_days : null;
-	const storageGb = data.type === "storage" ? data.storage_gb : null;
+	const storageGb = storesGigabytes(data.type) ? data.storage_gb : null;
 	const employees = data.type === "employees" ? data.employees : null;
 	const emails = data.type === "emails" ? data.emails : null;
 	if (data.type === "emails" && !isWholeNumber(emails, 1, MAX_LICENSE_EMAILS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (data.type === "transactions" && !isWholeNumber(transactions, 1, MAX_LICENSE_TRANSACTIONS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (TIMED_LICENSE_TYPES.includes(data.type) && !isWholeNumber(durationDays, 1, MAX_LICENSE_DAYS)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
-	if (data.type === "storage" && !isWholeNumber(storageGb, 1, MAX_LICENSE_STORAGE_GB)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
+	if (storesGigabytes(data.type) && !isWholeNumber(storageGb, 1, MAX_LICENSE_STORAGE_GB)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 	if (data.type === "employees" && !isWholeNumber(employees, 1, MAX_LICENSE_EMPLOYEES)) return Utils.fail(ctx, ErrorCode.INVALID_LICENSE);
 
 	const purchase = readPurchase(data, null);
@@ -505,15 +513,16 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 
 	await meterAll();
 
+	const byStatus = ctx.query().get("deleted") === "1" ? Database`status = 'deleted'` : Database`status != 'deleted'`;
 	const rows = (await Database`
 		SELECT * FROM projects
-		WHERE status != 'deleted' ${bySearch}
+		WHERE ${byStatus} ${bySearch}
 		ORDER BY created DESC LIMIT ${limit} OFFSET ${offset}
 	`) as ProjectRow[];
 
 	const [total] = (await Database`
 		SELECT COUNT(*) AS count FROM projects
-		WHERE status != 'deleted' ${bySearch}
+		WHERE ${byStatus} ${bySearch}
 	`) as { count: number }[];
 
 	const period = periodOf(Date.now());
@@ -525,6 +534,7 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 		: [];
 	const usageByProject = new Map(usage.map((row) => [row.project, row]));
 	const storage = await Promise.all(rows.map((row) => storageFor(row.uuid)));
+	const fileStorage = await Promise.all(rows.map((row) => fileStorageFor(row.uuid)));
 
 	return await okWithNames(ctx, {
 		projects: rows.map((project, index) => {
@@ -563,6 +573,7 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 				accounting: accountingActive(project),
 				accounting_until: project.accounting_until,
 				...storage[index],
+				...fileStorage[index],
 			};
 		}),
 		total: Number(total.count),
@@ -570,6 +581,33 @@ Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 		limit,
 		offset,
 	});
+});
+
+Server.app.delete("/api/v1/admin/projects/:project", ...guard, async (ctx) => {
+	if (!Validate.uuid(ctx.params.project)) return Utils.fail(ctx, ErrorCode.PROJECT_NOT_FOUND);
+	const [project] = (await Database`SELECT * FROM projects WHERE uuid = ${ctx.params.project}`) as ProjectRow[];
+	if (!project) return Utils.fail(ctx, ErrorCode.PROJECT_NOT_FOUND);
+	if (project.status !== "deleted") return Utils.fail(ctx, ErrorCode.PROJECT_NOT_CLOSED);
+
+	let data: { name?: unknown };
+	try {
+		data = await ctx.body<{ name?: unknown }>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+	if (typeof data.name !== "string" || data.name.trim() !== project.name) return Utils.fail(ctx, ErrorCode.PROJECT_NAME_MISMATCH);
+
+	const result = await purgeProject(project);
+	const account = Auth.account(ctx);
+	await Audit.record(ctx, {
+		action: "project.purged",
+		entityType: "project",
+		entityId: project.uuid,
+		oldValue: { name: project.name, created: project.created, created_by: project.created_by },
+		newValue: result,
+	});
+	Logger.audit(`[ADMIN] ${account.username} permanently deleted project ${project.uuid} with ${result.stored_files} stored files`);
+	return Utils.ok(ctx, result);
 });
 
 Server.app.patch("/api/v1/admin/projects/:project", ...guard, async (ctx) => {

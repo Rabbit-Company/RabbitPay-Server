@@ -18,6 +18,7 @@ const ACCOUNT_FIELDS = [
 	"sent_by",
 	"invited_by",
 	"submitted_by",
+	"removed_by",
 ];
 
 export function normalizeEmail(email: unknown): string {

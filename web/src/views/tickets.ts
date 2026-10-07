@@ -16,7 +16,7 @@ import { el, emptyState, field, input, select, table } from "../dom";
 import { formatDateTime, formatMoney, toMajorUnits, toMinorUnits } from "../money";
 import { can, Permission } from "../access";
 import { t } from "../i18n";
-import { navigate } from "../router";
+import { navigate, onLeave } from "../router";
 import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { markdownEditor, markdownView } from "../markdown-editor";
@@ -33,6 +33,7 @@ import {
 	ticketPriorityLabel,
 	workforceGate,
 } from "./workforce-shared";
+import { ticketFilesCard } from "./files";
 import type { DateFormat, TimeFormat } from "../../../server/formats";
 
 function when(project: Project, timestamp: number): string {
@@ -820,6 +821,17 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 	const active = state.license.active;
 	const manages = active && can(project, Permission.TICKET_MANAGE);
 	const works = active && can(project, Permission.TICKET_WORK);
+	const previews = new Map<string, string>();
+	let uploadFiles: (files: File[]) => Promise<void> = async () => undefined;
+	onLeave(() => {
+		for (const url of previews.values()) URL.revokeObjectURL(url);
+	});
+	container.addEventListener("paste", (event) => {
+		const pasted = [...(event.clipboardData?.files ?? [])];
+		if (!works || pasted.length === 0) return;
+		event.preventDefault();
+		void uploadFiles(pasted);
+	});
 
 	const reload = async () => {
 		try {
@@ -933,6 +945,14 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 			)
 		);
 
+		const files = ticketFilesCard(project, ticket, {
+			upload: works,
+			removeAny: can(project, Permission.TICKET_MANAGE) || can(project, Permission.PROJECT_EDIT),
+			previews,
+			onChanged: () => void reload(),
+		});
+		uploadFiles = files.upload;
+
 		container.replaceChildren(
 			el(
 				"div",
@@ -947,6 +967,7 @@ function ticketDetail(project: Project, state: WorkforceState, initial: TicketDe
 					"div",
 					{ class: "stack" },
 					el("div", { class: "card" }, ticket.description ? markdownView(ticket.description) : el("p", { class: "muted" }, t("ticket.no_description"))),
+					files.element,
 					el(
 						"div",
 						{ class: "card stack" },

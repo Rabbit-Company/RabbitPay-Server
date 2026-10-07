@@ -64,6 +64,7 @@ const LICENSE_TYPE_FILTERS = [
 	{ value: "emails", label: "Emails" },
 	{ value: "white_label", label: "White label" },
 	{ value: "storage", label: "Storage" },
+	{ value: "files", label: "File storage" },
 	{ value: "store", label: "Online store" },
 	{ value: "workforce", label: "Workforce" },
 	{ value: "employees", label: "Employee seats" },
@@ -141,6 +142,7 @@ export function describeLicense(license: Pick<License, "type" | "transactions" |
 	if (license.type === "emails") return `${(license.emails ?? 0).toLocaleString()} emails`;
 	const days = license.duration_days ?? 0;
 	if (license.type === "storage") return `${(license.storage_gb ?? 0).toLocaleString()} GB storage for ${days} ${days === 1 ? "day" : "days"}`;
+	if (license.type === "files") return `${(license.storage_gb ?? 0).toLocaleString()} GB file storage for ${days} ${days === 1 ? "day" : "days"}`;
 	if (license.type === "employees") {
 		const employees = license.employees ?? 0;
 		return `${employees.toLocaleString()} ${employees === 1 ? "employee" : "employees"} for ${days} ${days === 1 ? "day" : "days"}`;
@@ -268,6 +270,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			{ value: "emails", label: "Emails" },
 			{ value: "white_label", label: "White label" },
 			{ value: "storage", label: "Storage" },
+			{ value: "files", label: "File storage (ticket attachments)" },
 			{ value: "store", label: "Online store" },
 			{ value: "workforce", label: "Workforce (timesheets, tickets, employees)" },
 			{ value: "employees", label: "Employee seats" },
@@ -295,7 +298,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 		days,
 		"Starts when the key is redeemed. Add-on keys add to any time left, and each employee seat or storage key runs on its own."
 	);
-	const storageField = field("Storage in GB", storage, "Added to the project's document storage capacity, for the days below.");
+	const storageField = field("Storage in GB", storage, "Added to the project's document storage or file storage capacity, for the days below.");
 	const employeesField = field("Employees", employees, "Added to the people the workforce license covers, for the days below.");
 	const emailsField = field("Emails", emails, "Added to the project's paid emails. They never expire and only count on this server.");
 	const serverField = field(
@@ -306,7 +309,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 
 	const sync = () => {
 		const transactionsSelected = type.value === "transactions";
-		const storageSelected = type.value === "storage";
+		const storageSelected = type.value === "storage" || type.value === "files";
 		const white =
 			type.value === "white_label" ||
 			type.value === "store" ||
@@ -353,7 +356,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 				if (body.type === "transactions") body.transactions = Number(transactions.value);
 				else if (body.type === "emails") body.emails = Number(emails.value);
 				else body.duration_days = Number(days.value);
-				if (body.type === "storage") body.storage_gb = Number(storage.value);
+				if (body.type === "storage" || body.type === "files") body.storage_gb = Number(storage.value);
 				if (body.type === "employees") body.employees = Number(employees.value);
 
 				try {
@@ -671,6 +674,13 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 	const settings = await AdminApi.settings();
 	const defaultAllowance = () => Number((settings.license_issuer ? settings.values : settings.defaults)["licensing.free_transactions"]);
 	const defaultEmails = () => Number((settings.license_issuer ? settings.values : settings.defaults)["licensing.free_emails"]);
+	const shown = select(
+		[
+			{ value: "active", label: "Active projects" },
+			{ value: "deleted", label: "Deleted projects" },
+		],
+		"active"
+	);
 	const search = input("search", { placeholder: "Search name, owner or id" });
 
 	const row = (project: AdminProject): HTMLElement => {
@@ -682,6 +692,10 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 			project.storage_limit === null
 				? `${formatBytes(project.storage_used)} / unlimited`
 				: `${formatBytes(project.storage_used)} / ${formatBytes(project.storage_limit)}`;
+		const fileStorage =
+			project.file_storage_limit === null
+				? `${formatBytes(project.file_storage_used)} / unlimited`
+				: `${formatBytes(project.file_storage_used)} / ${formatBytes(project.file_storage_limit)}`;
 
 		return el(
 			"tr",
@@ -702,7 +716,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 				project.emails_metered ? el("div", { class: "muted" }, `${Math.max(project.emails_paid_balance, 0).toLocaleString()} paid left`) : null,
 				project.free_emails !== null ? el("div", { class: "muted" }, "custom limit") : null
 			),
-			el("td", { class: "mono" }, storage),
+			el("td", { class: "mono" }, storage, el("div", { class: "muted" }, `Files ${fileStorage}`)),
 			el("td", {}, whiteLabel),
 			el("td", {}, store),
 			el("td", {}, workforce),
@@ -714,14 +728,18 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "line-actions" },
-					settings.license_issuer
-						? el(
-								"button",
-								{ class: "button ghost small", type: "button", onClick: () => freeLimitDialog(project, defaultAllowance, defaultEmails, list.refresh) },
-								"Free limits"
-							)
-						: null,
-					el("button", { class: "button ghost small", type: "button", onClick: () => applyLicenseDialog(project, list.refresh) }, "Apply key")
+					...(project.status === "deleted"
+						? [el("button", { class: "button danger small", type: "button", onClick: () => purgeProjectDialog(project, list.refresh) }, "Delete permanently")]
+						: [
+								settings.license_issuer
+									? el(
+											"button",
+											{ class: "button ghost small", type: "button", onClick: () => freeLimitDialog(project, defaultAllowance, defaultEmails, list.refresh) },
+											"Free limits"
+										)
+									: null,
+								el("button", { class: "button ghost small", type: "button", onClick: () => applyLicenseDialog(project, list.refresh) }, "Apply key"),
+							])
 				)
 			)
 		);
@@ -729,7 +747,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 
 	const list = pager(
 		async (offset) => {
-			const result = await AdminApi.projects({ search: search.value.trim(), limit: PAGE_SIZE, offset });
+			const result = await AdminApi.projects({ search: search.value.trim(), limit: PAGE_SIZE, offset, deleted: shown.value === "deleted" ? "1" : undefined });
 			return { items: result.projects, total: result.total };
 		},
 		row,
@@ -754,6 +772,7 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 		"input",
 		debounce(() => void list.refresh())
 	);
+	shown.addEventListener("change", () => void list.refresh());
 	void list.refresh();
 
 	return adminLayout(
@@ -767,9 +786,55 @@ export async function adminProjectsView(): Promise<HTMLElement> {
 					? `Projects get ${defaultAllowance().toLocaleString()} free completed payments a month unless you set their own limit. A negative paid balance means payments arrived after the project ran out, and the next key covers them.`
 					: `Projects get ${defaultAllowance().toLocaleString()} free completed payments a month. A negative paid balance means payments arrived after the project ran out, and the next key covers them.`
 			),
-			el("div", { class: "toolbar" }, search, el("span", {})),
+			el("div", { class: "toolbar" }, search, shown, el("span", {})),
 			list.element
 		)
+	);
+}
+
+function purgeProjectDialog(project: AdminProject, onPurged: () => void) {
+	const name = input("text", { required: true, autocomplete: "off", placeholder: project.name });
+	const submit = el("button", { class: "button danger", type: "submit" }, "Delete permanently");
+	const dialog = modal(
+		`Delete ${project.display_name ?? project.name} permanently`,
+		el(
+			"form",
+			{
+				class: "stack",
+				onSubmit: async (event) => {
+					event.preventDefault();
+					submit.disabled = true;
+					try {
+						const result = await AdminApi.purgeProject(project.uuid, name.value.trim());
+						dialog.close();
+						toast(
+							result.missed_files > 0
+								? `Project deleted. ${result.missed_files} of ${result.stored_files} stored files could not be removed, see the server log.`
+								: `Project deleted with ${result.stored_files.toLocaleString()} stored files (${formatBytes(result.stored_bytes)}).`,
+							result.missed_files > 0 ? "info" : "success"
+						);
+						onPurged();
+					} catch (error) {
+						reportError(error);
+						submit.disabled = false;
+					}
+				},
+			},
+			el(
+				"p",
+				{},
+				"This removes the project and everything in it from the database and from document storage: invoices, credit notes, payments, customers, items, expenses, e-invoices, FURS records and archives, store content, timesheets, payroll, tickets, files and the audit trail of the project."
+			),
+			el(
+				"p",
+				{ class: "warn" },
+				"It cannot be undone. Issued invoices must by law be kept for 10 years, so make sure the business has exported what it needs or that the retention period is over. Copies in backups disappear only as the backups rotate."
+			),
+			field(`Type the project name ${project.name} to confirm`, name),
+			el("div", { class: "form-actions" }, submit)
+		),
+		undefined,
+		"dialog"
 	);
 }
 

@@ -52,7 +52,7 @@
 		"bip32": "^5.0.1",
 		"bitcoinjs-lib": "^7.0.2",
 		"ethereumjs-wallet": "^1.0.2",
-		"nodemailer": "^10.0.10",
+		"nodemailer": "^10.0.16",
 		"pdfkit": "^0.20.2",
 		"tiny-secp256k1": "^2.2.4"
 	}

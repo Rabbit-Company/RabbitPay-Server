@@ -518,12 +518,17 @@ a:hover {
 	max-height: calc(100vh - 60px - 2.5rem);
 	overflow-y: auto;
 	scrollbar-width: thin;
+	scrollbar-color: transparent transparent;
+}
+.project-side:hover,
+.project-side:focus-within {
+	scrollbar-color: var(--border) transparent;
 }
 
 .project-nav {
 	display: flex;
 	flex-direction: column;
-	gap: 1.75rem;
+	gap: 1.25rem;
 }
 
 .nav-group {
@@ -542,7 +547,7 @@ a:hover {
 }
 
 .project-nav .tab {
-	padding: 0.4rem 0.75rem;
+	padding: 0.33rem 0.75rem;
 	border-bottom: none;
 	border-radius: 8px;
 }
@@ -5605,4 +5610,192 @@ fieldset.stack-tight {
 	.help-bar .theme-switcher {
 		display: none;
 	}
+}
+.file-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.5rem;
+}
+.file-row {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.5rem 0.75rem;
+}
+.file-row-removed {
+	border-style: dashed;
+	color: var(--muted);
+}
+.file-info {
+	display: grid;
+	gap: 0.15rem;
+	min-width: 0;
+	flex: 1;
+	justify-items: start;
+}
+.file-name {
+	overflow-wrap: anywhere;
+	text-align: left;
+}
+.file-row-removed .file-name {
+	text-decoration: line-through;
+}
+.file-thumb {
+	flex: none;
+	width: 3.5rem;
+	height: 3.5rem;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
+	overflow: hidden;
+	cursor: zoom-in;
+}
+.file-thumb:disabled {
+	cursor: progress;
+}
+.file-thumb-image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+.explorer-crumbs a {
+	text-decoration: none;
+}
+.explorer-name {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.7rem;
+	text-align: left;
+	color: var(--text);
+	text-decoration: none;
+	font-weight: 500;
+	min-width: 0;
+}
+.explorer-name:hover,
+.explorer-crumbs a:hover {
+	text-decoration: none;
+}
+.explorer-name:hover .explorer-label {
+	color: var(--accent);
+}
+.explorer-label {
+	overflow-wrap: anywhere;
+	line-height: 1.3;
+}
+.explorer-icon {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	border-radius: 8px;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	color: var(--muted);
+}
+.explorer-icon svg {
+	display: block;
+}
+.explorer-icon-folder {
+	background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+	border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+	color: var(--accent);
+}
+.explorer-table tbody tr:hover {
+	background: var(--hover);
+}
+.explorer-table td {
+	padding-top: 0.55rem;
+	padding-bottom: 0.55rem;
+}
+.explorer-date {
+	font-size: 0.85rem;
+}
+.explorer-pill {
+	text-transform: none;
+	white-space: nowrap;
+}
+.explorer-actions {
+	justify-content: flex-end;
+	flex-wrap: nowrap;
+	gap: 0.4rem;
+}
+.explorer-usage {
+	display: grid;
+	gap: 0.3rem;
+	justify-items: end;
+	min-width: 12rem;
+}
+.explorer-meter {
+	width: 100%;
+	height: 6px;
+}
+.explorer-sharing {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+.explorer-dropping .card {
+	outline: 2px dashed var(--accent);
+	outline-offset: 2px;
+	background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.explorer-icon-built-in {
+	background: color-mix(in srgb, var(--success) 12%, var(--surface));
+	border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+	color: var(--success);
+}
+.explorer-label:has(.explorer-person) {
+	display: grid;
+	gap: 0.1rem;
+}
+.explorer-hidden {
+	display: none;
+}
+.explorer-table th {
+	white-space: nowrap;
+}
+.transfers {
+	position: fixed;
+	bottom: 1.25rem;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	z-index: 100;
+	width: min(340px, calc(100vw - 2.5rem));
+}
+.transfer {
+	display: grid;
+	gap: 0.4rem;
+	padding: 0.7rem 1rem;
+	border-radius: 10px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+	font-size: 0.9rem;
+}
+.transfer-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 500;
+}
+.transfer-detail {
+	font-size: 0.82rem;
+}
+.transfer .meter-fill {
+	transition: width 0.15s linear;
+}
+.transfer-done .meter-fill {
+	background: var(--success);
 }

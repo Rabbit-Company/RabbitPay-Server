@@ -11,7 +11,7 @@ export const RATE_PAYMENTS = 1000;
 export const RATE_EMAILS = 1000;
 
 const SERVER_ID = /^RPS(?:-[0-9A-HJKMNP-TV-Z]{5}){4}$/;
-const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails"];
+const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails", "files"];
 
 export interface LicenseGrant {
 	type: LicenseType;
@@ -48,7 +48,7 @@ export function normalizeServerId(value: unknown): string | null {
 }
 
 export function usesAmount(type: LicenseType): boolean {
-	return type === "transactions" || type === "storage" || type === "employees" || type === "emails";
+	return type === "transactions" || type === "storage" || type === "employees" || type === "emails" || type === "files";
 }
 
 export function soldByCount(type: LicenseType): boolean {
@@ -63,14 +63,18 @@ export function hostedOnly(type: LicenseType): boolean {
 	return type === "emails";
 }
 
+export function storesGigabytes(type: LicenseType): boolean {
+	return type === "storage" || type === "files";
+}
+
 export function usesDays(type: LicenseType): boolean {
-	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting" || type === "storage";
+	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting" || storesGigabytes(type);
 }
 
 export function amountLimit(type: LicenseType): number {
 	if (type === "transactions") return MAX_LICENSE_TRANSACTIONS;
 	if (type === "emails") return MAX_LICENSE_EMAILS;
-	if (type === "storage") return MAX_LICENSE_STORAGE_GB;
+	if (storesGigabytes(type)) return MAX_LICENSE_STORAGE_GB;
 	return MAX_LICENSE_EMPLOYEES;
 }
 
@@ -186,7 +190,7 @@ export function grantOf(product: LicenseProduct, choice: LicenseChoice): License
 		type: product.type,
 		transactions: product.type === "transactions" ? choice.amount : null,
 		duration_days: usesDays(product.type) ? choice.days : null,
-		storage_gb: product.type === "storage" ? choice.amount : null,
+		storage_gb: storesGigabytes(product.type) ? choice.amount : null,
 		employees: product.type === "employees" ? choice.amount : null,
 		emails: product.type === "emails" ? choice.amount : null,
 	};

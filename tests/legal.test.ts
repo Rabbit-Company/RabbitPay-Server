@@ -134,6 +134,9 @@ describe("templates", () => {
 		Settings.email.body_retention_days = 0;
 		try {
 			expect(await template("terms", "en")).toContain("GB of document storage. We may change");
+			expect(await template("terms", "en")).toContain("currently includes 10 GB of file storage");
+			expect(await template("terms", "sl")).toContain("trenutno vključuje 10 GB prostora za datoteke");
+			expect(await template("privacy", "en")).not.toContain("{{");
 			expect(await template("privacy", "en")).toContain("**Content of emails sent from the Service:** while the project exists.");
 		} finally {
 			Settings.licensing.enabled = true;

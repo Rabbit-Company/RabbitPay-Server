@@ -31,6 +31,9 @@ const ID_COLUMNS = new Set([
 	"statement",
 	"match_id",
 	"payment_transaction",
+	"file",
+	"folder",
+	"parent",
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
@@ -145,6 +148,7 @@ const TEXT_LENGTHS: Record<string, number> = {
 	statement_id: 140,
 	match_type: 32,
 	matched_by: 30,
+	removed_by: 30,
 };
 
 export function schemaTypes(dialect: Dialect) {

@@ -37,6 +37,8 @@ async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string
 }
 
 const LICENSE_TYPES_WITH_EMAILS = "CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees', 'accounting', 'emails'))";
+const LICENSE_TYPES_WITH_FILES =
+	"CHECK (type IN ('transactions', 'white_label', 'storage', 'store', 'workforce', 'employees', 'accounting', 'emails', 'files'))";
 
 export interface Migration {
 	version: number;
@@ -544,6 +546,99 @@ export const MIGRATIONS: Migration[] = [
 					UNIQUE(project, member, period)
 				)`,
 				`CREATE INDEX IF NOT EXISTS idx_timesheet_periods_project ON timesheet_periods(project, period, status)`,
+			]);
+		},
+	},
+	{
+		version: 51,
+		name: "file storage",
+		rebuildsSqliteTables: true,
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await replaceCheck(sql, dialect, "license_keys", "white_label", "license_keys_type_check", LICENSE_TYPES_WITH_EMAILS, LICENSE_TYPES_WITH_FILES);
+			await sql.unsafe(`ALTER TABLE projects ADD COLUMN max_file_bytes ${types.int64}`);
+			await sql.unsafe(`ALTER TABLE projects ADD COLUMN max_member_file_bytes ${types.int64}`);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS file_folders(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					parent ${types.text("parent")},
+					name ${types.text("file_name")} NOT NULL,
+					access ${types.text("status")} CHECK (access IN ('private', 'everyone', 'members')),
+					created_by ${types.text("created_by")},
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (parent) REFERENCES file_folders(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (created_by) REFERENCES accounts(username) ON DELETE SET NULL
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_file_folders_parent ON file_folders(project, parent)`,
+				`CREATE TABLE IF NOT EXISTS file_folder_members(
+					folder ${types.text("folder")} NOT NULL,
+					account ${types.text("account")} NOT NULL,
+					PRIMARY KEY (folder, account),
+					FOREIGN KEY (folder) REFERENCES file_folders(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (account) REFERENCES accounts(username) ON DELETE CASCADE
+				)`,
+				`CREATE TABLE IF NOT EXISTS file_member_limits(
+					project ${types.text("project")} NOT NULL,
+					account ${types.text("account")} NOT NULL,
+					max_bytes ${types.int64} NOT NULL,
+					PRIMARY KEY (project, account),
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (account) REFERENCES accounts(username) ON DELETE CASCADE
+				)`,
+				`CREATE TABLE IF NOT EXISTS project_files(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					storage_key ${types.text("storage_key")} NOT NULL UNIQUE,
+					file_name ${types.text("file_name")} NOT NULL,
+					content_type ${types.text("content_type")} NOT NULL,
+					byte_size ${types.int64} NOT NULL,
+					parts INTEGER NOT NULL,
+					parts_received INTEGER NOT NULL DEFAULT 0,
+					status ${types.text("status")} NOT NULL CHECK (status IN ('uploading', 'ready')),
+					explorer ${types.flag} NOT NULL DEFAULT 0 CHECK (explorer IN (0, 1)),
+					folder ${types.text("folder")},
+					created_by ${types.text("created_by")},
+					created ${types.int64} NOT NULL,
+					removed_by ${types.text("removed_by")},
+					removed_at ${types.int64},
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (created_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					FOREIGN KEY (removed_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					FOREIGN KEY (folder) REFERENCES file_folders(uuid) ON DELETE SET NULL
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_project_files_folder ON project_files(project, explorer, folder)`,
+				`CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project, removed_at, byte_size)`,
+				`CREATE INDEX IF NOT EXISTS idx_project_files_status ON project_files(status, created)`,
+				`CREATE TABLE IF NOT EXISTS ticket_files(
+					ticket ${types.text("ticket")} NOT NULL,
+					file ${types.text("file")} NOT NULL,
+					created ${types.int64} NOT NULL,
+					PRIMARY KEY (ticket, file),
+					FOREIGN KEY (ticket) REFERENCES tickets(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (file) REFERENCES project_files(uuid) ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_ticket_files_file ON ticket_files(file)`,
+			]);
+		},
+	},
+	{
+		version: 52,
+		name: "sharing of single files and nested folders",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE project_files ADD COLUMN access ${types.text("status")} NOT NULL DEFAULT 'private'`);
+			await sql`UPDATE file_folders SET access = 'private' WHERE access IS NULL`;
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS file_members(
+					file ${types.text("file")} NOT NULL,
+					account ${types.text("account")} NOT NULL,
+					PRIMARY KEY (file, account),
+					FOREIGN KEY (file) REFERENCES project_files(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (account) REFERENCES accounts(username) ON DELETE CASCADE
+				)`,
 			]);
 		},
 	},

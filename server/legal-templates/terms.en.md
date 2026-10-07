@@ -24,7 +24,7 @@ The service at {{service_url}} (the "Service") is provided by:
 
 ## 4. The Service
 
-4.1. The Service lets the Customer issue invoices, accept and record payments, manage customers, products, expenses and related records, and use the other features available at the time.
+4.1. The Service lets the Customer issue invoices, accept and record payments, manage customers, products, expenses and related records, store and share files within its team, and use the other features available at the time.
 
 4.2. We provide the Service with due care, but we do not guarantee that it will be available without interruption or free of errors. We may carry out maintenance, preferably at times of low use, and we will try to announce longer planned interruptions in advance.
 
@@ -38,13 +38,15 @@ The service at {{service_url}} (the "Service") is provided by:
 
 5.1. Each project includes a free monthly allowance, currently {{free_payments}} completed payments per month and {{free_storage}} GB of document storage.{{email_allowance}} We may change the free allowance with at least 30 days' notice.
 
-5.2. License keys extend a project, for example with additional payments, emails, storage, white labeling, the online store or timesheets and payroll. The content and price of each license key are stated in the offer or on the invoice.
+5.2. License keys extend a project, for example with additional payments, emails, document storage, file storage, white labeling, the online store or timesheets and payroll. The content and price of each license key are stated in the offer or on the invoice.
 
 5.3. License keys are paid by bank transfer based on an invoice we issue. We deliver a key after we receive the full payment.
 
 5.4. A license key is a one-time purchase and never renews automatically. A key with a limited duration starts running when it is redeemed on a project.
 
 5.5. A key can be redeemed on any project. Once redeemed, it stays with that project and cannot be moved or exchanged.
+
+5.6. Files that the Customer's team attaches to tickets or keeps in Files use file storage, which is counted separately from document storage. A project with an active timesheets and payroll license currently includes {{free_file_storage}} GB of file storage, and file storage license keys add more. We may change the included amount with at least 30 days' notice. When file storage is full, or when a file storage key ends and the project holds more than what is left, new uploads are refused until space is freed or added. Files already stored stay available and we do not delete them for that reason. Issuing invoices and everything else that uses document storage is not affected.
 
 ## 6. Prices and payment
 
@@ -72,9 +74,10 @@ The service at {{service_url}} (the "Service") is provided by:
 - for fraud, money laundering, financing of terrorism or sales of prohibited goods or services,
 - to send unsolicited commercial messages,
 - to upload malicious code or to test, overload or bypass the security or licensing of the Service,
+- to store or share files that are unlawful or that infringe copyright or other rights of others, or to use file storage as a public file hosting or distribution service,
 - to resell access to the Service without our written consent.
 
-8.3. We may suspend access to the Service if the Customer seriously breaches these Terms or if we must do so by law. Where possible, we will notify the Customer first and give it a chance to remedy the breach.
+8.3. We may suspend access to the Service if the Customer seriously breaches these Terms or if we must do so by law. Where possible, we will notify the Customer first and give it a chance to remedy the breach. We may remove or disable access to a file if we learn that it is unlawful or if we must do so by law.
 
 ## 9. Data processing agreement
 
@@ -86,7 +89,7 @@ This section is the agreement on the processing of personal data under Article 2
 
 9.3. **Nature and purpose.** Storage, organisation, retrieval, transmission (for example sending invoices by email), backup and deletion, solely to provide the Service.
 
-9.4. **Types of data.** Names, addresses, email addresses, phone numbers, tax and registration numbers, bank details, invoice and payment details, order details, support messages and, where the Customer uses timesheets and payroll, employee data such as working time, absences and salary data.
+9.4. **Types of data.** Names, addresses, email addresses, phone numbers, tax and registration numbers, bank details, invoice and payment details, order details, support messages and, where the Customer uses timesheets and payroll, employee data such as working time, absences and salary data, as well as any personal data contained in files the Customer's team uploads.
 
 9.5. **Data subjects.** The Customer's customers and their contact persons, employees, suppliers and other persons whose data the Customer enters.
 

@@ -17,6 +17,7 @@ import {
 	parseLicenseProduct,
 	readEnteredChoice,
 	readLicenseChoice,
+	storesGigabytes,
 	type LicenseChoice,
 	type LicenseProduct,
 } from "../license-pricing";
@@ -157,7 +158,7 @@ function describeLicense(language: string, product: LicenseProduct, choice: Lice
 	const parts = [
 		product.type === "transactions" ? t(language, "license.line_payments", { count: choice.amount ?? 0 }) : null,
 		product.type === "emails" ? t(language, "license.line_emails", { count: choice.amount ?? 0 }) : null,
-		product.type === "storage" ? t(language, "license.line_storage", { count: choice.amount ?? 0 }) : null,
+		storesGigabytes(product.type) ? t(language, "license.line_storage", { count: choice.amount ?? 0 }) : null,
 		product.type === "employees" ? t(language, "license.line_employees", { count: choice.amount ?? 0 }) : null,
 		choice.days !== null ? t(language, "license.line_days", { count: choice.days }) : null,
 		choice.server_id ? t(language, "license.line_server", { id: choice.server_id }) : t(language, "license.line_hosted"),

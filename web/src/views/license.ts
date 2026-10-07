@@ -16,6 +16,9 @@ export function describeLicense(license: Pick<LicensePreview, "type" | "transact
 	if (license.type === "storage") {
 		return t("license.grants_storage", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB`, days: tn("count.days", license.duration_days ?? 0) });
 	}
+	if (license.type === "files") {
+		return t("license.grants_files", { size: `${(license.storage_gb ?? 0).toLocaleString()} GB`, days: tn("count.days", license.duration_days ?? 0) });
+	}
 	if (license.type === "store") return t("license.grants_store", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "workforce") return t("license.grants_workforce", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "accounting") return t("license.grants_accounting", { days: tn("count.days", license.duration_days ?? 0) });
@@ -28,8 +31,8 @@ export function describeLicense(license: Pick<LicensePreview, "type" | "transact
 const MAX_LOGO_BYTES = 150 * 1024;
 
 function keyPeriod(
-	running: "license.storage_key_until" | "license.employees_seat_until",
-	scheduled: "license.storage_key_from" | "license.employees_seat_from",
+	running: "license.storage_key_until" | "license.files_key_until" | "license.employees_seat_until",
+	scheduled: "license.storage_key_from" | "license.files_key_from" | "license.employees_seat_from",
 	grant: { from: number; until: number }
 ): string {
 	if (grant.from <= Date.now()) return t(running, { date: formatDate(grant.until) });
@@ -192,6 +195,53 @@ function storageCard(state: ProjectLicense): HTMLElement {
 		),
 		el("p", { class: "muted" }, t("license.storage_hint")),
 		remaining !== null && remaining <= 0 ? el("p", { class: "warn" }, t("license.storage_full")) : null
+	);
+}
+
+function fileStorageCard(uuid: string, state: ProjectLicense, editable: boolean): HTMLElement {
+	const limit = state.file_storage_limit;
+	const remaining = state.file_storage_remaining;
+	return el(
+		"div",
+		{ class: "card stack" },
+		el("h2", {}, t("license.files")),
+		el(
+			"div",
+			{ class: "totals usage-totals" },
+			el("div", { class: "totals-row" }, el("span", {}, t("license.storage_used")), el("span", { class: "mono" }, formatBytes(state.file_storage_used))),
+			limit === null
+				? el("div", { class: "totals-row grand" }, el("span", {}, t("license.storage_limit")), el("span", { class: "mono" }, t("license.unlimited")))
+				: el(
+						"div",
+						{},
+						el(
+							"div",
+							{ class: "totals-row" },
+							el("span", {}, t("license.files_included")),
+							el("span", { class: "mono" }, formatBytes(state.file_storage_included))
+						),
+						...state.file_storage_grants.map((grant) =>
+							el(
+								"div",
+								{ class: "totals-row" },
+								el("span", {}, keyPeriod("license.files_key_until", "license.files_key_from", grant)),
+								el("span", { class: "mono" }, `${grant.storage_gb.toLocaleString()} GB`)
+							)
+						),
+						usageMeter(state.file_storage_used, limit),
+						el(
+							"div",
+							{ class: "totals-row grand" },
+							el("span", {}, t("license.storage_left")),
+							el("span", { class: "mono" }, formatBytes(Math.max(remaining ?? 0, 0)))
+						)
+					)
+		),
+		el("p", { class: "muted" }, t("license.files_hint")),
+		remaining !== null && remaining <= 0 && state.file_storage_used > 0 ? el("p", { class: "warn" }, t("license.files_full")) : null,
+		editable
+			? el("div", { class: "line-actions" }, el("a", { class: "button ghost", href: `/projects/${uuid}/file-storage` }, t("license.files_manage")))
+			: null
 	);
 }
 
@@ -686,6 +736,7 @@ export async function licenseView(uuid: string): Promise<HTMLElement> {
 			usageCard(state),
 			emailsCard(uuid, state),
 			storageCard(state),
+			fileStorageCard(uuid, state, editable),
 			whiteLabelCard(uuid, project, state, server, () => void refresh()),
 			storeCard(uuid, state),
 			workforceCard(uuid, state),

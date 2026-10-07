@@ -103,6 +103,8 @@ export interface ServerSettings {
 		free_transactions: number;
 		free_emails: number;
 		free_storage_gb: number;
+		free_file_storage_gb: number;
+		max_file_mb: number;
 		free_employees: number;
 	};
 	payments: {
@@ -245,7 +247,7 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		phone: "",
 		business_only: false,
 	},
-	licensing: { enabled: true, free_transactions: 50, free_emails: 100, free_storage_gb: 1, free_employees: 5 },
+	licensing: { enabled: true, free_transactions: 50, free_emails: 100, free_storage_gb: 1, free_file_storage_gb: 10, max_file_mb: 5000, free_employees: 5 },
 	payments: { allow_private_wallets: false },
 	invoices: { overdue_interval: 300, recurring_interval: 300, document_interval: 60 },
 	fiscal: { poll_interval: 30, software_supplier_tax_number: 0, software_supplier_name: "RabbitPay" },
@@ -489,7 +491,8 @@ export const SETTING_GROUPS: SettingGroup[] = [
 	{
 		id: "licensing",
 		label: "Licensing",
-		description: "Every project gets free completed payments and document storage. License keys add payments, storage, employee seats or add-ons.",
+		description:
+			"Every project gets free completed payments and document storage. License keys add payments, storage, file storage, employee seats or add-ons.",
 		fields: [
 			{
 				key: "licensing.enabled",
@@ -517,6 +520,20 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				hint: "Default document storage included with every project. Storage license keys add more for a number of days.",
 				kind: "number",
 				min: 0,
+			},
+			{
+				key: "licensing.free_file_storage_gb",
+				label: "Included file storage in GB",
+				hint: "File storage for ticket attachments that comes with a workforce license. File storage license keys add more for a number of days.",
+				kind: "number",
+				min: 0,
+			},
+			{
+				key: "licensing.max_file_mb",
+				label: "Largest file in MB",
+				hint: "The highest file size limit a project can choose for its attachments. Each project starts at 25 MB.",
+				kind: "number",
+				min: 1,
 			},
 			{
 				key: "licensing.free_employees",

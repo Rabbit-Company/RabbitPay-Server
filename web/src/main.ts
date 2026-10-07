@@ -51,6 +51,8 @@ import { domainStore, storeError, useRouteLanguage } from "./storefront/layout";
 import { isLanguageCode } from "../../server/store/language-code";
 import { absencesView, timesheetReportView, timesheetSettingsView, timesheetView } from "./views/timesheet";
 import { ticketsView, ticketView } from "./views/tickets";
+import { fileStorageView } from "./views/files";
+import { explorerView } from "./views/explorer";
 import { employeesView } from "./views/employees";
 import { payrollRatesView, payrollRunsView, payrollRunView } from "./views/payroll";
 import { accountingClientsView, accountingJournalView, accountLedgerView, ledgerAccountsView, trialBalanceView } from "./views/accounting";
@@ -505,6 +507,34 @@ define(
 define(
 	"/projects/:uuid/pos",
 	guarded([Permission.POS_SELL], (params) => posView(params.uuid))
+);
+define(
+	"/projects/:uuid/files",
+	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, {}))
+);
+define(
+	"/projects/:uuid/files/folders/:folder",
+	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, { folder: params.folder }))
+);
+define(
+	"/projects/:uuid/files/shared",
+	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, { scope: "shared" }))
+);
+define(
+	"/projects/:uuid/files/shared/:owner",
+	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, { scope: "shared", owner: params.owner }))
+);
+define(
+	"/projects/:uuid/files/everyone",
+	projectRoute([Permission.PROJECT_EDIT], (params) => explorerView(params.uuid, { scope: "all" }))
+);
+define(
+	"/projects/:uuid/files/everyone/:owner",
+	projectRoute([Permission.PROJECT_EDIT], (params) => explorerView(params.uuid, { scope: "all", owner: params.owner }))
+);
+define(
+	"/projects/:uuid/file-storage",
+	projectRoute([Permission.PROJECT_EDIT], (params) => fileStorageView(params.uuid))
 );
 define(
 	"/projects/:uuid/license",

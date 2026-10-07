@@ -139,7 +139,7 @@ export function licenseSummary(license: LicenseChoice & { type: LicenseProduct["
 	const parts = [
 		license.type === "transactions" ? t("shop.license_payments", { count: (license.amount ?? 0).toLocaleString() }) : null,
 		license.type === "emails" ? t("shop.license_emails", { count: (license.amount ?? 0).toLocaleString() }) : null,
-		license.type === "storage" ? t("shop.license_storage", { count: (license.amount ?? 0).toLocaleString() }) : null,
+		license.type === "storage" || license.type === "files" ? t("shop.license_storage", { count: (license.amount ?? 0).toLocaleString() }) : null,
 		license.type === "employees" ? tn("count.employees", license.amount ?? 0) : null,
 		license.days !== null ? tn("count.days", license.days) : null,
 		license.server_id ? t("shop.license_server", { id: license.server_id }) : t("shop.license_hosted"),

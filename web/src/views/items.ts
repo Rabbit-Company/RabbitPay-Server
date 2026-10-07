@@ -18,6 +18,7 @@ const LICENSE_TYPES: { value: LicenseProduct["type"]; label: UiKey; rate: UiKey;
 	{ value: "transactions", label: "items.license_transactions", rate: "items.license_rate_payments", amount: "items.license_amount_payments" },
 	{ value: "emails", label: "items.license_emails", rate: "items.license_rate_emails", amount: "items.license_amount_emails" },
 	{ value: "storage", label: "items.license_storage", rate: "items.license_rate_storage", amount: "items.license_amount_storage" },
+	{ value: "files", label: "items.license_files", rate: "items.license_rate_storage", amount: "items.license_amount_storage" },
 	{ value: "white_label", label: "items.license_white_label", rate: "items.license_rate_days", amount: null },
 	{ value: "store", label: "items.license_store", rate: "items.license_rate_days", amount: null },
 	{ value: "workforce", label: "items.license_workforce", rate: "items.license_rate_days", amount: null },

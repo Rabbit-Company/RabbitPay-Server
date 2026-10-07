@@ -73,3 +73,36 @@ export function toBase64(file: Blob): Promise<string> {
 		reader.readAsDataURL(file);
 	});
 }
+
+const LOSSLESS_SOURCES = ["image/png", "image/bmp"];
+
+function chunkName(bytes: Uint8Array, offset: number): string {
+	return String.fromCharCode(...bytes.subarray(offset, offset + 4));
+}
+
+function isLosslessWebp(bytes: Uint8Array): boolean {
+	if (bytes.length < 16 || chunkName(bytes, 0) !== "RIFF" || chunkName(bytes, 8) !== "WEBP") return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	let offset = 12;
+	while (offset + 8 <= bytes.length) {
+		const name = chunkName(bytes, offset);
+		if (name === "VP8L") return true;
+		if (name === "VP8 ") return false;
+		const size = view.getUint32(offset + 4, true);
+		offset += 8 + size + (size % 2);
+	}
+	return false;
+}
+
+export async function losslessWebp(file: File): Promise<File> {
+	if (!LOSSLESS_SOURCES.includes(file.type)) return file;
+	try {
+		const image = await decodeImage(file);
+		const blob = await encode(draw(image, image.naturalWidth, image.naturalHeight), 1);
+		if (blob.type !== "image/webp" || blob.size >= file.size) return file;
+		if (!isLosslessWebp(new Uint8Array(await blob.arrayBuffer()))) return file;
+		return new File([blob], `${file.name.replace(/\.[^.]*$/, "")}.webp`, { type: "image/webp", lastModified: file.lastModified });
+	} catch {
+		return file;
+	}
+}

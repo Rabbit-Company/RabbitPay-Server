@@ -33,6 +33,7 @@ import {
 	TICKET_STATUSES,
 	type TicketInput,
 } from "../../workforce/tickets";
+import { discardFiles, filesOfTicket, filesOnlyOnTicket, maxFileBytes, presentFile } from "../../files";
 import type { AppState, CustomerRow, TicketCommentRow, TicketPortalAccessRow, TicketRow, TicketStatus, TimeEntryRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid";
@@ -214,6 +215,7 @@ Server.app.get(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(P
 	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
 	const showPricing = Permissions.has(Permissions.member(ctx), Permission.TICKET_MANAGE);
 	const comments = (await Database`SELECT * FROM ticket_comments WHERE ticket = ${ticket.uuid} ORDER BY created ASC, uuid ASC`) as TicketCommentRow[];
+	const files = await filesOfTicket(ticket.uuid);
 	const entries = (await Database`SELECT * FROM time_entries WHERE ticket = ${ticket.uuid} ORDER BY work_date DESC, start_minute DESC`) as TimeEntryRow[];
 	const configOf = await memberConfigs(
 		ticket.project,
@@ -224,6 +226,8 @@ Server.app.get(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(P
 	return await okWithNames(ctx, {
 		...(await detailed(ticket, showPricing)),
 		comments: comments.map(presentComment),
+		files: files.map(presentFile),
+		max_file_bytes: maxFileBytes(Permissions.project(ctx)),
 		time_by_person: [...people].map(([person, minutes]) => ({ person, minutes })),
 	});
 });
@@ -297,7 +301,9 @@ Server.app.post(`${base}/tickets/:ticket/order`, Auth.required(), Permissions.re
 Server.app.delete(`${base}/tickets/:ticket`, Auth.required(), Permissions.require(Permission.TICKET_MANAGE), requireWorkforce(), async (ctx) => {
 	const ticket = await findTicket(ctx);
 	if (!ticket) return Utils.fail(ctx, ErrorCode.TICKET_NOT_FOUND);
+	const files = await filesOnlyOnTicket(ticket.uuid);
 	await Database`DELETE FROM tickets WHERE uuid = ${ticket.uuid}`;
+	await discardFiles(files);
 	await audit(ctx, "ticket.deleted", ticket.uuid, undefined, ticket);
 	return Utils.ok(ctx);
 });

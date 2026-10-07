@@ -4,15 +4,15 @@ The first account created on a server becomes its administrator and gets an
 Admin link in the header. The Admin panel covers the whole server rather than a
 single project.
 
-| Page         | What it does                                                                              |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| Overview     | Accounts, projects, payments this month, license sales by currency and the Server ID      |
-| License keys | Create keys (on the issuing server), copy them, edit purchase details, revoke unused ones |
-| Projects     | Usage this month, paid balance, storage, add-on end dates, apply a key to a project       |
-| Accounts     | Administrators, suspension, two-factor reset, data export and account deletion            |
-| Invite codes | Registration codes with a use limit, expiry and note, a signup link to copy, revocation   |
-| Legal        | Terms of Service and Privacy Policy, with version history and acceptance counts           |
-| Settings     | Every server setting                                                                      |
+| Page         | What it does                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Overview     | Accounts, projects, payments this month, license sales by currency and the Server ID                                      |
+| License keys | Create keys (on the issuing server), copy them, edit purchase details, revoke unused ones                                 |
+| Projects     | Usage this month, paid balance, storage, add-on end dates, apply a key to a project, permanently delete a deleted project |
+| Accounts     | Administrators, suspension, two-factor reset, data export and account deletion                                            |
+| Invite codes | Registration codes with a use limit, expiry and note, a signup link to copy, revocation                                   |
+| Legal        | Terms of Service and Privacy Policy, with version history and acceptance counts                                           |
+| Settings     | Every server setting                                                                                                      |
 
 The Admin panel is in English only. It is for whoever runs the server, and its
 setting labels come from [`server/settings-schema.ts`](../server/settings-schema.ts).
@@ -31,6 +31,7 @@ License keys add to a project:
 | Transactions | Payments added to the paid balance. They never expire.                     |
 | Emails       | Emails added to the paid email balance. They never expire.                 |
 | Storage      | More document storage for a number of days.                                |
+| File storage | More storage for ticket attachments for a number of days.                  |
 | White label  | Your own branding for a number of days.                                    |
 | Online store | A web store for a number of days (see [Online store](online-store.md)).    |
 | Workforce    | Timesheets, absences, tickets, employees and payroll for a number of days. |
@@ -94,6 +95,17 @@ existing documents stay available, but new issued invoices, attachments and
 exports are refused with error `1126` until storage is added. The same applies
 when a storage key ends and the project holds more than what is left. Nothing is
 deleted.
+
+Files attached to tickets and files kept in Files count toward file storage instead, which has its own
+limit. A workforce license includes 10 GB (the `licensing.free_file_storage_gb`
+setting) and file storage keys add more. When it is full, uploads are refused
+with error `1303`, while downloads, removals and everything that uses document
+storage keep working. Owners and administrators of a project see its files,
+largest first, under License, Manage files, where they also set the largest
+file their project accepts. It starts at 25 MB and can go up to the
+`licensing.max_file_mb` setting, 5000 MB by default. An upload that is started
+but not finished counts toward file storage until it is discarded, which
+happens after 24 hours.
 
 ### The issuing server and licensed servers
 

@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import Database from "./database/database";
 import { Settings } from "./settings";
 import Utils from "./utils";
-import { emailsMetered, includedPayments, includedStorageGb } from "./licensing";
+import { emailsMetered, includedFileStorageGb, includedPayments, includedStorageGb } from "./licensing";
 import type { LegalDocumentRow, LegalKind } from "./database/models";
 import termsEn from "./legal-templates/terms.en.md" with { type: "text" };
 import termsSl from "./legal-templates/terms.sl.md" with { type: "text" };
@@ -277,6 +277,7 @@ export function legalTemplate(kind: LegalKind, language: LegalLanguage): string 
 		vat_clause: vatClause(language),
 		free_payments: String(includedPayments()),
 		free_storage: String(includedStorageGb()),
+		free_file_storage: String(includedFileStorageGb()),
 		email_allowance: emailAllowanceClause(language),
 		email_content_retention: emailContentRetention(language),
 		access_log_days: String(Settings.access_logs.online_days),

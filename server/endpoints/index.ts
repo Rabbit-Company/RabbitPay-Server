@@ -39,6 +39,8 @@ import "./v1/store-admin";
 import "./v1/storefront";
 import "./v1/workforce";
 import "./v1/tickets";
+import "./v1/files";
+import "./v1/explorer";
 import "./v1/employees";
 import "./v1/payroll";
 import "./v1/customer-tickets";

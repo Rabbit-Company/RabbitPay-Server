@@ -394,6 +394,40 @@ async function send(method: string, path: string, body?: unknown, extraHeaders: 
 	}
 }
 
+function sendBytes(method: string, path: string, body: Blob, onProgress?: (sent: number) => void): Promise<Response> {
+	return new Promise((resolve, reject) => {
+		const request = new XMLHttpRequest();
+		request.open(method, `/api/v1${path}`);
+		request.setRequestHeader("Content-Type", "application/octet-stream");
+		const token = getToken();
+		if (token) request.setRequestHeader("Authorization", `Bearer ${token}`);
+		request.upload.addEventListener("progress", (event) => onProgress?.(event.loaded));
+		request.addEventListener("load", () => resolve(new Response(request.responseText, { status: request.status })));
+		request.addEventListener("error", () => reject(new ApiError(-1, 0, "Could not reach the server.")));
+		request.addEventListener("abort", () => reject(new ApiError(-1, 0, "Could not reach the server.")));
+		request.send(body);
+	});
+}
+
+async function requestBytes(path: string, total: number, onProgress: (received: number) => void): Promise<Blob> {
+	const response = await send("GET", path);
+	if (!response.ok || !response.body || response.headers.get("Content-Type")?.includes("application/json")) {
+		await payloadOf<never>(response);
+		throw new ApiError(-1, response.status, "The server returned an unreadable response.");
+	}
+	const reader = response.body.getReader();
+	const chunks: Uint8Array<ArrayBuffer>[] = [];
+	let received = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value as Uint8Array<ArrayBuffer>);
+		received += value.length;
+		onProgress(Math.min(received, total));
+	}
+	return new Blob(chunks, { type: response.headers.get("Content-Type") ?? "application/octet-stream" });
+}
+
 async function payloadOf<T>(response: Response): Promise<T> {
 	let payload: { error: number; info: string; data?: unknown };
 	try {
@@ -864,8 +898,123 @@ export interface TicketComment {
 	updated: number;
 }
 
+export interface TicketFile {
+	uuid: string;
+	file_name: string;
+	content_type: string;
+	byte_size: number;
+	ready: boolean;
+	created_by: string | null;
+	created_by_name?: string | null;
+	created: number;
+	removed: boolean;
+	removed_by: string | null;
+	removed_by_name?: string | null;
+	removed_at: number | null;
+}
+
+export interface FileUpload extends TicketFile {
+	parts: number;
+	part_bytes: number;
+}
+
+export interface FileLimits {
+	max_file_bytes: number;
+	max_file_bytes_ceiling: number;
+	max_member_file_bytes: number | null;
+}
+
+export interface FilePeople extends FileLimits {
+	people: { username: string; name: string; used: number; max_bytes: number | null }[];
+}
+
+export type FolderAccess = "private" | "everyone" | "members";
+
+export interface ExplorerFolder {
+	uuid: string;
+	name: string;
+	parent: string | null;
+	access: FolderAccess;
+	members: string[];
+	created_by: string | null;
+	created_by_name?: string | null;
+	created: number;
+	updated: number;
+	can_manage: boolean;
+}
+
+export interface ExplorerFile extends TicketFile {
+	folder: string | null;
+	access: FolderAccess;
+	members: string[];
+	can_manage: boolean;
+}
+
+export interface ExplorerSharing {
+	uuid: string;
+	name: string;
+	access: FolderAccess;
+	members: string[];
+}
+
+export type ExplorerScope = "shared" | "all";
+
+export interface ExplorerOwner {
+	username: string;
+	name: string | null;
+	email: string | null;
+}
+
+export interface ExplorerLocation {
+	folder?: string;
+	scope?: ExplorerScope;
+	owner?: string;
+}
+
+export interface Explorer {
+	folder: ExplorerFolder | null;
+	scope: ExplorerScope | null;
+	origin: { scope: ExplorerScope; owner: ExplorerOwner } | null;
+	people: (ExplorerOwner & { items: number })[] | null;
+	shared_people: number;
+	everyone_people: number | null;
+	path: { uuid: string; name: string }[];
+	sharing: ExplorerSharing[];
+	folders: ExplorerFolder[];
+	files: ExplorerFile[];
+	used: number;
+	limit: number | null;
+	file_storage_remaining: number | null;
+	max_file_bytes: number;
+}
+
+export interface FolderChoice {
+	uuid: string;
+	parent: string | null;
+	path: string[];
+}
+
+export interface ProjectFile extends TicketFile {
+	tickets: { uuid: string; number: number; title: string }[];
+	location: string[] | null;
+}
+
+export interface ProjectFiles extends FileLimits {
+	files: ProjectFile[];
+	total: number;
+	limit: number;
+	offset: number;
+	file_storage_included: number;
+	file_storage_licensed: number;
+	file_storage_used: number;
+	file_storage_limit: number | null;
+	file_storage_remaining: number | null;
+}
+
 export interface TicketDetails extends Ticket {
 	comments: TicketComment[];
+	files: TicketFile[];
+	max_file_bytes: number;
 	time_by_person: { person: string; minutes: number }[];
 }
 
@@ -1229,7 +1378,7 @@ export interface Branding {
 	logo: string | null;
 }
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files";
 
 export interface License {
 	uuid: string;
@@ -1323,6 +1472,12 @@ export interface ProjectLicense extends LicenseIdentity {
 	storage_limit: number | null;
 	storage_remaining: number | null;
 	storage_grants: { storage_gb: number; from: number; until: number }[];
+	file_storage_included: number;
+	file_storage_licensed: number;
+	file_storage_used: number;
+	file_storage_limit: number | null;
+	file_storage_remaining: number | null;
+	file_storage_grants: { storage_gb: number; from: number; until: number }[];
 	scheduled: { type: LicenseType; from: number; until: number }[];
 	emails_metered: boolean;
 	emails_free_allowance: number;
@@ -1431,6 +1586,12 @@ export interface AdminProject {
 	storage_limit: number | null;
 	storage_remaining: number | null;
 	storage_grants: { storage_gb: number; from: number; until: number }[];
+	file_storage_included: number;
+	file_storage_licensed: number;
+	file_storage_used: number;
+	file_storage_limit: number | null;
+	file_storage_remaining: number | null;
+	file_storage_grants: { storage_gb: number; from: number; until: number }[];
 }
 
 export type RegistrationMode = "open" | "invite" | "closed";
@@ -3536,6 +3697,78 @@ export const Api = {
 		return request<null>("DELETE", `/projects/${uuid}/tickets/${ticket}/comments/${comment}`);
 	},
 
+	beginTicketFile(uuid: string, ticket: string, file: { name: string; type: string; size: number }) {
+		return request<FileUpload>("POST", `/projects/${uuid}/tickets/${ticket}/files`, file);
+	},
+
+	async uploadFilePart(uuid: string, file: string, index: number, part: Blob, onProgress?: (sent: number) => void) {
+		return await payloadOf<TicketFile>(await sendBytes("PUT", `/projects/${uuid}/files/${file}/parts/${index}`, part, onProgress));
+	},
+
+	fileBytes(uuid: string, file: string, total: number, onProgress: (received: number) => void) {
+		return requestBytes(`/projects/${uuid}/files/${file}`, total, onProgress);
+	},
+
+	fileLink(uuid: string, file: string) {
+		return request<{ path: string; expires_in: number }>("POST", `/projects/${uuid}/files/${file}/link`);
+	},
+
+	saveFileSettings(uuid: string, settings: { max_file_mb: number; max_member_file_mb: number | null }) {
+		return request<FileLimits>("PUT", `/projects/${uuid}/files/settings`, settings);
+	},
+
+	fileLimits(uuid: string) {
+		return request<FilePeople>("GET", `/projects/${uuid}/file-limits`);
+	},
+
+	saveMemberFileLimit(uuid: string, username: string, maxMb: number | null) {
+		return request<{ username: string; max_bytes: number | null }>("PUT", `/projects/${uuid}/file-limits/${encodeURIComponent(username)}`, { max_mb: maxMb });
+	},
+
+	explorer(uuid: string, location: ExplorerLocation) {
+		const query = Object.entries(location)
+			.filter(([, value]) => value !== undefined)
+			.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+			.join("&");
+		return request<Explorer>("GET", `/projects/${uuid}/explorer${query ? `?${query}` : ""}`);
+	},
+
+	explorerFolders(uuid: string) {
+		return request<FolderChoice[]>("GET", `/projects/${uuid}/explorer/folders`);
+	},
+
+	createFolder(uuid: string, name: string, parent: string | null) {
+		return request<ExplorerFolder>("POST", `/projects/${uuid}/explorer/folders`, { name, parent });
+	},
+
+	updateFolder(uuid: string, folder: string, changes: { name?: string; parent?: string | null; access?: FolderAccess; members?: string[] }) {
+		return request<ExplorerFolder>("PATCH", `/projects/${uuid}/explorer/folders/${folder}`, changes);
+	},
+
+	deleteFolder(uuid: string, folder: string) {
+		return request<{ files: number }>("DELETE", `/projects/${uuid}/explorer/folders/${folder}`);
+	},
+
+	beginExplorerFile(uuid: string, file: { name: string; type: string; size: number; folder: string | null }) {
+		return request<FileUpload>("POST", `/projects/${uuid}/explorer/files`, file);
+	},
+
+	updateExplorerFile(uuid: string, file: string, changes: { name?: string; folder?: string | null; access?: FolderAccess; members?: string[] }) {
+		return request<ExplorerFile>("PATCH", `/projects/${uuid}/explorer/files/${file}`, changes);
+	},
+
+	file(uuid: string, file: string) {
+		return requestFile(`/projects/${uuid}/files/${file}`, "file");
+	},
+
+	removeFile(uuid: string, file: string) {
+		return request<TicketFile>("DELETE", `/projects/${uuid}/files/${file}`);
+	},
+
+	files(uuid: string, options: { limit: number; offset: number; sort: "size" | "created" }) {
+		return request<ProjectFiles>("GET", `/projects/${uuid}/files?limit=${options.limit}&offset=${options.offset}&sort=${options.sort}`);
+	},
+
 	invoiceTicket(uuid: string, ticket: string) {
 		return request<{ invoice: string; reference: string; minutes: number; quantity: number; rate: number | null }>(
 			"POST",
@@ -3689,8 +3922,12 @@ export const AdminApi = {
 		return request<License>("POST", `/admin/licenses/${uuid}/revoke`, {});
 	},
 
-	projects(options: { search?: string; limit?: number; offset?: number } = {}) {
+	projects(options: { search?: string; limit?: number; offset?: number; deleted?: string } = {}) {
 		return request<{ projects: AdminProject[]; total: number; period: string }>("GET", `/admin/projects${listQuery(options)}`);
+	},
+
+	purgeProject(uuid: string, name: string) {
+		return request<{ stored_files: number; stored_bytes: number; missed_files: number }>("DELETE", `/admin/projects/${uuid}`, { name });
 	},
 
 	updateProject(uuid: string, changes: { free_transactions?: number | null; free_emails?: number | null }) {
