@@ -55,7 +55,7 @@ Time logged on a ticket appears in the timesheets. To bill it:
 
 ### Attach files to a ticket
 
-Open a ticket and press **Attach files**, or paste a screenshot anywhere on the page. A file can be up to 25 MB unless an owner or administrator changes that under **Files**, **Storage and limits**. Pictures up to 10 MB show a preview, everything else is downloaded.
+Open a ticket and press **Attach files**, or paste a screenshot anywhere on the page. A file can be up to 25 MB unless an owner or administrator changes that under **Files**, **Storage and limits**. Pictures up to 10 MB show a preview. Clicking the name of a video or a PDF opens it in the page, everything else is downloaded.
 
 PNG and BMP pictures are stored as lossless WebP when that makes them smaller. Not a single pixel changes, only the file name ends in .webp. Photos and videos are stored as they are.
 
@@ -67,8 +67,10 @@ Attached files use **File storage**, which is separate from document storage, so
 
 **Files** is a shared place for documents, pictures and videos. Create folders, upload files with **Upload files**, drop them onto the page or paste a screenshot.
 
+- Click a picture, a video or a PDF to open it without downloading. Videos play in the page and you can jump to any point. Other files download when you click them.
+- Every file and folder has an actions menu at the end of its row, which also opens with a right click: **Preview**, **Download**, **Share**, **Rename**, **Move** and **Delete**.
 - Your own files and folders are visible only to you until you share them.
-- To share, press **Share** next to any folder or any single file, at any depth. Choose **Everyone in the project** or **Chosen people**.
+- To share, choose **Share** in the menu of any folder or any single file, at any depth. Choose **Everyone in the project** or **Chosen people**.
 - Sharing a folder covers everything inside it, and people who can open a folder can also add files to it.
 - What other people share with you is in **Shared with me**, grouped by the person it belongs to. Your own things stay at the top of Files.
 - Sharing only adds people. If you share one subfolder or one file, the people you chose see just that item under your name in Shared with me, not the folder around it. Whoever can open the folder around it can still open the item.

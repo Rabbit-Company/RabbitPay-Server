@@ -5717,6 +5717,17 @@ fieldset.stack-tight {
 }
 .explorer-date {
 	font-size: 0.85rem;
+	white-space: nowrap;
+}
+.explorer-table th:not(:first-child),
+.explorer-table td:not(:first-child) {
+	width: 1%;
+	white-space: nowrap;
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
+}
+.explorer-table td.actions {
+	padding-left: 0.2rem;
 }
 .explorer-pill {
 	text-transform: none;
@@ -5798,4 +5809,37 @@ fieldset.stack-tight {
 }
 .transfer-done .meter-fill {
 	background: var(--success);
+}
+.menu-panel-floating {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: auto;
+	width: 220px;
+	z-index: 120;
+}
+.explorer-more {
+	color: var(--muted);
+}
+.explorer-table tbody tr:hover .explorer-more,
+.explorer-more:focus-visible {
+	color: var(--text);
+}
+.dialog-viewer {
+	max-width: min(1100px, 96vw);
+}
+.file-viewer-video {
+	display: block;
+	width: 100%;
+	max-height: 72vh;
+	background: #000;
+	border-radius: var(--radius);
+}
+.file-viewer-frame {
+	display: block;
+	width: 100%;
+	height: 72vh;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg);
 }

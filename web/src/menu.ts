@@ -99,3 +99,56 @@ export function actionMenu(label: string, sections: MenuLink[][]): HTMLElement |
 		"menu-panel-actions"
 	);
 }
+
+let closeFloating: (() => void) | null = null;
+
+export function floatingMenu(position: { x: number; y: number }, sections: MenuLink[][], returnFocus?: HTMLElement) {
+	closeFloating?.();
+	const filled = sections.filter((section) => section.length > 0);
+	if (filled.length === 0) return;
+
+	const panel = el("div", { class: "menu-panel menu-panel-actions menu-panel-floating" });
+	panel.setAttribute("role", "menu");
+	const items = () => [...panel.querySelectorAll<HTMLElement>(".menu-item")];
+
+	const onOutside = (event: Event) => {
+		if (!panel.contains(event.target as Node)) close();
+	};
+	const onKey = (event: KeyboardEvent) => {
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			close();
+			returnFocus?.focus();
+			return;
+		}
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		const list = items();
+		const index = list.indexOf(document.activeElement as HTMLElement);
+		event.preventDefault();
+		list[(index + (event.key === "ArrowDown" ? 1 : -1) + list.length) % list.length]?.focus();
+	};
+	function close() {
+		panel.remove();
+		document.removeEventListener("pointerdown", onOutside, true);
+		document.removeEventListener("keydown", onKey, true);
+		window.removeEventListener("scroll", close, true);
+		window.removeEventListener("resize", close);
+		window.removeEventListener("popstate", close);
+		closeFloating = null;
+	}
+	closeFloating = close;
+
+	panel.append(...filled.map((links) => el("div", { class: "menu-section" }, ...links.map((link) => menuItem(link, close)))));
+	document.body.appendChild(panel);
+	const box = panel.getBoundingClientRect();
+	panel.style.left = `${Math.max(8, Math.min(position.x, window.innerWidth - box.width - 8))}px`;
+	panel.style.top = `${Math.max(8, Math.min(position.y, window.innerHeight - box.height - 8))}px`;
+
+	document.addEventListener("pointerdown", onOutside, true);
+	document.addEventListener("keydown", onKey, true);
+	window.addEventListener("scroll", close, true);
+	window.addEventListener("resize", close);
+	window.addEventListener("popstate", close);
+	items()[0]?.focus();
+}

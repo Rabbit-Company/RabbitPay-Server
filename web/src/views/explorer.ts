@@ -18,7 +18,11 @@ import { t } from "../i18n";
 import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { icon } from "../storefront/icons";
 import { loadProject, projectLayout } from "./project";
-import { downloadFile, uploadFiles } from "./files";
+import { downloadFile, openViewer, uploadFiles, viewerKind } from "./files";
+import { floatingMenu, type MenuLink } from "../menu";
+import { openLightbox } from "../lightbox";
+import { onLeave } from "../router";
+import { startTransfer } from "../transfers";
 import type { DateFormat, TimeFormat } from "../../../server/formats";
 
 function when(project: Project, timestamp: number): string {
@@ -300,168 +304,202 @@ export async function explorerView(uuid: string, location: ExplorerLocation): Pr
 			el("div", { class: "muted explorer-date" }, when(project, item.created))
 		);
 
-	const action = (label: string, onClick: () => void, danger = false): HTMLElement =>
-		el("button", { class: `button ${danger ? "danger" : "ghost"} small`, type: "button", onClick }, label);
+	const previews = new Map<string, string>();
+	onLeave(() => {
+		for (const url of previews.values()) URL.revokeObjectURL(url);
+	});
+	const previewable = (file: ExplorerFile): boolean => viewerKind(file) !== null;
+	const preview = async (file: ExplorerFile) => {
+		const kind = viewerKind(file);
+		if (kind === "video" || kind === "pdf") return await openViewer(project, file, kind);
+		let url = previews.get(file.uuid);
+		if (!url) {
+			const transfer = startTransfer("download", file.file_name, file.byte_size);
+			try {
+				url = URL.createObjectURL(await Api.fileBytes(uuid, file.uuid, file.byte_size, transfer.update));
+				previews.set(file.uuid, url);
+				transfer.finish();
+			} catch (error) {
+				transfer.fail();
+				reportError(error);
+				return;
+			}
+		}
+		openLightbox([{ src: url, alt: file.file_name }]);
+	};
 
-	const folderRow = (folder: ExplorerFolder, atTop: boolean): HTMLElement =>
-		el(
-			"tr",
-			{},
+	const removal = async (title: string, body: string, remove: () => Promise<unknown>) => {
+		const confirmed = await confirmDialog({ title, body, confirmLabel: t("ui.delete"), destructive: true });
+		if (!confirmed) return;
+		try {
+			await remove();
+			toast(t("explorer.deleted"), "success");
+			await reload();
+		} catch (error) {
+			reportError(error);
+		}
+	};
+
+	const folderMenu = (folder: ExplorerFolder): MenuLink[][] => [
+		[{ label: t("explorer.open"), href: folderHref(uuid, folder.uuid) }],
+		folder.can_manage
+			? [
+					{
+						label: t("explorer.share"),
+						onSelect: () =>
+							void shareDialog(
+								project,
+								{ ...folder, nested: folder.parent !== null, save: (access, members) => Api.updateFolder(uuid, folder.uuid, { access, members }) },
+								() => void reload()
+							).catch(reportError),
+					},
+					{
+						label: t("explorer.rename"),
+						onSelect: () =>
+							nameDialog(t("explorer.rename"), t("explorer.folder_name"), folder.name, async (name) => {
+								await Api.updateFolder(uuid, folder.uuid, { name });
+								await reload();
+							}),
+					},
+					{
+						label: t("explorer.move"),
+						onSelect: () =>
+							void moveDialog(project, folder.name, folder.parent, { movingFolder: folder.uuid, topLevel: true }, async (target) => {
+								await Api.updateFolder(uuid, folder.uuid, { parent: target });
+								await reload();
+							}).catch(reportError),
+					},
+				]
+			: [],
+		folder.can_manage
+			? [
+					{
+						label: t("ui.delete"),
+						danger: true,
+						onSelect: () =>
+							void removal(t("explorer.delete_folder_title"), t("explorer.delete_folder_body", { name: folder.name }), () =>
+								Api.deleteFolder(uuid, folder.uuid)
+							),
+					},
+				]
+			: [],
+	];
+
+	const fileMenu = (file: ExplorerFile): MenuLink[][] => [
+		[
+			...(previewable(file) ? [{ label: t("explorer.preview"), onSelect: () => void preview(file) }] : []),
+			{ label: t("files.download"), onSelect: () => void downloadFile(project, file) },
+		],
+		file.can_manage
+			? [
+					{
+						label: t("explorer.share"),
+						onSelect: () =>
+							void shareDialog(
+								project,
+								{
+									...file,
+									name: file.file_name,
+									nested: file.folder !== null,
+									save: (access, members) => Api.updateExplorerFile(uuid, file.uuid, { access, members }),
+								},
+								() => void reload()
+							).catch(reportError),
+					},
+					{
+						label: t("explorer.rename"),
+						onSelect: () =>
+							nameDialog(t("explorer.rename"), t("explorer.name_label"), file.file_name, async (name) => {
+								await Api.updateExplorerFile(uuid, file.uuid, { name });
+								await reload();
+							}),
+					},
+					{
+						label: t("explorer.move"),
+						onSelect: () =>
+							void moveDialog(project, file.file_name, file.folder, { movingFolder: null, topLevel: file.created_by === username }, async (target) => {
+								await Api.updateExplorerFile(uuid, file.uuid, { folder: target });
+								await reload();
+							}).catch(reportError),
+					},
+				]
+			: [],
+		file.can_manage
+			? [
+					{
+						label: t("ui.delete"),
+						danger: true,
+						onSelect: () =>
+							void removal(t("explorer.delete_file_title"), t("explorer.delete_file_body", { name: file.file_name }), () => Api.removeFile(uuid, file.uuid)),
+					},
+				]
+			: [],
+	];
+
+	const withMenu = (row: HTMLTableRowElement, name: string, sections: () => MenuLink[][]): HTMLTableRowElement => {
+		const more = el("button", { class: "icon-button explorer-more", type: "button", title: t("explorer.actions", { name }) }, icon("more", 18));
+		more.setAttribute("aria-haspopup", "menu");
+		more.addEventListener("click", () => {
+			const box = more.getBoundingClientRect();
+			floatingMenu({ x: box.right - 220, y: box.bottom + 4 }, sections(), more);
+		});
+		row.append(el("td", { class: "actions" }, more));
+		row.addEventListener("contextmenu", (event) => {
+			event.preventDefault();
+			floatingMenu({ x: event.clientX, y: event.clientY }, sections(), more);
+		});
+		return row;
+	};
+
+	const folderRow = (folder: ExplorerFolder): HTMLElement =>
+		withMenu(
 			el(
-				"td",
+				"tr",
 				{},
 				el(
-					"a",
-					{ class: "explorer-name", href: folderHref(uuid, folder.uuid) },
-					icon("folder", 18, "explorer-icon explorer-icon-folder"),
-					el("span", { class: "explorer-label" }, folder.name)
-				)
+					"td",
+					{},
+					el(
+						"a",
+						{ class: "explorer-name", href: folderHref(uuid, folder.uuid) },
+						icon("folder", 18, "explorer-icon explorer-icon-folder"),
+						el("span", { class: "explorer-label" }, folder.name)
+					)
+				),
+				el("td", { class: "mono" }, ""),
+				el("td", {}, sharingPill(folder, folder.parent !== null)),
+				added(folder)
 			),
-			el("td", { class: "mono" }, ""),
-			el("td", {}, sharingPill(folder, folder.parent !== null)),
-			added(folder),
-			el(
-				"td",
-				{ class: "actions" },
-				el(
-					"div",
-					{ class: "line-actions explorer-actions" },
-					folder.can_manage
-						? action(
-								t("explorer.share"),
-								() =>
-									void shareDialog(
-										project,
-										{ ...folder, nested: folder.parent !== null, save: (access, members) => Api.updateFolder(uuid, folder.uuid, { access, members }) },
-										() => void reload()
-									).catch(reportError)
-							)
-						: null,
-					folder.can_manage
-						? action(t("explorer.rename"), () =>
-								nameDialog(t("explorer.rename"), t("explorer.folder_name"), folder.name, async (name) => {
-									await Api.updateFolder(uuid, folder.uuid, { name });
-									await reload();
-								})
-							)
-						: null,
-					folder.can_manage
-						? action(
-								t("explorer.move"),
-								() =>
-									void moveDialog(project, folder.name, folder.parent, { movingFolder: folder.uuid, topLevel: true }, async (target) => {
-										await Api.updateFolder(uuid, folder.uuid, { parent: target });
-										await reload();
-									}).catch(reportError)
-							)
-						: null,
-					folder.can_manage
-						? action(
-								t("ui.delete"),
-								async () => {
-									const confirmed = await confirmDialog({
-										title: t("explorer.delete_folder_title"),
-										body: t("explorer.delete_folder_body", { name: folder.name }),
-										confirmLabel: t("ui.delete"),
-										destructive: true,
-									});
-									if (!confirmed) return;
-									try {
-										await Api.deleteFolder(uuid, folder.uuid);
-										toast(t("explorer.deleted"), "success");
-										await reload();
-									} catch (error) {
-										reportError(error);
-									}
-								},
-								true
-							)
-						: null
-				)
-			)
+			folder.name,
+			() => folderMenu(folder)
 		);
 
-	const fileRow = (file: ExplorerFile, atTop: boolean): HTMLElement =>
-		el(
-			"tr",
-			{},
+	const fileRow = (file: ExplorerFile): HTMLElement =>
+		withMenu(
 			el(
-				"td",
+				"tr",
 				{},
 				el(
-					"button",
-					{ class: "link-button explorer-name", type: "button", title: t("files.download"), onClick: () => void downloadFile(project, file) },
-					icon("file", 18, "explorer-icon"),
-					el("span", { class: "explorer-label" }, file.file_name)
-				)
+					"td",
+					{},
+					el(
+						"button",
+						{
+							class: "link-button explorer-name",
+							type: "button",
+							title: previewable(file) ? t("explorer.preview") : t("files.download"),
+							onClick: () => void (previewable(file) ? preview(file) : downloadFile(project, file)),
+						},
+						icon(viewerKind(file) === "image" ? "image" : viewerKind(file) === "video" ? "play" : "file", 18, "explorer-icon"),
+						el("span", { class: "explorer-label" }, file.file_name)
+					)
+				),
+				el("td", { class: "mono" }, formatBytes(file.byte_size)),
+				el("td", {}, sharingPill(file, file.folder !== null)),
+				added(file)
 			),
-			el("td", { class: "mono" }, formatBytes(file.byte_size)),
-			el("td", {}, sharingPill(file, file.folder !== null)),
-			added(file),
-			el(
-				"td",
-				{ class: "actions" },
-				el(
-					"div",
-					{ class: "line-actions explorer-actions" },
-					file.can_manage
-						? action(
-								t("explorer.share"),
-								() =>
-									void shareDialog(
-										project,
-										{
-											...file,
-											name: file.file_name,
-											nested: file.folder !== null,
-											save: (access, members) => Api.updateExplorerFile(uuid, file.uuid, { access, members }),
-										},
-										() => void reload()
-									).catch(reportError)
-							)
-						: null,
-					file.can_manage
-						? action(t("explorer.rename"), () =>
-								nameDialog(t("explorer.rename"), t("explorer.name_label"), file.file_name, async (name) => {
-									await Api.updateExplorerFile(uuid, file.uuid, { name });
-									await reload();
-								})
-							)
-						: null,
-					file.can_manage
-						? action(
-								t("explorer.move"),
-								() =>
-									void moveDialog(project, file.file_name, folderId, { movingFolder: null, topLevel: file.created_by === username }, async (target) => {
-										await Api.updateExplorerFile(uuid, file.uuid, { folder: target });
-										await reload();
-									}).catch(reportError)
-							)
-						: null,
-					file.can_manage
-						? action(
-								t("ui.delete"),
-								async () => {
-									const confirmed = await confirmDialog({
-										title: t("explorer.delete_file_title"),
-										body: t("explorer.delete_file_body", { name: file.file_name }),
-										confirmLabel: t("ui.delete"),
-										destructive: true,
-									});
-									if (!confirmed) return;
-									try {
-										await Api.removeFile(uuid, file.uuid);
-										toast(t("explorer.deleted"), "success");
-										await reload();
-									} catch (error) {
-										reportError(error);
-									}
-								},
-								true
-							)
-						: null
-				)
-			)
+			file.file_name,
+			() => fileMenu(file)
 		);
 
 	const render = (state: Explorer) => {
@@ -526,8 +564,8 @@ export async function explorerView(uuid: string, location: ExplorerLocation): Pr
 			: [
 					...(atTop && !browsing ? [builtIn("shared", state.shared_people)] : []),
 					...(atTop && !browsing && state.everyone_people !== null ? [builtIn("all", state.everyone_people)] : []),
-					...state.folders.map((folder) => folderRow(folder, atTop)),
-					...state.files.map((file) => fileRow(file, atTop)),
+					...state.folders.map((folder) => folderRow(folder)),
+					...state.files.map((file) => fileRow(file)),
 				];
 		const usage =
 			state.limit === null

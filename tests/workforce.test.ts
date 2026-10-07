@@ -1649,6 +1649,30 @@ describe("ticket files", () => {
 		expect(downloaded.length).toBe(bytes.length);
 		expect(downloaded[0]).toBe(7);
 		expect(downloaded[downloaded.length - 1]).toBe(9);
+
+		const playback = await call("POST", `${base()}/files/${uuid}/link`, tokens.employee, { inline: true });
+		expect(playback.data.expires_in).toBe(3600);
+		const ranged = async (range: string) => {
+			const part = await Server.app.handle(new Request(`http://127.0.0.1${playback.data.path}`, { headers: { Range: range } }));
+			return { status: part.status, range: part.headers.get("Content-Range"), bytes: new Uint8Array(await part.arrayBuffer()), headers: part.headers };
+		};
+		const across = await ranged("bytes=15999998-16000004");
+		expect(across.status).toBe(206);
+		expect(across.range).toBe(`bytes 15999998-16000004/${bytes.length}`);
+		expect([...across.bytes]).toEqual([7, 7, 7, 7, 7, 7, 9]);
+		expect(across.headers.get("Content-Disposition")).toContain("inline;");
+		expect(across.headers.get("Accept-Ranges")).toBe("bytes");
+		const tail = await ranged("bytes=-2");
+		expect(tail.range).toBe(`bytes 16000003-16000004/${bytes.length}`);
+		expect([...tail.bytes]).toEqual([7, 9]);
+		const open = await ranged("bytes=16000000-");
+		expect(open.bytes.length).toBe(5);
+		expect((await ranged("bytes=99999999-")).status).toBe(416);
+		expect((await ranged("pages=1-2")).status).toBe(416);
+		const plain = await call("POST", `${base()}/files/${file}/link`, tokens.employee, { inline: true });
+		expect(plain.data.expires_in).toBe(300);
+		const attached = await Server.app.handle(new Request(`http://127.0.0.1${plain.data.path}`));
+		expect(attached.headers.get("Content-Disposition")).toContain("attachment;");
 		expect((await call("DELETE", `${base()}/files/${uuid}`, tokens.employee)).error).toBe(0);
 
 		const abandoned = await call("POST", `${base()}/tickets/${ticket}/files`, tokens.employee, { name: "half.mp4", type: "video/mp4", size: 1000 });

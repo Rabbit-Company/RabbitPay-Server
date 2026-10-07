@@ -26,7 +26,7 @@ import {
 	removeFile,
 	storePart,
 } from "../../files";
-import { DOWNLOAD_LINK_SECONDS, FILE_MB_BYTES, FILE_PART_BYTES } from "../../file-limits";
+import { DOWNLOAD_LINK_SECONDS, FILE_MB_BYTES, FILE_PART_BYTES, isPlayableVideo, PLAYBACK_LINK_SECONDS } from "../../file-limits";
 import { dropFromExplorer, fileView, memberFileUsage, pathNames, projectFolders, ticketLinked } from "../../file-explorer";
 import type { AppState, ProjectFileRow, ProjectMemberRow, ProjectRow, TicketRow } from "../../database/models";
 
@@ -257,19 +257,22 @@ Server.app.post(`${base}/files/:file/link`, Auth.required(), Permissions.require
 	const file = await requestedFile(ctx);
 	if (!file || file.status !== "ready" || !(await fileAccess(ctx, file)).view) return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
 	if (file.removed_at !== null) return Utils.fail(ctx, ErrorCode.FILE_REMOVED);
+	const inline = (await body(ctx))?.inline === true && isPlayableVideo(file);
+	const seconds = inline ? PLAYBACK_LINK_SECONDS : DOWNLOAD_LINK_SECONDS;
 	const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
-	await Cache.setString(downloadKey(token), JSON.stringify({ project: file.project, file: file.uuid }), DOWNLOAD_LINK_SECONDS, DOWNLOAD_LINK_SECONDS);
-	return Utils.ok(ctx, { path: `/api/v1/file-downloads/${token}`, expires_in: DOWNLOAD_LINK_SECONDS });
+	await Cache.setString(downloadKey(token), JSON.stringify({ project: file.project, file: file.uuid, inline, seconds }), seconds, seconds);
+	return Utils.ok(ctx, { path: `/api/v1/file-downloads/${token}`, expires_in: seconds });
 });
 
 Server.app.get("/api/v1/file-downloads/:token", async (ctx) => {
 	const stored = DOWNLOAD_TOKEN.test(ctx.params.token) ? await Cache.getString(downloadKey(ctx.params.token), DOWNLOAD_LINK_SECONDS) : null;
 	if (!stored) return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
-	const link = JSON.parse(stored) as { project: string; file: string };
+	const link = JSON.parse(stored) as { project: string; file: string; inline: boolean; seconds: number };
 	const file = await findFile(link.project, link.file);
 	if (!file || file.status !== "ready") return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
 	if (file.removed_at !== null) return Utils.fail(ctx, ErrorCode.FILE_REMOVED);
-	return fileResponse(file);
+	if (link.inline) await Cache.setString(downloadKey(ctx.params.token), stored, link.seconds, link.seconds);
+	return fileResponse(file, { range: ctx.req.headers.get("range"), inline: link.inline });
 });
 
 Server.app.delete(`${base}/files/:file`, Auth.required(), Permissions.require(Permission.PROJECT_VIEW), async (ctx) => {

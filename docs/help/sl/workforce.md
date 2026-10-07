@@ -55,7 +55,7 @@ Ure, zabeležene na zahtevku, se prikažejo v evidencah delovnega časa. Zaraču
 
 ### Zahtevku pripnite datoteke
 
-Odprite zahtevek in pritisnite **Pripni datoteke** ali posnetek zaslona prilepite kjerkoli na strani. Datoteka je lahko velika do 25 MB, razen če lastnik ali administrator to spremeni pod **Datoteke**, **Prostor in omejitve**. Slike do 10 MB imajo predogled, vse ostalo se prenese.
+Odprite zahtevek in pritisnite **Pripni datoteke** ali posnetek zaslona prilepite kjerkoli na strani. Datoteka je lahko velika do 25 MB, razen če lastnik ali administrator to spremeni pod **Datoteke**, **Prostor in omejitve**. Slike do 10 MB imajo predogled. S klikom na ime videoposnetka ali PDF-ja ga odprete na strani, vse ostalo se prenese.
 
 Slike PNG in BMP se shranijo kot WebP brez izgub, kadar so tako manjše. Ne spremeni se niti ena slikovna pika, le ime datoteke se konča z .webp. Fotografije in videoposnetki se shranijo nespremenjeni.
 
@@ -67,8 +67,10 @@ Pripete datoteke uporabljajo **Prostor za datoteke**, ki je ločen od prostora z
 
 **Datoteke** so skupen prostor za dokumente, slike in videoposnetke. Ustvarite mape, datoteke naložite z gumbom **Naloži datoteke**, jih spustite na stran ali prilepite posnetek zaslona.
 
+- S klikom na sliko, videoposnetek ali PDF ga odprete brez prenosa. Videoposnetki se predvajajo na strani in lahko skočite na katerokoli mesto. Druge datoteke se ob kliku prenesejo.
+- Vsaka datoteka in mapa ima na koncu vrstice meni z dejanji, ki se odpre tudi z desnim klikom: **Predogled**, **Prenesi**, **Deli**, **Preimenuj**, **Premakni** in **Izbriši**.
 - Svoje datoteke in mape vidite samo vi, dokler jih ne delite.
-- Za deljenje pritisnite **Deli** ob katerikoli mapi ali posamezni datoteki, na katerikoli ravni. Izberite **Vsi v projektu** ali **Izbrane osebe**.
+- Za deljenje izberite **Deli** v meniju katerekoli mape ali posamezne datoteke, na katerikoli ravni. Izberite **Vsi v projektu** ali **Izbrane osebe**.
 - Deljenje mape velja za vse v njej in kdor lahko mapo odpre, lahko vanjo tudi dodaja datoteke.
 - Kar drugi delijo z vami, je v mapi **Deljeno z mano**, razvrščeno po osebi, ki ji pripada. Vaše stvari ostanejo na vrhu Datotek.
 - Deljenje samo dodaja osebe. Če delite eno podmapo ali eno datoteko, izbrane osebe pod vašim imenom v mapi Deljeno z mano vidijo samo ta element, ne pa mape okoli njega. Kdor lahko odpre mapo okoli njega, lahko element še vedno odpre.

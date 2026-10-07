@@ -3505,6 +3505,7 @@ export const sl: UiDictionary = {
 	"files.empty": "Datoteka {name} je prazna.",
 	"files.too_large": "Datoteka {name} je večja od {size}.",
 	"files.download": "Prenesi",
+	"files.video_unplayable": "Tega videoposnetka brskalnik ne more predvajati. Za ogled ga prenesite.",
 	"files.remove": "Odstrani",
 	"files.remove_title": "Želite odstraniti to datoteko?",
 	"files.remove_body":
@@ -3558,6 +3559,9 @@ export const sl: UiDictionary = {
 	"explorer.share_inherit": "Brez dodatnega deljenja",
 	"explorer.access_members": "Izbrane osebe ({count})",
 	"explorer.rename": "Preimenuj",
+	"explorer.open": "Odpri",
+	"explorer.preview": "Predogled",
+	"explorer.actions": "Dejanja za {name}",
 	"explorer.move": "Premakni",
 	"explorer.share": "Deli",
 	"explorer.name_label": "Ime",

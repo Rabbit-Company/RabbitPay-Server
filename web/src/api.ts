@@ -3709,8 +3709,8 @@ export const Api = {
 		return requestBytes(`/projects/${uuid}/files/${file}`, total, onProgress);
 	},
 
-	fileLink(uuid: string, file: string) {
-		return request<{ path: string; expires_in: number }>("POST", `/projects/${uuid}/files/${file}/link`);
+	fileLink(uuid: string, file: string, inline = false) {
+		return request<{ path: string; expires_in: number }>("POST", `/projects/${uuid}/files/${file}/link`, { inline });
 	},
 
 	saveFileSettings(uuid: string, settings: { max_file_mb: number; max_member_file_mb: number | null }) {

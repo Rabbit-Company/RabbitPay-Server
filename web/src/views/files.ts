@@ -14,13 +14,21 @@ import { el, emptyState, field, input, saveFile, select, table } from "../dom";
 import { formatBytes, formatDateTime } from "../money";
 import { can, Permission } from "../access";
 import { t } from "../i18n";
-import { accountName, confirmDialog, reportError, toast } from "../ui";
+import { accountName, confirmDialog, modal, reportError, toast } from "../ui";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { openLightbox } from "../lightbox";
 import { loadProject, projectLayout } from "./project";
 import { losslessWebp } from "../image";
 import { startTransfer } from "../transfers";
-import { FILE_MB_BYTES, MAX_IN_PAGE_DOWNLOAD_BYTES, MAX_PREVIEW_BYTES, PREVIEWABLE_IMAGE_TYPES } from "../../../server/file-limits";
+import {
+	FILE_MB_BYTES,
+	MAX_IN_PAGE_DOWNLOAD_BYTES,
+	MAX_PDF_PREVIEW_BYTES,
+	MAX_PREVIEW_BYTES,
+	PDF_CONTENT_TYPE,
+	isPlayableVideo,
+	PREVIEWABLE_IMAGE_TYPES,
+} from "../../../server/file-limits";
 import type { DateFormat, TimeFormat } from "../../../server/formats";
 
 function when(project: Project, timestamp: number): string {
@@ -99,6 +107,67 @@ export async function downloadFile(project: Project, file: TicketFile) {
 		anchor.click();
 		anchor.remove();
 	} catch (error) {
+		reportError(error);
+	}
+}
+
+export type ViewerKind = "image" | "video" | "pdf";
+
+export function viewerKind(file: Pick<TicketFile, "content_type" | "byte_size" | "file_name">): ViewerKind | null {
+	if (PREVIEWABLE_IMAGE_TYPES.includes(file.content_type)) return file.byte_size <= MAX_PREVIEW_BYTES ? "image" : null;
+	if (isPlayableVideo(file)) return "video";
+	if (file.content_type === PDF_CONTENT_TYPE) return file.byte_size <= MAX_PDF_PREVIEW_BYTES ? "pdf" : null;
+	return null;
+}
+
+function viewerDialog(project: Project, file: TicketFile, content: HTMLElement, onClose: () => void) {
+	modal(
+		file.file_name,
+		el(
+			"div",
+			{ class: "stack" },
+			content,
+			el(
+				"div",
+				{ class: "form-actions" },
+				el("button", { class: "button ghost", type: "button", onClick: () => void downloadFile(project, file) }, t("files.download"))
+			)
+		),
+		onClose,
+		"dialog-viewer"
+	);
+}
+
+export async function openViewer(project: Project, file: TicketFile, kind: "video" | "pdf") {
+	if (kind === "video") {
+		try {
+			const link = await Api.fileLink(project.uuid, file.uuid, true);
+			const video = el("video", { class: "file-viewer-video", src: link.path });
+			video.controls = true;
+			video.autoplay = true;
+			video.playsInline = true;
+			const holder = el("div", {}, video);
+			video.addEventListener("error", () => holder.replaceChildren(el("p", { class: "warn" }, t("files.video_unplayable"))));
+			viewerDialog(project, file, holder, () => {
+				video.pause();
+				video.removeAttribute("src");
+				video.load();
+			});
+		} catch (error) {
+			reportError(error);
+		}
+		return;
+	}
+
+	const transfer = startTransfer("download", file.file_name, file.byte_size);
+	try {
+		const bytes = await Api.fileBytes(project.uuid, file.uuid, file.byte_size, transfer.update);
+		transfer.finish();
+		const url = URL.createObjectURL(new Blob([bytes], { type: PDF_CONTENT_TYPE }));
+		const frame = el("iframe", { class: "file-viewer-frame", src: url, title: file.file_name });
+		viewerDialog(project, file, frame, () => URL.revokeObjectURL(url));
+	} catch (error) {
+		transfer.fail();
 		reportError(error);
 	}
 }
@@ -191,6 +260,8 @@ export function ticketFilesCard(
 		return button;
 	};
 
+	const watchable = (file: TicketFile): boolean => viewerKind(file) === "video" || viewerKind(file) === "pdf";
+
 	const row = (file: TicketFile): HTMLElement => {
 		if (file.removed) {
 			return el(
@@ -209,7 +280,16 @@ export function ticketFilesCard(
 				{ class: "file-info" },
 				el(
 					"button",
-					{ class: "link-button file-name", type: "button", title: t("files.download"), onClick: () => void downloadFile(project, file) },
+					{
+						class: "link-button file-name",
+						type: "button",
+						title: watchable(file) ? t("explorer.preview") : t("files.download"),
+						onClick: () => {
+							const kind = viewerKind(file);
+							if (kind === "video" || kind === "pdf") void openViewer(project, file, kind);
+							else void downloadFile(project, file);
+						},
+					},
 					file.file_name
 				),
 				el("span", { class: "muted" }, [formatBytes(file.byte_size), uploaderOf(file), when(project, file.created)].filter(Boolean).join(" | "))

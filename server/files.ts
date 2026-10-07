@@ -1,7 +1,16 @@
 import Database from "./database/database";
 import { documentStorage } from "./document-storage";
 import { Settings } from "./settings";
-import { DEFAULT_MAX_FILE_BYTES, FILE_MB_BYTES, MAX_FILE_NAME_LENGTH, partCount, partLength, UPLOAD_EXPIRY_MS } from "./file-limits";
+import {
+	DEFAULT_MAX_FILE_BYTES,
+	FILE_MB_BYTES,
+	FILE_PART_BYTES,
+	MAX_FILE_NAME_LENGTH,
+	partCount,
+	partLength,
+	isPlayableVideo,
+	UPLOAD_EXPIRY_MS,
+} from "./file-limits";
 import type { ProjectFileRow, ProjectRow } from "./database/models";
 
 export const FALLBACK_CONTENT_TYPE = "application/octet-stream";
@@ -88,26 +97,52 @@ export async function storePart(file: ProjectFileRow, index: number, bytes: Uint
 	return (await findFile(file.project, file.uuid))!;
 }
 
-export function fileStream(file: ProjectFileRow): ReadableStream<Uint8Array> {
-	let index = 0;
+export function fileStream(file: ProjectFileRow, start = 0, end = Number(file.byte_size) - 1): ReadableStream<Uint8Array> {
+	let position = start;
 	return new ReadableStream<Uint8Array>({
 		async pull(controller) {
-			if (index >= Number(file.parts)) return controller.close();
-			controller.enqueue(await documentStorage().get(partKey(file, index++)));
+			if (position > end) return controller.close();
+			const index = Math.floor(position / FILE_PART_BYTES);
+			const part = await documentStorage().get(partKey(file, index));
+			const from = position - index * FILE_PART_BYTES;
+			const to = Math.min(part.length, end - index * FILE_PART_BYTES + 1);
+			if (to <= from) return controller.close();
+			controller.enqueue(from === 0 && to === part.length ? part : part.subarray(from, to));
+			position += to - from;
 		},
 	});
 }
 
-export function fileResponse(file: ProjectFileRow): Response {
+export function readByteRange(header: string | null | undefined, size: number): { start: number; end: number } | null | undefined {
+	if (!header) return undefined;
+	const match = header.trim().match(/^bytes=(\d*)-(\d*)$/);
+	if (!match || (match[1] === "" && match[2] === "")) return null;
+	if (match[1] === "") {
+		const length = Number(match[2]);
+		return length > 0 ? { start: Math.max(size - length, 0), end: size - 1 } : null;
+	}
+	const start = Number(match[1]);
+	const end = match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
+	return Number.isSafeInteger(start) && start < size && start <= end ? { start, end } : null;
+}
+
+export function fileResponse(file: ProjectFileRow, options: { range?: string | null; inline?: boolean } = {}): Response {
+	const size = Number(file.byte_size);
 	const fallback = file.file_name.replace(/[^A-Za-z0-9._-]/g, "_") || "file";
-	return new Response(fileStream(file), {
-		headers: {
-			"Content-Type": file.content_type,
-			"Content-Length": String(file.byte_size),
-			"Content-Disposition": `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(file.file_name)}`,
-			"Content-Security-Policy": "sandbox; default-src 'none'",
-			"X-Content-Type-Options": "nosniff",
-		},
+	const inline = options.inline === true && isPlayableVideo(file);
+	const headers: Record<string, string> = {
+		"Content-Type": file.content_type,
+		"Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(file.file_name)}`,
+		"Content-Security-Policy": "sandbox; default-src 'none'",
+		"X-Content-Type-Options": "nosniff",
+		"Accept-Ranges": "bytes",
+	};
+	const range = readByteRange(options.range, size);
+	if (range === null) return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${size}` } });
+	if (range === undefined) return new Response(fileStream(file), { headers: { ...headers, "Content-Length": String(size) } });
+	return new Response(fileStream(file, range.start, range.end), {
+		status: 206,
+		headers: { ...headers, "Content-Length": String(range.end - range.start + 1), "Content-Range": `bytes ${range.start}-${range.end}/${size}` },
 	});
 }
 
