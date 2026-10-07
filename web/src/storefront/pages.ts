@@ -525,6 +525,7 @@ const AMOUNT_LABELS: Partial<Record<LicenseProduct["type"], UiKey>> = {
 	transactions: "shop.license_amount_payments",
 	emails: "shop.license_amount_emails",
 	storage: "shop.license_amount_storage",
+	files: "shop.license_amount_storage",
 	employees: "shop.license_amount_employees",
 };
 
