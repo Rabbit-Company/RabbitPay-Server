@@ -15,7 +15,7 @@ import { loginView } from "./views/login";
 import { customerCreditNoteView, customerInvoiceView, customerInvoicesView, customerLoginView, customerRoute } from "./views/customer-portal";
 import { projectsView } from "./views/projects";
 import { landingEnabled, landingPath, landingView } from "./views/landing";
-import { checkPendingTerms, legalDocumentView, legalNoticeView } from "./views/legal";
+import { checkPendingTerms, legalDocumentView, legalNoticeView, promptPendingTerms } from "./views/legal";
 import { helpArticleView, helpIndexView } from "./views/help";
 import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS, STORE_PERMISSIONS } from "./views/project";
 import { canAny, Permission, sellsOnly, terminalPath, timesheetPath, worksOnly } from "./access";
@@ -552,6 +552,7 @@ configure({
 	afterRender: () => {
 		mountShell();
 		handleShortcutRender();
+		promptPendingTerms();
 	},
 });
 setErrorView(failureView);

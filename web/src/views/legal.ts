@@ -185,9 +185,18 @@ function upcomingBanner(upcoming: NonNullable<Account["upcoming_terms"]>): void 
 	document.body.appendChild(banner);
 }
 
+const LEGAL_PATHS = ["/terms", "/privacy", "/legal"];
+let pendingTerms: number | null = null;
+
+export function promptPendingTerms(): void {
+	if (pendingTerms === null || LEGAL_PATHS.includes(window.location.pathname)) return;
+	termsPrompt(pendingTerms);
+}
+
 export async function checkPendingTerms(): Promise<boolean> {
 	const account = await refreshAccount();
-	if (account?.pending_terms) termsPrompt(account.pending_terms);
+	pendingTerms = account?.pending_terms ?? null;
+	if (pendingTerms !== null) promptPendingTerms();
 	else if (account?.upcoming_terms) upcomingBanner(account.upcoming_terms);
 	return account !== null;
 }
@@ -224,6 +233,7 @@ export function termsPrompt(version: number): void {
 			cached = null;
 			const info = await legalInfo();
 			await Api.acceptTerms(info.required_versions);
+			pendingTerms = null;
 			overlay.remove();
 			document.querySelector(".terms-banner")?.remove();
 		} catch (error) {
@@ -232,6 +242,7 @@ export function termsPrompt(version: number): void {
 		}
 	});
 	leave.addEventListener("click", () => {
+		pendingTerms = null;
 		overlay.remove();
 		void signOut();
 	});
