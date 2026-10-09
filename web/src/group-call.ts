@@ -4,7 +4,8 @@ import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
 import { reportError, toast } from "./ui";
-import { canRecord, startRecorder, type CallRecorder } from "./call-recorder";
+import { canRecord, RECORDING_SIZES, recordingSize, startRecorder, type CallRecorder, type RecordingSize } from "./call-recorder";
+import { select } from "./dom";
 import { callControl } from "./call-controls";
 import { icon } from "./storefront/icons";
 
@@ -35,6 +36,7 @@ interface GroupSession {
 	recordTarget: { project: string; conversation: string } | null;
 	recorder: CallRecorder | null;
 	recorderStarting: boolean;
+	recordSize: RecordingSize;
 	recordingBy: string | null;
 	room: Room | null;
 	stage: "connecting" | "connected" | "reconnecting";
@@ -132,6 +134,38 @@ function addLine(current: GroupSession, from: string, text: string) {
 	if (current.lines.length > MAX_CHAT_LINES) current.lines.shift();
 	if (!current.chatOpen || current.theater) current.chatUnread = true;
 	render();
+}
+
+function recordQualityPick(current: GroupSession): HTMLElement {
+	const pick = select(
+		RECORDING_SIZES.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
+		current.recordSize
+	);
+	pick.setAttribute("aria-label", t("calls.record_quality"));
+	pick.disabled = current.recorderStarting || current.recordingBy !== null;
+	pick.addEventListener("change", () => {
+		current.recordSize = pick.value as RecordingSize;
+	});
+	return el(
+		"label",
+		{ class: "call-control call-control-pick", title: `${t("calls.record_quality")} | ${t(`files.recording_size_${current.recordSize}`)}` },
+		icon("down", 14, "call-control-icon"),
+		pick
+	);
+}
+
+function recordControl(current: GroupSession): HTMLElement {
+	const record = callControl(
+		current.recorder ? "record_stop" : "record",
+		current.recorder ? t("calls.record_stop") : t("calls.record"),
+		() => void toggleRecording(current),
+		{
+			tone: current.recorder ? "off" : "neutral",
+			pressed: current.recorder !== null,
+			disabled: current.recorderStarting || (current.recorder === null && current.recordingBy !== null),
+		}
+	);
+	return current.recorder ? record : el("div", { class: "call-control-split" }, record, recordQualityPick(current));
 }
 
 function markSpeakers() {
@@ -303,18 +337,7 @@ function render() {
 					pressed: local.isScreenShareEnabled,
 					disabled: (sharer !== undefined && sharer !== local) || !("getDisplayMedia" in navigator.mediaDevices),
 				}),
-				current.recordTarget && canRecord()
-					? callControl(
-							current.recorder ? "record_stop" : "record",
-							current.recorder ? t("calls.record_stop") : t("calls.record"),
-							() => void toggleRecording(current),
-							{
-								tone: current.recorder ? "off" : "neutral",
-								pressed: current.recorder !== null,
-								disabled: current.recorderStarting || (current.recorder === null && current.recordingBy !== null),
-							}
-						)
-					: null,
+				current.recordTarget && canRecord() ? recordControl(current) : null,
 				callControl(
 					"message",
 					current.chatUnread ? t("calls.chat_new") : t("nav.chat"),
@@ -416,7 +439,13 @@ async function toggleRecording(current: GroupSession) {
 	current.recorderStarting = true;
 	queueRender();
 	try {
-		const recorder = await startRecorder(room, livekit, { ...current.recordTarget, title: current.title }, () => void stopRecording(current));
+		const recorder = await startRecorder(
+			room,
+			livekit,
+			{ ...current.recordTarget, title: current.title },
+			current.recordSize,
+			() => void stopRecording(current)
+		);
 		if (session !== current || current.room !== room) {
 			void recorder.stop();
 			return;
@@ -479,6 +508,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		recordTarget: options.recordTarget ?? null,
 		recorder: null,
 		recorderStarting: false,
+		recordSize: recordingSize(),
 		recordingBy: null,
 		room: null,
 		stage: "connecting",

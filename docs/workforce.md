@@ -152,6 +152,18 @@ the person recording closes, the parts already uploaded are kept and the
 recording appears in the conversation a few minutes later, without the last
 minute or two. Calls between two people cannot be recorded.
 
+Each person chooses the quality of the recordings they make under Files, My
+chat attachments, because a recording counts toward their own storage: High
+(1080p, 30 frames, 3000 kbps, about 1.4 GB per hour), Medium (1080p, 15
+frames, 2000 kbps), Low (720p, 10 frames, 1200 kbps) or Custom, where they
+set the resolution, frame rate and video bitrate themselves. The choice is
+kept in their browser, and the arrow next to the record button in a call
+overrides it for that call. Under Admin, Settings, Calls the administrator sets
+the highest values anyone can use: the picture height (1080 by default, up to
+2160 for 4K), the frame rate (60) and the video bitrate (5000 kbps), plus the
+audio bitrate (64 kbps) used by every recording. Presets above a limit are
+lowered to it.
+
 The server only passes the connection details between the two browsers. Under
 Admin, Settings, Calls the administrator sets the STUN servers that let
 browsers find each other and, optionally, TURN servers that relay a call when

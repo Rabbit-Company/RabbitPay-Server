@@ -527,6 +527,15 @@ Server.app.post("/api/v1/public/meetings/:token/leave", guestLimit, async (ctx) 
 const recordingPart = bodyLimit<AppState>({ maxSize: FILE_PART_BYTES, message: "The recording part is too large." });
 const RECORDING_TYPES = ["video/webm", "video/mp4"];
 
+function recordingLimits() {
+	return {
+		height: Settings.calls.recording_max_height,
+		frames_per_second: Settings.calls.recording_max_frames_per_second,
+		video_kbps: Settings.calls.recording_max_video_kbps,
+		audio_kbps: Settings.calls.recording_audio_kbps,
+	};
+}
+
 function recordingStamp(timezone: string): string {
 	const format = (zone: string) => new Intl.DateTimeFormat("sv-SE", { timeZone: zone, dateStyle: "short", timeStyle: "short" }).format(new Date());
 	try {
@@ -564,7 +573,7 @@ Server.app.post(`${base}/conversations/:conversation/recordings`, ...chat, async
 	const file = await beginOpenUpload(project.uuid, name, type, Auth.account(ctx).username);
 	await Database`INSERT INTO chat_files(file, conversation, recording, created) VALUES(${file.uuid}, ${found.conversation.uuid}, 1, ${Date.now()})`;
 	await audit(ctx, "chat.recording_started", found.conversation.uuid, { file: file.uuid });
-	return Utils.ok(ctx, { ...presentFile(file), part_bytes: FILE_PART_BYTES, max_bytes: fileSizeCeiling() }, 201);
+	return Utils.ok(ctx, { ...presentFile(file), part_bytes: FILE_PART_BYTES, max_bytes: fileSizeCeiling(), limits: recordingLimits() }, 201);
 });
 
 Server.app.put(`${base}/recordings/:file/parts/:index`, recordingPart, ...chat, async (ctx) => {
@@ -632,6 +641,7 @@ Server.app.get(`${base}/attachments`, ...chat, async (ctx) => {
 		total_bytes: Number(totals.bytes),
 		limit,
 		offset,
+		recording_limits: recordingLimits(),
 	});
 });
 

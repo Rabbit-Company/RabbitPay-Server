@@ -1,5 +1,6 @@
-import { Api, type ChatAttachment } from "../api";
-import { el, emptyState, select, table } from "../dom";
+import { Api, type ChatAttachment, type RecordingQuality } from "../api";
+import { el, emptyState, field, input, select, table } from "../dom";
+import { chooseCustomRecording, chooseRecordingSize, qualityOf, RECORDING_FLOOR, RECORDING_SIZES, recordingSize, type RecordingSize } from "../call-recorder";
 import { formatBytes, formatDateTime } from "../money";
 import { t } from "../i18n";
 import { confirmDialog, reportError, toast } from "../ui";
@@ -47,6 +48,75 @@ export function bulkRemoval(uuid: string, everyone: boolean, onRemoved: () => vo
 		}
 	});
 	return el("div", { class: "toolbar chat-attachment-removal" }, el("span", {}, t("files.chat_remove_older")), age, remove);
+}
+
+const BYTES_PER_HOUR_PER_KBPS = 450_000;
+const RECORDING_HEIGHTS = [360, 480, 720, 1080, 1440, 2160];
+
+function recordingSizeChoice(limits: RecordingQuality): HTMLElement {
+	const detail = (quality: RecordingQuality) =>
+		t("files.recording_size_detail", {
+			height: quality.height,
+			frames: quality.frames_per_second,
+			size: formatBytes((quality.video_kbps + quality.audio_kbps) * BYTES_PER_HOUR_PER_KBPS),
+		});
+	const size = select(
+		RECORDING_SIZES.map((option) => ({
+			value: option,
+			label: option === "custom" ? t("files.recording_size_custom") : `${t(`files.recording_size_${option}`)} | ${detail(qualityOf(option, limits))}`,
+		})),
+		recordingSize()
+	);
+	const chosen = qualityOf("custom", limits);
+	const heights = [...new Set([...RECORDING_HEIGHTS.filter((height) => height < limits.height), limits.height, chosen.height])].sort((a, b) => a - b);
+	const height = select(
+		heights.map((value) => ({ value: String(value), label: `${value}p` })),
+		String(chosen.height)
+	);
+	const frames = input("number", {
+		min: String(RECORDING_FLOOR.frames_per_second),
+		max: String(limits.frames_per_second),
+		step: "1",
+		value: String(chosen.frames_per_second),
+	});
+	const bitrate = input("number", {
+		min: String(RECORDING_FLOOR.video_kbps),
+		max: String(limits.video_kbps),
+		step: "100",
+		value: String(chosen.video_kbps),
+	});
+	const estimate = el("p", { class: "muted" });
+	const custom = el(
+		"div",
+		{ class: "chat-recording-custom" },
+		field(t("files.recording_resolution"), height),
+		field(t("files.recording_frames"), frames, t("files.recording_up_to", { limit: limits.frames_per_second })),
+		field(t("files.recording_bitrate"), bitrate, t("files.recording_up_to", { limit: limits.video_kbps })),
+		estimate
+	);
+	const show = () => {
+		custom.hidden = size.value !== "custom";
+		estimate.textContent = detail(qualityOf("custom", limits));
+	};
+	const keep = () => {
+		const wanted = { height: Number(height.value), frames_per_second: Number(frames.value), video_kbps: Number(bitrate.value) };
+		if (Object.values(wanted).every((value) => Number.isFinite(value) && value > 0)) chooseCustomRecording(wanted);
+		show();
+	};
+	size.addEventListener("change", () => {
+		chooseRecordingSize(size.value as RecordingSize);
+		show();
+	});
+	for (const control of [height, frames, bitrate]) control.addEventListener("input", keep);
+	for (const control of [frames, bitrate]) {
+		control.addEventListener("change", () => {
+			const kept = qualityOf("custom", limits);
+			frames.value = String(kept.frames_per_second);
+			bitrate.value = String(kept.video_kbps);
+		});
+	}
+	show();
+	return el("div", { class: "chat-recording-size" }, field(t("files.recording_size"), size, t("files.recording_size_hint")), custom);
 }
 
 export async function chatAttachmentsView(uuid: string): Promise<HTMLElement> {
@@ -97,9 +167,11 @@ export async function chatAttachmentsView(uuid: string): Promise<HTMLElement> {
 		);
 
 	const controls = pagination(() => load());
+	const recording = el("div", {});
 	const load = async (): Promise<void> => {
 		const result = await Api.chatAttachments(uuid, { limit: PAGE_SIZE, offset: controls.state.offset });
 		if (controls.update(result.total)) return load();
+		if (!recording.hasChildNodes()) recording.appendChild(recordingSizeChoice(result.recording_limits));
 		summary.textContent = t("files.chat_summary", { count: result.total, size: formatBytes(result.total_bytes) });
 		body.replaceChildren(
 			result.files.length
@@ -120,6 +192,7 @@ export async function chatAttachmentsView(uuid: string): Promise<HTMLElement> {
 				el("div", {}, el("a", { class: "back-link", href: `/projects/${uuid}/files` }, t("files.chat_back")), el("h2", {}, t("files.chat_title")))
 			),
 			el("p", { class: "muted" }, t("files.chat_hint")),
+			recording,
 			summary,
 			bulkRemoval(uuid, false, () => {
 				controls.reset();

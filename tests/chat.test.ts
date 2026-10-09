@@ -622,6 +622,7 @@ describe("recordings", () => {
 		const begun = await call("POST", recordings(), tokens.anna, { type: "video/webm;codecs=vp8,opus" });
 		expect(begun.status).toBe(201);
 		expect(begun.data).toMatchObject({ content_type: "video/webm", byte_size: 0, ready: false, part_bytes: FILE_PART_BYTES });
+		expect(begun.data.limits).toEqual({ height: 1080, frames_per_second: 60, video_kbps: 5000, audio_kbps: 64 });
 		expect(begun.data.file_name).toMatch(/^Board \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.webm$/);
 
 		const full = new Uint8Array(FILE_PART_BYTES).fill(7);

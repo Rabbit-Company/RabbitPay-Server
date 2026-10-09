@@ -877,6 +877,13 @@ export interface ChatMessage {
 	call: { outcome: ChatCallOutcome; seconds: number; video: boolean } | null;
 }
 
+export interface RecordingQuality {
+	height: number;
+	frames_per_second: number;
+	video_kbps: number;
+	audio_kbps: number;
+}
+
 export interface ChatAttachment extends TicketFile {
 	conversation: string;
 	conversation_name: string;
@@ -3939,7 +3946,7 @@ export const Api = {
 	},
 
 	chatAttachments(uuid: string, options: { limit: number; offset: number }) {
-		return request<{ files: ChatAttachment[]; total: number; total_bytes: number; limit: number; offset: number }>(
+		return request<{ files: ChatAttachment[]; total: number; total_bytes: number; limit: number; offset: number; recording_limits: RecordingQuality }>(
 			"GET",
 			`/projects/${uuid}/chat/attachments?limit=${options.limit}&offset=${options.offset}`
 		);
@@ -3950,9 +3957,11 @@ export const Api = {
 	},
 
 	beginRecording(uuid: string, conversation: string, type: string) {
-		return request<{ uuid: string; part_bytes: number; max_bytes: number }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/recordings`, {
-			type,
-		});
+		return request<{ uuid: string; part_bytes: number; max_bytes: number; limits: RecordingQuality }>(
+			"POST",
+			`/projects/${uuid}/chat/conversations/${conversation}/recordings`,
+			{ type }
+		);
 	},
 
 	async uploadRecordingPart(uuid: string, file: string, index: number, part: Blob) {

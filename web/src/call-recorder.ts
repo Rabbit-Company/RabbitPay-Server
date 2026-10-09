@@ -1,14 +1,65 @@
 import type { Participant, Room, Track } from "livekit-client";
-import { Api } from "./api";
+import { Api, type RecordingQuality } from "./api";
 import { reserveDuration } from "./webm-duration";
 
-const WIDTH = 1280;
-const HEIGHT = 720;
-const FRAMES_PER_SECOND = 10;
 const SLICE_MS = 3000;
-const VIDEO_BITS = 1_200_000;
-const AUDIO_BITS = 64_000;
+const ASPECT = 16 / 9;
+const TITLE_HEIGHT = 720;
+const SIZE_KEY = "rabbitpay.recording_size";
+const CUSTOM_KEY = "rabbitpay.recording_custom";
 const PREFERRED_TYPES = ["video/webm;codecs=vp8,opus", "video/webm"];
+
+export type RecordingSize = "high" | "medium" | "small" | "custom";
+export type RecordingPicture = Omit<RecordingQuality, "audio_kbps">;
+export const RECORDING_SIZES: RecordingSize[] = ["high", "medium", "small", "custom"];
+export const RECORDING_FLOOR: RecordingPicture = { height: 360, frames_per_second: 5, video_kbps: 300 };
+
+const PRESETS: Record<Exclude<RecordingSize, "custom">, RecordingPicture> = {
+	high: { height: 1080, frames_per_second: 30, video_kbps: 3000 },
+	medium: { height: 1080, frames_per_second: 15, video_kbps: 2000 },
+	small: { height: 720, frames_per_second: 10, video_kbps: 1200 },
+};
+
+export function recordingSize(): RecordingSize {
+	try {
+		const stored = localStorage.getItem(SIZE_KEY) as RecordingSize | null;
+		return stored !== null && RECORDING_SIZES.includes(stored) ? stored : "high";
+	} catch {
+		return "high";
+	}
+}
+
+export function chooseRecordingSize(size: RecordingSize) {
+	try {
+		localStorage.setItem(SIZE_KEY, size);
+	} catch {
+		void 0;
+	}
+}
+
+export function customRecording(): RecordingPicture {
+	try {
+		const stored = JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? "null") as Partial<RecordingPicture> | null;
+		const kept = (key: keyof RecordingPicture) => (typeof stored?.[key] === "number" && Number.isFinite(stored[key]) ? stored[key] : PRESETS.high[key]);
+		return { height: kept("height"), frames_per_second: kept("frames_per_second"), video_kbps: kept("video_kbps") };
+	} catch {
+		return PRESETS.high;
+	}
+}
+
+export function chooseCustomRecording(picture: RecordingPicture) {
+	try {
+		localStorage.setItem(CUSTOM_KEY, JSON.stringify(picture));
+	} catch {
+		void 0;
+	}
+}
+
+export function qualityOf(size: RecordingSize, limits: RecordingQuality): RecordingQuality {
+	const wanted = size === "custom" ? customRecording() : PRESETS[size];
+	const within = (key: keyof RecordingPicture) => Math.max(RECORDING_FLOOR[key], Math.min(limits[key], Math.round(wanted[key])));
+	return { height: within("height"), frames_per_second: within("frames_per_second"), video_kbps: within("video_kbps"), audio_kbps: limits.audio_kbps };
+}
 
 type LiveKit = typeof import("livekit-client");
 
@@ -34,17 +85,22 @@ export async function startRecorder(
 	room: Room,
 	kit: LiveKit,
 	target: { project: string; conversation: string; title: string },
+	size: RecordingSize,
 	onFailure: () => void
 ): Promise<CallRecorder> {
 	const type = PREFERRED_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate))!;
 	const begun = await Api.beginRecording(target.project, target.conversation, type);
+	const quality = qualityOf(size, begun.limits);
+	const frameHeight = quality.height;
+	const frameWidth = Math.round((frameHeight * ASPECT) / 2) * 2;
+	const titleScale = frameHeight / TITLE_HEIGHT;
 
 	const audio = new AudioContext();
 	const destination = audio.createMediaStreamDestination();
 	const sources = new Map<string, MediaStreamAudioSourceNode>();
 	const canvas = document.createElement("canvas");
-	canvas.width = WIDTH;
-	canvas.height = HEIGHT;
+	canvas.width = frameWidth;
+	canvas.height = frameHeight;
 	const pen = canvas.getContext("2d")!;
 	const screen = document.createElement("video");
 	screen.muted = true;
@@ -84,30 +140,34 @@ export async function startRecorder(
 			}
 		}
 		pen.fillStyle = "#101215";
-		pen.fillRect(0, 0, WIDTH, HEIGHT);
+		pen.fillRect(0, 0, frameWidth, frameHeight);
 		if (track && screen.videoWidth > 0) {
-			const scale = Math.min(WIDTH / screen.videoWidth, HEIGHT / screen.videoHeight);
+			const scale = Math.min(frameWidth / screen.videoWidth, frameHeight / screen.videoHeight);
 			const width = screen.videoWidth * scale;
 			const height = screen.videoHeight * scale;
-			pen.drawImage(screen, (WIDTH - width) / 2, (HEIGHT - height) / 2, width, height);
+			pen.drawImage(screen, (frameWidth - width) / 2, (frameHeight - height) / 2, width, height);
 			return;
 		}
 		pen.fillStyle = "#e8eaed";
 		pen.textAlign = "center";
-		pen.font = "600 44px sans-serif";
-		pen.fillText(target.title, WIDTH / 2, HEIGHT / 2 - 30, WIDTH - 120);
-		pen.font = "26px sans-serif";
+		pen.font = `600 ${44 * titleScale}px sans-serif`;
+		pen.fillText(target.title, frameWidth / 2, frameHeight / 2 - 30 * titleScale, frameWidth - 120 * titleScale);
+		pen.font = `${26 * titleScale}px sans-serif`;
 		pen.fillStyle = "#9aa1ac";
 		const names = [room.localParticipant, ...room.remoteParticipants.values()].map((participant) => participant.name || participant.identity);
-		pen.fillText(names.join(", "), WIDTH / 2, HEIGHT / 2 + 30, WIDTH - 120);
-		pen.fillText(new Date().toLocaleString("sv-SE"), WIDTH / 2, HEIGHT / 2 + 80);
+		pen.fillText(names.join(", "), frameWidth / 2, frameHeight / 2 + 30 * titleScale, frameWidth - 120 * titleScale);
+		pen.fillText(new Date().toLocaleString("sv-SE"), frameWidth / 2, frameHeight / 2 + 80 * titleScale);
 	}
 
 	sync();
 	draw();
-	const drawTimer = setInterval(draw, 1000 / FRAMES_PER_SECOND);
-	const stream = new MediaStream([...canvas.captureStream(FRAMES_PER_SECOND).getVideoTracks(), ...destination.stream.getAudioTracks()]);
-	const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: VIDEO_BITS, audioBitsPerSecond: AUDIO_BITS });
+	const drawTimer = setInterval(draw, 1000 / quality.frames_per_second);
+	const stream = new MediaStream([...canvas.captureStream(quality.frames_per_second).getVideoTracks(), ...destination.stream.getAudioTracks()]);
+	const recorder = new MediaRecorder(stream, {
+		mimeType: type,
+		videoBitsPerSecond: quality.video_kbps * 1000,
+		audioBitsPerSecond: quality.audio_kbps * 1000,
+	});
 
 	let pending: Blob[] = [];
 	let pendingBytes = 0;

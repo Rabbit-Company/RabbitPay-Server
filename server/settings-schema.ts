@@ -129,6 +129,10 @@ export interface ServerSettings {
 		livekit_api_key: string;
 		livekit_api_secret: string;
 		max_group_people: number;
+		recording_max_height: number;
+		recording_max_frames_per_second: number;
+		recording_max_video_kbps: number;
+		recording_audio_kbps: number;
 	};
 	reports: {
 		cooldown_minutes: number;
@@ -270,6 +274,10 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		livekit_api_key: "",
 		livekit_api_secret: "",
 		max_group_people: 50,
+		recording_max_height: 1080,
+		recording_max_frames_per_second: 60,
+		recording_max_video_kbps: 5000,
+		recording_audio_kbps: 64,
 	},
 	reports: { cooldown_minutes: 10 },
 	email: {
@@ -598,6 +606,24 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{ key: "calls.livekit_api_key", label: "LiveKit API key", hint: "The same key and secret must be configured on every media server", kind: "text" },
 			{ key: "calls.livekit_api_secret", label: "LiveKit API secret", kind: "secret" },
 			{ key: "calls.max_group_people", label: "Largest group call", hint: "People in one call", kind: "number", min: 2, max: 500 },
+			{
+				key: "calls.recording_max_height",
+				label: "Highest recording resolution",
+				hint: "Picture height in pixels at 16:9, such as 720, 1080, 1440 or 2160 for 4K. Each person picks the quality of their own recordings up to these limits. Recordings are encoded in the browser of the person recording, so high values need a fast computer.",
+				kind: "number",
+				min: 360,
+				max: 2160,
+			},
+			{ key: "calls.recording_max_frames_per_second", label: "Highest recording frame rate", hint: "Frames per second", kind: "number", min: 5, max: 60 },
+			{
+				key: "calls.recording_max_video_kbps",
+				label: "Highest recording video bitrate",
+				hint: "Kilobits per second. 5000 is about 2.3 GB per hour and 50000 (50 Mbps) about 22 GB per hour, which counts toward the storage of the person recording.",
+				kind: "number",
+				min: 300,
+				max: 100000,
+			},
+			{ key: "calls.recording_audio_kbps", label: "Recording audio bitrate", hint: "Kilobits per second", kind: "number", min: 24, max: 320 },
 		],
 	},
 	{
