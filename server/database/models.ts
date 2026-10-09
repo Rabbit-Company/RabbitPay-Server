@@ -1409,3 +1409,61 @@ export interface FixedAssetRow {
 }
 
 export type Bookkeeping = "company" | "sole_double" | "sole_simplified" | "sole_flat_rate";
+
+export type ConversationKind = "direct" | "group";
+
+export interface ChatConversationRow {
+	uuid: string;
+	project: string;
+	kind: ConversationKind;
+	name: string | null;
+	direct_key: string | null;
+	last_number: number;
+	last_message_at: number | null;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface ChatParticipantRow {
+	conversation: string;
+	account: string;
+	admin: number;
+	read_number: number;
+	joined: number;
+}
+
+export interface ChatMessageRow {
+	uuid: string;
+	conversation: string;
+	number: number;
+	author: string | null;
+	author_name: string;
+	body: string | null;
+	created: number;
+	edited_at: number | null;
+	deleted_at: number | null;
+	call_outcome: CallOutcome | null;
+	call_seconds: number | null;
+	call_video: number | null;
+}
+
+export type CallOutcome = "answered" | "missed" | "declined" | "cancelled";
+
+export interface ChatFileRow {
+	file: string;
+	conversation: string;
+	message: string | null;
+	recording: number;
+	created: number;
+}
+
+export interface ChatMeetingRow {
+	conversation: string;
+	starts_at: number;
+	duration_minutes: number;
+	guest_token: string | null;
+	guest_token_hash: string | null;
+	created: number;
+	updated: number;
+}

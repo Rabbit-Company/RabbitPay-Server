@@ -120,6 +120,16 @@ export interface ServerSettings {
 		software_supplier_tax_number: number;
 		software_supplier_name: string;
 	};
+	calls: {
+		stun_urls: string;
+		turn_urls: string;
+		turn_secret: string;
+		ring_seconds: number;
+		livekit_urls: string;
+		livekit_api_key: string;
+		livekit_api_secret: string;
+		max_group_people: number;
+	};
 	reports: {
 		cooldown_minutes: number;
 	};
@@ -251,6 +261,16 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 	payments: { allow_private_wallets: false },
 	invoices: { overdue_interval: 300, recurring_interval: 300, document_interval: 60 },
 	fiscal: { poll_interval: 30, software_supplier_tax_number: 0, software_supplier_name: "RabbitPay" },
+	calls: {
+		stun_urls: "stun:stun.cloudflare.com:3478",
+		turn_urls: "",
+		turn_secret: "",
+		ring_seconds: 45,
+		livekit_urls: "",
+		livekit_api_key: "",
+		livekit_api_secret: "",
+		max_group_people: 50,
+	},
 	reports: { cooldown_minutes: 10 },
 	email: {
 		enabled: false,
@@ -542,6 +562,42 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				kind: "number",
 				min: 0,
 			},
+		],
+	},
+	{
+		id: "calls",
+		label: "Calls",
+		description:
+			"Voice and video calls between two people connect directly from browser to browser. STUN lets them find each other, and TURN relays a call when a firewall blocks the direct connection. Group calls run through LiveKit media servers, which you host separately so that calls never load this server.",
+		fields: [
+			{
+				key: "calls.stun_urls",
+				label: "STUN servers",
+				hint: "Separated by commas, such as stun:stun.cloudflare.com:3478. Leave empty to use none.",
+				kind: "text",
+			},
+			{
+				key: "calls.turn_urls",
+				label: "TURN servers",
+				hint: "Separated by commas, such as turn:turn.example.com:3478,turns:turn.example.com:5349. Leave empty to connect directly only.",
+				kind: "text",
+			},
+			{
+				key: "calls.turn_secret",
+				label: "TURN shared secret",
+				hint: "The static-auth-secret of coturn. Each call gets its own short-lived username and password derived from it.",
+				kind: "secret",
+			},
+			{ key: "calls.ring_seconds", label: "Ringing time", hint: "Seconds before an unanswered call counts as missed", kind: "number", min: 10, max: 120 },
+			{
+				key: "calls.livekit_urls",
+				label: "LiveKit media servers",
+				hint: "WebSocket addresses separated by commas, such as wss://media1.example.com,wss://media2.example.com. A new group call goes to the server with the fewest people on it. Leave empty to turn group calls off.",
+				kind: "text",
+			},
+			{ key: "calls.livekit_api_key", label: "LiveKit API key", hint: "The same key and secret must be configured on every media server", kind: "text" },
+			{ key: "calls.livekit_api_secret", label: "LiveKit API secret", kind: "secret" },
+			{ key: "calls.max_group_people", label: "Largest group call", hint: "People in one call", kind: "number", min: 2, max: 500 },
 		],
 	},
 	{

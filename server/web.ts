@@ -48,7 +48,7 @@ async function fileResponse(path: string, cacheControl: string): Promise<Respons
 
 const STOREFRONT_PATH = /^\/shop\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/;
 const STORE_SITEMAP_PATH = /^\/shop\/([a-z0-9]+(?:-[a-z0-9]+)*)\/sitemap\.xml$/;
-const APPLICATION_PRIVATE_PATHS = ["/projects", "/admin", "/account", "/customer", "/pay/", "/login", "/invite", "/converter"];
+const APPLICATION_PRIVATE_PATHS = ["/projects", "/admin", "/account", "/customer", "/pay/", "/login", "/invite", "/converter", "/meet/"];
 const DOMAIN_PRIVATE_PATHS = ["/customer", "/pay/", "/login"];
 
 interface StoreRequest {

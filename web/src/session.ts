@@ -1,5 +1,8 @@
 import { Api, clearSession, getToken, storeSession, type Account } from "./api";
 import { navigate } from "./router";
+import { stopRealtime } from "./realtime";
+import { forgetChatUnread } from "./chat-unread";
+import { dropCall } from "./calls";
 
 export async function signOut() {
 	try {
@@ -8,6 +11,9 @@ export async function signOut() {
 		void 0;
 	}
 	clearSession();
+	dropCall();
+	stopRealtime();
+	forgetChatUnread();
 	navigate("/login");
 }
 

@@ -80,6 +80,36 @@ export async function beginUpload(
 	return (await findFile(projectId, uuid))!;
 }
 
+export async function beginOpenUpload(projectId: string, name: string, type: string, username: string): Promise<ProjectFileRow> {
+	const uuid = crypto.randomUUID();
+	await Database`
+		INSERT INTO project_files(uuid, project, storage_key, file_name, content_type, byte_size, parts, parts_received, status, explorer, folder,
+			created_by, created)
+		VALUES(${uuid}, ${projectId}, ${`files/${projectId}/${uuid}`}, ${name}, ${type}, 0, 0, 0, 'uploading', 0, NULL, ${username}, ${Date.now()})
+	`;
+	return (await findFile(projectId, uuid))!;
+}
+
+export function acceptsAppendedPart(file: ProjectFileRow, index: number, length: number): boolean {
+	if (file.status !== "uploading" || file.removed_at !== null) return false;
+	if (index !== Number(file.parts_received) || Number(file.byte_size) !== index * FILE_PART_BYTES) return false;
+	return length > 0 && length <= FILE_PART_BYTES;
+}
+
+export async function appendPart(file: ProjectFileRow, index: number, bytes: Uint8Array): Promise<ProjectFileRow | null> {
+	await documentStorage().put(partKey(file, index), bytes, FALLBACK_CONTENT_TYPE);
+	const stored = await Database`
+		UPDATE project_files SET parts = ${index + 1}, parts_received = ${index + 1}, byte_size = byte_size + ${bytes.length}
+		WHERE uuid = ${file.uuid} AND status = 'uploading' AND parts_received = ${index}
+	`;
+	return stored.count === 1 ? await findFile(file.project, file.uuid) : null;
+}
+
+export async function finishOpenUpload(file: ProjectFileRow): Promise<ProjectFileRow | null> {
+	const finished = await Database`UPDATE project_files SET status = 'ready' WHERE uuid = ${file.uuid} AND status = 'uploading' AND parts_received > 0`;
+	return finished.count === 1 ? await findFile(file.project, file.uuid) : null;
+}
+
 export function acceptsPart(file: ProjectFileRow, index: number, length: number): boolean {
 	if (file.status !== "uploading" || file.removed_at !== null) return false;
 	const received = Number(file.parts_received);

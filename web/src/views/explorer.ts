@@ -535,6 +535,25 @@ export async function explorerView(uuid: string, location: ExplorerLocation): Pr
 				el("td", {}, ""),
 				el("td", {}, "")
 			);
+		const chatAttachmentsRow = (): HTMLElement =>
+			el(
+				"tr",
+				{},
+				el(
+					"td",
+					{},
+					el(
+						"a",
+						{ class: "explorer-name", href: `/projects/${uuid}/files/chat-attachments` },
+						icon("message", 18, "explorer-icon explorer-icon-built-in"),
+						el("span", { class: "explorer-label" }, t("files.chat_title"))
+					)
+				),
+				el("td", {}, ""),
+				el("td", {}, ""),
+				el("td", {}, ""),
+				el("td", {}, "")
+			);
 		const personRow = (person: NonNullable<Explorer["people"]>[number]): HTMLElement =>
 			el(
 				"tr",
@@ -564,6 +583,7 @@ export async function explorerView(uuid: string, location: ExplorerLocation): Pr
 			: [
 					...(atTop && !browsing ? [builtIn("shared", state.shared_people)] : []),
 					...(atTop && !browsing && state.everyone_people !== null ? [builtIn("all", state.everyone_people)] : []),
+					...(atTop && !browsing && can(project, Permission.CHAT_USE) && (project.workforce || project.workforce_until !== null) ? [chatAttachmentsRow()] : []),
 					...state.folders.map((folder) => folderRow(folder)),
 					...state.files.map((file) => fileRow(file)),
 				];

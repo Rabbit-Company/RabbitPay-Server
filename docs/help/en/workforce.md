@@ -63,6 +63,76 @@ The person who uploaded a file, supervisors, administrators and owners can remov
 
 Attached files use **File storage**, which is separate from document storage, so a full file storage never stops you from issuing invoices. 10 GB comes with the workforce license and a file storage key adds more. Owners and administrators see every file, largest first, under **License**, **Manage files**, and can remove files there to free space.
 
+## Chat with colleagues
+
+**Chat** is for quick messages inside the project. Everyone except viewers, developers and cashiers can use it.
+
+1. Press **New** and choose **New message** to write to one person, or **New group** to name a group and pick its people.
+2. Write in the box at the bottom and press Enter to send. Shift and Enter starts a new line. On a phone, use the **Send** button.
+3. New messages appear right away. The number next to **Chat** in the menu shows how many you have not read.
+
+Each of your own messages has an actions menu with **Edit** and **Delete**. A deleted message is removed for everyone and its text is erased.
+
+The person who creates a group is its admin. Under **Group details** an admin renames the group, adds and removes people and can delete any message in it. Anyone can leave a group with **Leave group**. People added later see the earlier messages.
+
+Conversations are private. Only the people in a conversation can read it, and owners and administrators of the project cannot open other people's conversations. Message text is stored encrypted.
+
+### Send files in chat
+
+Press the paperclip button or paste a screenshot into the message box, then send. A message can carry up to 10 files. Pictures show a preview, videos and PDFs open in the page and everything else is downloaded.
+
+You can delete your own attachments with the bin button next to them, and a group admin can delete any attachment in the group. The message keeps a note that the attachment was deleted and by whom.
+
+Chat attachments use **File storage**. Owners and administrators see them under **Storage and limits** as **Chat attachment**, with the size, the sender and the date. They cannot open them or see their names, but they can remove them to free space.
+
+To see what you sent, open **Files** and choose **My chat attachments**. The list shows each attachment and recording with its size, the conversation and the date. Remove one with **Remove**, or choose an age next to **Remove chat attachments older than** to remove all of yours that are older, for example older than 1 year. Owners and administrators have the same choice under **Storage and limits**, where it applies to everyone's chat attachments.
+
+### Call a colleague
+
+Open a conversation with one person and press the phone button for a voice call or the camera button for a video call, at the top of the conversation. The other person hears it ring in every tab where RabbitPay is open and can answer with or without video, or decline. The first time, the browser asks for permission to use the microphone and the camera.
+
+The call has a row of round buttons. Hold the pointer over a button to see its name. From left to right they:
+
+- mute your microphone, which turns the button red while you are muted,
+- turn the camera on or off,
+- share a window or your whole screen. Only one of you can share at a time.
+- make the call fill the page,
+- hang up, with the red button.
+
+The call stays in the corner of the page while you keep working in RabbitPay. Closing the tab ends it. Sound and picture travel directly between the two browsers, not through RabbitPay.
+
+The conversation keeps a line for every call with its length. A missed call is marked and counts as unread. If the other person is not online, they see a missed call the next time they open the chat.
+
+### Call a group
+
+Open a group and press the camera button at the top of the conversation to start a call. Everyone in the group then sees a highlighted button there with the number of people already in the call, which joins it, and the conversation list shows **Call in progress**. A group call does not ring.
+
+The call shows a tile for each person. The buttons work as in a call between two people, and only one person can share a screen at a time. Press the red button to leave. The call ends when the last person leaves, and the conversation keeps a line with its length.
+
+If a group has no camera button, the server has no media servers for group calls. Calls between two people still work.
+
+The call has its own chat, behind the speech bubble button, for quick messages to everyone in the call. These messages are not saved. Use the conversation itself for anything that should stay.
+
+### Schedule a meeting and invite guests
+
+1. In **Chat**, press **New** and choose **Schedule meeting**.
+2. Enter a title, the date, the start time and the length, and choose the colleagues to invite.
+3. Turn on **Let guests join with a link** if people outside the team should take part.
+
+The meeting appears in everyone's conversation list with its time. It is a group like any other, so you can write and share files in it before and after. At the agreed time, open it and start the call.
+
+To invite a guest, open **Group details**, copy the **Guest link** and send it to them. A guest opens the link, enters their name and joins. They do not need an account. A guest can join only while the call is running, so someone from the team has to start it first, and the call ends for guests when the last team member leaves. Guests are marked as guests in the call.
+
+An admin of the meeting can change the time, turn guest access off or press **New guest link**, which makes the old link stop working.
+
+### Record a call
+
+In a group call or a meeting, press the record button, the one with a dot in a circle. The recording contains everyone's voices and the shared screen. While nobody shares a screen it shows the title of the call. Everyone in the call sees who is recording, and only one person can record at a time. Tell guests before you start if your rules require their consent.
+
+Press the same button again or leave the call to finish. The recording appears in the conversation as a video that everyone in the group can play or download. It is stored encrypted and uses **File storage**, roughly 10 MB per minute.
+
+The recording is made in your browser, so keep the tab open. If the tab closes, what was recorded up to the last minute or two is still saved and appears in the conversation a few minutes later. Calls between two people cannot be recorded.
+
 ## Keep and share files
 
 **Files** is a shared place for documents, pictures and videos. Create folders, upload files with **Upload files**, drop them onto the page or paste a screenshot.
@@ -80,7 +150,7 @@ Attached files use **File storage**, which is separate from document storage, so
 Files use the same **File storage** as ticket attachments. Owners and administrators open **Storage and limits** to see every file, largest first, and to set:
 
 1. **Largest file in MB**, the biggest single file anyone can upload.
-2. **Storage per person in MB**, how much each person can keep in Files. Leave it empty for no limit.
+2. **Storage per person in MB**, how much each person can keep in Files and send as chat attachments and recordings. Leave it empty for no limit.
 3. An **own limit** for one person, when someone needs more or less than the others.
 
 A customer sees a ticket in the customer portal only after you give them access and mark the ticket as visible to them. See [Customer portal](customer-portal).

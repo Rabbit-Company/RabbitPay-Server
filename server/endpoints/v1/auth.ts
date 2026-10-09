@@ -20,6 +20,7 @@ import { isEnabled, sendEmail } from "../../email/mailer";
 import { emailChangeEmail, emailChangedEmail } from "../../email/templates";
 import { isUiLanguage, type UiLanguage } from "../../../web/src/i18n/dictionary";
 import type { AccountRow } from "../../database/models";
+import { Realtime } from "../../realtime";
 
 interface RegisterBody {
 	email?: string;
@@ -232,7 +233,10 @@ Server.app.post("/api/v1/auth/login", credentialLimit, async (ctx) => {
 
 Server.app.post("/api/v1/auth/logout", Auth.required(), async (ctx) => {
 	const token = ctx.get("sessionToken");
-	if (token) await Auth.destroySession(token);
+	if (token) {
+		await Auth.destroySession(token);
+		Realtime.closeAccount(Auth.account(ctx).username, token);
+	}
 
 	return Utils.ok(ctx);
 });

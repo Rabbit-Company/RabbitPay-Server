@@ -24,6 +24,7 @@ import {
 } from "./workforce-schema";
 import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema, LICENSE_TYPES_WITH_ACCOUNTING } from "./accounting-schema";
 import { createRegistrySchema } from "./registry-schema";
+import { createChatSchema } from "./chat-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string) {
@@ -642,6 +643,7 @@ export const MIGRATIONS: Migration[] = [
 			]);
 		},
 	},
+	{ version: 53, name: "chat", up: createChatSchema },
 ];
 
 export class SchemaTooNew extends Error {

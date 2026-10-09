@@ -17,6 +17,7 @@ import {
 	acceptsPart,
 	beginUpload,
 	discardFiles,
+	FALLBACK_CONTENT_TYPE,
 	fileResponse,
 	fileSizeCeiling,
 	findFile,
@@ -28,7 +29,8 @@ import {
 } from "../../files";
 import { DOWNLOAD_LINK_SECONDS, FILE_MB_BYTES, FILE_PART_BYTES, isPlayableVideo, PLAYBACK_LINK_SECONDS } from "../../file-limits";
 import { dropFromExplorer, fileView, memberFileUsage, pathNames, projectFolders, ticketLinked } from "../../file-explorer";
-import type { AppState, ProjectFileRow, ProjectMemberRow, ProjectRow, TicketRow } from "../../database/models";
+import { announceFileChange, chatFileOf } from "../../workforce/chat";
+import type { AppState, ChatConversationRow, ChatParticipantRow, ProjectFileRow, ProjectMemberRow, ProjectRow, TicketRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid";
 const partBody = bodyLimit<AppState>({ maxSize: FILE_PART_BYTES, message: "The file part is too large." });
@@ -61,13 +63,29 @@ interface FileAccess {
 	view: boolean;
 	remove: boolean;
 	linked: boolean;
+	chat: boolean;
+}
+
+async function chatFileAccess(ctx: Context<AppState>, file: ProjectFileRow, conversationId: string): Promise<FileAccess> {
+	const member = Permissions.member(ctx);
+	const username = Auth.account(ctx).username;
+	const [conversation] = (await Database`SELECT * FROM chat_conversations WHERE uuid = ${conversationId}`) as ChatConversationRow[];
+	const [participant] = Permissions.has(member, Permission.CHAT_USE)
+		? ((await Database`SELECT * FROM chat_participants WHERE conversation = ${conversationId} AND account = ${username}`) as ChatParticipantRow[])
+		: [];
+	const view = participant !== undefined;
+	const moderates = view && conversation?.kind === "group" && Boolean(participant.admin);
+	const remove = (view && file.created_by === username) || moderates || Permissions.has(member, Permission.PROJECT_EDIT);
+	return { view, remove, linked: true, chat: true };
 }
 
 async function fileAccess(ctx: Context<AppState>, file: ProjectFileRow): Promise<FileAccess> {
 	const member = Permissions.member(ctx);
 	const username = Auth.account(ctx).username;
+	const chatLink = await chatFileOf(file.uuid);
+	if (chatLink) return await chatFileAccess(ctx, file, chatLink.conversation);
 	const linked = await ticketLinked(file.uuid);
-	if (Permissions.has(member, Permission.PROJECT_EDIT)) return { view: true, remove: true, linked };
+	if (Permissions.has(member, Permission.PROJECT_EDIT)) return { view: true, remove: true, linked, chat: false };
 
 	const own = file.created_by === username;
 	let view = own || (linked && Permissions.has(member, Permission.TICKET_VIEW));
@@ -77,7 +95,7 @@ async function fileAccess(ctx: Context<AppState>, file: ProjectFileRow): Promise
 		view ||= explorer.view;
 		remove ||= explorer.manages;
 	}
-	return { view, remove: remove && view, linked };
+	return { view, remove: remove && view, linked, chat: false };
 }
 
 function megabytesToBytes(value: unknown): number | null | undefined {
@@ -154,9 +172,14 @@ Server.app.get(`${base}/files`, Auth.required(), Permissions.require(Permission.
 			`) as (Pick<TicketRow, "uuid" | "number" | "title"> & { file: string })[])
 		: [];
 	const folders = rows.some((row) => row.explorer) ? await projectFolders(project.uuid) : [];
+	const chatRows = rows.length
+		? ((await Database`SELECT file FROM chat_files WHERE file IN ${Database(rows.map((row) => row.uuid))}`) as { file: string }[])
+		: [];
+	const inChat = new Set(chatRows.map((row) => row.file));
 	return await okWithNames(ctx, {
 		files: rows.map((row) => ({
-			...presentFile(row),
+			...presentFile(inChat.has(row.uuid) ? { ...row, file_name: "", content_type: FALLBACK_CONTENT_TYPE } : row),
+			chat: inChat.has(row.uuid),
 			tickets: links.filter((link) => link.file === row.uuid).map((link) => ({ uuid: link.uuid, number: link.number, title: link.title })),
 			location: row.explorer ? pathNames(folders, row.folder) : null,
 		})),
@@ -281,10 +304,11 @@ Server.app.delete(`${base}/files/:file`, Auth.required(), Permissions.require(Pe
 	if (!file) return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
 	const account = Auth.account(ctx);
 	const access = await fileAccess(ctx, file);
-	if (!access.view) return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
+	if (!access.view && !access.remove) return Utils.fail(ctx, ErrorCode.FILE_NOT_FOUND);
 	if (!access.remove) return Utils.fail(ctx, ErrorCode.INSUFFICIENT_PERMISSIONS);
+	const visible = access.view ? file : { ...file, file_name: "", content_type: FALLBACK_CONTENT_TYPE };
 	if (file.removed_at !== null) return Utils.fail(ctx, ErrorCode.FILE_REMOVED);
-	if (file.status === "uploading") {
+	if (file.status === "uploading" || (access.chat && (await chatFileOf(file.uuid))?.message === null)) {
 		await discardFiles([file]);
 		return Utils.ok(ctx);
 	}
@@ -304,10 +328,11 @@ Server.app.delete(`${base}/files/:file`, Auth.required(), Permissions.require(Pe
 	if (!removed) return Utils.fail(ctx, ErrorCode.FILE_REMOVED);
 	await Audit.record(ctx, {
 		project: project.uuid,
-		action: "file.removed",
+		action: access.chat ? "file.chat_attachment_removed" : "file.removed",
 		entityType: "file",
 		entityId: file.uuid,
-		oldValue: { file_name: file.file_name, byte_size: Number(file.byte_size), created_by: file.created_by },
+		oldValue: { file_name: access.chat ? null : file.file_name, byte_size: Number(file.byte_size), created_by: file.created_by },
 	});
-	return await okWithNames(ctx, presentFile(removed));
+	if (access.chat) await announceFileChange(file.uuid);
+	return await okWithNames(ctx, presentFile({ ...visible, removed_at: removed.removed_at, removed_by: removed.removed_by }));
 });

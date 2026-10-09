@@ -210,7 +210,7 @@ without a connection string are skipped.
 
 ### Settings worth a second look
 
-Two settings are easy to get wrong:
+These settings are easy to get wrong:
 
 - Server, Client IP source sets how the client IP is found. The client IP
   drives the audit trail and the login rate limiter. Choose the proxy that sits
@@ -229,6 +229,12 @@ Two settings are easy to get wrong:
   the browser. A proxy that is not configured makes
   every client share one rate-limit bucket, so one attacker can lock everyone
   out of logging in.
+- Chat and calls use a WebSocket at `/api/v1/realtime`. The reverse proxy has
+  to pass WebSocket upgrades through on HTTP/1.1, and the site has to be served
+  over HTTPS for browsers to allow the microphone, camera and screen sharing.
+  Live delivery is kept in the memory of one server process, so run RabbitPay
+  as a single process. Group calls and meetings also need LiveKit media
+  servers, see [Timesheets, tickets and payroll](workforce.md#calls).
 - Shared cache, Adapter has to be reachable or nobody can log in. Sessions
   are written to both cache layers and a write must succeed in both. With the
   memory adapter everyone is signed out when the server restarts. The file and

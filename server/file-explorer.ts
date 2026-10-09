@@ -202,9 +202,15 @@ export function pathNames(folders: FileFolderRow[], uuid: string | null): string
 export async function memberFileUsage(projectId: string, username: string): Promise<number> {
 	const [row] = (await Database`
 		SELECT COALESCE(SUM(byte_size), 0) AS used FROM project_files
-		WHERE project = ${projectId} AND explorer = 1 AND removed_at IS NULL AND created_by = ${username}
+		WHERE project = ${projectId} AND removed_at IS NULL AND created_by = ${username}
+			AND (explorer = 1 OR uuid IN (SELECT file FROM chat_files))
 	`) as { used: number }[];
 	return Number(row.used);
+}
+
+export async function memberHasRoom(project: Pick<ProjectRow, "uuid" | "max_member_file_bytes">, username: string, bytes: number): Promise<boolean> {
+	const limit = await memberFileLimit(project, username);
+	return limit === null || (await memberFileUsage(project.uuid, username)) + bytes <= limit;
 }
 
 export async function memberFileLimit(project: Pick<ProjectRow, "uuid" | "max_member_file_bytes">, username: string): Promise<number | null> {

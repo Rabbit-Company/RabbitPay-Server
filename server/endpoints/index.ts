@@ -48,3 +48,5 @@ import "./v1/accounting";
 import "./v1/recorded-invoices";
 import "./v1/bank";
 import "./v1/fixed-assets";
+import "./v1/realtime";
+import "./v1/chat";

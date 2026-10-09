@@ -852,6 +852,68 @@ export interface MonthReport {
 	people: { member: string; person: string; daily_minutes: number; approval: TimesheetPeriod; days: ReportDay[]; totals: MonthTotals }[];
 }
 
+export interface ChatPerson {
+	account: string;
+	name: string;
+	online: boolean;
+}
+
+export interface ChatParticipant extends ChatPerson {
+	admin: boolean;
+	active: boolean;
+}
+
+export interface ChatMessage {
+	uuid: string;
+	conversation: string;
+	number: number;
+	author: string | null;
+	author_name: string;
+	body: string | null;
+	created: number;
+	edited_at: number | null;
+	deleted: boolean;
+	files: TicketFile[];
+	call: { outcome: ChatCallOutcome; seconds: number; video: boolean } | null;
+}
+
+export interface ChatAttachment extends TicketFile {
+	conversation: string;
+	conversation_name: string;
+}
+
+export interface ChatGroupCall {
+	call: string;
+	people: number;
+	started: number;
+	started_by: string;
+}
+
+export type ChatCallOutcome = "answered" | "missed" | "declined" | "cancelled";
+
+export interface IceServer {
+	urls: string[];
+	username?: string;
+	credential?: string;
+}
+
+export interface ChatConversation {
+	uuid: string;
+	kind: "direct" | "group";
+	name: string | null;
+	participants: ChatParticipant[];
+	admin: boolean;
+	read_number: number;
+	last_number: number;
+	last_message: ChatMessage | null;
+	last_message_at: number | null;
+	call: ChatGroupCall | null;
+	meeting: { starts_at: number; duration_minutes: number; guests: boolean } | null;
+	unread: number;
+	created: number;
+	updated: number;
+}
+
 export interface TicketAssignee {
 	member: string;
 	name: string;
@@ -995,6 +1057,7 @@ export interface FolderChoice {
 }
 
 export interface ProjectFile extends TicketFile {
+	chat: boolean;
 	tickets: { uuid: string; number: number; title: string }[];
 	location: string[] | null;
 }
@@ -2363,7 +2426,19 @@ export async function publicRequest<T>(method: string, path: string, body?: unkn
 	return payload.data as T;
 }
 
+export interface GuestMeeting {
+	title: string;
+	organisation: string;
+	starts_at: number;
+	duration_minutes: number;
+	active: boolean;
+}
+
 export const PublicApi = {
+	meeting(token: string) {
+		return publicRequest<GuestMeeting>("GET", `/meetings/${token}`);
+	},
+
 	invoicePdfUrl(invoice: string) {
 		return `/api/v1/public/invoices/${invoice}/pdf`;
 	},
@@ -3783,6 +3858,133 @@ export const Api = {
 			`/projects/${uuid}/tickets/invoice`,
 			{ tickets }
 		);
+	},
+
+	realtimeTicket() {
+		return request<{ ticket: string; expires_in: number }>("POST", "/realtime/ticket");
+	},
+
+	chatPeople(uuid: string) {
+		return request<{ people: ChatPerson[] }>("GET", `/projects/${uuid}/chat/people`);
+	},
+
+	chatUnread(uuid: string) {
+		return request<{ messages: number; conversations: number }>("GET", `/projects/${uuid}/chat/unread`);
+	},
+
+	chatConversations(uuid: string) {
+		return request<{ conversations: ChatConversation[]; max_file_bytes: number; group_calls: boolean }>("GET", `/projects/${uuid}/chat/conversations`);
+	},
+
+	chatConversation(uuid: string, conversation: string) {
+		return request<ChatConversation>("GET", `/projects/${uuid}/chat/conversations/${conversation}`);
+	},
+
+	openDirectChat(uuid: string, account: string) {
+		return request<ChatConversation>("POST", `/projects/${uuid}/chat/conversations`, { kind: "direct", account });
+	},
+
+	createChatGroup(uuid: string, name: string, accounts: string[]) {
+		return request<ChatConversation>("POST", `/projects/${uuid}/chat/conversations`, { kind: "group", name, accounts });
+	},
+
+	renameChatGroup(uuid: string, conversation: string, name: string) {
+		return request<ChatConversation>("PATCH", `/projects/${uuid}/chat/conversations/${conversation}`, { name });
+	},
+
+	addChatPeople(uuid: string, conversation: string, accounts: string[]) {
+		return request<ChatConversation>("POST", `/projects/${uuid}/chat/conversations/${conversation}/participants`, { accounts });
+	},
+
+	removeChatPerson(uuid: string, conversation: string, account: string) {
+		return request<{ closed: boolean }>("DELETE", `/projects/${uuid}/chat/conversations/${conversation}/participants/${encodeURIComponent(account)}`);
+	},
+
+	chatMessages(uuid: string, conversation: string, before?: number) {
+		return request<{ messages: ChatMessage[]; has_more: boolean }>(
+			"GET",
+			`/projects/${uuid}/chat/conversations/${conversation}/messages${before ? `?before=${before}` : ""}`
+		);
+	},
+
+	sendChatMessage(uuid: string, conversation: string, body: string, files: string[] = []) {
+		return request<ChatMessage>("POST", `/projects/${uuid}/chat/conversations/${conversation}/messages`, { body, files });
+	},
+
+	startChatCall(uuid: string, conversation: string, client: string, video: boolean) {
+		return request<{ call: string; ice_servers: IceServer[]; ring_seconds: number }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/calls`, {
+			client,
+			video,
+		});
+	},
+
+	acceptChatCall(uuid: string, call: string, client: string) {
+		return request<{ call: string; ice_servers: IceServer[] }>("POST", `/projects/${uuid}/chat/calls/${call}/accept`, { client });
+	},
+
+	endChatCall(uuid: string, call: string) {
+		return request<null>("POST", `/projects/${uuid}/chat/calls/${call}/end`);
+	},
+
+	scheduleMeeting(uuid: string, meeting: { title: string; starts_at: number; duration_minutes: number; accounts: string[]; guests: boolean }) {
+		return request<ChatConversation>("POST", `/projects/${uuid}/chat/meetings`, meeting);
+	},
+
+	updateMeeting(uuid: string, conversation: string, changes: { starts_at?: number; duration_minutes?: number; guests?: boolean; reset_guest_link?: boolean }) {
+		return request<ChatConversation>("PATCH", `/projects/${uuid}/chat/conversations/${conversation}/meeting`, changes);
+	},
+
+	meetingGuestLink(uuid: string, conversation: string) {
+		return request<{ url: string | null }>("GET", `/projects/${uuid}/chat/conversations/${conversation}/meeting/guest-link`);
+	},
+
+	chatAttachments(uuid: string, options: { limit: number; offset: number }) {
+		return request<{ files: ChatAttachment[]; total: number; total_bytes: number; limit: number; offset: number }>(
+			"GET",
+			`/projects/${uuid}/chat/attachments?limit=${options.limit}&offset=${options.offset}`
+		);
+	},
+
+	removeChatAttachments(uuid: string, olderThanDays: number, everyone: boolean) {
+		return request<{ removed: number; bytes: number }>("POST", `/projects/${uuid}/chat/attachments/remove`, { older_than_days: olderThanDays, everyone });
+	},
+
+	beginRecording(uuid: string, conversation: string, type: string) {
+		return request<{ uuid: string; part_bytes: number; max_bytes: number }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/recordings`, {
+			type,
+		});
+	},
+
+	async uploadRecordingPart(uuid: string, file: string, index: number, part: Blob) {
+		return await payloadOf<{ byte_size: number; parts: number }>(await sendBytes("PUT", `/projects/${uuid}/chat/recordings/${file}/parts/${index}`, part));
+	},
+
+	finishRecording(uuid: string, file: string) {
+		return request<{ kept: boolean }>("POST", `/projects/${uuid}/chat/recordings/${file}/finish`);
+	},
+
+	joinGroupCall(uuid: string, conversation: string) {
+		return request<{ call: string; url: string; token: string }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/group-call`);
+	},
+
+	leaveGroupCall(uuid: string, conversation: string) {
+		return request<null>("POST", `/projects/${uuid}/chat/conversations/${conversation}/group-call/leave`);
+	},
+
+	beginChatFile(uuid: string, conversation: string, file: { name: string; type: string; size: number }) {
+		return request<FileUpload>("POST", `/projects/${uuid}/chat/conversations/${conversation}/files`, file);
+	},
+
+	editChatMessage(uuid: string, conversation: string, message: string, body: string) {
+		return request<ChatMessage>("PATCH", `/projects/${uuid}/chat/conversations/${conversation}/messages/${message}`, { body });
+	},
+
+	deleteChatMessage(uuid: string, conversation: string, message: string) {
+		return request<ChatMessage>("DELETE", `/projects/${uuid}/chat/conversations/${conversation}/messages/${message}`);
+	},
+
+	markChatRead(uuid: string, conversation: string, number: number) {
+		return request<{ read_number: number }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/read`, { number });
 	},
 
 	ticketAccess(uuid: string, customer: string) {

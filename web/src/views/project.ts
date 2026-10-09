@@ -5,6 +5,7 @@ import { currentPath } from "../router";
 import { applyAccent } from "../theme";
 import { can, canAny, Permission } from "../access";
 import { roleLabel, statusLabel, t, type UiKey } from "../i18n";
+import { chatUnreadBadge } from "../chat-unread";
 
 const cache = new Map<string, Project>();
 
@@ -47,6 +48,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 		workforce: true,
 	},
 	{ id: "tickets", label: "nav.tickets", suffix: "/tickets", permissions: [Permission.TICKET_VIEW], group: "work", workforce: true },
+	{ id: "chat", label: "nav.chat", suffix: "/chat", permissions: [Permission.CHAT_USE], group: "work", workforce: true },
 	{ id: "files", label: "nav.files", suffix: "/files", permissions: [Permission.FILE_USE], group: "work" },
 	{ id: "employees", label: "nav.employees", suffix: "/employees", permissions: [Permission.EMPLOYEE_VIEW], group: "work", workforce: true },
 	{ id: "payroll", label: "nav.payroll", suffix: "/payroll", permissions: [Permission.EMPLOYEE_VIEW], group: "work", workforce: true },
@@ -92,7 +94,7 @@ export function projectLayout(project: Project, content: HTMLElement): HTMLEleme
 		const href = `/projects/${project.uuid}${tab.suffix}`;
 		const active = tab.suffix === "" ? path === href : path.startsWith(href);
 		if (active) activeLabel = t(tab.label);
-		const link = el("a", { class: `tab ${active ? "active" : ""}`, href }, t(tab.label));
+		const link = el("a", { class: `tab ${active ? "active" : ""}`, href }, t(tab.label), tab.id === "chat" ? chatUnreadBadge(project.uuid) : null);
 		if (active) link.setAttribute("aria-current", "page");
 		const key = tab.group ?? null;
 		groups.set(key, [...(groups.get(key) ?? []), link]);

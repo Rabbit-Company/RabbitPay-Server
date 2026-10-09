@@ -53,6 +53,9 @@ import { absencesView, timesheetReportView, timesheetSettingsView, timesheetView
 import { ticketsView, ticketView } from "./views/tickets";
 import { fileStorageView } from "./views/files";
 import { explorerView } from "./views/explorer";
+import { chatView } from "./views/chat";
+import { guestMeetingView } from "./views/meeting";
+import { chatAttachmentsView } from "./views/chat-attachments";
 import { employeesView } from "./views/employees";
 import { payrollRatesView, payrollRunsView, payrollRunView } from "./views/payroll";
 import { accountingClientsView, accountingJournalView, accountLedgerView, ledgerAccountsView, trialBalanceView } from "./views/accounting";
@@ -246,6 +249,7 @@ define("/customer/tickets", () => customerRoute(customerTicketsView), false);
 define("/customer/tickets/:ticket", (params) => customerRoute(() => customerTicketView(params.ticket)), false);
 define("/pay/:invoice", (params) => payView(params.invoice), false);
 define("/invite/:token", (params) => inviteView(params.token), false);
+define("/meet/:token", (params) => guestMeetingView(params.token), false);
 function landingRoute(routeLanguage: UiLanguage | null): Promise<HTMLElement> | HTMLElement {
 	if (getToken() !== null && routeLanguage === null) return projectsView();
 	const target = getToken() !== null ? "/" : landingEnabled() ? landingPath(routeLanguage ?? language()) : "/login";
@@ -509,12 +513,24 @@ define(
 	guarded([Permission.POS_SELL], (params) => posView(params.uuid))
 );
 define(
+	"/projects/:uuid/chat",
+	projectRoute([Permission.CHAT_USE], (params) => chatView(params.uuid))
+);
+define(
+	"/projects/:uuid/chat/:conversation",
+	projectRoute([Permission.CHAT_USE], (params) => chatView(params.uuid, params.conversation))
+);
+define(
 	"/projects/:uuid/files",
 	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, {}))
 );
 define(
 	"/projects/:uuid/files/folders/:folder",
 	projectRoute([Permission.FILE_USE], (params) => explorerView(params.uuid, { folder: params.folder }))
+);
+define(
+	"/projects/:uuid/files/chat-attachments",
+	projectRoute([Permission.CHAT_USE], (params) => chatAttachmentsView(params.uuid))
 );
 define(
 	"/projects/:uuid/files/shared",

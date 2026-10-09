@@ -74,6 +74,8 @@ export enum Permission {
 
 	FILE_USE = "file.use",
 
+	CHAT_USE = "chat.use",
+
 	EMPLOYEE_VIEW = "employee.view",
 	EMPLOYEE_EDIT = "employee.edit",
 
@@ -130,6 +132,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.TICKET_WORK,
 		Permission.TICKET_MANAGE,
 		Permission.FILE_USE,
+		Permission.CHAT_USE,
 		Permission.EMPLOYEE_VIEW,
 		Permission.EMPLOYEE_EDIT,
 		Permission.LEDGER_EDIT,
@@ -167,6 +170,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.TICKET_WORK,
 		Permission.TICKET_MANAGE,
 		Permission.FILE_USE,
+		Permission.CHAT_USE,
 	],
 
 	[ProjectRole.ACCOUNTANT]: [
@@ -187,6 +191,7 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.EMPLOYEE_VIEW,
 		Permission.LEDGER_EDIT,
 		Permission.FILE_USE,
+		Permission.CHAT_USE,
 	],
 
 	[ProjectRole.DEVELOPER]: [
@@ -223,9 +228,17 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, Permission[]> = {
 		Permission.TICKET_WORK,
 		Permission.TICKET_MANAGE,
 		Permission.FILE_USE,
+		Permission.CHAT_USE,
 	],
 
-	[ProjectRole.EMPLOYEE]: [Permission.PROJECT_VIEW, Permission.TIMESHEET_OWN, Permission.TICKET_VIEW, Permission.TICKET_WORK, Permission.FILE_USE],
+	[ProjectRole.EMPLOYEE]: [
+		Permission.PROJECT_VIEW,
+		Permission.TIMESHEET_OWN,
+		Permission.TICKET_VIEW,
+		Permission.TICKET_WORK,
+		Permission.FILE_USE,
+		Permission.CHAT_USE,
+	],
 };
 
 // Helper function to check if a role has a specific permission

@@ -13,8 +13,8 @@
 		"logs:export": "bun run server/storage-cli.ts export-access-logs",
 		"license:keygen": "bun run server/license-cli.ts keygen",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
-		"build:web": "bun build web/index.html --outdir web/dist --minify --public-path=/ && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
-		"watch:web": "bun build web/index.html --outdir web/dist --public-path=/ --watch",
+		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
+		"watch:web": "bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
 		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
 	},
 	"repository": {
@@ -52,6 +52,7 @@
 		"bip32": "^5.0.1",
 		"bitcoinjs-lib": "^7.0.2",
 		"ethereumjs-wallet": "^1.0.2",
+		"livekit-client": "^2.22.3",
 		"nodemailer": "^10.0.16",
 		"pdfkit": "^0.20.2",
 		"tiny-secp256k1": "^2.2.4"

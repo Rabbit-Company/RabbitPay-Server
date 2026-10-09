@@ -63,6 +63,76 @@ Datoteko lahko odstrani oseba, ki jo je naložila, pa tudi nadzorniki, administr
 
 Pripete datoteke uporabljajo **Prostor za datoteke**, ki je ločen od prostora za dokumente, zato poln prostor za datoteke nikoli ne ustavi izdaje računov. Z licenco za delovno silo dobite 10 GB, ključ za datoteke pa doda več. Lastniki in administratorji vidijo vse datoteke, največje najprej, pod **Licenca**, **Upravljanje datotek**, kjer jih lahko odstranijo in sprostijo prostor.
 
+## Klepetajte s sodelavci
+
+**Klepet** je namenjen hitrim sporočilom znotraj projekta. Uporabljajo ga lahko vsi razen pregledovalcev, razvijalcev in blagajnikov.
+
+1. Pritisnite **Novo** in izberite **Novo sporočilo**, da pišete eni osebi, ali **Nova skupina**, da poimenujete skupino in izberete njene osebe.
+2. Pišite v polje na dnu in sporočilo pošljite s tipko Enter. Shift in Enter začne novo vrstico. Na telefonu uporabite gumb **Pošlji**.
+3. Nova sporočila se prikažejo takoj. Številka ob **Klepet** v meniju pove, koliko jih še niste prebrali.
+
+Vsako vaše sporočilo ima meni dejanj z **Uredi** in **Izbriši**. Izbrisano sporočilo se odstrani za vse in njegovo besedilo se izbriše.
+
+Oseba, ki ustvari skupino, je njen skrbnik. Pod **Podrobnosti skupine** skrbnik skupino preimenuje, dodaja in odstranjuje osebe ter lahko izbriše katerokoli sporočilo v njej. Skupino lahko vsak zapusti z **Zapusti skupino**. Osebe, dodane pozneje, vidijo prejšnja sporočila.
+
+Pogovori so zasebni. Pogovor lahko berejo samo osebe v njem, lastniki in administratorji projekta pa pogovorov drugih ne morejo odpreti. Besedilo sporočil je shranjeno šifrirano.
+
+### Pošiljajte datoteke v klepetu
+
+Pritisnite gumb s sponko ali posnetek zaslona prilepite v polje za sporočilo in ga pošljite. Sporočilo ima lahko največ 10 datotek. Slike imajo predogled, videoposnetki in PDF-ji se odprejo na strani, vse ostalo se prenese.
+
+Svoje priponke lahko izbrišete z gumbom s košem ob njih, skrbnik skupine pa lahko izbriše katerokoli priponko v skupini. V sporočilu ostane zapis, da je bila priponka izbrisana in kdo jo je izbrisal.
+
+Priponke iz klepeta uporabljajo **Prostor za datoteke**. Lastniki in administratorji jih vidijo pod **Prostor in omejitve** kot **Priponka iz klepeta**, z velikostjo, pošiljateljem in datumom. Ne morejo jih odpreti ali videti njihovih imen, lahko pa jih odstranijo in sprostijo prostor.
+
+Kaj ste poslali, vidite tako, da odprete **Datoteke** in izberete **Moje priponke iz klepeta**. Seznam prikazuje vsako priponko in posnetek z velikostjo, pogovorom in datumom. Posamezno odstranite z **Odstrani**, ali pa ob **Odstrani priponke iz klepeta, starejše od** izberete starost in odstranite vse svoje starejše priponke, na primer starejše od 1 leta. Lastniki in administratorji imajo enako izbiro pod **Prostor in omejitve**, kjer velja za priponke iz klepeta vseh oseb.
+
+### Pokličite sodelavca
+
+Odprite pogovor z eno osebo in na vrhu pogovora pritisnite gumb s telefonom za glasovni klic ali gumb s kamero za videoklic. Druga oseba sliši zvonjenje v vsakem zavihku, kjer ima odprt RabbitPay, in lahko klic sprejme z videom ali brez njega ali ga zavrne. Prvič brskalnik vpraša za dovoljenje za uporabo mikrofona in kamere.
+
+Klic ima vrsto okroglih gumbov. Ime gumba vidite, če nanj postavite kazalec. Od leve proti desni:
+
+- izklopijo vaš mikrofon, pri čemer je gumb rdeč, dokler je mikrofon izklopljen,
+- vklopijo ali izklopijo kamero,
+- delijo okno ali cel zaslon. Zaslon lahko naenkrat deli samo eden od vaju.
+- razširijo klic čez stran,
+- z rdečim gumbom prekinejo klic.
+
+Klic ostane v kotu strani, medtem ko delate naprej v RabbitPayu. Če zaprete zavihek, se klic konča. Zvok in slika potujeta neposredno med brskalnikoma, ne prek RabbitPaya.
+
+V pogovoru ostane vrstica za vsak klic z njegovo dolžino. Zgrešen klic je označen in šteje kot neprebran. Če druga oseba ni povezana, zgrešen klic vidi, ko naslednjič odpre klepet.
+
+### Pokličite skupino
+
+Odprite skupino in na vrhu pogovora pritisnite gumb s kamero, da začnete klic. Vsi v skupini tam vidijo poudarjen gumb s številom oseb, ki so že v klicu, s katerim se pridružijo, na seznamu pogovorov pa piše **Klic poteka**. Skupinski klic ne zvoni.
+
+Klic pokaže ploščico za vsako osebo. Gumbi delujejo enako kot pri klicu med dvema osebama, zaslon pa lahko naenkrat deli samo ena oseba. Klic zapustite z rdečim gumbom. Klic se konča, ko ga zapusti zadnja oseba, v pogovoru pa ostane vrstica z njegovo dolžino.
+
+Če skupina nima gumba s kamero, strežnik nima medijskih strežnikov za skupinske klice. Klici med dvema osebama še vedno delujejo.
+
+Klic ima svoj klepet, za gumbom z oblačkom, za hitra sporočila vsem v klicu. Ta sporočila se ne shranijo. Za vse, kar naj ostane, uporabite sam pogovor.
+
+### Načrtujte sestanek in povabite goste
+
+1. V **Klepetu** pritisnite **Novo** in izberite **Načrtuj sestanek**.
+2. Vnesite naslov, datum, začetek in dolžino ter izberite sodelavce, ki jih vabite.
+3. Vklopite **Gostje se lahko pridružijo s povezavo**, če naj sodelujejo tudi osebe zunaj ekipe.
+
+Sestanek se vsem prikaže na seznamu pogovorov s svojim časom. Je skupina kot vsaka druga, zato lahko v njem pišete in delite datoteke pred sestankom in po njem. Ob dogovorjenem času ga odprite in začnite klic.
+
+Gosta povabite tako, da odprete **Podrobnosti skupine**, kopirate **Povezavo za goste** in mu jo pošljete. Gost odpre povezavo, vnese svoje ime in se pridruži. Računa ne potrebuje. Gost se lahko pridruži samo, dokler klic poteka, zato ga mora najprej začeti nekdo iz ekipe, klic pa se za goste konča, ko ga zapusti zadnji član ekipe. Gostje so v klicu označeni kot gostje.
+
+Skrbnik sestanka lahko spremeni čas, izklopi dostop za goste ali pritisne **Nova povezava za goste**, s čimer stara povezava preneha delovati.
+
+### Posnemite klic
+
+V skupinskem klicu ali na sestanku pritisnite gumb za snemanje, tisti s piko v krogu. Posnetek vsebuje glasove vseh in deljeni zaslon. Dokler nihče ne deli zaslona, prikazuje naslov klica. Vsi v klicu vidijo, kdo snema, snema pa lahko naenkrat samo ena oseba. Če vaša pravila zahtevajo soglasje gostov, jih obvestite, preden začnete.
+
+Snemanje končate z istim gumbom ali tako, da zapustite klic. Posnetek se prikaže v pogovoru kot videoposnetek, ki ga lahko vsi v skupini predvajajo ali prenesejo. Shranjen je šifrirano in uporablja **Prostor za datoteke**, približno 10 MB na minuto.
+
+Posnetek nastaja v vašem brskalniku, zato imejte zavihek odprt. Če se zavihek zapre, se ohrani vse, kar je bilo posneto do zadnje minute ali dveh, in se v pogovoru prikaže nekaj minut pozneje. Klicev med dvema osebama ni mogoče snemati.
+
 ## Shranjujte in delite datoteke
 
 **Datoteke** so skupen prostor za dokumente, slike in videoposnetke. Ustvarite mape, datoteke naložite z gumbom **Naloži datoteke**, jih spustite na stran ali prilepite posnetek zaslona.
@@ -80,7 +150,7 @@ Pripete datoteke uporabljajo **Prostor za datoteke**, ki je ločen od prostora z
 Datoteke uporabljajo isti **Prostor za datoteke** kot priloge zahtevkov. Lastniki in administratorji pod **Prostor in omejitve** vidijo vse datoteke, največje najprej, in nastavijo:
 
 1. **Največja datoteka v MB**, največjo posamezno datoteko, ki jo lahko kdo naloži.
-2. **Prostor na osebo v MB**, koliko lahko vsaka oseba hrani v Datotekah. Pustite prazno, če omejitve ni.
+2. **Prostor na osebo v MB**, koliko lahko vsaka oseba hrani v Datotekah in pošlje kot priponke in posnetke v klepetu. Pustite prazno, če omejitve ni.
 3. **Lastno omejitev** za eno osebo, kadar nekdo potrebuje več ali manj kot ostali.
 
 Stranka vidi zahtevek na portalu za kupce šele, ko ji omogočite dostop in zahtevek označite kot viden zanjo. Glejte [Portal za kupce](customer-portal).

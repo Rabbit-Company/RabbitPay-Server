@@ -45,6 +45,10 @@ export default class Auth {
 		return session;
 	}
 
+	static async isSessionAlive(token: string): Promise<boolean> {
+		return (await Cache.getString(await Auth.cacheKey(token))) !== null;
+	}
+
 	static async destroySession(token: string): Promise<boolean> {
 		return await Cache.deleteString(await Auth.cacheKey(token));
 	}

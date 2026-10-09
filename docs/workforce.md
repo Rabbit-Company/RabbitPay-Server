@@ -66,6 +66,113 @@ removed it and when. Customers do not see attached files. Files use the
 project's file storage, which is separate from document storage (see
 [Administration](administration.md)).
 
+## Chat
+
+Chat lets the people in a project write to each other, either one to one or in
+named groups. It is open to every role except viewer, developer and cashier
+and needs the workforce license. A direct conversation always has the same two
+people. A group has a name and up to 100 people, and the person who creates it
+is its admin. Group admins rename the group and add or remove people, and
+anyone can leave. When the last admin leaves, the person who has been in the
+group longest becomes admin, and a group that everyone left is deleted with
+its messages.
+
+Messages arrive live over a WebSocket at `/api/v1/realtime`, so the reverse
+proxy in front of the server has to pass WebSocket upgrades through on
+HTTP/1.1. The browser reconnects by itself after a network outage and loads
+what it missed. A message can be up to 4000 characters. Its author can edit or
+delete it, and a group admin can delete anyone's message in that group. Message
+text is encrypted in the database with the server's master key, and a deleted
+message has its text erased. Only the people in a conversation can read it.
+Owners and administrators cannot open other people's conversations.
+
+A message can carry up to 10 files, attached with the Attach button or by
+pasting. They are stored like ticket attachments, use the project's file
+storage and follow its largest file setting. The sender and group admins can
+delete an attachment, and the message then shows that it was deleted and by
+whom. Owners and administrators see chat attachments under License, Manage
+files only as "Chat attachment" with their size, sender and date. They cannot
+open them or see their names, but they can delete them to free storage.
+Deleting a message deletes its attachments, and files that were attached but
+never sent are discarded after a day.
+
+Chat attachments and recordings count toward the project's file storage and
+toward the sender's own limit, together with what the person keeps in Files.
+A person at their limit cannot attach files or start a recording, and a
+running recording stops when the limit is reached. They are not shown among a
+person's files. Files has a My chat attachments entry instead, which lists everything
+the person sent in chat with its size, conversation and date. There they can
+remove single attachments or all of their attachments older than 30 days, 3
+months, 6 months or a year, or all of them. Owners and administrators have the
+same choice under License, Manage files for the chat attachments of everyone
+in the project.
+
+### Calls
+
+In a direct conversation, Call and Video call ring the other person in every
+browser tab they have open. The call connects from browser to browser, so
+audio, video and a shared screen do not pass through the RabbitPay server and
+a running call survives a short outage or restart of the server. During a
+call each person can mute, turn the camera on or off and share their screen.
+Only one of the two can share a screen at a time. The call stays in a panel
+at the corner of the page while the person keeps working, and the
+conversation keeps a line for every call with its length, or a note that it
+was missed, declined or cancelled. A missed call counts as unread. Calling
+someone who is not online records a missed call for them.
+
+A group conversation has Start call when the server has media servers
+configured. Everyone in the group sees that a call is running and joins with
+Join call. It does not ring. Group calls go through a LiveKit media server
+instead of browser to browser, so each person sends their audio and video only
+once however many people take part. One person shares a screen at a time. The
+call ends when the last person leaves and the conversation keeps a line with
+its length. The call panel has its own Chat for quick messages that everyone
+in the call sees, guests included. Those messages are not saved.
+
+Schedule meeting, in the New menu of Chat, creates a group with a title, a
+start time and a length, and invites the chosen people. The meeting is an
+ordinary group, so its conversation, files and call work the same way, and
+the time is only shown, nothing starts by itself. A meeting can allow guests.
+Group details then shows a guest link that anyone can open without an
+account. A guest enters a name and can join only while a call started by a
+member is running, and when the last member leaves, the call ends for the
+guests too. Guests are marked as guests in the call, do not count as employee
+seats and see nothing of the project except the meeting title, the company
+name and the time. A group admin can replace the link, which makes the old
+one stop working, or turn guest access off.
+
+Record, in a group call, records in the browser of the member who pressed it:
+the voices of everyone in the call mixed together and the shared screen, or a
+title card while nobody shares. Everyone in the call, guests included, sees
+who is recording, and only one person records at a time. The recording is
+uploaded in 16 MB parts while the call runs and is added to the conversation
+as a WebM video when recording stops, where it is stored encrypted like every
+other chat attachment and uses the project's file storage. If the browser of
+the person recording closes, the parts already uploaded are kept and the
+recording appears in the conversation a few minutes later, without the last
+minute or two. Calls between two people cannot be recorded.
+
+The server only passes the connection details between the two browsers. Under
+Admin, Settings, Calls the administrator sets the STUN servers that let
+browsers find each other and, optionally, TURN servers that relay a call when
+a firewall blocks the direct connection. TURN uses the shared secret of a
+coturn server (`use-auth-secret`), from which every call gets its own
+credentials that expire after six hours. Without TURN, a small share of calls
+between strict networks cannot connect. Browsers only allow the microphone,
+camera and screen sharing on HTTPS or on localhost.
+
+Group calls need one or more [LiveKit](https://github.com/livekit/livekit)
+servers, hosted apart from RabbitPay so that calls never use its bandwidth or
+processor. Enter their WebSocket addresses under Admin, Settings, Calls
+together with the API key and secret, which must be the same on every media
+server. A new call is placed on the reachable server with the fewest people
+on it and stays there. RabbitPay hands each person a token that is valid for
+that one room, and it asks the media server every minute who is still
+connected, so a call whose participants all lost their connection is closed.
+If a media server fails, only its calls drop and people can start the call
+again on another server. Without media servers, groups have no call button,
+meetings cannot be scheduled and calls between two people keep working.
+
 ## Files
 
 Files is a file manager for the team, open to every role except viewer,
@@ -84,9 +191,10 @@ who added an item and whoever made a folder above it can share, rename, move
 and delete it. Owners and administrators can open everything.
 
 Files and ticket attachments share the project's file storage. Owners and
-administrators can also limit how much each person keeps in Files, with one
-limit for everyone and a separate limit for individual people. Ticket
-attachments do not count toward a person's limit.
+administrators can also limit how much each person keeps in Files and sends
+as chat attachments and recordings, with one limit for everyone and a separate
+limit for individual people. Ticket attachments do not count toward a person's
+limit.
 
 A customer can see tickets in the [customer portal](customer-portal.md) only
 after a project member gives them access and marks the tickets they may see. The

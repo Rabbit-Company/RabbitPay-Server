@@ -20,6 +20,7 @@ import { openLightbox } from "../lightbox";
 import { loadProject, projectLayout } from "./project";
 import { losslessWebp } from "../image";
 import { startTransfer } from "../transfers";
+import { bulkRemoval } from "./chat-attachments";
 import {
 	FILE_MB_BYTES,
 	MAX_IN_PAGE_DOWNLOAD_BYTES,
@@ -172,10 +173,10 @@ export async function openViewer(project: Project, file: TicketFile, kind: "vide
 	}
 }
 
-async function confirmRemoval(project: Project, file: TicketFile): Promise<boolean> {
+export async function confirmRemoval(project: Project, file: TicketFile, chat = false): Promise<boolean> {
 	const confirmed = await confirmDialog({
 		title: t("files.remove_title"),
-		body: t("files.remove_body", { name: file.file_name }),
+		body: chat ? t("files.remove_chat_body", { name: file.file_name || t("files.chat_attachment") }) : t("files.remove_body", { name: file.file_name }),
 		confirmLabel: t("files.remove"),
 		destructive: true,
 	});
@@ -338,7 +339,13 @@ export async function fileStorageView(uuid: string): Promise<HTMLElement> {
 		el(
 			"tr",
 			{},
-			el("td", {}, el("button", { class: "link-button", type: "button", onClick: () => void downloadFile(project, file) }, file.file_name)),
+			el(
+				"td",
+				{},
+				file.chat
+					? el("span", { class: "muted" }, t("files.chat_attachment"))
+					: el("button", { class: "link-button", type: "button", onClick: () => void downloadFile(project, file) }, file.file_name)
+			),
 			el("td", { class: "mono" }, formatBytes(file.byte_size)),
 			el("td", {}, [uploaderOf(file), when(project, file.created)].filter(Boolean).join(" | ")),
 			el(
@@ -360,7 +367,7 @@ export async function fileStorageView(uuid: string): Promise<HTMLElement> {
 						class: "button ghost small",
 						type: "button",
 						onClick: async () => {
-							if (await confirmRemoval(project, file)) await load();
+							if (await confirmRemoval(project, file, file.chat)) await load();
 						},
 					},
 					t("files.remove")
@@ -462,7 +469,7 @@ export async function fileStorageView(uuid: string): Promise<HTMLElement> {
 		project,
 		el(
 			"div",
-			{ class: "stack" },
+			{ class: "stack file-page" },
 			el(
 				"div",
 				{ class: "page-head" },
@@ -470,6 +477,10 @@ export async function fileStorageView(uuid: string): Promise<HTMLElement> {
 			),
 			el("p", { class: "muted" }, t("files.manage_hint")),
 			el("div", { class: "toolbar" }, summary, sort),
+			bulkRemoval(uuid, true, () => {
+				controls.reset();
+				void load().catch(reportError);
+			}),
 			el("div", { class: "card" }, body),
 			controls.element,
 			limitForm,
