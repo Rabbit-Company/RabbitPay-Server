@@ -1501,6 +1501,55 @@ body.sf-locked {
 	padding: 0;
 	background: none;
 }
+.hljs-comment,
+.hljs-quote {
+	color: color-mix(in srgb, var(--text) 55%, transparent);
+	font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-meta,
+.hljs-doctag {
+	color: color-mix(in srgb, #a626a4 65%, var(--text));
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+	color: color-mix(in srgb, #2e9e44 65%, var(--text));
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet {
+	color: color-mix(in srgb, #d9730d 65%, var(--text));
+}
+.hljs-title,
+.hljs-section,
+.hljs-property {
+	color: color-mix(in srgb, #2f6fed 65%, var(--text));
+}
+.hljs-built_in,
+.hljs-type,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-pseudo,
+.hljs-selector-attr {
+	color: color-mix(in srgb, #0e9aa7 65%, var(--text));
+}
+.hljs-name,
+.hljs-deletion {
+	color: color-mix(in srgb, #e0364f 65%, var(--text));
+}
+.hljs-emphasis {
+	font-style: italic;
+}
+.hljs-strong {
+	font-weight: 700;
+}
 .sf-prose hr {
 	border: none;
 	height: 1px;

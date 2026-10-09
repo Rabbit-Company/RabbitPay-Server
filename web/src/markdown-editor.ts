@@ -2,6 +2,7 @@ import { el } from "./dom";
 import { t, type UiKey } from "./i18n";
 import { renderMarkdown } from "../../server/markdown";
 import { zoomableImages } from "./lightbox";
+import { withCodeTools } from "./code-blocks";
 import { applyStorePreviewTheme } from "./storefront/layout";
 
 interface MarkdownEditorOptions {
@@ -77,6 +78,7 @@ export function markdownView(source: string, className = ""): HTMLElement {
 	const view = el("div", { class: `sf-prose markdown-body${className ? ` ${className}` : ""}` });
 	view.innerHTML = renderMarkdown(source);
 	zoomableImages(view);
+	withCodeTools(view);
 	return view;
 }
 

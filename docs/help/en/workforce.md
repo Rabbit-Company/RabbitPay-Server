@@ -75,6 +75,10 @@ A dot next to a person's name shows whether you can reach them now: green means 
 
 Set your own status at the top of the conversation list: **Available**, **Away** or **Do not disturb**. It stays until you change it, on every device. With **Do not disturb** calls do not ring and new messages do not pop up. Callers are told you do not want to be disturbed, and you see the missed call and the messages in the chat afterwards.
 
+Messages understand the same formatting as tickets: `**bold**`, `*italic*`, `~~struck~~`, lists that start with `-` or `1.`, quotes that start with `>`, headings, tables and named links, written as the text in square brackets followed by the address in round brackets. A new line in your message stays a new line, and web addresses become links by themselves.
+
+To send code, put it between two lines of three backticks. Write the language right after the first three, such as `ts, `css or ```sql, and the code is shown in colors. While a code block is still open, Enter starts a new line and does not send. Close the block with three backticks and Enter sends again. Every code block has two small buttons in its top right corner: one copies the code and one opens it larger. The same coloring and buttons work in ticket descriptions and comments.
+
 Each of your own messages has an actions menu with **Edit** and **Delete**. A deleted message is removed for everyone and its text is erased.
 
 The person who creates a group is its admin. Under **Group details** an admin renames the group, adds and removes people and can delete any message in it. Anyone can leave a group with **Leave group**. People added later see the earlier messages.

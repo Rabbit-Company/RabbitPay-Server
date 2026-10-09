@@ -75,6 +75,10 @@ Pika ob imenu osebe pove, ali je ta zdaj dosegljiva: zelena pomeni, da ima Rabbi
 
 Svoj status nastavite na vrhu seznama pogovorov: **Na voljo**, **Odsotnost** ali **Ne moti**. Ostane, dokler ga ne spremenite, na vseh napravah. Pri **Ne moti** klici ne zvonijo in nova sporočila se ne prikazujejo v oknih. Klicatelj izve, da ne želite biti moteni, zgrešen klic in sporočila pa pozneje vidite v klepetu.
 
+Sporočila razumejo enako oblikovanje kot zahtevki: `**krepko**`, `*ležeče*`, `~~prečrtano~~`, sezname, ki se začnejo z `-` ali `1.`, navedke, ki se začnejo z `>`, naslove, tabele in poimenovane povezave, zapisane kot besedilo v oglatih oklepajih, ki mu sledi naslov v okroglih oklepajih. Nova vrstica v sporočilu ostane nova vrstica, spletni naslovi pa sami postanejo povezave.
+
+Kodo pošljete tako, da jo postavite med dve vrstici s tremi krativci. Takoj za prvimi tremi napišite jezik, na primer `ts, `css ali ```sql, in koda se prikaže v barvah. Dokler je blok kode odprt, Enter začne novo vrstico in sporočila ne pošlje. Ko blok zaprete s tremi krativci, Enter spet pošilja. Vsak blok kode ima v zgornjem desnem kotu dva majhna gumba: eden kodo kopira, drugi jo odpre večjo. Enako barvanje in gumbi delujejo v opisih in komentarjih zahtevkov.
+
 Vsako vaše sporočilo ima meni dejanj z **Uredi** in **Izbriši**. Izbrisano sporočilo se odstrani za vse in njegovo besedilo se izbriše.
 
 Oseba, ki ustvari skupino, je njen skrbnik. Pod **Podrobnosti skupine** skrbnik skupino preimenuje, dodaja in odstranjuje osebe ter lahko izbriše katerokoli sporočilo v njej. Skupino lahko vsak zapusti z **Zapusti skupino**. Osebe, dodane pozneje, vidijo prejšnja sporočila.

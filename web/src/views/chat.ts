@@ -10,6 +10,8 @@ import {
 	type FileUpload,
 	type TicketFile,
 } from "../api";
+import { markdownText } from "../../../server/markdown";
+import { markdownView } from "../markdown-editor";
 import { chooseOwnStatus, ownStatus, watchOwnStatus } from "../chat-status";
 import { el, emptyState, field, input, select } from "../dom";
 import { formatBytes, formatDate, formatTime } from "../money";
@@ -31,6 +33,7 @@ const CONVERSATION_NOT_FOUND = 1316;
 const NEAR_BOTTOM_PX = 120;
 const LOAD_OLDER_PX = 60;
 const READ_DELAY_MS = 300;
+const PREVIEW_LENGTH = 120;
 const MEETING_LENGTHS = [15, 30, 45, 60, 90, 120, 180];
 
 function pad(value: number): string {
@@ -83,6 +86,33 @@ function linked(text: string): (Node | string)[] {
 		const anchor = el("a", { href: part, target: "_blank", rel: "noopener noreferrer" }, part);
 		return anchor;
 	});
+}
+
+function insideOpenCode(written: string): boolean {
+	return (written.match(/```/g) ?? []).length % 2 === 1;
+}
+
+function linkBareAddresses(root: HTMLElement) {
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const texts: Text[] = [];
+	while (walker.nextNode()) {
+		const text = walker.currentNode as Text;
+		if (!text.parentElement?.closest("a, code, pre")) texts.push(text);
+	}
+	for (const text of texts) {
+		const parts = linked(text.data);
+		if (parts.length > 1) text.replaceWith(...parts);
+	}
+}
+
+function messageContent(text: string): HTMLElement {
+	const view = markdownView(text, "markdown-compact");
+	linkBareAddresses(view);
+	return view;
+}
+
+function messagePreview(text: string): string {
+	return markdownText(text, PREVIEW_LENGTH) || (text.includes("```") ? t("code.title") : text.slice(0, PREVIEW_LENGTH));
 }
 
 function presenceDot(presence: ChatPresence): HTMLElement {
@@ -188,7 +218,7 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 		if (last.call) return callLabel(last);
 		if (last.deleted || last.body === null) return t("chat.message_deleted");
 		const author = last.author === me ? t("chat.you") : conversation.kind === "group" ? last.author_name : null;
-		const text = last.body || t("chat.attachment");
+		const text = last.body ? messagePreview(last.body) : t("chat.attachment");
 		return author ? `${author}: ${text}` : text;
 	}
 
@@ -333,7 +363,7 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 		const bubble = message.deleted
 			? el("div", { class: "chat-bubble" }, t("chat.message_deleted"))
 			: message.body
-				? el("div", { class: "chat-bubble" }, ...linked(message.body))
+				? el("div", { class: "chat-bubble" }, messageContent(message.body))
 				: null;
 		const files = message.files.length > 0 ? el("div", { class: "chat-files" }, ...message.files.map((file) => fileNode(message, file))) : null;
 		return el(
@@ -607,6 +637,7 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 			return;
 		}
 		if (event.key !== "Enter" || event.shiftKey || event.isComposing || window.matchMedia("(pointer: coarse)").matches) return;
+		if (insideOpenCode(composerText.value.slice(0, composerText.selectionStart))) return;
 		event.preventDefault();
 		void submit();
 	});

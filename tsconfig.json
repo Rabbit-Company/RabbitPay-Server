@@ -14,6 +14,9 @@
 		"allowSyntheticDefaultImports": true,
 		"forceConsistentCasingInFileNames": true,
 		"allowJs": true,
+		"paths": {
+			"highlight.js/lib/common": ["./server/highlight-js.d.ts"]
+		},
 		"types": [
 			"bun-types" // add Bun global
 		]

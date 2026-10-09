@@ -1,3 +1,5 @@
+import { highlightCode } from "./code-highlight";
+
 const INLINE =
 	/(`+)([\s\S]*?[^`])\1(?!`)|!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"([^"]*)")?\s*\)|\[((?:[^[\]]|\[[^\]]*\])+)\]\(\s*([^)\s]+)(?:\s+"([^"]*)")?\s*\)|<((?:https?:\/\/|mailto:)[^>\s]+)>|\*\*(?=\S)([\s\S]+?)\*\*|__(?=\S)([\s\S]+?)__|~~(?=\S)([\s\S]+?)~~|\*(?=\S)([\s\S]+?)\*|(?<![A-Za-z0-9])_(?=\S)([\s\S]+?)_(?![A-Za-z0-9])|(?: {2,}|\\)\n/;
 
@@ -212,7 +214,7 @@ function renderBlocks(lines: string[]): string {
 			}
 			index++;
 			const language = fence[2] ? ` class="language-${escapeHtml(fence[2])}"` : "";
-			output.push(`<pre><code${language}>${escapeHtml(code.join("\n"))}</code></pre>`);
+			output.push(`<pre><code${language}>${highlightCode(code.join("\n"), fence[2])}</code></pre>`);
 			continue;
 		}
 

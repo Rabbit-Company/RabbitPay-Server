@@ -4,6 +4,7 @@ import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
 import { currentPath } from "./router";
 import { toast } from "./ui";
+import { markdownText } from "../../server/markdown";
 import { watchCalls } from "./calls";
 import { followOwnStatus, ownStatus } from "./chat-status";
 
@@ -44,7 +45,7 @@ function announce(project: string, message: ChatMessage) {
 	if (message.author === getUsername() || message.deleted || message.body === null || ownStatus() === "dnd") return;
 	if (currentPath().startsWith(`/projects/${project}/chat`) && document.visibilityState === "visible") return;
 	if (message.call !== null && message.call.outcome !== "missed") return;
-	const text = message.call ? t("calls.log_missed") : message.body || t("chat.attachment");
+	const text = message.call ? t("calls.log_missed") : message.body ? markdownText(message.body, PREVIEW_LENGTH) || t("code.title") : t("chat.attachment");
 	const preview = text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}...` : text;
 	toast(`${message.author_name}: ${preview}`, "info");
 }
