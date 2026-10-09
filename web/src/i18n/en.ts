@@ -4214,6 +4214,8 @@ export const en = {
 	"calls.stop_sharing": "Stop sharing",
 	"calls.larger": "Larger",
 	"calls.smaller": "Smaller",
+	"calls.full_screen": "Full screen",
+	"calls.exit_full_screen": "Exit full screen",
 	"calls.you_share": "You are sharing your screen.",
 	"calls.they_share": "{name} is sharing their screen.",
 	"calls.they_muted": "{name} is muted",

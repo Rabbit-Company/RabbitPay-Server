@@ -4217,6 +4217,8 @@ export const sl: UiDictionary = {
 	"calls.stop_sharing": "Ustavi deljenje",
 	"calls.larger": "Večje",
 	"calls.smaller": "Manjše",
+	"calls.full_screen": "Cel zaslon",
+	"calls.exit_full_screen": "Zapri cel zaslon",
 	"calls.you_share": "Delite svoj zaslon.",
 	"calls.they_share": "{name} deli svoj zaslon.",
 	"calls.they_muted": "{name} ima izklopljen mikrofon",

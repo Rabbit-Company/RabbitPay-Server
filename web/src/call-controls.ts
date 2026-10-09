@@ -6,12 +6,13 @@ export interface CallControlOptions {
 	pressed?: boolean;
 	disabled?: boolean;
 	badge?: boolean;
+	extraClass?: string;
 }
 
 export function callControl(name: string, label: string, onClick: () => void, options: CallControlOptions = {}): HTMLElement {
 	const button = el(
 		"button",
-		{ class: `call-control tone-${options.tone ?? "neutral"}`, type: "button", title: label, onClick },
+		{ class: `call-control tone-${options.tone ?? "neutral"}${options.extraClass ? ` ${options.extraClass}` : ""}`, type: "button", title: label, onClick },
 		icon(name, 20, "call-control-icon"),
 		options.badge ? el("span", { class: "call-control-badge" }) : null
 	);

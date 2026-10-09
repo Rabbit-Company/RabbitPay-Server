@@ -40,6 +40,9 @@ interface GroupSession {
 	stage: "connecting" | "connected" | "reconnecting";
 	joinedAt: number | null;
 	expanded: boolean;
+	theater: boolean;
+	quiet: boolean;
+	focus: string | null;
 }
 
 type LiveKit = typeof import("livekit-client");
@@ -50,6 +53,8 @@ let panel: HTMLElement | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let listening = false;
 let renderQueued = false;
+let chatField: HTMLInputElement | null = null;
+let nativeTheater = false;
 const videos = new Map<string, HTMLVideoElement>();
 const audioHost = el("div", { class: "call-audio" });
 audioHost.hidden = true;
@@ -96,7 +101,8 @@ function chatBox(current: GroupSession): HTMLElement {
 			? [el("p", { class: "muted" }, t("calls.chat_hint"))]
 			: current.lines.map((line) => el("p", {}, el("strong", {}, `${line.from}: `), line.text)))
 	);
-	const box = el("input", { type: "text", maxlength: String(MAX_CHAT_LENGTH), placeholder: t("chat.write_message") });
+	chatField ??= el("input", { type: "text", maxlength: String(MAX_CHAT_LENGTH), placeholder: t("chat.write_message") });
+	const box = chatField;
 	box.setAttribute("aria-label", t("chat.write_message"));
 	const form = el(
 		"form",
@@ -124,33 +130,66 @@ function chatBox(current: GroupSession): HTMLElement {
 function addLine(current: GroupSession, from: string, text: string) {
 	current.lines.push({ from, text: text.slice(0, MAX_CHAT_LENGTH) });
 	if (current.lines.length > MAX_CHAT_LINES) current.lines.shift();
-	if (!current.chatOpen) current.chatUnread = true;
-	const focused = document.activeElement;
-	const typing = focused instanceof HTMLInputElement && panel?.contains(focused) ? focused.value : null;
+	if (!current.chatOpen || current.theater) current.chatUnread = true;
 	render();
-	const box = panel?.querySelector<HTMLInputElement>(".call-chat-form input");
-	if (typing !== null && box) {
-		box.value = typing;
-		box.focus();
+}
+
+function markSpeakers() {
+	const room = session?.room;
+	if (!room || panel === null) return;
+	const speaking = new Set(room.activeSpeakers.map((participant) => participant.identity));
+	for (const node of panel.querySelectorAll<HTMLElement>(".call-tile")) node.classList.toggle("speaking", speaking.has(node.dataset.identity ?? ""));
+}
+
+function leaveNativeTheater() {
+	if (panel !== null && document.fullscreenElement === panel) void document.exitFullscreen().catch(() => undefined);
+}
+
+function setTheater(current: GroupSession, on: boolean, focus: string | null = null) {
+	current.theater = on;
+	current.quiet = false;
+	current.focus = on ? focus : null;
+	render();
+	if (!on) leaveNativeTheater();
+	else if (panel !== null && document.fullscreenEnabled) void panel.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
+}
+
+function onFullscreenChange() {
+	if (panel !== null && document.fullscreenElement === panel) {
+		nativeTheater = true;
+		return;
+	}
+	if (!nativeTheater) return;
+	nativeTheater = false;
+	if (session?.theater) {
+		session.theater = false;
+		session.focus = null;
+		render();
 	}
 }
 
-function tile(participant: Participant, own: boolean, source: LiveKit["Track"]["Source"]): HTMLElement {
+function cameraOf(participant: Participant, source: LiveKit["Track"]["Source"]): Track | null {
 	const camera = participant.getTrackPublication(source.Camera)?.track ?? null;
-	const showsVideo = camera !== null && participant.isCameraEnabled;
+	return participant.isCameraEnabled ? camera : null;
+}
+
+function tile(participant: Participant, own: boolean, source: LiveKit["Track"]["Source"], staged: boolean, maximize: () => void): HTMLElement {
+	const camera = staged ? null : cameraOf(participant, source);
+	const showsVideo = camera !== null;
 	const name = own ? t("chat.you") : nameOf(participant);
 	const video = showsVideo ? videoFor(camera) : null;
 	if (video) video.className = `call-tile-video${own ? " own" : ""}`;
 	return el(
 		"div",
-		{ class: `call-tile${participant.isSpeaking ? " speaking" : ""}` },
+		{ class: `call-tile${participant.isSpeaking ? " speaking" : ""}`, dataset: { identity: participant.identity } },
 		video ?? el("span", { class: "call-avatar" }, (participant.name || participant.identity).slice(0, 1).toUpperCase()),
 		el(
 			"span",
 			{ class: "call-tile-name", title: participant.isMicrophoneEnabled ? name : `${name} | ${t("calls.muted")}` },
 			participant.isMicrophoneEnabled ? null : icon("mic_off", 12, "call-tile-muted"),
 			name
-		)
+		),
+		video && !own ? callControl("fullscreen", t("calls.full_screen"), maximize, { extraClass: "call-stage-action call-tile-action" }) : null
 	);
 }
 
@@ -164,8 +203,10 @@ function render() {
 		clock = null;
 		videos.clear();
 		audioHost.replaceChildren();
+		chatField = null;
 		return;
 	}
+	const typing = chatField !== null && document.activeElement === chatField;
 	const recordingNote = current.recorder ? t("calls.recording_you") : current.recordingBy ? t("calls.recording_by", { name: current.recordingBy }) : null;
 	const head = el(
 		"div",
@@ -189,17 +230,50 @@ function render() {
 		const everyone: Participant[] = [local, ...room.remoteParticipants.values()];
 		const sharer = everyone.find((participant) => participant.isScreenShareEnabled && participant.getTrackPublication(source.ScreenShare)?.track);
 		const shared = sharer?.getTrackPublication(source.ScreenShare)?.track ?? null;
-		const sharedVideo = shared ? videoFor(shared) : null;
+		const focused = everyone.find((participant) => participant !== local && participant.identity === current.focus && cameraOf(participant, source));
+		const staged = (focused ? cameraOf(focused, source) : null) ?? shared;
+		const sharedVideo = staged ? videoFor(staged) : null;
 		if (sharedVideo) sharedVideo.className = "call-video-main";
-		const tiles = everyone.map((participant) => tile(participant, participant === local, source));
+		const tiles = everyone.map((participant) =>
+			tile(participant, participant === local, source, participant === focused, () => setTheater(current, true, participant.identity))
+		);
 		const used = new Set<HTMLVideoElement>([...(sharedVideo ? [sharedVideo] : []), ...tiles.flatMap((node) => [...node.querySelectorAll("video")])]);
 		for (const [key, video] of videos) if (!used.has(video)) videos.delete(key);
+		const watching = sharedVideo !== null && (focused !== undefined || sharer !== local);
+		if (current.theater && (!watching || (current.focus !== null && !focused))) {
+			current.theater = false;
+			leaveNativeTheater();
+		}
+		if (!current.theater) current.focus = null;
+		const theater = current.theater;
+		const stage = sharedVideo
+			? el(
+					"div",
+					{
+						class: "call-stage",
+						onClick: (event) => {
+							if (!current.theater || (event.target as Element).closest("button")) return;
+							current.quiet = !current.quiet;
+							panel?.classList.toggle("quiet", current.quiet);
+						},
+					},
+					sharedVideo,
+					watching
+						? callControl(
+								theater ? "fullscreen_exit" : "fullscreen",
+								theater ? t("calls.exit_full_screen") : t("calls.full_screen"),
+								() => setTheater(current, !theater),
+								{ pressed: theater, extraClass: "call-stage-action" }
+							)
+						: null
+				)
+			: null;
 		const sharingNote = sharer ? (sharer === local ? t("calls.you_share") : t("calls.they_share", { name: nameOf(sharer) })) : null;
 		body = el(
 			"div",
 			{ class: "call-body" },
-			sharedVideo
-				? el("div", { class: "call-group" }, el("div", { class: "call-stage" }, sharedVideo), el("div", { class: "call-strip" }, ...tiles))
+			stage
+				? el("div", { class: "call-group" }, stage, el("div", { class: "call-strip" }, ...tiles))
 				: el("div", { class: `call-grid people-${Math.min(everyone.length, 9)}` }, ...tiles),
 			sharingNote ? el("p", { class: "call-sharing muted" }, sharingNote) : null,
 			current.chatOpen ? chatBox(current) : null,
@@ -245,32 +319,34 @@ function render() {
 					"message",
 					current.chatUnread ? t("calls.chat_new") : t("nav.chat"),
 					() => {
-						current.chatOpen = !current.chatOpen;
+						current.chatOpen = theater || !current.chatOpen;
 						current.chatUnread = false;
-						render();
+						if (theater) setTheater(current, false);
+						else render();
+						if (current.chatOpen) chatField?.focus();
 					},
-					{ tone: current.chatOpen ? "active" : "neutral", pressed: current.chatOpen, badge: current.chatUnread }
+					{ tone: current.chatOpen && !theater ? "active" : "neutral", pressed: current.chatOpen && !theater, badge: current.chatUnread }
 				),
-				callControl(current.expanded ? "shrink" : "expand", current.expanded ? t("calls.smaller") : t("calls.larger"), () => {
-					current.expanded = !current.expanded;
-					render();
-				}),
+				theater
+					? null
+					: callControl(current.expanded ? "shrink" : "expand", current.expanded ? t("calls.smaller") : t("calls.larger"), () => {
+							current.expanded = !current.expanded;
+							render();
+						}),
 				callControl("hang_up", t("calls.leave"), () => void leaveGroupCall(), { tone: "danger" })
 			)
 		);
 	}
-	const next = el(
-		"div",
-		{ class: `call-panel call-panel-group${current.expanded ? " expanded" : ""}`, dataset: { stage: current.stage } },
-		head,
-		body,
-		audioHost
-	);
-	next.setAttribute("role", "dialog");
-	next.setAttribute("aria-label", t("calls.title", { name: current.title }));
-	if (panel) panel.replaceWith(next);
-	else document.body.appendChild(next);
-	panel = next;
+	if (panel === null) {
+		panel = el("div", {});
+		panel.setAttribute("role", "dialog");
+		document.body.appendChild(panel);
+	}
+	panel.className = `call-panel call-panel-group${current.expanded ? " expanded" : ""}${current.theater ? " theater" : ""}${current.theater && current.quiet ? " quiet" : ""}`;
+	panel.dataset.stage = current.stage;
+	panel.setAttribute("aria-label", t("calls.title", { name: current.title }));
+	panel.replaceChildren(head, body, audioHost);
+	if (typing && chatField?.isConnected) chatField.focus({ preventScroll: true });
 	clock ??= setInterval(() => {
 		const shown = panel?.querySelector(".call-status");
 		if (shown && session) shown.textContent = elapsed(session);
@@ -408,6 +484,9 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		stage: "connecting",
 		joinedAt: null,
 		expanded: options.expanded,
+		theater: false,
+		quiet: false,
+		focus: null,
 	};
 	session = current;
 	render();
@@ -430,11 +509,11 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 			events.TrackUnmuted,
 			events.LocalTrackPublished,
 			events.LocalTrackUnpublished,
-			events.ActiveSpeakersChanged,
 			events.TrackUnpublished,
 		]) {
 			room.on(event, queueRender);
 		}
+		room.on(events.ActiveSpeakersChanged, markSpeakers);
 		room.on(events.TrackSubscribed, (track) => {
 			if (track.kind === kit.Track.Kind.Audio) audioHost.appendChild(track.attach());
 			yieldScreen(room, kit);
@@ -568,5 +647,6 @@ export function watchGroupCalls() {
 	if (listening) return;
 	listening = true;
 	onRealtime(onEvent);
+	document.addEventListener("fullscreenchange", onFullscreenChange);
 	window.addEventListener("pagehide", () => session?.leave(true));
 }

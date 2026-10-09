@@ -6603,6 +6603,96 @@ fieldset.stack-tight {
 	grid-template-rows: minmax(0, 1fr);
 	grid-auto-rows: auto;
 }
+.call-chat-form input {
+	flex: 1;
+	min-width: 0;
+}
+.call-stage-action {
+	position: absolute;
+	top: 0.5rem;
+	right: 0.5rem;
+	border-color: transparent;
+	background: rgba(0, 0, 0, 0.6);
+	color: #ffffff;
+}
+.call-stage-action:hover:not(:disabled) {
+	background: rgba(0, 0, 0, 0.8);
+}
+.call-tile-action {
+	top: 0.3rem;
+	right: 0.3rem;
+	width: 2rem;
+	height: 2rem;
+}
+.call-grid.people-1 {
+	grid-template-columns: minmax(0, 240px);
+	justify-content: center;
+}
+.call-panel.expanded .call-grid.people-1 {
+	grid-template-columns: minmax(0, 420px);
+}
+.call-panel.theater {
+	inset: 0;
+	z-index: 80;
+	display: block;
+	width: auto;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: #000000;
+}
+.call-panel.theater .call-head,
+.call-panel.theater .call-strip,
+.call-panel.theater .call-sharing,
+.call-panel.theater .call-chat {
+	display: none;
+}
+.call-panel.theater .call-body,
+.call-panel.theater .call-group {
+	display: block;
+	height: 100%;
+}
+.call-panel.theater .call-stage {
+	height: 100%;
+	min-height: 0;
+	border-radius: 0;
+	background: #000000;
+}
+.call-panel.theater .call-stage-action {
+	top: max(0.5rem, env(safe-area-inset-top));
+	right: max(0.5rem, env(safe-area-inset-right));
+}
+.call-panel.theater .call-controls {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.call-panel.theater.quiet .call-controls,
+.call-panel.theater.quiet .call-stage-action {
+	display: none;
+}
+@media (max-width: 640px) {
+	.call-panel.expanded {
+		inset: 0;
+		padding: max(0.6rem, env(safe-area-inset-top)) max(0.6rem, env(safe-area-inset-right)) max(0.6rem, env(safe-area-inset-bottom))
+			max(0.6rem, env(safe-area-inset-left));
+		border: 0;
+		border-radius: 0;
+	}
+	.call-panel.expanded .call-grid {
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	}
+	.call-strip .call-tile {
+		flex-basis: 88px;
+	}
+	.call-chat-lines {
+		max-height: 96px;
+	}
+	.call-chat-form input {
+		font-size: 16px;
+	}
+}
 .chat-meeting {
 	padding: 0.75rem;
 	border: 1px solid var(--border);
