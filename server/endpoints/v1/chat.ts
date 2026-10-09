@@ -38,6 +38,7 @@ import {
 	announceFileChange,
 	findConversation,
 	finishRecording,
+	stampRecordingDuration,
 	insertMessage,
 	MAX_GROUP_PEOPLE,
 	meetingByGuestToken,
@@ -583,6 +584,8 @@ Server.app.put(`${base}/recordings/:file/parts/:index`, recordingPart, ...chat, 
 Server.app.post(`${base}/recordings/:file/finish`, ...chat, async (ctx) => {
 	const open = await openRecording(ctx);
 	if (!open) return Utils.fail(ctx, ErrorCode.RECORDING_NOT_FOUND);
+	const sent = await body(ctx);
+	if (sent?.duration_ms !== undefined) await stampRecordingDuration(open.file, sent.duration_offset, sent.duration_ms).catch(() => false);
 	const kept = await finishRecording(open.file, open.conversation, { username: Auth.account(ctx).username, name: personName(Permissions.member(ctx)) });
 	await audit(ctx, "chat.recording_finished", open.conversation.uuid, { file: open.file.uuid, kept, byte_size: Number(open.file.byte_size) });
 	return Utils.ok(ctx, { kept });

@@ -8,7 +8,7 @@ import { Permission } from "../roles";
 import { Realtime, type RealtimeEvent } from "../realtime";
 import { membersWithEmail, personName } from "./people";
 import { nameAccounts } from "../accounts";
-import { discardFiles, finishOpenUpload, presentFile, removeFile } from "../files";
+import { discardFiles, finishOpenUpload, presentFile, removeFile, replaceInFirstPart } from "../files";
 import { UPLOAD_EXPIRY_MS } from "../file-limits";
 import { MAX_GROUP_NAME_LENGTH, MAX_GROUP_PEOPLE, MAX_MESSAGE_FILES, MAX_MESSAGE_LENGTH, MAX_MESSAGE_PAGE, MESSAGE_PAGE } from "./chat-limits";
 import type {
@@ -208,6 +208,20 @@ export async function discardUnsentChatFiles(now = Date.now()): Promise<number> 
 	`) as ProjectFileRow[];
 	await discardFiles(unsent);
 	return unsent.length;
+}
+
+const DURATION_PLACEHOLDER = new Uint8Array([0xec, 0x89, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const MAX_DURATION_OFFSET = 65_536;
+const MAX_RECORDING_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function stampRecordingDuration(file: ProjectFileRow, offset: unknown, milliseconds: unknown): Promise<boolean> {
+	if (file.content_type !== "video/webm") return false;
+	if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0 || offset > MAX_DURATION_OFFSET) return false;
+	if (typeof milliseconds !== "number" || !Number.isFinite(milliseconds) || milliseconds <= 0 || milliseconds > MAX_RECORDING_MS) return false;
+	const duration = new Uint8Array(DURATION_PLACEHOLDER.length);
+	duration.set([0x44, 0x89, 0x88]);
+	new DataView(duration.buffer).setFloat64(3, milliseconds);
+	return await replaceInFirstPart(file, offset, DURATION_PLACEHOLDER, duration);
 }
 
 export async function finishRecording(file: ProjectFileRow, conversation: ChatConversationRow, author: { username: string; name: string }): Promise<boolean> {

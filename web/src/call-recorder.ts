@@ -1,5 +1,6 @@
 import type { Participant, Room, Track } from "livekit-client";
 import { Api } from "./api";
+import { reserveDuration } from "./webm-duration";
 
 const WIDTH = 1280;
 const HEIGHT = 720;
@@ -99,7 +100,7 @@ export async function startRecorder(
 		pen.fillStyle = "#9aa1ac";
 		const names = [room.localParticipant, ...room.remoteParticipants.values()].map((participant) => participant.name || participant.identity);
 		pen.fillText(names.join(", "), WIDTH / 2, HEIGHT / 2 + 30, WIDTH - 120);
-		pen.fillText(new Date().toLocaleTimeString(), WIDTH / 2, HEIGHT / 2 + 80);
+		pen.fillText(new Date().toLocaleString("sv-SE"), WIDTH / 2, HEIGHT / 2 + 80);
 	}
 
 	sync();
@@ -114,6 +115,11 @@ export async function startRecorder(
 	let failed = false;
 	let uploads: Promise<void> = Promise.resolve();
 	let stopped: Promise<boolean> | null = null;
+	let intake: Promise<void> = Promise.resolve();
+	let opening = type.startsWith("video/webm");
+	let durationOffset: number | null = null;
+	let startedAt = performance.now();
+	let endedAt: number | null = null;
 
 	function upload(part: Blob) {
 		const index = partIndex++;
@@ -139,11 +145,29 @@ export async function startRecorder(
 		}
 	}
 
+	async function opened(data: Blob): Promise<Blob> {
+		if (!opening) return data;
+		opening = false;
+		const reserved = reserveDuration(new Uint8Array(await data.arrayBuffer()));
+		if (reserved === null) return data;
+		durationOffset = reserved.offset;
+		return new Blob([reserved.bytes as BlobPart]);
+	}
+
 	recorder.addEventListener("dataavailable", (event) => {
 		if (event.data.size === 0) return;
-		pending.push(event.data);
-		pendingBytes += event.data.size;
-		cutParts(false);
+		intake = intake.then(async () => {
+			const data = await opened(event.data).catch(() => event.data);
+			pending.push(data);
+			pendingBytes += data.size;
+			cutParts(false);
+		});
+	});
+	recorder.addEventListener("start", () => {
+		startedAt = performance.now();
+	});
+	recorder.addEventListener("stop", () => {
+		endedAt ??= performance.now();
 	});
 	recorder.start(SLICE_MS);
 
@@ -155,10 +179,12 @@ export async function startRecorder(
 				for (const source of sources.values()) source.disconnect();
 				for (const track of stream.getTracks()) track.stop();
 				void audio.close().catch(() => undefined);
+				await intake;
 				cutParts(true);
 				await uploads;
+				const duration = durationOffset === null ? null : { offset: durationOffset, milliseconds: Math.round((endedAt ?? performance.now()) - startedAt) };
 				try {
-					resolve((await Api.finishRecording(target.project, begun.uuid)).kept && !failed);
+					resolve((await Api.finishRecording(target.project, begun.uuid, duration)).kept && !failed);
 				} catch {
 					resolve(false);
 				}

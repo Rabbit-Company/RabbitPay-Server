@@ -648,6 +648,36 @@ describe("recordings", () => {
 		expect((await call("GET", `/projects/${project}/files/${begun.data.uuid}`, tokens.boris)).status).toBe(404);
 	});
 
+	test("get their duration written into the reserved place", async () => {
+		const reserved = [0xec, 0x89, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+		const recorded = new Uint8Array([1, 2, 3, 4, ...reserved, 5, 6, 7]);
+		const download = async (file: string) =>
+			new Uint8Array(
+				await (
+					await Server.app.handle(
+						new Request(`http://127.0.0.1/api/v1/projects/${project}/files/${file}`, { headers: { Authorization: `Bearer ${tokens.owner}` } })
+					)
+				).arrayBuffer()
+			);
+
+		const stamped = await call("POST", recordings(), tokens.anna, { type: "video/webm" });
+		await part(tokens.anna, stamped.data.uuid, 0, recorded);
+		expect((await call("POST", `${chat()}/recordings/${stamped.data.uuid}/finish`, tokens.anna, { duration_offset: 4, duration_ms: 90500 })).data).toEqual({
+			kept: true,
+		});
+		const bytes = await download(stamped.data.uuid);
+		expect([...bytes.subarray(0, 7)]).toEqual([1, 2, 3, 4, 0x44, 0x89, 0x88]);
+		expect(new DataView(bytes.buffer).getFloat64(7)).toBe(90500);
+		expect([...bytes.subarray(15)]).toEqual([5, 6, 7]);
+
+		const misplaced = await call("POST", recordings(), tokens.anna, { type: "video/webm" });
+		await part(tokens.anna, misplaced.data.uuid, 0, recorded);
+		expect((await call("POST", `${chat()}/recordings/${misplaced.data.uuid}/finish`, tokens.anna, { duration_offset: 3, duration_ms: 90500 })).data).toEqual({
+			kept: true,
+		});
+		expect([...(await download(misplaced.data.uuid))]).toEqual([...recorded]);
+	});
+
 	test("are dropped when nothing was recorded and finished when left open", async () => {
 		const empty = await call("POST", recordings(), tokens.anna, {});
 		expect((await call("POST", `${chat()}/recordings/${empty.data.uuid}/finish`, tokens.anna)).data).toEqual({ kept: false });

@@ -18,6 +18,14 @@
 			"bun-types" // add Bun global
 		]
 	},
-	"include": ["server", "tests", "web/src/i18n/dictionary.ts", "web/src/i18n/en.ts", "web/src/i18n/sl.ts", "web/src/storefront/strings.ts"],
+	"include": [
+		"server",
+		"tests",
+		"web/src/i18n/dictionary.ts",
+		"web/src/i18n/en.ts",
+		"web/src/i18n/sl.ts",
+		"web/src/storefront/strings.ts",
+		"web/src/webm-duration.ts"
+	],
 	"exclude": ["node_modules"]
 }

@@ -3959,8 +3959,12 @@ export const Api = {
 		return await payloadOf<{ byte_size: number; parts: number }>(await sendBytes("PUT", `/projects/${uuid}/chat/recordings/${file}/parts/${index}`, part));
 	},
 
-	finishRecording(uuid: string, file: string) {
-		return request<{ kept: boolean }>("POST", `/projects/${uuid}/chat/recordings/${file}/finish`);
+	finishRecording(uuid: string, file: string, duration: { offset: number; milliseconds: number } | null) {
+		return request<{ kept: boolean }>(
+			"POST",
+			`/projects/${uuid}/chat/recordings/${file}/finish`,
+			duration ? { duration_offset: duration.offset, duration_ms: duration.milliseconds } : {}
+		);
 	},
 
 	joinGroupCall(uuid: string, conversation: string) {

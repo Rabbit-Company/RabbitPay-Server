@@ -105,6 +105,16 @@ export async function appendPart(file: ProjectFileRow, index: number, bytes: Uin
 	return stored.count === 1 ? await findFile(file.project, file.uuid) : null;
 }
 
+export async function replaceInFirstPart(file: ProjectFileRow, offset: number, expected: Uint8Array, replacement: Uint8Array): Promise<boolean> {
+	if (Number(file.parts_received) < 1 || expected.length !== replacement.length) return false;
+	const part = await documentStorage().get(partKey(file, 0));
+	if (offset < 0 || offset + expected.length > part.length || expected.some((byte, index) => part[offset + index] !== byte)) return false;
+	const replaced = new Uint8Array(part);
+	replaced.set(replacement, offset);
+	await documentStorage().put(partKey(file, 0), replaced, FALLBACK_CONTENT_TYPE);
+	return true;
+}
+
 export async function finishOpenUpload(file: ProjectFileRow): Promise<ProjectFileRow | null> {
 	const finished = await Database`UPDATE project_files SET status = 'ready' WHERE uuid = ${file.uuid} AND status = 'uploading' AND parts_received > 0`;
 	return finished.count === 1 ? await findFile(file.project, file.uuid) : null;
