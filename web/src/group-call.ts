@@ -27,6 +27,9 @@ interface RoomTicket {
 }
 
 type ShareSize = Exclude<RecordingSize, "custom">;
+type DeviceKind = "audioinput" | "videoinput";
+
+const DEVICE_KEY = "rabbitpay.call_device";
 
 const SHARE_SIZES: ShareSize[] = ["high", "medium", "small"];
 const SHARE_KEY = "rabbitpay.screen_share_quality";
@@ -34,7 +37,7 @@ const SHARE_ASPECT = 16 / 9;
 const SHARE_PRESETS: Record<ShareSize, ScreenShareQuality> = {
 	high: { height: 1080, frames_per_second: 30, kbps: 4000 },
 	medium: { height: 1080, frames_per_second: 15, kbps: 2500 },
-	small: { height: 720, frames_per_second: 10, kbps: 1000 },
+	small: { height: 720, frames_per_second: 15, kbps: 1500 },
 };
 
 function shareSize(): ShareSize {
@@ -68,6 +71,7 @@ interface GroupSession {
 	recordSize: RecordingSize;
 	shareSize: ShareSize;
 	shareLimits: ScreenShareQuality;
+	devices: Record<DeviceKind, MediaDeviceInfo[]>;
 	recordingBy: string | null;
 	room: Room | null;
 	stage: "connecting" | "connected" | "reconnecting";
@@ -167,23 +171,85 @@ function addLine(current: GroupSession, from: string, text: string) {
 	render();
 }
 
-function qualityPick<Size extends RecordingSize>(label: string, sizes: Size[], chosen: Size, disabled: boolean, choose: (size: Size) => void): HTMLElement {
-	const pick = select(
-		sizes.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
-		chosen
-	);
+function controlPick(
+	label: string,
+	options: { value: string; label: string }[],
+	chosen: string,
+	disabled: boolean,
+	choose: (value: string) => void
+): HTMLElement {
+	const pick = select(options, chosen);
 	pick.setAttribute("aria-label", label);
 	pick.disabled = disabled;
 	const holder = el("label", { class: "call-control call-control-pick" }, icon("down", 14, "call-control-icon"), pick);
 	const name = () => {
-		holder.title = `${label} | ${t(`files.recording_size_${pick.value as Size}`)}`;
+		holder.title = `${label} | ${options.find((option) => option.value === pick.value)?.label ?? ""}`;
 	};
 	pick.addEventListener("change", () => {
-		choose(pick.value as Size);
+		choose(pick.value);
 		name();
 	});
 	name();
 	return holder;
+}
+
+function qualityPick<Size extends RecordingSize>(label: string, sizes: Size[], chosen: Size, disabled: boolean, choose: (size: Size) => void): HTMLElement {
+	return controlPick(
+		label,
+		sizes.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
+		chosen,
+		disabled,
+		(value) => choose(value as Size)
+	);
+}
+
+function rememberedDevice(kind: DeviceKind): string | undefined {
+	try {
+		return localStorage.getItem(`${DEVICE_KEY}.${kind}`) ?? undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+async function refreshDevices(current: GroupSession) {
+	if (livekit === null) return;
+	try {
+		const [microphones, cameras] = await Promise.all([livekit.Room.getLocalDevices("audioinput", false), livekit.Room.getLocalDevices("videoinput", false)]);
+		const named = (device: MediaDeviceInfo) => device.deviceId !== "" && device.label !== "";
+		current.devices = { audioinput: microphones.filter(named), videoinput: cameras.filter(named) };
+		queueRender();
+	} catch {
+		void 0;
+	}
+}
+
+async function switchDevice(current: GroupSession, kind: DeviceKind, device: string) {
+	try {
+		await current.room?.switchActiveDevice(kind, device);
+		try {
+			localStorage.setItem(`${DEVICE_KEY}.${kind}`, device);
+		} catch {
+			void 0;
+		}
+	} catch {
+		toast(t(kind === "audioinput" ? "calls.no_microphone" : "calls.no_camera"), "error");
+	}
+	queueRender();
+}
+
+function withDevices(current: GroupSession, kind: DeviceKind, main: HTMLElement): HTMLElement {
+	const devices = current.devices[kind];
+	if (devices.length < 2 || current.room === null) return main;
+	return splitControl(
+		main,
+		controlPick(
+			t(kind === "audioinput" ? "calls.microphone_source" : "calls.camera_source"),
+			devices.map((device) => ({ value: device.deviceId, label: device.label })),
+			current.room.getActiveDevice(kind) ?? devices[0].deviceId,
+			false,
+			(device) => void switchDevice(current, kind, device)
+		)
+	);
 }
 
 function splitControl(main: HTMLElement, pick: HTMLElement): HTMLElement {
@@ -372,23 +438,31 @@ function render() {
 			el(
 				"div",
 				{ class: "call-controls" },
-				callControl(
-					local.isMicrophoneEnabled ? "mic" : "mic_off",
-					local.isMicrophoneEnabled ? t("calls.mute") : t("calls.unmute"),
-					() => void toggle("microphone"),
-					{
-						tone: local.isMicrophoneEnabled ? "neutral" : "off",
-						pressed: !local.isMicrophoneEnabled,
-					}
+				withDevices(
+					current,
+					"audioinput",
+					callControl(
+						local.isMicrophoneEnabled ? "mic" : "mic_off",
+						local.isMicrophoneEnabled ? t("calls.mute") : t("calls.unmute"),
+						() => void toggle("microphone"),
+						{
+							tone: local.isMicrophoneEnabled ? "neutral" : "off",
+							pressed: !local.isMicrophoneEnabled,
+						}
+					)
 				),
-				callControl(
-					local.isCameraEnabled ? "video" : "video_off",
-					local.isCameraEnabled ? t("calls.camera_off") : t("calls.camera_on"),
-					() => void toggle("camera"),
-					{
-						tone: local.isCameraEnabled ? "active" : "neutral",
-						pressed: local.isCameraEnabled,
-					}
+				withDevices(
+					current,
+					"videoinput",
+					callControl(
+						local.isCameraEnabled ? "video" : "video_off",
+						local.isCameraEnabled ? t("calls.camera_off") : t("calls.camera_on"),
+						() => void toggle("camera"),
+						{
+							tone: local.isCameraEnabled ? "active" : "neutral",
+							pressed: local.isCameraEnabled,
+						}
+					)
 				),
 				shareControl(current, local.isScreenShareEnabled, (sharer !== undefined && sharer !== local) || !("getDisplayMedia" in navigator.mediaDevices)),
 				current.recordTarget && canRecord() ? recordControl(current) : null,
@@ -466,6 +540,7 @@ async function toggle(kind: "microphone" | "camera" | "screen") {
 		if (kind === "microphone") toast(t("calls.no_microphone"), "error");
 		if (kind === "camera") toast(t("calls.no_camera"), "error");
 	}
+	if (session && kind !== "screen") void refreshDevices(session);
 	queueRender();
 }
 
@@ -576,6 +651,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		recordSize: recordingSize(),
 		shareSize: shareSize(),
 		shareLimits: SHARE_PRESETS.high,
+		devices: { audioinput: [], videoinput: [] },
 		recordingBy: null,
 		room: null,
 		stage: "connecting",
@@ -597,7 +673,14 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 			options.leave(false);
 			return false;
 		}
-		const room = new kit.Room({ adaptiveStream: true, dynacast: true });
+		const room = new kit.Room({
+			adaptiveStream: true,
+			dynacast: true,
+			audioCaptureDefaults: { deviceId: rememberedDevice("audioinput") },
+			videoCaptureDefaults: { deviceId: rememberedDevice("videoinput") },
+		});
+		room.on(kit.RoomEvent.MediaDevicesChanged, () => void refreshDevices(current));
+		room.on(kit.RoomEvent.ActiveDeviceChanged, queueRender);
 		current.room = room;
 		const events = kit.RoomEvent;
 		for (const event of [
@@ -674,6 +757,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		} catch {
 			toast(t("calls.no_microphone"), "error");
 		}
+		void refreshDevices(current);
 		queueRender();
 		return true;
 	} catch (error) {

@@ -7,7 +7,7 @@ const ASPECT = 16 / 9;
 const TITLE_HEIGHT = 720;
 const SIZE_KEY = "rabbitpay.recording_size";
 const CUSTOM_KEY = "rabbitpay.recording_custom";
-const PREFERRED_TYPES = ["video/webm;codecs=vp8,opus", "video/webm"];
+const PREFERRED_TYPES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
 
 export type RecordingSize = "high" | "medium" | "small" | "custom";
 export type RecordingPicture = Omit<RecordingQuality, "audio_kbps">;
@@ -17,7 +17,7 @@ export const RECORDING_FLOOR: RecordingPicture = { height: 360, frames_per_secon
 const PRESETS: Record<Exclude<RecordingSize, "custom">, RecordingPicture> = {
 	high: { height: 1080, frames_per_second: 30, video_kbps: 3000 },
 	medium: { height: 1080, frames_per_second: 15, video_kbps: 2000 },
-	small: { height: 720, frames_per_second: 10, video_kbps: 1200 },
+	small: { height: 720, frames_per_second: 15, video_kbps: 1500 },
 };
 
 export function recordingSize(): RecordingSize {

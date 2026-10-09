@@ -107,7 +107,7 @@ V pogovoru ostane vrstica za vsak klic z njegovo dolžino. Zgrešen klic je ozna
 
 Odprite skupino in na vrhu pogovora pritisnite gumb s kamero, da začnete klic. Vsi v skupini tam vidijo poudarjen gumb s številom oseb, ki so že v klicu, s katerim se pridružijo, na seznamu pogovorov pa piše **Klic poteka**. Skupinski klic ne zvoni.
 
-Klic pokaže ploščico za vsako osebo. Gumbi delujejo enako kot pri klicu med dvema osebama, zaslon pa lahko naenkrat deli samo ena oseba. S puščico ob gumbu za deljenje nastavite kakovost deljenega zaslona: **Visoka**, **Srednja** ali **Nizka**. Če je vaša povezava počasna, izberite nižjo. Klic zapustite z rdečim gumbom. Klic se konča, ko ga zapusti zadnja oseba, v pogovoru pa ostane vrstica z njegovo dolžino.
+Klic pokaže ploščico za vsako osebo. Gumbi delujejo enako kot pri klicu med dvema osebama, zaslon pa lahko naenkrat deli samo ena oseba. Če ima vaša naprava več mikrofonov ali kamer, lahko s puščico ob tem gumbu preklopite med njimi, izbira pa se zapomni za naslednji klic. S puščico ob gumbu za deljenje nastavite kakovost deljenega zaslona: **Visoka**, **Srednja** ali **Nizka**. Če je vaša povezava počasna, izberite nižjo. Klic zapustite z rdečim gumbom. Klic se konča, ko ga zapusti zadnja oseba, v pogovoru pa ostane vrstica z njegovo dolžino.
 
 Če skupina nima gumba s kamero, strežnik nima medijskih strežnikov za skupinske klice. Klici med dvema osebama še vedno delujejo.
 

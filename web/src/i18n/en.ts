@@ -4216,6 +4216,8 @@ export const en = {
 	"calls.smaller": "Smaller",
 	"calls.record_quality": "Recording quality",
 	"calls.share_quality": "Screen sharing quality",
+	"calls.microphone_source": "Microphone",
+	"calls.camera_source": "Camera",
 	"calls.full_screen": "Full screen",
 	"calls.exit_full_screen": "Exit full screen",
 	"calls.you_share": "You are sharing your screen.",

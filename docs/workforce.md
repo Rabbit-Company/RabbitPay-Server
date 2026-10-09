@@ -154,7 +154,7 @@ minute or two. Calls between two people cannot be recorded.
 
 Screen sharing in a group call has its own quality. The arrow next to the
 share button offers High (1080p, 30 frames, 4000 kbps), Medium (1080p, 15
-frames, 2500 kbps) and Low (720p, 10 frames, 1000 kbps), remembered in the
+frames, 2500 kbps) and Low (720p, 15 frames, 1500 kbps), remembered in the
 browser. Under Admin, Settings, Calls the administrator sets the highest
 resolution (1080), frame rate (30) and bitrate (5000 kbps) for shared screens,
 and choices above a limit are lowered to it. Calls between two people are not
@@ -163,7 +163,7 @@ affected.
 Each person chooses the quality of the recordings they make under Files, My
 chat attachments, because a recording counts toward their own storage: High
 (1080p, 30 frames, 3000 kbps, about 1.4 GB per hour), Medium (1080p, 15
-frames, 2000 kbps), Low (720p, 10 frames, 1200 kbps) or Custom, where they
+frames, 2000 kbps), Low (720p, 15 frames, 1500 kbps) or Custom, where they
 set the resolution, frame rate and video bitrate themselves. The choice is
 kept in their browser, and the arrow next to the record button in a call
 overrides it for that call. Under Admin, Settings, Calls the administrator sets
