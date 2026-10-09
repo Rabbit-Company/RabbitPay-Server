@@ -275,7 +275,7 @@ function tile(participant: Participant, own: boolean, source: LiveKit["Track"]["
 	const showsVideo = camera !== null;
 	const name = own ? t("chat.you") : nameOf(participant);
 	const video = showsVideo ? videoFor(camera) : null;
-	if (video) video.className = `call-tile-video${own ? " own" : ""}`;
+	if (video) video.className = "call-tile-video";
 	return el(
 		"div",
 		{ class: `call-tile${participant.isSpeaking ? " speaking" : ""}`, dataset: { identity: participant.identity } },
@@ -330,7 +330,7 @@ function render() {
 		const focused = everyone.find((participant) => participant.identity === current.focus && cameraOf(participant, source));
 		const staged = (focused ? cameraOf(focused, source) : null) ?? shared;
 		const sharedVideo = staged ? videoFor(staged) : null;
-		if (sharedVideo) sharedVideo.className = `call-video-main${focused === local ? " own" : ""}`;
+		if (sharedVideo) sharedVideo.className = "call-video-main";
 		const tiles = everyone.map((participant) =>
 			tile(participant, participant === local, source, participant === focused, () => setTheater(current, true, participant.identity))
 		);

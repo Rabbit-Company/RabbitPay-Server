@@ -209,7 +209,6 @@ function render() {
 		mainVideo.hidden = main === null;
 		sideVideo.hidden = side === null;
 		selfVideo.hidden = call.camera === null;
-		mainVideo.classList.toggle("own", call.ownFocus);
 		const selfThumb =
 			call.camera !== null && !call.ownFocus
 				? el(

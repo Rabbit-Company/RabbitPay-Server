@@ -6359,9 +6359,6 @@ fieldset.stack-tight {
 	max-height: 100%;
 	object-fit: contain;
 }
-.call-video-main.own {
-	transform: scaleX(-1);
-}
 .call-thumb {
 	position: relative;
 	display: flex;
@@ -6391,9 +6388,6 @@ fieldset.stack-tight {
 .call-panel.expanded .call-video-self {
 	width: 200px;
 	height: 150px;
-}
-.call-video-self {
-	transform: scaleX(-1);
 }
 .call-note {
 	position: absolute;
@@ -6565,9 +6559,6 @@ fieldset.stack-tight {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-}
-.call-tile-video.own {
-	transform: scaleX(-1);
 }
 .call-tile-name {
 	position: absolute;
