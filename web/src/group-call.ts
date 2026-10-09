@@ -454,7 +454,11 @@ async function publishCamera(current: GroupSession, room: Room) {
 	await room.localParticipant.setCameraEnabled(
 		true,
 		{ resolution: { width: quality.width, height: quality.height, frameRate: quality.frames_per_second } },
-		{ videoEncoding: { maxBitrate: quality.kbps * 1000, maxFramerate: quality.frames_per_second } }
+		{
+			videoEncoding: { maxBitrate: quality.kbps * 1000, maxFramerate: quality.frames_per_second },
+			videoCodec: livekit?.supportsVP9() ? "vp9" : "vp8",
+			backupCodec: true,
+		}
 	);
 }
 

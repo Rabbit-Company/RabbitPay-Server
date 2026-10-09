@@ -533,11 +533,26 @@ async function offer(call: ActiveCall, iceRestart = false) {
 	}
 }
 
+function preferVp9(connection: RTCPeerConnection) {
+	const codecs = RTCRtpReceiver.getCapabilities?.("video")?.codecs;
+	if (!codecs) return;
+	const vp9 = (codec: RTCRtpCodec) => codec.mimeType.toLowerCase() === "video/vp9";
+	const ordered = [...codecs.filter(vp9), ...codecs.filter((codec) => !vp9(codec))];
+	for (const transceiver of connection.getTransceivers().slice(1)) {
+		try {
+			transceiver.setCodecPreferences(ordered);
+		} catch {
+			void 0;
+		}
+	}
+}
+
 async function begin(call: ActiveCall) {
 	const connection = connect(call);
 	connection.addTransceiver(call.microphone ?? "audio", { direction: "sendrecv" });
 	connection.addTransceiver(call.camera ?? "video", { direction: "sendrecv" });
 	connection.addTransceiver("video", { direction: "sendrecv" });
+	preferVp9(connection);
 	await offer(call);
 }
 
@@ -549,6 +564,7 @@ async function answer(call: ActiveCall, description: RTCSessionDescriptionInit) 
 	await audio?.sender.replaceTrack(call.microphone);
 	await camera?.sender.replaceTrack(call.camera);
 	await screen?.sender.replaceTrack(call.screen);
+	preferVp9(connection);
 	await connection.setLocalDescription(await connection.createAnswer());
 	signal(call, { description: connection.localDescription!.toJSON() });
 	await drainCandidates(call);
