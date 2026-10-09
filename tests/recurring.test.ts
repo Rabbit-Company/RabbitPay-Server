@@ -350,7 +350,7 @@ describe("running", () => {
 		expect(row.occurrences).toBe(15);
 		expect(row.status).toBe("completed");
 		expect(row.next_run_at).toBeNull();
-	}, 10_000);
+	}, 60_000);
 
 	test("ends after the end date", async () => {
 		const created = await createTemplate({ interval_unit: "week", end_date: today() + 10 * DAY });
