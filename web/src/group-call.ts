@@ -1,5 +1,5 @@
 import type { Participant, Room, Track } from "livekit-client";
-import { Api, getToken, getUsername, publicRequest, type ScreenShareQuality } from "./api";
+import { Api, getToken, getUsername, publicRequest, type CameraQuality, type ScreenShareQuality } from "./api";
 import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
@@ -8,6 +8,10 @@ import { canRecord, RECORDING_SIZES, recordingSize, startRecorder, type CallReco
 import { callControl, controlPick, qualityPick, splitControl } from "./call-controls";
 import { icon } from "./storefront/icons";
 import {
+	CAMERA_PRESETS,
+	cameraQuality,
+	cameraSize,
+	chooseCameraSize,
 	chooseShareSize,
 	namedDevices,
 	rememberDevice,
@@ -35,6 +39,7 @@ interface RoomTicket {
 	url: string;
 	token: string;
 	screen_share: ScreenShareQuality;
+	camera: CameraQuality;
 }
 
 interface GroupSession {
@@ -51,6 +56,8 @@ interface GroupSession {
 	recordSize: RecordingSize;
 	shareSize: ShareSize;
 	shareLimits: ScreenShareQuality;
+	cameraSize: ShareSize;
+	cameraLimits: CameraQuality;
 	devices: Record<DeviceKind, MediaDeviceInfo[]>;
 	recordingBy: string | null;
 	room: Room | null;
@@ -171,11 +178,12 @@ async function switchDevice(current: GroupSession, kind: DeviceKind, device: str
 	queueRender();
 }
 
-function withDevices(current: GroupSession, kind: DeviceKind, main: HTMLElement): HTMLElement {
+function withDevices(current: GroupSession, kind: DeviceKind, main: HTMLElement, ...picks: HTMLElement[]): HTMLElement {
 	const devices = current.devices[kind];
-	if (devices.length < 2 || current.room === null) return main;
+	if (devices.length < 2 || current.room === null) return picks.length > 0 ? splitControl(main, ...picks) : main;
 	return splitControl(
 		main,
+		...picks,
 		controlPick(
 			t(kind === "audioinput" ? "calls.microphone_source" : "calls.camera_source"),
 			devices.map((device) => ({ value: device.deviceId, label: device.label })),
@@ -392,7 +400,8 @@ function render() {
 							tone: local.isCameraEnabled ? "active" : "neutral",
 							pressed: local.isCameraEnabled,
 						}
-					)
+					),
+					qualityPick(t("calls.camera_quality"), SHARE_SIZES, current.cameraSize, false, (size) => void changeCameraQuality(current, size))
 				),
 				shareControl(current, local.isScreenShareEnabled, (sharer !== undefined && sharer !== local) || !("getDisplayMedia" in navigator.mediaDevices)),
 				current.recordTarget && canRecord() ? recordControl(current) : null,
@@ -440,14 +449,43 @@ function queueRender() {
 	requestAnimationFrame(render);
 }
 
+async function publishCamera(current: GroupSession, room: Room) {
+	const quality = cameraQuality(current.cameraSize, current.cameraLimits);
+	await room.localParticipant.setCameraEnabled(
+		true,
+		{ resolution: { width: quality.width, height: quality.height, frameRate: quality.frames_per_second } },
+		{ videoEncoding: { maxBitrate: quality.kbps * 1000, maxFramerate: quality.frames_per_second } }
+	);
+}
+
+async function changeCameraQuality(current: GroupSession, size: ShareSize) {
+	current.cameraSize = size;
+	chooseCameraSize(size);
+	const room = current.room;
+	if (!room || livekit === null) return;
+	const local = room.localParticipant;
+	const published = local.getTrackPublication(livekit.Track.Source.Camera)?.track;
+	if (!published) return;
+	const shown = local.isCameraEnabled;
+	try {
+		await local.unpublishTrack(published, true);
+		if (shown) await publishCamera(current, room);
+	} catch {
+		toast(t("calls.no_camera"), "error");
+	}
+	queueRender();
+}
+
 async function toggle(kind: "microphone" | "camera" | "screen") {
 	const room = session?.room;
 	if (!room || livekit === null) return;
 	const local = room.localParticipant;
 	try {
 		if (kind === "microphone") await local.setMicrophoneEnabled(!local.isMicrophoneEnabled);
-		else if (kind === "camera") await local.setCameraEnabled(!local.isCameraEnabled);
-		else {
+		else if (kind === "camera") {
+			if (local.isCameraEnabled) await local.setCameraEnabled(false);
+			else if (session) await publishCamera(session, room);
+		} else {
 			const source = livekit.Track.Source.ScreenShare;
 			const someoneElse = [...room.remoteParticipants.values()].some(
 				(participant) => participant.isScreenShareEnabled && participant.getTrackPublication(source)
@@ -599,6 +637,8 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		recordSize: recordingSize(),
 		shareSize: shareSize(),
 		shareLimits: SHARE_PRESETS.high,
+		cameraSize: cameraSize(),
+		cameraLimits: CAMERA_PRESETS.high,
 		devices: { audioinput: [], videoinput: [] },
 		recordingBy: null,
 		room: null,
@@ -616,6 +656,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		const [kit, ticket] = await Promise.all([import("livekit-client"), options.ticket()]);
 		ticketed = true;
 		current.shareLimits = ticket.screen_share;
+		current.cameraLimits = ticket.camera;
 		livekit = kit;
 		if (session !== current) {
 			options.leave(false);

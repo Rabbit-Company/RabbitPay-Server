@@ -364,7 +364,13 @@ Server.app.post(`${base}/conversations/:conversation/calls`, ...chat, async (ctx
 	}
 	return Utils.ok(
 		ctx,
-		{ call: call.uuid, ice_servers: iceServers(username), ring_seconds: Settings.calls.ring_seconds, screen_share: screenShareLimits() },
+		{
+			call: call.uuid,
+			ice_servers: iceServers(username),
+			ring_seconds: Settings.calls.ring_seconds,
+			screen_share: screenShareLimits(),
+			camera: cameraLimits(),
+		},
 		201
 	);
 });
@@ -377,7 +383,7 @@ Server.app.post(`${base}/calls/:call/accept`, ...chat, async (ctx) => {
 	if (!waiting || waiting.conversation.project !== Permissions.project(ctx).uuid) return Utils.fail(ctx, ErrorCode.CALL_NOT_FOUND);
 	const call = Calls.accept(ctx.params.call, username, client);
 	if (!call) return Utils.fail(ctx, ErrorCode.CALL_NOT_FOUND);
-	return Utils.ok(ctx, { call: call.uuid, ice_servers: iceServers(username), screen_share: screenShareLimits() });
+	return Utils.ok(ctx, { call: call.uuid, ice_servers: iceServers(username), screen_share: screenShareLimits(), camera: cameraLimits() });
 });
 
 Server.app.post(`${base}/calls/:call/end`, ...chat, async (ctx) => {
@@ -396,7 +402,7 @@ Server.app.post(`${base}/conversations/:conversation/group-call`, ...chat, async
 	if (result === "unavailable" || result === "closed") return Utils.fail(ctx, ErrorCode.GROUP_CALLS_UNAVAILABLE);
 	if (result === "full") return Utils.fail(ctx, ErrorCode.CALL_FULL);
 	ctx.header("Cache-Control", "no-store");
-	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, screen_share: screenShareLimits() });
+	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, screen_share: screenShareLimits(), camera: cameraLimits() });
 });
 
 Server.app.post(`${base}/conversations/:conversation/group-call/leave`, ...chat, async (ctx) => {
@@ -517,7 +523,14 @@ Server.app.post("/api/v1/public/meetings/:token/join", guestLimit, async (ctx) =
 	if (result === "unavailable") return Utils.fail(ctx, ErrorCode.GROUP_CALLS_UNAVAILABLE);
 	if (result === "full") return Utils.fail(ctx, ErrorCode.CALL_FULL);
 	ctx.header("Cache-Control", "no-store");
-	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, guest, screen_share: screenShareLimits() });
+	return Utils.ok(ctx, {
+		call: result.call.uuid,
+		url: result.call.node,
+		token: result.token,
+		guest,
+		screen_share: screenShareLimits(),
+		camera: cameraLimits(),
+	});
 });
 
 Server.app.post("/api/v1/public/meetings/:token/leave", guestLimit, async (ctx) => {
@@ -530,6 +543,14 @@ Server.app.post("/api/v1/public/meetings/:token/leave", guestLimit, async (ctx) 
 
 const recordingPart = bodyLimit<AppState>({ maxSize: FILE_PART_BYTES, message: "The recording part is too large." });
 const RECORDING_TYPES = ["video/webm", "video/mp4"];
+
+function cameraLimits() {
+	return {
+		height: Settings.calls.camera_max_height,
+		frames_per_second: Settings.calls.camera_max_frames_per_second,
+		kbps: Settings.calls.camera_max_kbps,
+	};
+}
 
 function screenShareLimits() {
 	return {

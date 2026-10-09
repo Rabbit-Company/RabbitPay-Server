@@ -129,6 +129,9 @@ export interface ServerSettings {
 		livekit_api_key: string;
 		livekit_api_secret: string;
 		max_group_people: number;
+		camera_max_height: number;
+		camera_max_frames_per_second: number;
+		camera_max_kbps: number;
 		screen_share_max_height: number;
 		screen_share_max_frames_per_second: number;
 		screen_share_max_kbps: number;
@@ -277,6 +280,9 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		livekit_api_key: "",
 		livekit_api_secret: "",
 		max_group_people: 50,
+		camera_max_height: 1080,
+		camera_max_frames_per_second: 30,
+		camera_max_kbps: 3000,
 		screen_share_max_height: 1080,
 		screen_share_max_frames_per_second: 30,
 		screen_share_max_kbps: 5000,
@@ -612,6 +618,23 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{ key: "calls.livekit_api_key", label: "LiveKit API key", hint: "The same key and secret must be configured on every media server", kind: "text" },
 			{ key: "calls.livekit_api_secret", label: "LiveKit API secret", kind: "secret" },
 			{ key: "calls.max_group_people", label: "Largest group call", hint: "People in one call", kind: "number", min: 2, max: 500 },
+			{
+				key: "calls.camera_max_height",
+				label: "Highest camera resolution",
+				hint: "Picture height in pixels, such as 360, 720 or 1080. Each person picks High, Medium or Low for their camera, and these limits cap all three.",
+				kind: "number",
+				min: 180,
+				max: 2160,
+			},
+			{ key: "calls.camera_max_frames_per_second", label: "Highest camera frame rate", hint: "Frames per second", kind: "number", min: 1, max: 60 },
+			{
+				key: "calls.camera_max_kbps",
+				label: "Highest camera bitrate",
+				hint: "Kilobits per second. In a group call every viewer can receive this much from the media server for each camera shown large, and small tiles receive a lighter copy.",
+				kind: "number",
+				min: 100,
+				max: 20000,
+			},
 			{
 				key: "calls.screen_share_max_height",
 				label: "Highest screen sharing resolution",

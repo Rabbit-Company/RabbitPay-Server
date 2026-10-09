@@ -162,6 +162,15 @@ browser. Under Admin, Settings, Calls the administrator sets the highest
 resolution (1080), frame rate (30) and bitrate (5000 kbps) for shared screens,
 and choices above a limit are lowered to it.
 
+The camera has its own quality too, in both kinds of call. The arrow next to
+the camera button offers High (1080p, 30 frames, 3000 kbps), Medium (720p, 30
+frames, 1700 kbps) and Low (360p, 20 frames, 500 kbps), remembered in the
+browser and applied at once when the camera is already on. Medium is the
+default. Under Admin, Settings, Calls the administrator sets the highest
+camera resolution (1080), frame rate (30) and bitrate (3000 kbps), and choices
+above a limit are lowered to it. In a group call the media server still sends
+smaller copies of each camera to people who see it in a small tile.
+
 Each person chooses the quality of the recordings they make under Files, My
 chat attachments, because a recording counts toward their own storage: High
 (1080p, 30 frames, 3000 kbps, about 1.4 GB per hour), Medium (1080p, 15

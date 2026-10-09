@@ -511,6 +511,7 @@ describe("calls", () => {
 		expect(started.status).toBe(201);
 		expect(started.data.ice_servers).toEqual([{ urls: ["stun:stun.cloudflare.com:3478"] }]);
 		expect(started.data.screen_share).toEqual({ height: 1080, frames_per_second: 30, kbps: 5000 });
+		expect(started.data.camera).toEqual({ height: 1080, frames_per_second: 30, kbps: 3000 });
 		expect(boris.events).toMatchObject([
 			{ type: "call.incoming", call: started.data.call, video: true, from: { account: "chat-anna", name: "Anna Employee" } },
 		]);
@@ -778,6 +779,7 @@ describe("group calls", () => {
 		const joined = await call("POST", path(), tokens.anna);
 		expect(joined.data).toMatchObject({ call: started.data.call, url: started.data.url });
 		expect(joined.data.screen_share).toEqual({ height: 1080, frames_per_second: 30, kbps: 5000 });
+		expect(joined.data.camera).toEqual({ height: 1080, frames_per_second: 30, kbps: 3000 });
 		expect(anna.events.at(-1)).toMatchObject({ type: "call.group", ring: false, info: { people: 2 } });
 		expect((await call("GET", `${chat()}/conversations/${group.uuid}`, tokens.boris)).data.call).toMatchObject({
 			people: 2,
@@ -846,7 +848,12 @@ describe("group calls", () => {
 		const started = await call("POST", `${meeting}/group-call`, tokens.owner);
 		expect((await call("POST", `/public/meetings/${token}/join`, undefined, { name: "  " })).error).toBe(1328);
 		const guest = await call("POST", `/public/meetings/${token}/join`, undefined, { name: " Greta   Guest " });
-		expect(guest.data).toMatchObject({ call: started.data.call, url: started.data.url, screen_share: { height: 1080, frames_per_second: 30, kbps: 5000 } });
+		expect(guest.data).toMatchObject({
+			call: started.data.call,
+			url: started.data.url,
+			screen_share: { height: 1080, frames_per_second: 30, kbps: 5000 },
+			camera: { height: 1080, frames_per_second: 30, kbps: 3000 },
+		});
 		const claims = JSON.parse(Buffer.from(guest.data.token.split(".")[1], "base64url").toString());
 		expect(claims).toMatchObject({ sub: `guest-${guest.data.guest}`, name: "Greta Guest", video: { room: started.data.call, roomJoin: true } });
 		expect(GroupCalls.infoOf(created.data.uuid)!.people).toBe(2);

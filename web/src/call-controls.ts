@@ -62,6 +62,6 @@ export function qualityPick<Size extends RecordingSize>(
 	);
 }
 
-export function splitControl(main: HTMLElement, pick: HTMLElement): HTMLElement {
-	return el("div", { class: "call-control-split" }, main, pick);
+export function splitControl(main: HTMLElement, ...picks: HTMLElement[]): HTMLElement {
+	return el("div", { class: "call-control-split" }, main, ...picks);
 }

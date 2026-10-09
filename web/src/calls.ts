@@ -1,4 +1,4 @@
-import { Api, getToken, type ChatCallOutcome, type IceServer, type ScreenShareQuality } from "./api";
+import { Api, getToken, type CameraQuality, type ChatCallOutcome, type IceServer, type ScreenShareQuality } from "./api";
 import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, sendRealtime, type RealtimeEvent } from "./realtime";
@@ -6,6 +6,10 @@ import { reportError, toast } from "./ui";
 import { dropGroupCall, inGroupCall, watchGroupCalls } from "./group-call";
 import { callControl, controlPick, qualityPick, splitControl } from "./call-controls";
 import {
+	CAMERA_PRESETS,
+	cameraQuality,
+	cameraSize,
+	chooseCameraSize,
 	chooseShareSize,
 	namedDevices,
 	rememberDevice,
@@ -59,6 +63,8 @@ interface ActiveCall {
 	recordSize: RecordingSize;
 	shareSize: ShareSize;
 	shareLimits: ScreenShareQuality;
+	cameraSize: ShareSize;
+	cameraLimits: CameraQuality;
 	devices: Record<DeviceKind, MediaDeviceInfo[]>;
 	expanded: boolean;
 	theater: boolean;
@@ -249,6 +255,11 @@ function render() {
 					callControl(call.camera ? "video" : "video_off", call.camera ? t("calls.camera_off") : t("calls.camera_on"), () => void toggleCamera(), {
 						tone: call.camera ? "active" : "neutral",
 						pressed: call.camera !== null,
+					}),
+					qualityPick(t("calls.camera_quality"), SHARE_SIZES, call.cameraSize, false, (size) => {
+						call.cameraSize = size;
+						chooseCameraSize(size);
+						void applyCameraQuality(call);
 					})
 				),
 				shareControl(call),
@@ -277,13 +288,14 @@ function render() {
 	}
 }
 
-function withDevices(call: ActiveCall, kind: DeviceKind, main: HTMLElement): HTMLElement {
+function withDevices(call: ActiveCall, kind: DeviceKind, main: HTMLElement, ...picks: HTMLElement[]): HTMLElement {
 	const devices = call.devices[kind];
-	if (devices.length < 2) return main;
+	if (devices.length < 2) return picks.length > 0 ? splitControl(main, ...picks) : main;
 	const track = kind === "audioinput" ? call.microphone : call.camera;
 	const chosen = track?.getSettings().deviceId ?? rememberedDevice(kind);
 	return splitControl(
 		main,
+		...picks,
 		controlPick(
 			t(kind === "audioinput" ? "calls.microphone_source" : "calls.camera_source"),
 			devices.map((device) => ({ value: device.deviceId, label: device.label })),
@@ -324,7 +336,7 @@ async function switchDevice(call: ActiveCall, kind: DeviceKind, device: string) 
 	rememberDevice(kind, device);
 	const current = kind === "audioinput" ? call.microphone : call.camera;
 	if (current === null || call.connection === null) return;
-	const next = kind === "audioinput" ? await microphone() : await cameraTrack();
+	const next = kind === "audioinput" ? await microphone() : await cameraTrack(call);
 	if (next === null) return;
 	if (active !== call || (kind === "videoinput" && call.camera === null)) {
 		next.stop();
@@ -336,6 +348,7 @@ async function switchDevice(call: ActiveCall, kind: DeviceKind, device: string) 
 		call.microphone = next;
 	} else call.camera = next;
 	await call.connection.getTransceivers()[kind === "audioinput" ? 0 : 1]?.sender.replaceTrack(next);
+	if (kind === "videoinput") await applyCameraQuality(call);
 	render();
 }
 
@@ -481,6 +494,7 @@ function watchConnection(call: ActiveCall, connection: RTCPeerConnection) {
 			call.restarted = false;
 			call.connectedAt ??= Date.now();
 			call.stage = "connected";
+			void applyCameraQuality(call);
 			void refreshDevices(call);
 			announceState(call);
 			render();
@@ -588,9 +602,36 @@ async function microphone(): Promise<MediaStreamTrack | null> {
 	}
 }
 
-async function cameraTrack(): Promise<MediaStreamTrack | null> {
+function cameraShape(quality: CameraQuality & { width: number }): MediaTrackConstraints {
+	return { width: { ideal: quality.width }, height: { ideal: quality.height }, frameRate: { ideal: quality.frames_per_second } };
+}
+
+async function limitSender(sender: RTCRtpSender | undefined, quality: CameraQuality) {
 	try {
-		const video = { width: { ideal: 1280 }, height: { ideal: 720 }, deviceId: rememberedDevice("videoinput") };
+		const parameters = sender?.getParameters();
+		if (sender && parameters?.encodings?.[0]) {
+			parameters.encodings[0].maxBitrate = quality.kbps * 1000;
+			parameters.encodings[0].maxFramerate = quality.frames_per_second;
+			await sender.setParameters(parameters);
+		}
+	} catch {
+		void 0;
+	}
+}
+
+async function applyCameraQuality(call: ActiveCall) {
+	const quality = cameraQuality(call.cameraSize, call.cameraLimits);
+	try {
+		await call.camera?.applyConstraints(cameraShape(quality));
+	} catch {
+		void 0;
+	}
+	await limitSender(call.connection?.getTransceivers()[1]?.sender, quality);
+}
+
+async function cameraTrack(call: ActiveCall): Promise<MediaStreamTrack | null> {
+	try {
+		const video = { ...cameraShape(cameraQuality(call.cameraSize, call.cameraLimits)), deviceId: rememberedDevice("videoinput") };
 		return (await navigator.mediaDevices.getUserMedia({ video })).getVideoTracks()[0] ?? null;
 	} catch {
 		toast(t("calls.no_camera"), "error");
@@ -615,10 +656,11 @@ async function toggleCamera() {
 		call.camera.stop();
 		call.camera = null;
 	} else {
-		call.camera = await cameraTrack();
+		call.camera = await cameraTrack(call);
 	}
 	if (active !== call) return;
 	await sender?.replaceTrack(call.camera);
+	await applyCameraQuality(call);
 	announceState(call);
 	render();
 	void refreshDevices(call);
@@ -663,16 +705,7 @@ async function toggleScreen() {
 	});
 	const sender = call.connection.getTransceivers()[2]?.sender;
 	await sender?.replaceTrack(track);
-	try {
-		const parameters = sender?.getParameters();
-		if (sender && parameters?.encodings?.[0]) {
-			parameters.encodings[0].maxBitrate = quality.kbps * 1000;
-			parameters.encodings[0].maxFramerate = quality.frames_per_second;
-			await sender.setParameters(parameters);
-		}
-	} catch {
-		void 0;
-	}
+	await limitSender(sender, quality);
 	announceState(call);
 	render();
 }
@@ -697,6 +730,8 @@ function newCall(values: Pick<ActiveCall, "id" | "project" | "conversation" | "p
 		recordSize: recordingSize(),
 		shareSize: shareSize(),
 		shareLimits: SHARE_PRESETS.high,
+		cameraSize: cameraSize(),
+		cameraLimits: CAMERA_PRESETS.high,
 		devices: { audioinput: [], videoinput: [] },
 		expanded: false,
 		theater: false,
@@ -722,7 +757,7 @@ export async function startCall(project: string, conversation: string, peerName:
 		cleanup(call);
 		return;
 	}
-	if (video) call.camera = await cameraTrack();
+	if (video) call.camera = await cameraTrack(call);
 	if (active !== call) {
 		cleanup(call);
 		return;
@@ -732,6 +767,8 @@ export async function startCall(project: string, conversation: string, peerName:
 		call.id = started.call;
 		call.iceServers = started.ice_servers;
 		call.shareLimits = started.screen_share;
+		call.cameraLimits = started.camera;
+		void applyCameraQuality(call);
 		if (active !== call) await Api.endChatCall(project, started.call).catch(() => undefined);
 	} catch (error) {
 		cleanup(call);
@@ -750,7 +787,7 @@ async function accept(video: boolean) {
 		await hangUp();
 		return;
 	}
-	if (video) call.camera = await cameraTrack();
+	if (video) call.camera = await cameraTrack(call);
 	if (active !== call) {
 		cleanup(call);
 		return;
@@ -759,6 +796,8 @@ async function accept(video: boolean) {
 		const accepted = await Api.acceptChatCall(call.project, call.id, clientId);
 		call.iceServers = accepted.ice_servers;
 		call.shareLimits = accepted.screen_share;
+		call.cameraLimits = accepted.camera;
+		void applyCameraQuality(call);
 	} catch (error) {
 		cleanup(call);
 		reportError(error);

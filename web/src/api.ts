@@ -883,6 +883,8 @@ export interface ScreenShareQuality {
 	kbps: number;
 }
 
+export type CameraQuality = ScreenShareQuality;
+
 export interface RecordingQuality {
 	height: number;
 	frames_per_second: number;
@@ -3925,7 +3927,7 @@ export const Api = {
 	},
 
 	startChatCall(uuid: string, conversation: string, client: string, video: boolean) {
-		return request<{ call: string; ice_servers: IceServer[]; ring_seconds: number; screen_share: ScreenShareQuality }>(
+		return request<{ call: string; ice_servers: IceServer[]; ring_seconds: number; screen_share: ScreenShareQuality; camera: CameraQuality }>(
 			"POST",
 			`/projects/${uuid}/chat/conversations/${conversation}/calls`,
 			{
@@ -3936,9 +3938,13 @@ export const Api = {
 	},
 
 	acceptChatCall(uuid: string, call: string, client: string) {
-		return request<{ call: string; ice_servers: IceServer[]; screen_share: ScreenShareQuality }>("POST", `/projects/${uuid}/chat/calls/${call}/accept`, {
-			client,
-		});
+		return request<{ call: string; ice_servers: IceServer[]; screen_share: ScreenShareQuality; camera: CameraQuality }>(
+			"POST",
+			`/projects/${uuid}/chat/calls/${call}/accept`,
+			{
+				client,
+			}
+		);
 	},
 
 	endChatCall(uuid: string, call: string) {
@@ -3989,7 +3995,7 @@ export const Api = {
 	},
 
 	joinGroupCall(uuid: string, conversation: string) {
-		return request<{ call: string; url: string; token: string; screen_share: ScreenShareQuality }>(
+		return request<{ call: string; url: string; token: string; screen_share: ScreenShareQuality; camera: CameraQuality }>(
 			"POST",
 			`/projects/${uuid}/chat/conversations/${conversation}/group-call`
 		);

@@ -4219,6 +4219,7 @@ export const sl: UiDictionary = {
 	"calls.smaller": "Manjše",
 	"calls.record_quality": "Kakovost snemanja",
 	"calls.share_quality": "Kakovost deljenja zaslona",
+	"calls.camera_quality": "Kakovost kamere",
 	"calls.microphone_source": "Mikrofon",
 	"calls.camera_source": "Kamera",
 	"calls.full_screen": "Cel zaslon",
