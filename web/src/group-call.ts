@@ -58,6 +58,7 @@ interface GroupSession {
 	shareLimits: ScreenShareQuality;
 	cameraSize: ShareSize;
 	cameraLimits: CameraQuality;
+	cameraRestarting: boolean;
 	devices: Record<DeviceKind, MediaDeviceInfo[]>;
 	recordingBy: string | null;
 	room: Room | null;
@@ -285,7 +286,7 @@ function tile(participant: Participant, own: boolean, source: LiveKit["Track"]["
 			participant.isMicrophoneEnabled ? null : icon("mic_off", 12, "call-tile-muted"),
 			name
 		),
-		video && !own ? callControl("fullscreen", t("calls.full_screen"), maximize, { extraClass: "call-stage-action call-tile-action" }) : null
+		video ? callControl("fullscreen", t("calls.full_screen"), maximize, { extraClass: "call-stage-action call-tile-action" }) : null
 	);
 }
 
@@ -326,17 +327,17 @@ function render() {
 		const everyone: Participant[] = [local, ...room.remoteParticipants.values()];
 		const sharer = everyone.find((participant) => participant.isScreenShareEnabled && participant.getTrackPublication(source.ScreenShare)?.track);
 		const shared = sharer?.getTrackPublication(source.ScreenShare)?.track ?? null;
-		const focused = everyone.find((participant) => participant !== local && participant.identity === current.focus && cameraOf(participant, source));
+		const focused = everyone.find((participant) => participant.identity === current.focus && cameraOf(participant, source));
 		const staged = (focused ? cameraOf(focused, source) : null) ?? shared;
 		const sharedVideo = staged ? videoFor(staged) : null;
-		if (sharedVideo) sharedVideo.className = "call-video-main";
+		if (sharedVideo) sharedVideo.className = `call-video-main${focused === local ? " own" : ""}`;
 		const tiles = everyone.map((participant) =>
 			tile(participant, participant === local, source, participant === focused, () => setTheater(current, true, participant.identity))
 		);
 		const used = new Set<HTMLVideoElement>([...(sharedVideo ? [sharedVideo] : []), ...tiles.flatMap((node) => [...node.querySelectorAll("video")])]);
 		for (const [key, video] of videos) if (!used.has(video)) videos.delete(key);
 		const watching = sharedVideo !== null && (focused !== undefined || sharer !== local);
-		if (current.theater && (!watching || (current.focus !== null && !focused))) {
+		if (current.theater && !current.cameraRestarting && (!watching || (current.focus !== null && !focused))) {
 			current.theater = false;
 			leaveNativeTheater();
 		}
@@ -471,12 +472,14 @@ async function changeCameraQuality(current: GroupSession, size: ShareSize) {
 	const published = local.getTrackPublication(livekit.Track.Source.Camera)?.track;
 	if (!published) return;
 	const shown = local.isCameraEnabled;
+	current.cameraRestarting = true;
 	try {
 		await local.unpublishTrack(published, true);
 		if (shown) await publishCamera(current, room);
 	} catch {
 		toast(t("calls.no_camera"), "error");
 	}
+	current.cameraRestarting = false;
 	queueRender();
 }
 
@@ -643,6 +646,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		shareLimits: SHARE_PRESETS.high,
 		cameraSize: cameraSize(),
 		cameraLimits: CAMERA_PRESETS.high,
+		cameraRestarting: false,
 		devices: { audioinput: [], videoinput: [] },
 		recordingBy: null,
 		room: null,

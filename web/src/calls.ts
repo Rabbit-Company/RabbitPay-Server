@@ -68,6 +68,7 @@ interface ActiveCall {
 	devices: Record<DeviceKind, MediaDeviceInfo[]>;
 	expanded: boolean;
 	theater: boolean;
+	ownFocus: boolean;
 	quiet: boolean;
 }
 
@@ -192,7 +193,8 @@ function render() {
 	} else {
 		const remoteScreen = call.remote.screen ? remoteTrack(call, 2) : null;
 		const remoteCamera = call.remote.camera ? remoteTrack(call, 1) : null;
-		const main = remoteScreen ?? call.screen ?? remoteCamera;
+		if (call.camera === null) call.ownFocus = false;
+		const main = call.ownFocus ? call.camera : (remoteScreen ?? call.screen ?? remoteCamera);
 		const watching = main !== null && main !== call.screen;
 		if (call.theater && !watching) {
 			call.theater = false;
@@ -207,6 +209,16 @@ function render() {
 		mainVideo.hidden = main === null;
 		sideVideo.hidden = side === null;
 		selfVideo.hidden = call.camera === null;
+		mainVideo.classList.toggle("own", call.ownFocus);
+		const selfThumb =
+			call.camera !== null && !call.ownFocus
+				? el(
+						"div",
+						{ class: "call-thumb" },
+						selfVideo,
+						callControl("fullscreen", t("calls.full_screen"), () => setTheater(call, true, true), { extraClass: "call-stage-action call-tile-action" })
+					)
+				: null;
 		const sharingNote = call.screen ? t("calls.you_share") : call.remote.screen ? t("calls.they_share", { name: call.peerName }) : null;
 		body = el(
 			"div",
@@ -223,7 +235,7 @@ function render() {
 				},
 				main === null ? el("span", { class: "call-avatar" }, call.peerName.slice(0, 1).toUpperCase()) : null,
 				mainVideo,
-				el("div", { class: "call-thumbs" }, sideVideo, selfVideo),
+				el("div", { class: "call-thumbs" }, sideVideo, selfThumb),
 				watching
 					? callControl(
 							theater ? "fullscreen_exit" : "fullscreen",
@@ -425,8 +437,9 @@ function leaveNativeTheater() {
 	if (panel !== null && document.fullscreenElement === panel) void document.exitFullscreen().catch(() => undefined);
 }
 
-function setTheater(call: ActiveCall, on: boolean) {
+function setTheater(call: ActiveCall, on: boolean, own = false) {
 	call.theater = on;
+	call.ownFocus = on && own;
 	call.quiet = false;
 	render();
 	if (!on) leaveNativeTheater();
@@ -442,6 +455,7 @@ function onFullscreenChange() {
 	nativeTheater = false;
 	if (active?.theater) {
 		active.theater = false;
+		active.ownFocus = false;
 		render();
 	}
 }
@@ -751,6 +765,7 @@ function newCall(values: Pick<ActiveCall, "id" | "project" | "conversation" | "p
 		devices: { audioinput: [], videoinput: [] },
 		expanded: false,
 		theater: false,
+		ownFocus: false,
 		quiet: false,
 	};
 }

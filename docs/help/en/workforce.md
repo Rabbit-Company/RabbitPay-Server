@@ -99,6 +99,8 @@ The call has a row of round buttons. Hold the pointer over a button to see its n
 - make the call fill the page,
 - hang up, with the red button.
 
+When your camera is on, your own picture sits in the corner of the call. Press the button on it to see yourself in full screen, for example to check how you are framed. In a group call every camera tile has the same button, yours included.
+
 The call stays in the corner of the page while you keep working in RabbitPay. Closing the tab ends it. Sound and picture travel directly between the two browsers, not through RabbitPay.
 
 The conversation keeps a line for every call with its length. A missed call is marked and counts as unread. If the other person is not online, they see a missed call the next time they open the chat.

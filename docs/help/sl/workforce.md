@@ -99,6 +99,8 @@ Klic ima vrsto okroglih gumbov. Ime gumba vidite, če nanj postavite kazalec. Od
 - razširijo klic čez stran,
 - z rdečim gumbom prekinejo klic.
 
+Ko je vaša kamera vklopljena, je vaša slika v kotu klica. Pritisnite gumb na njej, da se vidite čez cel zaslon, na primer da preverite, kako ste v kadru. V skupinskem klicu ima enak gumb vsaka ploščica s kamero, tudi vaša.
+
 Klic ostane v kotu strani, medtem ko delate naprej v RabbitPayu. Če zaprete zavihek, se klic konča. Zvok in slika potujeta neposredno med brskalnikoma, ne prek RabbitPaya.
 
 V pogovoru ostane vrstica za vsak klic z njegovo dolžino. Zgrešen klic je označen in šteje kot neprebran. Če druga oseba ni povezana, zgrešen klic vidi, ko naslednjič odpre klepet.

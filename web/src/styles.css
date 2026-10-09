@@ -6359,6 +6359,13 @@ fieldset.stack-tight {
 	max-height: 100%;
 	object-fit: contain;
 }
+.call-video-main.own {
+	transform: scaleX(-1);
+}
+.call-thumb {
+	position: relative;
+	display: flex;
+}
 .call-video-main[hidden],
 .call-video-side[hidden],
 .call-video-self[hidden] {
