@@ -4218,6 +4218,7 @@ export const sl: UiDictionary = {
 	"calls.larger": "Večje",
 	"calls.smaller": "Manjše",
 	"calls.record_quality": "Kakovost snemanja",
+	"calls.share_quality": "Kakovost deljenja zaslona",
 	"calls.full_screen": "Cel zaslon",
 	"calls.exit_full_screen": "Zapri cel zaslon",
 	"calls.you_share": "Delite svoj zaslon.",

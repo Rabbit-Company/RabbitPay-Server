@@ -392,7 +392,7 @@ Server.app.post(`${base}/conversations/:conversation/group-call`, ...chat, async
 	if (result === "unavailable" || result === "closed") return Utils.fail(ctx, ErrorCode.GROUP_CALLS_UNAVAILABLE);
 	if (result === "full") return Utils.fail(ctx, ErrorCode.CALL_FULL);
 	ctx.header("Cache-Control", "no-store");
-	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token });
+	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, screen_share: screenShareLimits() });
 });
 
 Server.app.post(`${base}/conversations/:conversation/group-call/leave`, ...chat, async (ctx) => {
@@ -513,7 +513,7 @@ Server.app.post("/api/v1/public/meetings/:token/join", guestLimit, async (ctx) =
 	if (result === "unavailable") return Utils.fail(ctx, ErrorCode.GROUP_CALLS_UNAVAILABLE);
 	if (result === "full") return Utils.fail(ctx, ErrorCode.CALL_FULL);
 	ctx.header("Cache-Control", "no-store");
-	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, guest });
+	return Utils.ok(ctx, { call: result.call.uuid, url: result.call.node, token: result.token, guest, screen_share: screenShareLimits() });
 });
 
 Server.app.post("/api/v1/public/meetings/:token/leave", guestLimit, async (ctx) => {
@@ -526,6 +526,14 @@ Server.app.post("/api/v1/public/meetings/:token/leave", guestLimit, async (ctx) 
 
 const recordingPart = bodyLimit<AppState>({ maxSize: FILE_PART_BYTES, message: "The recording part is too large." });
 const RECORDING_TYPES = ["video/webm", "video/mp4"];
+
+function screenShareLimits() {
+	return {
+		height: Settings.calls.screen_share_max_height,
+		frames_per_second: Settings.calls.screen_share_max_frames_per_second,
+		kbps: Settings.calls.screen_share_max_kbps,
+	};
+}
 
 function recordingLimits() {
 	return {

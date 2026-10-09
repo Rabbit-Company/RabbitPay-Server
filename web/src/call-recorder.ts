@@ -72,6 +72,21 @@ export function canRecord(): boolean {
 	return typeof MediaRecorder !== "undefined" && PREFERRED_TYPES.some((type) => MediaRecorder.isTypeSupported(type));
 }
 
+function steadyTimer(milliseconds: number, tick: () => void): () => void {
+	try {
+		const source = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${milliseconds});`], { type: "text/javascript" }));
+		const worker = new Worker(source);
+		worker.onmessage = tick;
+		return () => {
+			worker.terminate();
+			URL.revokeObjectURL(source);
+		};
+	} catch {
+		const timer = setInterval(tick, milliseconds);
+		return () => clearInterval(timer);
+	}
+}
+
 function sharedScreen(room: Room, kit: LiveKit): Track | null {
 	const everyone: Participant[] = [room.localParticipant, ...room.remoteParticipants.values()];
 	for (const participant of everyone) {
@@ -161,7 +176,7 @@ export async function startRecorder(
 
 	sync();
 	draw();
-	const drawTimer = setInterval(draw, 1000 / quality.frames_per_second);
+	const stopDrawing = steadyTimer(1000 / quality.frames_per_second, draw);
 	const stream = new MediaStream([...canvas.captureStream(quality.frames_per_second).getVideoTracks(), ...destination.stream.getAudioTracks()]);
 	const recorder = new MediaRecorder(stream, {
 		mimeType: type,
@@ -234,7 +249,7 @@ export async function startRecorder(
 	function stop(): Promise<boolean> {
 		stopped ??= new Promise<boolean>((resolve) => {
 			const finishUp = async () => {
-				clearInterval(drawTimer);
+				stopDrawing();
 				shownTrack?.detach(screen);
 				for (const source of sources.values()) source.disconnect();
 				for (const track of stream.getTracks()) track.stop();

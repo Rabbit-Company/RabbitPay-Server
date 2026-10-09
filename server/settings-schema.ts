@@ -129,6 +129,9 @@ export interface ServerSettings {
 		livekit_api_key: string;
 		livekit_api_secret: string;
 		max_group_people: number;
+		screen_share_max_height: number;
+		screen_share_max_frames_per_second: number;
+		screen_share_max_kbps: number;
 		recording_max_height: number;
 		recording_max_frames_per_second: number;
 		recording_max_video_kbps: number;
@@ -274,6 +277,9 @@ export const DEFAULT_SETTINGS: ServerSettings = {
 		livekit_api_key: "",
 		livekit_api_secret: "",
 		max_group_people: 50,
+		screen_share_max_height: 1080,
+		screen_share_max_frames_per_second: 30,
+		screen_share_max_kbps: 5000,
 		recording_max_height: 1080,
 		recording_max_frames_per_second: 60,
 		recording_max_video_kbps: 5000,
@@ -606,6 +612,30 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{ key: "calls.livekit_api_key", label: "LiveKit API key", hint: "The same key and secret must be configured on every media server", kind: "text" },
 			{ key: "calls.livekit_api_secret", label: "LiveKit API secret", kind: "secret" },
 			{ key: "calls.max_group_people", label: "Largest group call", hint: "People in one call", kind: "number", min: 2, max: 500 },
+			{
+				key: "calls.screen_share_max_height",
+				label: "Highest screen sharing resolution",
+				hint: "Picture height in pixels, such as 720, 1080, 1440 or 2160 for 4K. Applies to group calls. Each person picks High, Medium or Low when they share, and these limits cap all three.",
+				kind: "number",
+				min: 360,
+				max: 2160,
+			},
+			{
+				key: "calls.screen_share_max_frames_per_second",
+				label: "Highest screen sharing frame rate",
+				hint: "Frames per second",
+				kind: "number",
+				min: 1,
+				max: 60,
+			},
+			{
+				key: "calls.screen_share_max_kbps",
+				label: "Highest screen sharing bitrate",
+				hint: "Kilobits per second. Every viewer receives this much from the media server, so it sets the bandwidth a shared screen costs per person watching.",
+				kind: "number",
+				min: 200,
+				max: 50000,
+			},
 			{
 				key: "calls.recording_max_height",
 				label: "Highest recording resolution",

@@ -1,5 +1,5 @@
 import type { Participant, Room, Track } from "livekit-client";
-import { Api, getToken, getUsername, publicRequest } from "./api";
+import { Api, getToken, getUsername, publicRequest, type ScreenShareQuality } from "./api";
 import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
@@ -23,6 +23,35 @@ interface ChatLine {
 interface RoomTicket {
 	url: string;
 	token: string;
+	screen_share: ScreenShareQuality;
+}
+
+type ShareSize = Exclude<RecordingSize, "custom">;
+
+const SHARE_SIZES: ShareSize[] = ["high", "medium", "small"];
+const SHARE_KEY = "rabbitpay.screen_share_quality";
+const SHARE_ASPECT = 16 / 9;
+const SHARE_PRESETS: Record<ShareSize, ScreenShareQuality> = {
+	high: { height: 1080, frames_per_second: 30, kbps: 4000 },
+	medium: { height: 1080, frames_per_second: 15, kbps: 2500 },
+	small: { height: 720, frames_per_second: 10, kbps: 1000 },
+};
+
+function shareSize(): ShareSize {
+	try {
+		const stored = localStorage.getItem(SHARE_KEY) as ShareSize | null;
+		return stored !== null && SHARE_SIZES.includes(stored) ? stored : "high";
+	} catch {
+		return "high";
+	}
+}
+
+function chooseShareSize(size: ShareSize) {
+	try {
+		localStorage.setItem(SHARE_KEY, size);
+	} catch {
+		void 0;
+	}
 }
 
 interface GroupSession {
@@ -37,6 +66,8 @@ interface GroupSession {
 	recorder: CallRecorder | null;
 	recorderStarting: boolean;
 	recordSize: RecordingSize;
+	shareSize: ShareSize;
+	shareLimits: ScreenShareQuality;
 	recordingBy: string | null;
 	room: Room | null;
 	stage: "connecting" | "connected" | "reconnecting";
@@ -136,22 +167,27 @@ function addLine(current: GroupSession, from: string, text: string) {
 	render();
 }
 
-function recordQualityPick(current: GroupSession): HTMLElement {
+function qualityPick<Size extends RecordingSize>(label: string, sizes: Size[], chosen: Size, disabled: boolean, choose: (size: Size) => void): HTMLElement {
 	const pick = select(
-		RECORDING_SIZES.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
-		current.recordSize
+		sizes.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
+		chosen
 	);
-	pick.setAttribute("aria-label", t("calls.record_quality"));
-	pick.disabled = current.recorderStarting || current.recordingBy !== null;
+	pick.setAttribute("aria-label", label);
+	pick.disabled = disabled;
+	const holder = el("label", { class: "call-control call-control-pick" }, icon("down", 14, "call-control-icon"), pick);
+	const name = () => {
+		holder.title = `${label} | ${t(`files.recording_size_${pick.value as Size}`)}`;
+	};
 	pick.addEventListener("change", () => {
-		current.recordSize = pick.value as RecordingSize;
+		choose(pick.value as Size);
+		name();
 	});
-	return el(
-		"label",
-		{ class: "call-control call-control-pick", title: `${t("calls.record_quality")} | ${t(`files.recording_size_${current.recordSize}`)}` },
-		icon("down", 14, "call-control-icon"),
-		pick
-	);
+	name();
+	return holder;
+}
+
+function splitControl(main: HTMLElement, pick: HTMLElement): HTMLElement {
+	return el("div", { class: "call-control-split" }, main, pick);
 }
 
 function recordControl(current: GroupSession): HTMLElement {
@@ -165,7 +201,29 @@ function recordControl(current: GroupSession): HTMLElement {
 			disabled: current.recorderStarting || (current.recorder === null && current.recordingBy !== null),
 		}
 	);
-	return current.recorder ? record : el("div", { class: "call-control-split" }, record, recordQualityPick(current));
+	if (current.recorder) return record;
+	return splitControl(
+		record,
+		qualityPick(t("calls.record_quality"), RECORDING_SIZES, current.recordSize, current.recorderStarting || current.recordingBy !== null, (size) => {
+			current.recordSize = size;
+		})
+	);
+}
+
+function shareControl(current: GroupSession, sharing: boolean, disabled: boolean): HTMLElement {
+	const share = callControl("screen", sharing ? t("calls.stop_sharing") : t("calls.share_screen"), () => void toggle("screen"), {
+		tone: sharing ? "active" : "neutral",
+		pressed: sharing,
+		disabled,
+	});
+	if (sharing) return share;
+	return splitControl(
+		share,
+		qualityPick(t("calls.share_quality"), SHARE_SIZES, current.shareSize, disabled, (size) => {
+			current.shareSize = size;
+			chooseShareSize(size);
+		})
+	);
 }
 
 function markSpeakers() {
@@ -332,11 +390,7 @@ function render() {
 						pressed: local.isCameraEnabled,
 					}
 				),
-				callControl("screen", local.isScreenShareEnabled ? t("calls.stop_sharing") : t("calls.share_screen"), () => void toggle("screen"), {
-					tone: local.isScreenShareEnabled ? "active" : "neutral",
-					pressed: local.isScreenShareEnabled,
-					disabled: (sharer !== undefined && sharer !== local) || !("getDisplayMedia" in navigator.mediaDevices),
-				}),
+				shareControl(current, local.isScreenShareEnabled, (sharer !== undefined && sharer !== local) || !("getDisplayMedia" in navigator.mediaDevices)),
 				current.recordTarget && canRecord() ? recordControl(current) : null,
 				callControl(
 					"message",
@@ -395,7 +449,18 @@ async function toggle(kind: "microphone" | "camera" | "screen") {
 				(participant) => participant.isScreenShareEnabled && participant.getTrackPublication(source)
 			);
 			if (!local.isScreenShareEnabled && someoneElse) return;
-			await local.setScreenShareEnabled(!local.isScreenShareEnabled, { audio: false });
+			if (local.isScreenShareEnabled) await local.setScreenShareEnabled(false);
+			else {
+				const wanted = SHARE_PRESETS[session?.shareSize ?? "high"];
+				const limits = session?.shareLimits ?? wanted;
+				const height = Math.min(wanted.height, limits.height);
+				const frameRate = Math.min(wanted.frames_per_second, limits.frames_per_second);
+				await local.setScreenShareEnabled(
+					true,
+					{ audio: false, resolution: { width: Math.round(height * SHARE_ASPECT), height, frameRate } },
+					{ screenShareEncoding: { maxBitrate: Math.min(wanted.kbps, limits.kbps) * 1000, maxFramerate: frameRate } }
+				);
+			}
 		}
 	} catch {
 		if (kind === "microphone") toast(t("calls.no_microphone"), "error");
@@ -509,6 +574,8 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 		recorder: null,
 		recorderStarting: false,
 		recordSize: recordingSize(),
+		shareSize: shareSize(),
+		shareLimits: SHARE_PRESETS.high,
 		recordingBy: null,
 		room: null,
 		stage: "connecting",
@@ -524,6 +591,7 @@ async function openRoom(options: RoomOptions): Promise<boolean> {
 	try {
 		const [kit, ticket] = await Promise.all([import("livekit-client"), options.ticket()]);
 		ticketed = true;
+		current.shareLimits = ticket.screen_share;
 		livekit = kit;
 		if (session !== current) {
 			options.leave(false);

@@ -877,6 +877,12 @@ export interface ChatMessage {
 	call: { outcome: ChatCallOutcome; seconds: number; video: boolean } | null;
 }
 
+export interface ScreenShareQuality {
+	height: number;
+	frames_per_second: number;
+	kbps: number;
+}
+
 export interface RecordingQuality {
 	height: number;
 	frames_per_second: number;
@@ -3977,7 +3983,10 @@ export const Api = {
 	},
 
 	joinGroupCall(uuid: string, conversation: string) {
-		return request<{ call: string; url: string; token: string }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/group-call`);
+		return request<{ call: string; url: string; token: string; screen_share: ScreenShareQuality }>(
+			"POST",
+			`/projects/${uuid}/chat/conversations/${conversation}/group-call`
+		);
 	},
 
 	leaveGroupCall(uuid: string, conversation: string) {

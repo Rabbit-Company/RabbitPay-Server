@@ -107,7 +107,7 @@ The conversation keeps a line for every call with its length. A missed call is m
 
 Open a group and press the camera button at the top of the conversation to start a call. Everyone in the group then sees a highlighted button there with the number of people already in the call, which joins it, and the conversation list shows **Call in progress**. A group call does not ring.
 
-The call shows a tile for each person. The buttons work as in a call between two people, and only one person can share a screen at a time. Press the red button to leave. The call ends when the last person leaves, and the conversation keeps a line with its length.
+The call shows a tile for each person. The buttons work as in a call between two people, and only one person can share a screen at a time. The small arrow next to the share button sets the quality of your shared screen: **High**, **Medium** or **Low**. Choose a lower one if your connection is slow. Press the red button to leave. The call ends when the last person leaves, and the conversation keeps a line with its length.
 
 If a group has no camera button, the server has no media servers for group calls. Calls between two people still work.
 
