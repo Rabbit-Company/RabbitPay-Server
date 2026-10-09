@@ -6691,6 +6691,12 @@ fieldset.stack-tight {
 	right: 0;
 	bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
+.call-panel.theater .call-thumbs {
+	bottom: 4.5rem;
+}
+.call-panel.theater.quiet .call-thumbs {
+	bottom: 0.5rem;
+}
 .call-panel.theater.quiet .call-controls,
 .call-panel.theater.quiet .call-stage-action {
 	display: none;

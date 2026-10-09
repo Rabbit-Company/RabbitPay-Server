@@ -362,7 +362,11 @@ Server.app.post(`${base}/conversations/:conversation/calls`, ...chat, async (ctx
 		await Calls.recordUnreachable(found.conversation, caller, receiver, video);
 		return Utils.fail(ctx, ErrorCode.CALL_PERSON_OFFLINE);
 	}
-	return Utils.ok(ctx, { call: call.uuid, ice_servers: iceServers(username), ring_seconds: Settings.calls.ring_seconds }, 201);
+	return Utils.ok(
+		ctx,
+		{ call: call.uuid, ice_servers: iceServers(username), ring_seconds: Settings.calls.ring_seconds, screen_share: screenShareLimits() },
+		201
+	);
 });
 
 Server.app.post(`${base}/calls/:call/accept`, ...chat, async (ctx) => {
@@ -373,7 +377,7 @@ Server.app.post(`${base}/calls/:call/accept`, ...chat, async (ctx) => {
 	if (!waiting || waiting.conversation.project !== Permissions.project(ctx).uuid) return Utils.fail(ctx, ErrorCode.CALL_NOT_FOUND);
 	const call = Calls.accept(ctx.params.call, username, client);
 	if (!call) return Utils.fail(ctx, ErrorCode.CALL_NOT_FOUND);
-	return Utils.ok(ctx, { call: call.uuid, ice_servers: iceServers(username) });
+	return Utils.ok(ctx, { call: call.uuid, ice_servers: iceServers(username), screen_share: screenShareLimits() });
 });
 
 Server.app.post(`${base}/calls/:call/end`, ...chat, async (ctx) => {
@@ -570,7 +574,6 @@ Server.app.post(`${base}/conversations/:conversation/recordings`, ...chat, async
 	const project = Permissions.project(ctx);
 	const found = await joined(ctx);
 	if (!found) return Utils.fail(ctx, ErrorCode.CONVERSATION_NOT_FOUND);
-	if (found.conversation.kind !== "group") return Utils.fail(ctx, ErrorCode.INVALID_CALL);
 	const requested = (await body(ctx))?.type;
 	const type = typeof requested === "string" && RECORDING_TYPES.includes(requested.split(";")[0]) ? requested.split(";")[0] : RECORDING_TYPES[0];
 	if (!(await hasFileStorageCapacity(project.uuid, FILE_PART_BYTES))) return Utils.fail(ctx, ErrorCode.FILE_STORAGE_LIMIT_REACHED);

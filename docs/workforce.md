@@ -141,7 +141,7 @@ seats and see nothing of the project except the meeting title, the company
 name and the time. A group admin can replace the link, which makes the old
 one stop working, or turn guest access off.
 
-Record, in a group call, records in the browser of the member who pressed it:
+Record, in any call, records in the browser of the member who pressed it:
 the voices of everyone in the call mixed together and the shared screen, or a
 title card while nobody shares. Everyone in the call, guests included, sees
 who is recording, and only one person records at a time. The recording is
@@ -150,15 +150,17 @@ as a WebM video when recording stops, where it is stored encrypted like every
 other chat attachment and uses the project's file storage. If the browser of
 the person recording closes, the parts already uploaded are kept and the
 recording appears in the conversation a few minutes later, without the last
-minute or two. Calls between two people cannot be recorded.
+minute or two. A call between two people is recorded the same way: both
+voices and the shared screen, added to their direct conversation, and the
+other person sees that the call is being recorded.
 
-Screen sharing in a group call has its own quality. The arrow next to the
+Screen sharing has its own quality, in group calls and in calls between two
+people. The arrow next to the
 share button offers High (1080p, 30 frames, 4000 kbps), Medium (1080p, 15
 frames, 2500 kbps) and Low (720p, 15 frames, 1500 kbps), remembered in the
 browser. Under Admin, Settings, Calls the administrator sets the highest
 resolution (1080), frame rate (30) and bitrate (5000 kbps) for shared screens,
-and choices above a limit are lowered to it. Calls between two people are not
-affected.
+and choices above a limit are lowered to it.
 
 Each person chooses the quality of the recordings they make under Files, My
 chat attachments, because a recording counts toward their own storage: High

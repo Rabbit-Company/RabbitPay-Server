@@ -4,10 +4,21 @@ import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
 import { reportError, toast } from "./ui";
-import { canRecord, RECORDING_SIZES, recordingSize, startRecorder, type CallRecorder, type RecordingSize } from "./call-recorder";
-import { select } from "./dom";
-import { callControl } from "./call-controls";
+import { canRecord, RECORDING_SIZES, recordingSize, startRecorder, type CallRecorder, type RecordingSize, type RecordingSource } from "./call-recorder";
+import { callControl, controlPick, qualityPick, splitControl } from "./call-controls";
 import { icon } from "./storefront/icons";
+import {
+	chooseShareSize,
+	namedDevices,
+	rememberDevice,
+	rememberedDevice,
+	SHARE_PRESETS,
+	SHARE_SIZES,
+	shareQuality,
+	shareSize,
+	type DeviceKind,
+	type ShareSize,
+} from "./call-preferences";
 
 const GUEST_PREFIX = "guest-";
 const CHAT_TOPIC = "chat";
@@ -24,37 +35,6 @@ interface RoomTicket {
 	url: string;
 	token: string;
 	screen_share: ScreenShareQuality;
-}
-
-type ShareSize = Exclude<RecordingSize, "custom">;
-type DeviceKind = "audioinput" | "videoinput";
-
-const DEVICE_KEY = "rabbitpay.call_device";
-
-const SHARE_SIZES: ShareSize[] = ["high", "medium", "small"];
-const SHARE_KEY = "rabbitpay.screen_share_quality";
-const SHARE_ASPECT = 16 / 9;
-const SHARE_PRESETS: Record<ShareSize, ScreenShareQuality> = {
-	high: { height: 1080, frames_per_second: 30, kbps: 4000 },
-	medium: { height: 1080, frames_per_second: 15, kbps: 2500 },
-	small: { height: 720, frames_per_second: 15, kbps: 1500 },
-};
-
-function shareSize(): ShareSize {
-	try {
-		const stored = localStorage.getItem(SHARE_KEY) as ShareSize | null;
-		return stored !== null && SHARE_SIZES.includes(stored) ? stored : "high";
-	} catch {
-		return "high";
-	}
-}
-
-function chooseShareSize(size: ShareSize) {
-	try {
-		localStorage.setItem(SHARE_KEY, size);
-	} catch {
-		void 0;
-	}
 }
 
 interface GroupSession {
@@ -171,52 +151,10 @@ function addLine(current: GroupSession, from: string, text: string) {
 	render();
 }
 
-function controlPick(
-	label: string,
-	options: { value: string; label: string }[],
-	chosen: string,
-	disabled: boolean,
-	choose: (value: string) => void
-): HTMLElement {
-	const pick = select(options, chosen);
-	pick.setAttribute("aria-label", label);
-	pick.disabled = disabled;
-	const holder = el("label", { class: "call-control call-control-pick" }, icon("down", 14, "call-control-icon"), pick);
-	const name = () => {
-		holder.title = `${label} | ${options.find((option) => option.value === pick.value)?.label ?? ""}`;
-	};
-	pick.addEventListener("change", () => {
-		choose(pick.value);
-		name();
-	});
-	name();
-	return holder;
-}
-
-function qualityPick<Size extends RecordingSize>(label: string, sizes: Size[], chosen: Size, disabled: boolean, choose: (size: Size) => void): HTMLElement {
-	return controlPick(
-		label,
-		sizes.map((size) => ({ value: size, label: t(`files.recording_size_${size}`) })),
-		chosen,
-		disabled,
-		(value) => choose(value as Size)
-	);
-}
-
-function rememberedDevice(kind: DeviceKind): string | undefined {
-	try {
-		return localStorage.getItem(`${DEVICE_KEY}.${kind}`) ?? undefined;
-	} catch {
-		return undefined;
-	}
-}
-
 async function refreshDevices(current: GroupSession) {
 	if (livekit === null) return;
 	try {
-		const [microphones, cameras] = await Promise.all([livekit.Room.getLocalDevices("audioinput", false), livekit.Room.getLocalDevices("videoinput", false)]);
-		const named = (device: MediaDeviceInfo) => device.deviceId !== "" && device.label !== "";
-		current.devices = { audioinput: microphones.filter(named), videoinput: cameras.filter(named) };
+		current.devices = namedDevices(await livekit.Room.getLocalDevices(undefined, false));
 		queueRender();
 	} catch {
 		void 0;
@@ -226,11 +164,7 @@ async function refreshDevices(current: GroupSession) {
 async function switchDevice(current: GroupSession, kind: DeviceKind, device: string) {
 	try {
 		await current.room?.switchActiveDevice(kind, device);
-		try {
-			localStorage.setItem(`${DEVICE_KEY}.${kind}`, device);
-		} catch {
-			void 0;
-		}
+		rememberDevice(kind, device);
 	} catch {
 		toast(t(kind === "audioinput" ? "calls.no_microphone" : "calls.no_camera"), "error");
 	}
@@ -250,10 +184,6 @@ function withDevices(current: GroupSession, kind: DeviceKind, main: HTMLElement)
 			(device) => void switchDevice(current, kind, device)
 		)
 	);
-}
-
-function splitControl(main: HTMLElement, pick: HTMLElement): HTMLElement {
-	return el("div", { class: "call-control-split" }, main, pick);
 }
 
 function recordControl(current: GroupSession): HTMLElement {
@@ -525,14 +455,15 @@ async function toggle(kind: "microphone" | "camera" | "screen") {
 			if (!local.isScreenShareEnabled && someoneElse) return;
 			if (local.isScreenShareEnabled) await local.setScreenShareEnabled(false);
 			else {
-				const wanted = SHARE_PRESETS[session?.shareSize ?? "high"];
-				const limits = session?.shareLimits ?? wanted;
-				const height = Math.min(wanted.height, limits.height);
-				const frameRate = Math.min(wanted.frames_per_second, limits.frames_per_second);
+				const quality = shareQuality(session?.shareSize ?? "high", session?.shareLimits ?? SHARE_PRESETS.high);
 				await local.setScreenShareEnabled(
 					true,
-					{ audio: false, resolution: { width: Math.round(height * SHARE_ASPECT), height, frameRate } },
-					{ screenShareEncoding: { maxBitrate: Math.min(wanted.kbps, limits.kbps) * 1000, maxFramerate: frameRate } }
+					{ audio: false, resolution: { width: quality.width, height: quality.height, frameRate: quality.frames_per_second } },
+					{
+						screenShareEncoding: { maxBitrate: quality.kbps * 1000, maxFramerate: quality.frames_per_second },
+						videoCodec: livekit.supportsVP9() ? "vp9" : "vp8",
+						backupCodec: true,
+					}
 				);
 			}
 		}
@@ -569,6 +500,24 @@ async function stopRecording(current: GroupSession) {
 	toast((await recorder.stop()) ? t("calls.recording_saved") : t("calls.recording_failed"), "info");
 }
 
+function recordingSource(room: Room, kit: LiveKit): RecordingSource {
+	const everyone = (): Participant[] => [room.localParticipant, ...room.remoteParticipants.values()];
+	return {
+		audioTracks: () =>
+			everyone().flatMap((participant) =>
+				[...participant.audioTrackPublications.values()].flatMap((publication) => (publication.track ? [publication.track.mediaStreamTrack] : []))
+			),
+		screen: () => {
+			for (const participant of everyone()) {
+				const track = participant.getTrackPublication(kit.Track.Source.ScreenShare)?.track;
+				if (participant.isScreenShareEnabled && track) return track.mediaStreamTrack;
+			}
+			return null;
+		},
+		names: () => everyone().map((participant) => participant.name || participant.identity),
+	};
+}
+
 async function toggleRecording(current: GroupSession) {
 	if (current.recorder) {
 		await stopRecording(current);
@@ -580,8 +529,7 @@ async function toggleRecording(current: GroupSession) {
 	queueRender();
 	try {
 		const recorder = await startRecorder(
-			room,
-			livekit,
+			recordingSource(room, livekit),
 			{ ...current.recordTarget, title: current.title },
 			current.recordSize,
 			() => void stopRecording(current)

@@ -510,6 +510,7 @@ describe("calls", () => {
 		const started = await call("POST", `${path()}/calls`, tokens.anna, { client: callerClient, video: true });
 		expect(started.status).toBe(201);
 		expect(started.data.ice_servers).toEqual([{ urls: ["stun:stun.cloudflare.com:3478"] }]);
+		expect(started.data.screen_share).toEqual({ height: 1080, frames_per_second: 30, kbps: 5000 });
 		expect(boris.events).toMatchObject([
 			{ type: "call.incoming", call: started.data.call, video: true, from: { account: "chat-anna", name: "Anna Employee" } },
 		]);
@@ -694,9 +695,17 @@ describe("recordings", () => {
 		expect(last).toMatchObject({ author: "chat-anna", author_name: "Anna Employee", files: [{ uuid: abandoned.data.uuid, ready: true, byte_size: 14 }] });
 	});
 
-	test("are refused in direct conversations", async () => {
+	test("work in direct conversations and stay out of reach of other people", async () => {
 		const pair = await direct(tokens.anna, "chat-boris");
-		expect((await call("POST", `${chat()}/conversations/${pair.uuid}/recordings`, tokens.anna, {})).error).toBe(1325);
+		const begun = await call("POST", `${chat()}/conversations/${pair.uuid}/recordings`, tokens.anna, {});
+		expect(begun.status).toBe(201);
+		expect(begun.data.file_name).toMatch(/^Call \d{4}-\d{2}-\d{2} \d{2}\.\d{2}\.webm$/);
+		expect((await call("POST", `${chat()}/conversations/${pair.uuid}/recordings`, tokens.owner, {})).error).toBe(1316);
+		await part(tokens.anna, begun.data.uuid, 0, new TextEncoder().encode("a private call"));
+		expect((await call("POST", `${chat()}/recordings/${begun.data.uuid}/finish`, tokens.boris)).error).toBe(1331);
+		expect((await call("POST", `${chat()}/recordings/${begun.data.uuid}/finish`, tokens.anna)).data).toEqual({ kept: true });
+		const last = (await call("GET", `${chat()}/conversations/${pair.uuid}/messages?limit=1`, tokens.boris)).data.messages[0];
+		expect(last).toMatchObject({ author: "chat-anna", files: [{ uuid: begun.data.uuid, ready: true }] });
 	});
 });
 

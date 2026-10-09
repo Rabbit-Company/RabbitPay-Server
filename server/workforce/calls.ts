@@ -63,6 +63,11 @@ export namespace Calls {
 		return calls.get(uuid) ?? null;
 	}
 
+	export function runningIn(conversation: string): boolean {
+		for (const call of calls.values()) if (call.conversation.uuid === conversation) return true;
+		return false;
+	}
+
 	export function callOf(username: string): Call | null {
 		for (const call of calls.values()) {
 			if (call.caller.username === username || call.callee.username === username) return call;

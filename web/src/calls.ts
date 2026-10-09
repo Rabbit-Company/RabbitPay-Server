@@ -1,10 +1,23 @@
-import { Api, getToken, type ChatCallOutcome, type IceServer } from "./api";
+import { Api, getToken, type ChatCallOutcome, type IceServer, type ScreenShareQuality } from "./api";
 import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, sendRealtime, type RealtimeEvent } from "./realtime";
 import { reportError, toast } from "./ui";
 import { dropGroupCall, inGroupCall, watchGroupCalls } from "./group-call";
-import { callControl } from "./call-controls";
+import { callControl, controlPick, qualityPick, splitControl } from "./call-controls";
+import {
+	chooseShareSize,
+	namedDevices,
+	rememberDevice,
+	rememberedDevice,
+	SHARE_PRESETS,
+	SHARE_SIZES,
+	shareQuality,
+	shareSize,
+	type DeviceKind,
+	type ShareSize,
+} from "./call-preferences";
+import { canRecord, RECORDING_SIZES, recordingSize, startRecorder, type CallRecorder, type RecordingSize } from "./call-recorder";
 
 const CLIENT_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const FAILED_GRACE_MS = 20 * 1000;
@@ -18,6 +31,7 @@ interface PeerState {
 	camera: boolean;
 	screen: boolean;
 	microphone: boolean;
+	recording: boolean;
 }
 
 interface ActiveCall {
@@ -40,6 +54,15 @@ interface ActiveCall {
 	connectedAt: number | null;
 	failTimer: ReturnType<typeof setTimeout> | null;
 	restarted: boolean;
+	recorder: CallRecorder | null;
+	recorderStarting: boolean;
+	recordSize: RecordingSize;
+	shareSize: ShareSize;
+	shareLimits: ScreenShareQuality;
+	devices: Record<DeviceKind, MediaDeviceInfo[]>;
+	expanded: boolean;
+	theater: boolean;
+	quiet: boolean;
 }
 
 let active: ActiveCall | null = null;
@@ -48,6 +71,7 @@ let panel: HTMLElement | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let ringer: ReturnType<typeof setInterval> | null = null;
 let audioContext: AudioContext | null = null;
+let nativeTheater = false;
 
 const remoteAudio = el("audio", {});
 remoteAudio.autoplay = true;
@@ -132,9 +156,17 @@ function render() {
 		remoteAudio.srcObject = null;
 		return;
 	}
-	const expanded = panel?.classList.contains("expanded") ?? false;
+	const expanded = call.expanded;
 	const status = el("span", { class: "call-status" }, statusText(call));
-	const head = el("div", { class: "call-head" }, el("strong", { class: "call-peer" }, call.peerName), status);
+	const recordingNote = call.recorder ? t("calls.recording_you") : call.remote.recording ? t("calls.recording_by", { name: call.peerName }) : null;
+	const head = el(
+		"div",
+		{ class: "call-head" },
+		el("strong", { class: "call-peer" }, call.peerName),
+		recordingNote ? el("span", { class: "call-recording" }, recordingNote) : null,
+		status
+	);
+	call.recorder?.sync();
 
 	let body: HTMLElement;
 	if (call.stage === "incoming") {
@@ -155,6 +187,12 @@ function render() {
 		const remoteScreen = call.remote.screen ? remoteTrack(call, 2) : null;
 		const remoteCamera = call.remote.camera ? remoteTrack(call, 1) : null;
 		const main = remoteScreen ?? call.screen ?? remoteCamera;
+		const watching = main !== null && main !== call.screen;
+		if (call.theater && !watching) {
+			call.theater = false;
+			leaveNativeTheater();
+		}
+		const theater = call.theater;
 		const side = main !== remoteCamera ? remoteCamera : null;
 		show(mainVideo, main);
 		show(sideVideo, side);
@@ -169,41 +207,67 @@ function render() {
 			{ class: "call-body" },
 			el(
 				"div",
-				{ class: `call-stage${main === null ? " empty" : ""}` },
+				{
+					class: `call-stage${main === null ? " empty" : ""}`,
+					onClick: (event) => {
+						if (!call.theater || (event.target as Element).closest("button")) return;
+						call.quiet = !call.quiet;
+						panel?.classList.toggle("quiet", call.quiet);
+					},
+				},
 				main === null ? el("span", { class: "call-avatar" }, call.peerName.slice(0, 1).toUpperCase()) : null,
 				mainVideo,
 				el("div", { class: "call-thumbs" }, sideVideo, selfVideo),
+				watching
+					? callControl(
+							theater ? "fullscreen_exit" : "fullscreen",
+							theater ? t("calls.exit_full_screen") : t("calls.full_screen"),
+							() => setTheater(call, !theater),
+							{
+								pressed: theater,
+								extraClass: "call-stage-action",
+							}
+						)
+					: null,
 				call.remote.microphone ? null : el("span", { class: "call-note" }, t("calls.they_muted", { name: call.peerName }))
 			),
 			sharingNote ? el("p", { class: "call-sharing muted" }, sharingNote) : null,
 			el(
 				"div",
 				{ class: "call-controls" },
-				callControl(call.muted ? "mic_off" : "mic", call.muted ? t("calls.unmute") : t("calls.mute"), toggleMicrophone, {
-					tone: call.muted ? "off" : "neutral",
-					pressed: call.muted,
-				}),
-				callControl(call.camera ? "video" : "video_off", call.camera ? t("calls.camera_off") : t("calls.camera_on"), () => void toggleCamera(), {
-					tone: call.camera ? "active" : "neutral",
-					pressed: call.camera !== null,
-				}),
-				callControl("screen", call.screen ? t("calls.stop_sharing") : t("calls.share_screen"), () => void toggleScreen(), {
-					tone: call.screen ? "active" : "neutral",
-					pressed: call.screen !== null,
-					disabled: call.remote.screen || !("getDisplayMedia" in navigator.mediaDevices),
-				}),
-				callControl(expanded ? "shrink" : "expand", expanded ? t("calls.smaller") : t("calls.larger"), toggleExpanded),
+				withDevices(
+					call,
+					"audioinput",
+					callControl(call.muted ? "mic_off" : "mic", call.muted ? t("calls.unmute") : t("calls.mute"), toggleMicrophone, {
+						tone: call.muted ? "off" : "neutral",
+						pressed: call.muted,
+					})
+				),
+				withDevices(
+					call,
+					"videoinput",
+					callControl(call.camera ? "video" : "video_off", call.camera ? t("calls.camera_off") : t("calls.camera_on"), () => void toggleCamera(), {
+						tone: call.camera ? "active" : "neutral",
+						pressed: call.camera !== null,
+					})
+				),
+				shareControl(call),
+				canRecord() ? recordControl(call) : null,
+				theater ? null : callControl(expanded ? "shrink" : "expand", expanded ? t("calls.smaller") : t("calls.larger"), toggleExpanded),
 				callControl("hang_up", t("calls.hang_up"), () => void hangUp(), { tone: "danger" })
 			)
 		);
 	}
 
-	const next = el("div", { class: `call-panel${expanded ? " expanded" : ""}`, dataset: { stage: call.stage } }, head, body, remoteAudio);
-	next.setAttribute("role", "dialog");
-	next.setAttribute("aria-label", t("calls.title", { name: call.peerName }));
-	if (panel) panel.replaceWith(next);
-	else document.body.appendChild(next);
-	panel = next;
+	if (panel === null) {
+		panel = el("div", {});
+		panel.setAttribute("role", "dialog");
+		document.body.appendChild(panel);
+	}
+	panel.className = `call-panel${expanded ? " expanded" : ""}${call.theater ? " theater" : ""}${call.theater && call.quiet ? " quiet" : ""}`;
+	panel.dataset.stage = call.stage;
+	panel.setAttribute("aria-label", t("calls.title", { name: call.peerName }));
+	panel.replaceChildren(head, body, remoteAudio);
 
 	if (clock === null) {
 		clock = setInterval(() => {
@@ -213,9 +277,160 @@ function render() {
 	}
 }
 
-function toggleExpanded() {
-	panel?.classList.toggle("expanded");
+function withDevices(call: ActiveCall, kind: DeviceKind, main: HTMLElement): HTMLElement {
+	const devices = call.devices[kind];
+	if (devices.length < 2) return main;
+	const track = kind === "audioinput" ? call.microphone : call.camera;
+	const chosen = track?.getSettings().deviceId ?? rememberedDevice(kind);
+	return splitControl(
+		main,
+		controlPick(
+			t(kind === "audioinput" ? "calls.microphone_source" : "calls.camera_source"),
+			devices.map((device) => ({ value: device.deviceId, label: device.label })),
+			devices.find((device) => device.deviceId === chosen)?.deviceId ?? devices[0].deviceId,
+			false,
+			(device) => void switchDevice(call, kind, device)
+		)
+	);
+}
+
+function shareControl(call: ActiveCall): HTMLElement {
+	const disabled = call.remote.screen || !("getDisplayMedia" in navigator.mediaDevices);
+	const share = callControl("screen", call.screen ? t("calls.stop_sharing") : t("calls.share_screen"), () => void toggleScreen(), {
+		tone: call.screen ? "active" : "neutral",
+		pressed: call.screen !== null,
+		disabled,
+	});
+	if (call.screen) return share;
+	return splitControl(
+		share,
+		qualityPick(t("calls.share_quality"), SHARE_SIZES, call.shareSize, disabled, (size) => {
+			call.shareSize = size;
+			chooseShareSize(size);
+		})
+	);
+}
+
+async function refreshDevices(call: ActiveCall) {
+	try {
+		call.devices = namedDevices(await navigator.mediaDevices.enumerateDevices());
+		if (active === call) render();
+	} catch {
+		void 0;
+	}
+}
+
+async function switchDevice(call: ActiveCall, kind: DeviceKind, device: string) {
+	rememberDevice(kind, device);
+	const current = kind === "audioinput" ? call.microphone : call.camera;
+	if (current === null || call.connection === null) return;
+	const next = kind === "audioinput" ? await microphone() : await cameraTrack();
+	if (next === null) return;
+	if (active !== call || (kind === "videoinput" && call.camera === null)) {
+		next.stop();
+		return;
+	}
+	current.stop();
+	if (kind === "audioinput") {
+		next.enabled = !call.muted;
+		call.microphone = next;
+	} else call.camera = next;
+	await call.connection.getTransceivers()[kind === "audioinput" ? 0 : 1]?.sender.replaceTrack(next);
 	render();
+}
+
+function recordControl(call: ActiveCall): HTMLElement {
+	const record = callControl(
+		call.recorder ? "record_stop" : "record",
+		call.recorder ? t("calls.record_stop") : t("calls.record"),
+		() => void toggleRecording(call),
+		{
+			tone: call.recorder ? "off" : "neutral",
+			pressed: call.recorder !== null,
+			disabled: call.recorderStarting || (call.recorder === null && call.remote.recording),
+		}
+	);
+	if (call.recorder) return record;
+	return splitControl(
+		record,
+		qualityPick(t("calls.record_quality"), RECORDING_SIZES, call.recordSize, call.recorderStarting || call.remote.recording, (size) => {
+			call.recordSize = size;
+		})
+	);
+}
+
+async function stopRecording(call: ActiveCall) {
+	const recorder = call.recorder;
+	if (recorder === null) return;
+	call.recorder = null;
+	if (active === call) {
+		announceState(call);
+		render();
+	}
+	toast((await recorder.stop()) ? t("calls.recording_saved") : t("calls.recording_failed"), "info");
+}
+
+async function toggleRecording(call: ActiveCall) {
+	if (call.recorder) {
+		await stopRecording(call);
+		return;
+	}
+	if (call.recorderStarting || call.remote.recording || call.stage === "incoming" || call.stage === "outgoing") return;
+	call.recorderStarting = true;
+	render();
+	try {
+		const recorder = await startRecorder(
+			{
+				audioTracks: () => [call.microphone, remoteTrack(call, 0)].filter((track) => track !== null),
+				screen: () => (call.remote.screen ? remoteTrack(call, 2) : call.screen),
+				names: () => [],
+			},
+			{ project: call.project, conversation: call.conversation, title: t("calls.title", { name: call.peerName }) },
+			call.recordSize,
+			() => void stopRecording(call)
+		);
+		if (active !== call || call.remote.recording) {
+			void recorder.stop();
+			return;
+		}
+		call.recorder = recorder;
+		announceState(call);
+	} catch (error) {
+		reportError(error);
+	} finally {
+		call.recorderStarting = false;
+		if (active === call) render();
+	}
+}
+
+function toggleExpanded() {
+	if (active) active.expanded = !active.expanded;
+	render();
+}
+
+function leaveNativeTheater() {
+	if (panel !== null && document.fullscreenElement === panel) void document.exitFullscreen().catch(() => undefined);
+}
+
+function setTheater(call: ActiveCall, on: boolean) {
+	call.theater = on;
+	call.quiet = false;
+	render();
+	if (!on) leaveNativeTheater();
+	else if (panel !== null && document.fullscreenEnabled) void panel.requestFullscreen({ navigationUI: "hide" }).catch(() => undefined);
+}
+
+function onFullscreenChange() {
+	if (panel !== null && document.fullscreenElement === panel) {
+		nativeTheater = true;
+		return;
+	}
+	if (!nativeTheater) return;
+	nativeTheater = false;
+	if (active?.theater) {
+		active.theater = false;
+		render();
+	}
 }
 
 function signal(call: ActiveCall, data: Record<string, unknown>) {
@@ -228,15 +443,16 @@ function flush(call: ActiveCall) {
 }
 
 function announceState(call: ActiveCall) {
-	signal(call, { state: { camera: call.camera !== null, screen: call.screen !== null, microphone: !call.muted } });
+	signal(call, { state: { camera: call.camera !== null, screen: call.screen !== null, microphone: !call.muted, recording: call.recorder !== null } });
 }
 
 function cleanup(call: ActiveCall) {
 	stopRinging();
 	if (call.failTimer !== null) clearTimeout(call.failTimer);
+	if (active === call) active = null;
+	void stopRecording(call);
 	for (const track of [call.microphone, call.camera, call.screen]) track?.stop();
 	call.connection?.close();
-	if (active === call) active = null;
 	render();
 }
 
@@ -265,6 +481,7 @@ function watchConnection(call: ActiveCall, connection: RTCPeerConnection) {
 			call.restarted = false;
 			call.connectedAt ??= Date.now();
 			call.stage = "connected";
+			void refreshDevices(call);
 			announceState(call);
 			render();
 			return;
@@ -345,7 +562,14 @@ async function onSignal(call: ActiveCall, data: Record<string, unknown>) {
 		}
 		if (data.state) {
 			const state = data.state as PeerState;
-			call.remote = { camera: state.camera === true, screen: state.screen === true, microphone: state.microphone !== false };
+			if (state.recording === true && !call.remote.recording) toast(t("calls.recording_by", { name: call.peerName }), "info");
+			call.remote = {
+				camera: state.camera === true,
+				screen: state.screen === true,
+				microphone: state.microphone !== false,
+				recording: state.recording === true,
+			};
+			if (call.remote.recording && call.recorder && !call.caller) await stopRecording(call);
 			if (call.remote.screen && call.screen && !call.caller) await stopScreen(call);
 			render();
 		}
@@ -356,7 +580,8 @@ async function onSignal(call: ActiveCall, data: Record<string, unknown>) {
 
 async function microphone(): Promise<MediaStreamTrack | null> {
 	try {
-		return (await navigator.mediaDevices.getUserMedia({ audio: true })).getAudioTracks()[0] ?? null;
+		const device = rememberedDevice("audioinput");
+		return (await navigator.mediaDevices.getUserMedia({ audio: device ? { deviceId: device } : true })).getAudioTracks()[0] ?? null;
 	} catch {
 		toast(t("calls.no_microphone"), "error");
 		return null;
@@ -365,7 +590,8 @@ async function microphone(): Promise<MediaStreamTrack | null> {
 
 async function cameraTrack(): Promise<MediaStreamTrack | null> {
 	try {
-		return (await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })).getVideoTracks()[0] ?? null;
+		const video = { width: { ideal: 1280 }, height: { ideal: 720 }, deviceId: rememberedDevice("videoinput") };
+		return (await navigator.mediaDevices.getUserMedia({ video })).getVideoTracks()[0] ?? null;
 	} catch {
 		toast(t("calls.no_camera"), "error");
 		return null;
@@ -395,6 +621,7 @@ async function toggleCamera() {
 	await sender?.replaceTrack(call.camera);
 	announceState(call);
 	render();
+	void refreshDevices(call);
 }
 
 async function stopScreen(call: ActiveCall) {
@@ -413,9 +640,15 @@ async function toggleScreen() {
 		return;
 	}
 	if (call.remote.screen) return;
+	const quality = shareQuality(call.shareSize, call.shareLimits);
 	let track: MediaStreamTrack | null = null;
 	try {
-		track = (await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })).getVideoTracks()[0] ?? null;
+		const video = {
+			width: { ideal: quality.width },
+			height: { ideal: quality.height },
+			frameRate: { ideal: quality.frames_per_second, max: quality.frames_per_second },
+		};
+		track = (await navigator.mediaDevices.getDisplayMedia({ video, audio: false })).getVideoTracks()[0] ?? null;
 	} catch {
 		return;
 	}
@@ -428,7 +661,18 @@ async function toggleScreen() {
 	track.addEventListener("ended", () => {
 		if (call.screen === track) void stopScreen(call);
 	});
-	await call.connection.getTransceivers()[2]?.sender.replaceTrack(track);
+	const sender = call.connection.getTransceivers()[2]?.sender;
+	await sender?.replaceTrack(track);
+	try {
+		const parameters = sender?.getParameters();
+		if (sender && parameters?.encodings?.[0]) {
+			parameters.encodings[0].maxBitrate = quality.kbps * 1000;
+			parameters.encodings[0].maxFramerate = quality.frames_per_second;
+			await sender.setParameters(parameters);
+		}
+	} catch {
+		void 0;
+	}
 	announceState(call);
 	render();
 }
@@ -442,12 +686,21 @@ function newCall(values: Pick<ActiveCall, "id" | "project" | "conversation" | "p
 		camera: null,
 		screen: null,
 		muted: false,
-		remote: { camera: false, screen: false, microphone: true },
+		remote: { camera: false, screen: false, microphone: true, recording: false },
 		pendingCandidates: [],
 		unsent: [],
 		connectedAt: null,
 		failTimer: null,
 		restarted: false,
+		recorder: null,
+		recorderStarting: false,
+		recordSize: recordingSize(),
+		shareSize: shareSize(),
+		shareLimits: SHARE_PRESETS.high,
+		devices: { audioinput: [], videoinput: [] },
+		expanded: false,
+		theater: false,
+		quiet: false,
 	};
 }
 
@@ -478,6 +731,7 @@ export async function startCall(project: string, conversation: string, peerName:
 		const started = await Api.startChatCall(project, conversation, clientId, video);
 		call.id = started.call;
 		call.iceServers = started.ice_servers;
+		call.shareLimits = started.screen_share;
 		if (active !== call) await Api.endChatCall(project, started.call).catch(() => undefined);
 	} catch (error) {
 		cleanup(call);
@@ -502,7 +756,9 @@ async function accept(video: boolean) {
 		return;
 	}
 	try {
-		call.iceServers = (await Api.acceptChatCall(call.project, call.id, clientId)).ice_servers;
+		const accepted = await Api.acceptChatCall(call.project, call.id, clientId);
+		call.iceServers = accepted.ice_servers;
+		call.shareLimits = accepted.screen_share;
 	} catch (error) {
 		cleanup(call);
 		reportError(error);
@@ -570,6 +826,10 @@ export function watchCalls() {
 	listening = true;
 	onRealtime(onEvent);
 	watchGroupCalls();
+	document.addEventListener("fullscreenchange", onFullscreenChange);
+	navigator.mediaDevices?.addEventListener("devicechange", () => {
+		if (active) void refreshDevices(active);
+	});
 	window.addEventListener("pagehide", () => {
 		const call = active;
 		const token = getToken();

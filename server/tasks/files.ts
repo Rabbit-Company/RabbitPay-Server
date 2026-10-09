@@ -1,7 +1,7 @@
 import { Logger } from "../logger";
 import { discardAbandonedUploads } from "../files";
 import { discardUnsentChatFiles, finishStaleRecordings } from "../workforce/chat";
-import { GroupCalls } from "../workforce/calls";
+import { Calls, GroupCalls } from "../workforce/calls";
 
 namespace TaskFiles {
 	let running = false;
@@ -13,7 +13,7 @@ namespace TaskFiles {
 		try {
 			const discarded = await discardAbandonedUploads();
 			if (discarded > 0) Logger.info(`[FILES] Discarded ${discarded} unfinished uploads`);
-			const salvaged = await finishStaleRecordings((conversation) => GroupCalls.infoOf(conversation) !== null);
+			const salvaged = await finishStaleRecordings((conversation) => GroupCalls.infoOf(conversation) !== null || Calls.runningIn(conversation));
 			if (salvaged > 0) Logger.info(`[FILES] Finished ${salvaged} recordings that were left open`);
 			const unsent = await discardUnsentChatFiles();
 			if (unsent > 0) Logger.info(`[FILES] Discarded ${unsent} chat attachments that were never sent`);

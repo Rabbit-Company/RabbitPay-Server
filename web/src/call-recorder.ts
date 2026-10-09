@@ -1,4 +1,3 @@
-import type { Participant, Room, Track } from "livekit-client";
 import { Api, type RecordingQuality } from "./api";
 import { reserveDuration } from "./webm-duration";
 
@@ -61,7 +60,11 @@ export function qualityOf(size: RecordingSize, limits: RecordingQuality): Record
 	return { height: within("height"), frames_per_second: within("frames_per_second"), video_kbps: within("video_kbps"), audio_kbps: limits.audio_kbps };
 }
 
-type LiveKit = typeof import("livekit-client");
+export interface RecordingSource {
+	audioTracks(): MediaStreamTrack[];
+	screen(): MediaStreamTrack | null;
+	names(): string[];
+}
 
 export interface CallRecorder {
 	sync(): void;
@@ -87,18 +90,8 @@ function steadyTimer(milliseconds: number, tick: () => void): () => void {
 	}
 }
 
-function sharedScreen(room: Room, kit: LiveKit): Track | null {
-	const everyone: Participant[] = [room.localParticipant, ...room.remoteParticipants.values()];
-	for (const participant of everyone) {
-		const track = participant.getTrackPublication(kit.Track.Source.ScreenShare)?.track;
-		if (participant.isScreenShareEnabled && track) return track;
-	}
-	return null;
-}
-
 export async function startRecorder(
-	room: Room,
-	kit: LiveKit,
+	source: RecordingSource,
 	target: { project: string; conversation: string; title: string },
 	size: RecordingSize,
 	onFailure: () => void
@@ -120,39 +113,30 @@ export async function startRecorder(
 	const screen = document.createElement("video");
 	screen.muted = true;
 	screen.playsInline = true;
-	let shownTrack: Track | null = null;
+	let shownTrack: MediaStreamTrack | null = null;
 
 	function sync() {
 		const wanted = new Map<string, MediaStreamTrack>();
-		const everyone: Participant[] = [room.localParticipant, ...room.remoteParticipants.values()];
-		for (const participant of everyone) {
-			for (const publication of participant.audioTrackPublications.values()) {
-				const track = publication.track?.mediaStreamTrack;
-				if (track && track.readyState === "live") wanted.set(track.id, track);
-			}
-		}
-		for (const [id, source] of sources) {
+		for (const track of source.audioTracks()) if (track.readyState === "live") wanted.set(track.id, track);
+		for (const [id, node] of sources) {
 			if (wanted.has(id)) continue;
-			source.disconnect();
+			node.disconnect();
 			sources.delete(id);
 		}
 		for (const [id, track] of wanted) {
 			if (sources.has(id)) continue;
-			const source = audio.createMediaStreamSource(new MediaStream([track]));
-			source.connect(destination);
-			sources.set(id, source);
+			const node = audio.createMediaStreamSource(new MediaStream([track]));
+			node.connect(destination);
+			sources.set(id, node);
 		}
 	}
 
 	function draw() {
-		const track = sharedScreen(room, kit);
+		const track = source.screen();
 		if (track !== shownTrack) {
-			shownTrack?.detach(screen);
 			shownTrack = track;
-			if (track) {
-				track.attach(screen);
-				void screen.play().catch(() => undefined);
-			}
+			screen.srcObject = track ? new MediaStream([track]) : null;
+			if (track) void screen.play().catch(() => undefined);
 		}
 		pen.fillStyle = "#101215";
 		pen.fillRect(0, 0, frameWidth, frameHeight);
@@ -169,8 +153,7 @@ export async function startRecorder(
 		pen.fillText(target.title, frameWidth / 2, frameHeight / 2 - 30 * titleScale, frameWidth - 120 * titleScale);
 		pen.font = `${26 * titleScale}px sans-serif`;
 		pen.fillStyle = "#9aa1ac";
-		const names = [room.localParticipant, ...room.remoteParticipants.values()].map((participant) => participant.name || participant.identity);
-		pen.fillText(names.join(", "), frameWidth / 2, frameHeight / 2 + 30 * titleScale, frameWidth - 120 * titleScale);
+		pen.fillText(source.names().join(", "), frameWidth / 2, frameHeight / 2 + 30 * titleScale, frameWidth - 120 * titleScale);
 		pen.fillText(new Date().toLocaleString("sv-SE"), frameWidth / 2, frameHeight / 2 + 80 * titleScale);
 	}
 
@@ -250,8 +233,8 @@ export async function startRecorder(
 		stopped ??= new Promise<boolean>((resolve) => {
 			const finishUp = async () => {
 				stopDrawing();
-				shownTrack?.detach(screen);
-				for (const source of sources.values()) source.disconnect();
+				screen.srcObject = null;
+				for (const node of sources.values()) node.disconnect();
 				for (const track of stream.getTracks()) track.stop();
 				void audio.close().catch(() => undefined);
 				await intake;

@@ -3925,14 +3925,20 @@ export const Api = {
 	},
 
 	startChatCall(uuid: string, conversation: string, client: string, video: boolean) {
-		return request<{ call: string; ice_servers: IceServer[]; ring_seconds: number }>("POST", `/projects/${uuid}/chat/conversations/${conversation}/calls`, {
-			client,
-			video,
-		});
+		return request<{ call: string; ice_servers: IceServer[]; ring_seconds: number; screen_share: ScreenShareQuality }>(
+			"POST",
+			`/projects/${uuid}/chat/conversations/${conversation}/calls`,
+			{
+				client,
+				video,
+			}
+		);
 	},
 
 	acceptChatCall(uuid: string, call: string, client: string) {
-		return request<{ call: string; ice_servers: IceServer[] }>("POST", `/projects/${uuid}/chat/calls/${call}/accept`, { client });
+		return request<{ call: string; ice_servers: IceServer[]; screen_share: ScreenShareQuality }>("POST", `/projects/${uuid}/chat/calls/${call}/accept`, {
+			client,
+		});
 	},
 
 	endChatCall(uuid: string, call: string) {

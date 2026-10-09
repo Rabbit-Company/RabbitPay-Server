@@ -615,7 +615,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{
 				key: "calls.screen_share_max_height",
 				label: "Highest screen sharing resolution",
-				hint: "Picture height in pixels, such as 720, 1080, 1440 or 2160 for 4K. Applies to group calls. Each person picks High, Medium or Low when they share, and these limits cap all three.",
+				hint: "Picture height in pixels, such as 720, 1080, 1440 or 2160 for 4K. Each person picks High, Medium or Low when they share, and these limits cap all three.",
 				kind: "number",
 				min: 360,
 				max: 2160,
