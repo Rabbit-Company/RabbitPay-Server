@@ -71,6 +71,10 @@ Pripete datoteke uporabljajo **Prostor za datoteke**, ki je ločen od prostora z
 2. Pišite v polje na dnu in sporočilo pošljite s tipko Enter. Shift in Enter začne novo vrstico. Na telefonu uporabite gumb **Pošlji**.
 3. Nova sporočila se prikažejo takoj. Številka ob **Klepet** v meniju pove, koliko jih še niste prebrali.
 
+Pika ob imenu osebe pove, ali je ta zdaj dosegljiva: zelena pomeni, da ima RabbitPay odprt, rumena, da je označila odsotnost, rdeča, da je v klicu, rdeč krog s črto, da ne želi biti motena, prazen krog pa, da ni povezana. Spreminja se sama, ko ljudje prihajajo in odhajajo.
+
+Svoj status nastavite na vrhu seznama pogovorov: **Na voljo**, **Odsotnost** ali **Ne moti**. Ostane, dokler ga ne spremenite, na vseh napravah. Pri **Ne moti** klici ne zvonijo in nova sporočila se ne prikazujejo v oknih. Klicatelj izve, da ne želite biti moteni, zgrešen klic in sporočila pa pozneje vidite v klepetu.
+
 Vsako vaše sporočilo ima meni dejanj z **Uredi** in **Izbriši**. Izbrisano sporočilo se odstrani za vse in njegovo besedilo se izbriše.
 
 Oseba, ki ustvari skupino, je njen skrbnik. Pod **Podrobnosti skupine** skrbnik skupino preimenuje, dodaja in odstranjuje osebe ter lahko izbriše katerokoli sporočilo v njej. Skupino lahko vsak zapusti z **Zapusti skupino**. Osebe, dodane pozneje, vidijo prejšnja sporočila.

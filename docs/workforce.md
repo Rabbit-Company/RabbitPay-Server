@@ -120,6 +120,21 @@ conversation keeps a line for every call with its length, or a note that it
 was missed, declined or cancelled. A missed call counts as unread. Calling
 someone who is not online records a missed call for them.
 
+Chat shows a presence dot next to each person: Available (green) while they
+have RabbitPay open in any tab, In a call (red) from the moment a call rings
+until it ends, including group calls, and Offline (an empty ring) otherwise.
+Each person can also choose Away (yellow) or Do not disturb (a red ring with a
+line) at the top of the conversation list. The choice is stored on the account
+(accounts.chat_status, read and set through GET and PUT
+/api/v1/realtime/status) and applies in every project and tab. A call to
+someone on Do not disturb does not ring: the caller gets error 1332 and a
+missed call is recorded. Their browser also skips the pop up for new messages.
+In a call wins over the chosen status, and Offline wins over everything.
+Apart from that choice presence is not stored. The server derives it from open
+realtime connections and running calls and sends a chat.presence event to the colleagues who share
+a project chat with the person. A closed or reloaded tab counts as offline
+only after 5 seconds, so a page reload does not flicker.
+
 A group conversation has Start call when the server has media servers
 configured. Everyone in the group sees that a call is running and joins with
 Join call. It does not ring. Group calls go through a LiveKit media server

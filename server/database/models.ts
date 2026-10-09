@@ -7,6 +7,7 @@ export interface AccountRow {
 	two_factor_secret: string | null;
 	status: "active" | "suspended" | "deleted";
 	admin: number;
+	chat_status: "away" | "dnd" | null;
 	created: number;
 	updated: number;
 	accessed: number;

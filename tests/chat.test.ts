@@ -11,6 +11,7 @@ const { Realtime, REALTIME_CLOSE_UNAUTHORIZED } = await import("../server/realti
 const { MAX_MESSAGE_LENGTH, discardUnsentChatFiles, finishStaleRecordings } = await import("../server/workforce/chat");
 const { FILE_PART_BYTES } = await import("../server/file-limits");
 const { Calls, GroupCalls, iceServers } = await import("../server/workforce/calls");
+const { PresenceBoard } = await import("../server/workforce/presence");
 const { forgetNodeLoads } = await import("../server/workforce/media-nodes");
 const { createHmac } = await import("node:crypto");
 const { Settings } = await import("../server/settings");
@@ -53,15 +54,19 @@ async function member(username: string, role: string, fullName: string) {
 
 function listen(username: string, sessionToken = "") {
 	const events: any[] = [];
+	const presence: any[] = [];
 	const socket = {
 		closed: null as number | null,
-		send: (data: string) => void events.push(JSON.parse(data)),
+		send: (data: string) => {
+			const event = JSON.parse(data);
+			(event.type === "chat.presence" ? presence : events).push(event);
+		},
 		close(code?: number) {
 			this.closed = code ?? 1000;
 		},
 	};
 	Realtime.attach(socket, username, sessionToken);
-	return { events, socket, stop: () => Realtime.detach(socket) };
+	return { events, presence, socket, stop: () => Realtime.detach(socket) };
 }
 
 async function direct(token: string, other: string): Promise<any> {
@@ -586,6 +591,60 @@ describe("calls", () => {
 		boris.stop();
 		anna.stop();
 		Calls.reset();
+	});
+
+	test("show colleagues who is available, in a call or offline", async () => {
+		PresenceBoard.reset();
+		const told = async (listener: { presence: any[] }, count: number) => {
+			for (let waited = 0; waited < 200 && listener.presence.length < count; waited++) await Bun.sleep(5);
+			return listener.presence.map((event) => `${event.account} ${event.presence}`);
+		};
+		const shown = async (account: string) =>
+			(await call("GET", `${chat()}/people`, tokens.owner)).data.people.find((person: any) => person.account === account).presence;
+
+		const anna = listen("chat-anna", tokens.anna);
+		expect(await shown("chat-anna")).toBe("online");
+		expect(await shown("chat-boris")).toBe("offline");
+		const boris = listen("chat-boris", tokens.boris);
+		expect(await told(anna, 1)).toEqual(["chat-boris online"]);
+
+		const started = await call("POST", `${path()}/calls`, tokens.anna, { client: callerClient });
+		expect(await told(anna, 2)).toEqual(["chat-boris online", "chat-boris busy"]);
+		expect(await told(boris, 1)).toEqual(["chat-anna busy"]);
+		expect(await shown("chat-boris")).toBe("busy");
+		const listed = (await call("GET", `${chat()}/conversations/${conversation.uuid}`, tokens.anna)).data;
+		expect(listed.participants.find((participant: any) => participant.account === "chat-boris").presence).toBe("busy");
+
+		await call("POST", `${chat()}/calls/${started.data.call}/end`, tokens.anna);
+		expect(await told(anna, 3)).toEqual(["chat-boris online", "chat-boris busy", "chat-boris online"]);
+		expect(await told(boris, 2)).toEqual(["chat-anna busy", "chat-anna online"]);
+
+		expect((await call("PUT", "/realtime/status", tokens.boris, { status: "asleep" })).error).toBe(1333);
+		expect((await call("PUT", "/realtime/status", tokens.boris, { status: "away" })).data).toEqual({ status: "away" });
+		expect(await told(anna, 4)).toContain("chat-boris away");
+		expect(boris.events.at(-1)).toEqual({ type: "presence.chosen", status: "away" });
+
+		await call("PUT", "/realtime/status", tokens.boris, { status: "dnd" });
+		expect(await shown("chat-boris")).toBe("dnd");
+		expect((await call("GET", "/realtime/status", tokens.boris)).data).toEqual({ status: "dnd" });
+		const rings = boris.events.length;
+		expect((await call("POST", `${path()}/calls`, tokens.anna, { client: callerClient })).error).toBe(1332);
+		expect(boris.events.slice(rings).some((event) => event.type === "call.incoming")).toBe(false);
+		expect((await lastMessage()).call).toMatchObject({ outcome: "missed" });
+
+		boris.stop();
+		expect(await shown("chat-boris")).toBe("dnd");
+		PresenceBoard.reset();
+		const back = listen("chat-boris", tokens.boris);
+		for (let waited = 0; waited < 200 && (await shown("chat-boris")) !== "dnd"; waited++) await Bun.sleep(5);
+		expect(await shown("chat-boris")).toBe("dnd");
+		await call("PUT", "/realtime/status", tokens.boris, { status: "auto" });
+		expect(await shown("chat-boris")).toBe("online");
+		back.stop();
+		anna.stop();
+		PresenceBoard.reset();
+		Calls.reset();
+		expect(await shown("chat-boris")).toBe("offline");
 	});
 
 	test("hand out short lived TURN credentials when a relay is configured", () => {

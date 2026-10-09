@@ -37,6 +37,11 @@ export namespace Realtime {
 	const bySocket = new Map<RealtimeSocket, RealtimeConnection>();
 	const handlers = new Map<string, RealtimeHandler>();
 	const offlineListeners = new Set<(username: string) => void>();
+	const onlineListeners = new Set<(username: string) => void>();
+
+	export function onOnline(listener: (username: string) => void) {
+		onlineListeners.add(listener);
+	}
 
 	export function onOffline(listener: (username: string) => void) {
 		offlineListeners.add(listener);
@@ -77,6 +82,7 @@ export namespace Realtime {
 		open.add(connection);
 		connections.set(username, open);
 		bySocket.set(socket, connection);
+		if (open.size === 1) for (const listener of onlineListeners) listener(username);
 		return connection;
 	}
 

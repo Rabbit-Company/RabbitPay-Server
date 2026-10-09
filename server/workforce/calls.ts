@@ -4,6 +4,7 @@ import { Logger } from "../logger";
 import { Realtime, type RealtimeConnection, type RealtimeEvent } from "../realtime";
 import { insertMessage, notify, presentMessageById, provideGroupCallInfo } from "./chat";
 import { closeRoom, countJoin, joinToken, pickNode, roomPeople } from "./media-nodes";
+import { PresenceBoard } from "./presence";
 import type { CallOutcome, ChatConversationRow } from "../database/models";
 
 export const CLIENT_FORMAT = /^[A-Za-z0-9]{16}$/;
@@ -97,6 +98,7 @@ export namespace Calls {
 
 	async function close(call: Call, outcome: CallOutcome) {
 		if (!calls.delete(call.uuid)) return;
+		PresenceBoard.refresh(call.caller.username, call.callee.username);
 		if (call.timer !== null) clearTimeout(call.timer);
 		const seconds = call.answered === null ? 0 : Math.max(Math.round((Date.now() - call.answered) / 1000), 0);
 		send(call, [call.caller.username, call.callee.username], { type: "call.ended", reason: outcome });
@@ -107,17 +109,24 @@ export namespace Calls {
 		await log({ uuid: "", conversation, caller, callee, video, state: "ringing", created: Date.now(), answered: null, timer: null }, "missed", 0);
 	}
 
-	export async function start(conversation: ChatConversationRow, caller: CallParty, callee: CallParty, video: boolean): Promise<Call | "busy" | "offline"> {
+	export async function start(
+		conversation: ChatConversationRow,
+		caller: CallParty,
+		callee: CallParty,
+		video: boolean
+	): Promise<Call | "busy" | "offline" | "undisturbed"> {
 		const previous = callOf(caller.username);
 		if (previous) await end(previous.uuid, caller.username);
 		const theirs = callOf(callee.username);
 		if (theirs && Date.now() - theirs.created > MAX_CALL_MS) await close(theirs, "answered");
 		else if (theirs) return "busy";
 		if (!Realtime.isOnline(callee.username)) return "offline";
+		if (PresenceBoard.of(callee.username) === "dnd") return "undisturbed";
 
 		const call: Call = { uuid: crypto.randomUUID(), conversation, caller, callee, video, state: "ringing", created: Date.now(), answered: null, timer: null };
 		call.timer = setTimeout(() => void close(call, "missed"), Settings.calls.ring_seconds * 1000);
 		calls.set(call.uuid, call);
+		PresenceBoard.refresh(caller.username, callee.username);
 		send(call, [callee.username], { type: "call.incoming", from: { account: caller.username, name: caller.name }, video });
 		return call;
 	}
@@ -203,6 +212,11 @@ export namespace GroupCalls {
 		return [...people].every((identity) => identity.startsWith(GUEST_PREFIX));
 	}
 
+	export function includes(username: string): boolean {
+		for (const call of calls.values()) if (call.people.has(username)) return true;
+		return false;
+	}
+
 	export function infoOf(conversation: string): GroupCallInfo | null {
 		const call = calls.get(conversation);
 		return call ? { call: call.uuid, people: call.people.size, started: call.started, started_by: call.starter.name } : null;
@@ -221,6 +235,7 @@ export namespace GroupCalls {
 	async function finish(call: GroupCall) {
 		if (calls.get(call.conversation.uuid) !== call) return;
 		calls.delete(call.conversation.uuid);
+		PresenceBoard.refresh(...call.people);
 		if (calls.size === 0 && sweeper !== null) {
 			clearInterval(sweeper);
 			sweeper = null;
@@ -255,6 +270,7 @@ export namespace GroupCalls {
 		if (!call.people.has(party.username) && call.people.size >= Settings.calls.max_group_people) return "full";
 		if (!call.people.has(party.username)) countJoin(call.node);
 		call.people.add(party.username);
+		PresenceBoard.refresh(party.username);
 		await announce(call, true, created);
 		return { call, token: joinToken(call.uuid, party.username, party.name) };
 	}
@@ -262,6 +278,7 @@ export namespace GroupCalls {
 	export async function leave(conversation: string, username: string): Promise<boolean> {
 		const call = calls.get(conversation);
 		if (!call || !call.people.delete(username)) return false;
+		PresenceBoard.refresh(username);
 		if (onlyGuests(call.people)) await finish(call);
 		else await announce(call, true, false);
 		return true;
@@ -272,7 +289,9 @@ export namespace GroupCalls {
 			const present = await roomPeople(call.node, call.uuid);
 			if (present === null) continue;
 			const before = call.people.size;
+			const earlier = call.people;
 			call.people = new Set(present);
+			PresenceBoard.refresh(...earlier, ...present);
 			if (onlyGuests(call.people) && now - call.started >= EMPTY_GRACE_MS) await finish(call);
 			else if (present.length !== before) await announce(call, true, false);
 		}
@@ -286,3 +305,4 @@ export namespace GroupCalls {
 }
 
 provideGroupCallInfo(GroupCalls.infoOf);
+PresenceBoard.provideCallCheck((username) => Calls.callOf(username) !== null || GroupCalls.includes(username));

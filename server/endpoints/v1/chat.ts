@@ -170,8 +170,9 @@ Server.app.post(`${base}/conversations`, ...chat, async (ctx) => {
 			INSERT INTO chat_conversations(uuid, project, kind, name, created_by, created, updated)
 			VALUES(${uuid}, ${project.uuid}, 'group', ${name}, ${username}, ${now}, ${now})
 		`;
-		await addParticipants(tx, uuid, [username], true, 0);
-		await addParticipants(tx, uuid, accounts, false, 0);
+		const joined = Date.now();
+		await addParticipants(tx, uuid, [username], true, 0, joined);
+		await addParticipants(tx, uuid, accounts, false, 0, joined);
 	});
 	const [conversation] = (await Database`SELECT * FROM chat_conversations WHERE uuid = ${uuid}`) as ChatConversationRow[];
 	await audit(ctx, "chat.group_created", uuid, { name, accounts });
@@ -358,9 +359,9 @@ Server.app.post(`${base}/conversations/:conversation/calls`, ...chat, async (ctx
 	const video = data?.video === true;
 	const call = await Calls.start(found.conversation, caller, receiver, video);
 	if (call === "busy") return Utils.fail(ctx, ErrorCode.CALL_BUSY);
-	if (call === "offline") {
+	if (call === "offline" || call === "undisturbed") {
 		await Calls.recordUnreachable(found.conversation, caller, receiver, video);
-		return Utils.fail(ctx, ErrorCode.CALL_PERSON_OFFLINE);
+		return Utils.fail(ctx, call === "offline" ? ErrorCode.CALL_PERSON_OFFLINE : ErrorCode.CALL_PERSON_UNDISTURBED);
 	}
 	return Utils.ok(
 		ctx,
@@ -443,8 +444,9 @@ Server.app.post(`${base}/meetings`, ...chat, async (ctx) => {
 			INSERT INTO chat_conversations(uuid, project, kind, name, created_by, created, updated)
 			VALUES(${uuid}, ${project.uuid}, 'group', ${name}, ${username}, ${now}, ${now})
 		`;
-		await addParticipants(tx, uuid, [username], true, 0);
-		await addParticipants(tx, uuid, accounts, false, 0);
+		const joined = Date.now();
+		await addParticipants(tx, uuid, [username], true, 0, joined);
+		await addParticipants(tx, uuid, accounts, false, 0, joined);
 		await tx`
 			INSERT INTO chat_meetings(conversation, starts_at, duration_minutes, guest_token, guest_token_hash, created, updated)
 			VALUES(${uuid}, ${times.starts_at}, ${times.duration_minutes}, ${guest?.sealed ?? null}, ${guest?.hash ?? null}, ${now}, ${now})

@@ -852,10 +852,13 @@ export interface MonthReport {
 	people: { member: string; person: string; daily_minutes: number; approval: TimesheetPeriod; days: ReportDay[]; totals: MonthTotals }[];
 }
 
+export type ChatPresence = "online" | "away" | "dnd" | "busy" | "offline";
+export type ChatStatus = "auto" | "away" | "dnd";
+
 export interface ChatPerson {
 	account: string;
 	name: string;
-	online: boolean;
+	presence: ChatPresence;
 }
 
 export interface ChatParticipant extends ChatPerson {
@@ -3877,6 +3880,14 @@ export const Api = {
 
 	realtimeTicket() {
 		return request<{ ticket: string; expires_in: number }>("POST", "/realtime/ticket");
+	},
+
+	chatStatus() {
+		return request<{ status: ChatStatus }>("GET", "/realtime/status");
+	},
+
+	setChatStatus(status: ChatStatus) {
+		return request<{ status: ChatStatus }>("PUT", "/realtime/status", { status });
 	},
 
 	chatPeople(uuid: string) {

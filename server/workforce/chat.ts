@@ -6,6 +6,7 @@ import Vault from "../crypto/vault";
 import { Logger } from "../logger";
 import { Permission } from "../roles";
 import { Realtime, type RealtimeEvent } from "../realtime";
+import { PresenceBoard, type Presence } from "./presence";
 import { membersWithEmail, personName } from "./people";
 import { nameAccounts } from "../accounts";
 import { discardFiles, finishOpenUpload, presentFile, removeFile, replaceInFirstPart } from "../files";
@@ -27,7 +28,7 @@ export { MAX_GROUP_NAME_LENGTH, MAX_GROUP_PEOPLE, MAX_MESSAGE_FILES, MAX_MESSAGE
 export interface ChatPerson {
 	account: string;
 	name: string;
-	online: boolean;
+	presence: Presence;
 }
 
 export interface PresentedMessage {
@@ -93,9 +94,28 @@ export async function chatPeople(projectId: string): Promise<ChatPerson[]> {
 	`) as ProjectMemberRow[];
 	return members
 		.filter((member) => Permissions.isActive(member) && Permissions.has(member, Permission.CHAT_USE))
-		.map((member) => ({ account: member.account_username!, name: personName(member), online: Realtime.isOnline(member.account_username!) }))
+		.map((member) => ({ account: member.account_username!, name: personName(member), presence: PresenceBoard.of(member.account_username!) }))
 		.sort((first, second) => first.name.localeCompare(second.name));
 }
+
+async function announcePresence(username: string, presence: Presence) {
+	try {
+		const projects = (await Database`
+			SELECT project_id FROM project_members WHERE account_username = ${username} AND status = 'active'
+		`) as { project_id: string }[];
+		const colleagues = new Set<string>();
+		for (const { project_id } of projects) {
+			const people = await chatPeople(project_id);
+			if (people.some((person) => person.account === username)) for (const person of people) colleagues.add(person.account);
+		}
+		colleagues.delete(username);
+		Realtime.send(colleagues, { type: "chat.presence", account: username, presence });
+	} catch (error) {
+		Logger.warn(`[CHAT] Could not announce presence of ${username}: ${error}`);
+	}
+}
+
+PresenceBoard.onChange((username, presence) => void announcePresence(username, presence));
 
 export function readMessageBody(value: unknown, mayBeEmpty = false): string | null {
 	if (value === undefined && mayBeEmpty) return "";
@@ -363,7 +383,7 @@ export async function presentConversations(projectId: string, conversations: Cha
 				name: active.get(participant.account)?.name ?? formerNames.get(participant.account) ?? "",
 				admin: Boolean(participant.admin),
 				active: active.has(participant.account),
-				online: active.get(participant.account)?.online ?? false,
+				presence: active.get(participant.account)?.presence ?? "offline",
 			})),
 			admin: Boolean(own?.admin),
 			read_number: Number(own?.read_number ?? 0),
@@ -409,12 +429,11 @@ export async function insertMessage(
 	return message;
 }
 
-export async function addParticipants(sql: SQL, conversation: string, accounts: string[], admin: boolean, readNumber: number) {
-	const now = Date.now();
+export async function addParticipants(sql: SQL, conversation: string, accounts: string[], admin: boolean, readNumber: number, joined = Date.now()) {
 	for (const account of accounts) {
 		await sql`
 			INSERT INTO chat_participants(conversation, account, admin, read_number, joined)
-			VALUES(${conversation}, ${account}, ${admin ? 1 : 0}, ${readNumber}, ${now})
+			VALUES(${conversation}, ${account}, ${admin ? 1 : 0}, ${readNumber}, ${joined})
 		`;
 	}
 }

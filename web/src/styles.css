@@ -5933,6 +5933,41 @@ fieldset.stack-tight {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.presence {
+	display: inline-block;
+	width: 0.6rem;
+	height: 0.6rem;
+	margin-right: 0.4rem;
+	border: 2px solid var(--muted);
+	border-radius: 50%;
+}
+.presence-online {
+	border-color: var(--success);
+	background: var(--success);
+}
+.presence-busy {
+	border-color: var(--danger);
+	background: var(--danger);
+}
+.presence-away {
+	border-color: var(--warning);
+	background: var(--warning);
+}
+.presence-dnd {
+	border-color: var(--danger);
+	background: linear-gradient(var(--danger), var(--danger)) center / 100% 2px no-repeat;
+}
+.chat-status {
+	display: inline-flex;
+	align-items: center;
+	margin-left: auto;
+	min-width: 0;
+}
+.chat-status select {
+	min-width: 0;
+	padding: 0.25rem 0.4rem;
+	font-size: 0.85rem;
+}
 .chat-item.unread .chat-item-name,
 .chat-item.unread .chat-item-preview {
 	font-weight: 700;

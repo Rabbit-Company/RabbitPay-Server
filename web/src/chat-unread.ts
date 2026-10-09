@@ -5,6 +5,7 @@ import { onRealtime, type RealtimeEvent } from "./realtime";
 import { currentPath } from "./router";
 import { toast } from "./ui";
 import { watchCalls } from "./calls";
+import { followOwnStatus, ownStatus } from "./chat-status";
 
 const REFRESH_DELAY_MS = 250;
 const PREVIEW_LENGTH = 120;
@@ -40,7 +41,7 @@ function refresh(project: string) {
 }
 
 function announce(project: string, message: ChatMessage) {
-	if (message.author === getUsername() || message.deleted || message.body === null) return;
+	if (message.author === getUsername() || message.deleted || message.body === null || ownStatus() === "dnd") return;
 	if (currentPath().startsWith(`/projects/${project}/chat`) && document.visibilityState === "visible") return;
 	if (message.call !== null && message.call.outcome !== "missed") return;
 	const text = message.call ? t("calls.log_missed") : message.body || t("chat.attachment");
@@ -63,6 +64,7 @@ export function chatUnreadBadge(project: string): HTMLElement {
 		listening = true;
 		onRealtime(onEvent);
 		watchCalls();
+		followOwnStatus();
 	}
 	const count = counts.get(project) ?? 0;
 	if (!counts.has(project)) counts.set(project, 0);

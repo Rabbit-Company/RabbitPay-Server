@@ -644,6 +644,14 @@ export const MIGRATIONS: Migration[] = [
 		},
 	},
 	{ version: 53, name: "chat", up: createChatSchema },
+	{
+		version: 54,
+		name: "chosen chat status",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE accounts ADD COLUMN chat_status ${types.text("status")}`);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

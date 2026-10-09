@@ -1,4 +1,16 @@
-import { Api, ApiError, getUsername, type ChatConversation, type ChatMessage, type ChatPerson, type FileUpload, type TicketFile } from "../api";
+import {
+	Api,
+	ApiError,
+	getUsername,
+	type ChatConversation,
+	type ChatMessage,
+	type ChatPerson,
+	type ChatPresence,
+	type ChatStatus,
+	type FileUpload,
+	type TicketFile,
+} from "../api";
+import { chooseOwnStatus, ownStatus, watchOwnStatus } from "../chat-status";
 import { el, emptyState, field, input, select } from "../dom";
 import { formatBytes, formatDate, formatTime } from "../money";
 import { t, tn } from "../i18n";
@@ -73,10 +85,45 @@ function linked(text: string): (Node | string)[] {
 	});
 }
 
+function presenceDot(presence: ChatPresence): HTMLElement {
+	const dot = el("span", { class: `presence presence-${presence}`, title: t(`chat.presence_${presence}`) });
+	dot.setAttribute("role", "img");
+	dot.setAttribute("aria-label", t(`chat.presence_${presence}`));
+	return dot;
+}
+
+const STATUS_DOTS: Record<ChatStatus, ChatPresence> = { auto: "online", away: "away", dnd: "dnd" };
+
+function statusChoice(): { element: HTMLElement; stop: () => void } {
+	const pick = select(
+		(["auto", "away", "dnd"] as ChatStatus[]).map((status) => ({ value: status, label: t(`chat.presence_${STATUS_DOTS[status]}`) })),
+		ownStatus()
+	);
+	pick.setAttribute("aria-label", t("chat.own_status"));
+	const element = el("label", { class: "chat-status", title: t("chat.own_status") });
+	const show = (status: ChatStatus) => {
+		pick.value = status;
+		element.replaceChildren(presenceDot(STATUS_DOTS[status]), pick);
+	};
+	show(ownStatus());
+	pick.addEventListener("change", async () => {
+		try {
+			await chooseOwnStatus(pick.value as ChatStatus);
+		} catch (error) {
+			show(ownStatus());
+			reportError(error);
+		}
+	});
+	return { element, stop: watchOwnStatus(show) };
+}
+
 function peopleChecklist(people: ChatPerson[]): { element: HTMLElement; chosen: () => string[] } {
 	const boxes = people.map((person) => ({ box: input("checkbox", { value: person.account }), person }));
 	const search = input("search", { placeholder: t("chat.search_people") });
-	const rows = boxes.map(({ box, person }) => ({ row: el("label", { class: "switch" }, box, el("span", {}, person.name)), person }));
+	const rows = boxes.map(({ box, person }) => ({
+		row: el("label", { class: "switch" }, box, el("span", {}, presenceDot(person.presence), person.name)),
+		person,
+	}));
 	search.addEventListener("input", () => {
 		const wanted = search.value.trim().toLowerCase();
 		for (const { row, person } of rows) row.hidden = wanted !== "" && !person.name.toLowerCase().includes(wanted);
@@ -115,6 +162,8 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 	const root = el("div", { class: "chat" });
 
 	const others = () => people.filter((person) => person.account !== me);
+	const peerOf = (conversation: ChatConversation) =>
+		conversation.kind === "direct" ? (conversation.participants.find((participant) => participant.account !== me && participant.active) ?? null) : null;
 	const day = (timestamp: number) => formatDate(timestamp, project.date_format as DateFormat, project.timezone);
 	const time = (timestamp: number) => formatTime(timestamp, project.time_format as TimeFormat, project.timezone);
 
@@ -154,13 +203,14 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 			...conversations.map((conversation) => {
 				const stamp = conversation.last_message_at;
 				const active = current?.uuid === conversation.uuid;
+				const peer = peerOf(conversation);
 				const link = el(
 					"a",
 					{ class: `chat-item${active ? " active" : ""}${conversation.unread > 0 ? " unread" : ""}`, href: chatPath(uuid, conversation.uuid) },
 					el(
 						"span",
 						{ class: "chat-item-head" },
-						el("span", { class: "chat-item-name" }, titleOf(conversation, me)),
+						el("span", { class: "chat-item-name" }, peer ? presenceDot(peer.presence) : null, titleOf(conversation, me)),
 						stamp === null ? null : el("span", { class: "chat-item-time" }, day(stamp) === today ? time(stamp) : day(stamp))
 					),
 					el(
@@ -609,8 +659,10 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 				? el("button", { class: "button ghost", type: "button", onClick: () => groupDialog(conversation) }, t("chat.group_details"))
 				: null;
 		const people = tn("chat.people_count", conversation.participants.length);
-		const subtitle = conversation.meeting ? `${meetingWhen(conversation)} | ${people}` : conversation.kind === "group" ? people : t("chat.direct_hint");
-		const reachable = conversation.kind === "direct" && conversation.participants.some((participant) => participant.account !== me && participant.active);
+		const peer = peerOf(conversation);
+		const directHint = peer ? `${t(`chat.presence_${peer.presence}`)} | ${t("chat.direct_hint")}` : t("chat.direct_hint");
+		const subtitle = conversation.meeting ? `${meetingWhen(conversation)} | ${people}` : conversation.kind === "group" ? people : directHint;
+		const reachable = peer !== null;
 		const call = (video: boolean) => {
 			const label = video ? t("calls.video_call") : t("calls.call");
 			const button = el(
@@ -631,7 +683,12 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 				"header",
 				{ class: "chat-thread-head" },
 				back,
-				el("div", { class: "chat-thread-title" }, el("h2", {}, titleOf(conversation, me)), el("span", { class: "muted" }, subtitle)),
+				el(
+					"div",
+					{ class: "chat-thread-title" },
+					el("h2", {}, peer ? presenceDot(peer.presence) : null, titleOf(conversation, me)),
+					el("span", { class: "muted" }, subtitle)
+				),
 				reachable ? call(false) : null,
 				reachable ? call(true) : null,
 				groupCall,
@@ -705,7 +762,7 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 	function newMessageDialog() {
 		const search = input("search", { placeholder: t("chat.search_people") });
 		const rows = others().map((person) => {
-			const row = el("button", { class: "chat-person", type: "button" }, person.name);
+			const row = el("button", { class: "chat-person", type: "button" }, presenceDot(person.presence), person.name);
 			row.addEventListener("click", async () => {
 				try {
 					const conversation = await Api.openDirectChat(uuid, person.account);
@@ -931,7 +988,13 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 				return el(
 					"li",
 					{ class: "chat-member" },
-					el("span", { class: "chat-member-name" }, participant.name || t("ui.deleted_user"), participant.account === me ? ` (${t("chat.you")})` : null),
+					el(
+						"span",
+						{ class: "chat-member-name" },
+						participant.active && participant.account !== me ? presenceDot(participant.presence) : null,
+						participant.name || t("ui.deleted_user"),
+						participant.account === me ? ` (${t("chat.you")})` : null
+					),
 					participant.admin ? el("span", { class: "pill" }, t("chat.admin")) : null,
 					!participant.active ? el("span", { class: "pill" }, t("chat.inactive")) : null,
 					remove
@@ -1019,6 +1082,16 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 			if (event.reconnected) void reload();
 			return;
 		}
+		if (event.type === "chat.presence") {
+			const presence = event.presence as ChatPresence;
+			for (const person of people) if (person.account === event.account) person.presence = presence;
+			for (const known of conversations) {
+				for (const participant of known.participants) if (participant.account === event.account) participant.presence = presence;
+			}
+			renderList();
+			if (current?.participants.some((participant) => participant.account === event.account)) setTimeout(renderThread, 0);
+			return;
+		}
 		if (event.project !== uuid || typeof event.conversation !== "string") return;
 		const conversation = conversations.find((known) => known.uuid === event.conversation);
 
@@ -1065,8 +1138,10 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 	const onVisible = () => scheduleRead();
 	document.addEventListener("visibilitychange", onVisible);
 	const stopListening = onRealtime(onEvent);
+	const ownStatusChoice = statusChoice();
 	onLeave(() => {
 		stopListening();
+		ownStatusChoice.stop();
 		document.removeEventListener("visibilitychange", onVisible);
 		if (readTimer !== null) clearTimeout(readTimer);
 		threadRound++;
@@ -1081,7 +1156,10 @@ export async function chatView(uuid: string, selected?: string): Promise<HTMLEle
 			...(listing.group_calls ? [{ label: t("meetings.schedule"), onSelect: meetingDialog }] : []),
 		],
 	]);
-	root.append(el("aside", { class: "chat-list" }, el("div", { class: "chat-list-head" }, el("h2", {}, t("nav.chat")), create), listItems), thread);
+	root.append(
+		el("aside", { class: "chat-list" }, el("div", { class: "chat-list-head" }, el("h2", {}, t("nav.chat")), ownStatusChoice.element, create), listItems),
+		thread
+	);
 
 	const initial = selected && conversations.some((conversation) => conversation.uuid === selected) ? selected : null;
 	if (selected && initial === null) history.replaceState({}, "", chatPath(uuid));

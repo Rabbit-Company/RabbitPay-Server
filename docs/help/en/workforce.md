@@ -71,6 +71,10 @@ Attached files use **File storage**, which is separate from document storage, so
 2. Write in the box at the bottom and press Enter to send. Shift and Enter starts a new line. On a phone, use the **Send** button.
 3. New messages appear right away. The number next to **Chat** in the menu shows how many you have not read.
 
+A dot next to a person's name shows whether you can reach them now: green means they have RabbitPay open, yellow means they set themselves as away, red means they are in a call, a red ring with a line means do not disturb, and an empty ring means they are offline. It changes by itself as people come and go.
+
+Set your own status at the top of the conversation list: **Available**, **Away** or **Do not disturb**. It stays until you change it, on every device. With **Do not disturb** calls do not ring and new messages do not pop up. Callers are told you do not want to be disturbed, and you see the missed call and the messages in the chat afterwards.
+
 Each of your own messages has an actions menu with **Edit** and **Delete**. A deleted message is removed for everyone and its text is erased.
 
 The person who creates a group is its admin. Under **Group details** an admin renames the group, adds and removes people and can delete any message in it. Anyone can leave a group with **Leave group**. People added later see the earlier messages.

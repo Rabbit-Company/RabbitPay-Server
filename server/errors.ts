@@ -208,6 +208,8 @@ export enum Error {
 	MEETING_NOT_FOUND = 1329,
 	MEETING_NOT_STARTED = 1330,
 	RECORDING_NOT_FOUND = 1331,
+	CALL_PERSON_UNDISTURBED = 1332,
+	INVALID_CHAT_STATUS = 1333,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -756,6 +758,8 @@ namespace Errors {
 		1329: { message: "This meeting link is not valid any more. Ask the organiser for a new one.", httpCode: 404 },
 		1330: { message: "The meeting has not started yet. You can join as soon as someone from the team opens it.", httpCode: 409 },
 		1331: { message: "This recording does not exist or is already finished.", httpCode: 404 },
+		1332: { message: "This person does not want to be disturbed right now. They will see that you called.", httpCode: 409 },
+		1333: { message: "The status must be auto, away or dnd.", httpCode: 400 },
 		1313: { message: "The folder cannot be moved there. A folder cannot go inside itself and folders nest at most 20 deep.", httpCode: 409 },
 		1285: { message: "The Idempotency-Key header takes 1 to 128 letters, digits, dots, colons, hyphens or underscores.", httpCode: 400 },
 		1286: {

@@ -2,6 +2,7 @@ import { Server } from "../../server";
 import Auth from "../../auth";
 import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
+import { CHOSEN_STATUSES, PresenceBoard, type ChosenStatus } from "../../workforce/presence";
 import { Realtime, REALTIME_CLOSE_UNAUTHORIZED, REALTIME_PATH, REALTIME_TICKET_SECONDS } from "../../realtime";
 
 const MAX_EVENT_BYTES = 64 * 1024;
@@ -12,6 +13,19 @@ Server.app.post(`${REALTIME_PATH}/ticket`, Auth.required(), async (ctx) => {
 	if (ticket === null) return Utils.fail(ctx, ErrorCode.UNKNOWN_ERROR);
 	ctx.header("Cache-Control", "no-store");
 	return Utils.ok(ctx, { ticket, expires_in: REALTIME_TICKET_SECONDS });
+});
+
+Server.app.get(`${REALTIME_PATH}/status`, Auth.required(), async (ctx) => {
+	return Utils.ok(ctx, { status: await PresenceBoard.chosenBy(Auth.account(ctx).username) });
+});
+
+Server.app.put(`${REALTIME_PATH}/status`, Auth.required(), async (ctx) => {
+	const status = (await ctx.body<{ status?: unknown }>().catch(() => null))?.status as ChosenStatus;
+	if (!CHOSEN_STATUSES.includes(status)) return Utils.fail(ctx, ErrorCode.INVALID_CHAT_STATUS);
+	const username = Auth.account(ctx).username;
+	await PresenceBoard.choose(username, status);
+	Realtime.send([username], { type: "presence.chosen", status });
+	return Utils.ok(ctx, { status });
 });
 
 Server.app.get(REALTIME_PATH, (ctx) => Utils.fail(ctx, ErrorCode.INVALID_ENDPOINT));
