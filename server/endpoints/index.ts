@@ -50,3 +50,4 @@ import "./v1/bank";
 import "./v1/fixed-assets";
 import "./v1/realtime";
 import "./v1/chat";
+import "./v1/calendar";

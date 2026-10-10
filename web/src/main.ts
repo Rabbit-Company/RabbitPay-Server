@@ -54,6 +54,7 @@ import { ticketsView, ticketView } from "./views/tickets";
 import { fileStorageView } from "./views/files";
 import { explorerView } from "./views/explorer";
 import { chatView } from "./views/chat";
+import { calendarView } from "./views/calendar";
 import { guestMeetingView } from "./views/meeting";
 import { chatAttachmentsView } from "./views/chat-attachments";
 import { employeesView } from "./views/employees";
@@ -519,6 +520,10 @@ define(
 define(
 	"/projects/:uuid/chat/:conversation",
 	projectRoute([Permission.CHAT_USE], (params) => chatView(params.uuid, params.conversation))
+);
+define(
+	"/projects/:uuid/calendar",
+	projectRoute([Permission.CHAT_USE], (params) => calendarView(params.uuid))
 );
 define(
 	"/projects/:uuid/files",

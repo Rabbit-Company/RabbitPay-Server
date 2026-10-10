@@ -7,6 +7,7 @@ import { Logger } from "../logger";
 import { Permission } from "../roles";
 import { Realtime, type RealtimeEvent } from "../realtime";
 import { PresenceBoard, type Presence } from "./presence";
+import { repeatOf } from "./recurrence";
 import { membersWithEmail, personName } from "./people";
 import { nameAccounts } from "../accounts";
 import { discardFiles, finishOpenUpload, presentFile, removeFile, replaceInFirstPart } from "../files";
@@ -50,7 +51,12 @@ export const MIN_MEETING_MINUTES = 5;
 
 export function presentMeeting(meeting: ChatMeetingRow | undefined) {
 	if (!meeting) return null;
-	return { starts_at: Number(meeting.starts_at), duration_minutes: Number(meeting.duration_minutes), guests: meeting.guest_token_hash !== null };
+	return {
+		starts_at: Number(meeting.starts_at),
+		duration_minutes: Number(meeting.duration_minutes),
+		guests: meeting.guest_token_hash !== null,
+		repeat: repeatOf(meeting),
+	};
 }
 
 export function readMeetingTimes(data: Record<string, unknown>, previous?: ChatMeetingRow): { starts_at: number; duration_minutes: number } | null {
@@ -88,12 +94,15 @@ export async function directKey(projectId: string, first: string, second: string
 	return await Utils.generateHash(`${projectId}:${[first, second].sort().join(":")}`, "sha256");
 }
 
-export async function chatPeople(projectId: string): Promise<ChatPerson[]> {
+export async function chatMembers(projectId: string): Promise<ProjectMemberRow[]> {
 	const members = (await Database`
 		${membersWithEmail()} WHERE pm.project_id = ${projectId} AND pm.status = 'active' AND pm.account_username IS NOT NULL
 	`) as ProjectMemberRow[];
-	return members
-		.filter((member) => Permissions.isActive(member) && Permissions.has(member, Permission.CHAT_USE))
+	return members.filter((member) => Permissions.isActive(member) && Permissions.has(member, Permission.CHAT_USE));
+}
+
+export async function chatPeople(projectId: string): Promise<ChatPerson[]> {
+	return (await chatMembers(projectId))
 		.map((member) => ({ account: member.account_username!, name: personName(member), presence: PresenceBoard.of(member.account_username!) }))
 		.sort((first, second) => first.name.localeCompare(second.name));
 }

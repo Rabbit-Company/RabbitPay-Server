@@ -65,6 +65,9 @@ import { Calls, CLIENT_FORMAT, GroupCalls, iceServers } from "../../workforce/ca
 import { mediaNodes } from "../../workforce/media-nodes";
 import { Settings } from "../../settings";
 import { accountNames } from "../../accounts";
+import { localDate } from "../../timezone";
+import { readRepeat, repeatColumns, repeatOf, sameRepeat } from "../../workforce/recurrence";
+import { announceCalendar, seriesRemoval } from "../../workforce/team-calendar";
 import type { AppState, ChatConversationRow, ChatMeetingRow, ChatMessageRow, ChatParticipantRow, ProjectFileRow, ProjectRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid/chat";
@@ -99,6 +102,11 @@ async function requestedMessage(ctx: Context<AppState>, conversation: ChatConver
 async function allChatPeople(projectId: string, accounts: string[]): Promise<boolean> {
 	const allowed = new Set((await chatPeople(projectId)).map((person) => person.account));
 	return accounts.every((account) => allowed.has(account));
+}
+
+async function announceMeetingChange(conversation: ChatConversationRow) {
+	const [meeting] = await Database`SELECT conversation FROM chat_meetings WHERE conversation = ${conversation.uuid}`;
+	if (meeting) await announceCalendar(conversation.project);
 }
 
 Server.app.get(`${base}/people`, ...chat, async (ctx) => {
@@ -197,6 +205,7 @@ Server.app.patch(`${base}/conversations/:conversation`, ...chat, async (ctx) => 
 	await Database`UPDATE chat_conversations SET name = ${name}, updated = ${Date.now()} WHERE uuid = ${found.conversation.uuid}`;
 	await audit(ctx, "chat.group_renamed", found.conversation.uuid, { name });
 	await notify(found.conversation, { type: "chat.conversation" });
+	await announceMeetingChange(found.conversation);
 	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
 });
 
@@ -222,6 +231,7 @@ Server.app.post(`${base}/conversations/:conversation/participants`, ...chat, asy
 	if (added.length > 0) {
 		await audit(ctx, "chat.group_people_added", found.conversation.uuid, { accounts: added });
 		await notify(found.conversation, { type: "chat.conversation" });
+		await announceMeetingChange(found.conversation);
 	}
 	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
 });
@@ -237,9 +247,11 @@ Server.app.delete(`${base}/conversations/:conversation/participants/:account`, .
 	if (!target) return Utils.fail(ctx, ErrorCode.CHAT_MEMBER_NOT_FOUND);
 
 	const before = await recipientsOf(found.conversation);
+	const scheduled = (await meetingOf(found.conversation.uuid)) !== null;
 	const outcome = await removeParticipant(found.conversation, account);
 	await audit(ctx, account === username ? "chat.group_left" : "chat.group_person_removed", found.conversation.uuid, { account });
 	Realtime.send(before, { type: "chat.conversation", project: found.conversation.project, conversation: found.conversation.uuid });
+	if (scheduled) await announceCalendar(found.conversation.project);
 	return Utils.ok(ctx, { closed: outcome === "closed" });
 });
 
@@ -434,11 +446,14 @@ Server.app.post(`${base}/meetings`, ...chat, async (ctx) => {
 	const times = data ? readMeetingTimes(data) : null;
 	const accounts = readAccounts(data?.accounts ?? [])?.filter((account) => account !== username);
 	if (name === null || times === null || !accounts || accounts.length >= MAX_GROUP_PEOPLE) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
+	const repeat = readRepeat(data?.repeat, localDate(times.starts_at, project.timezone));
+	if (repeat === undefined) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
 	if (!(await allChatPeople(project.uuid, accounts))) return Utils.fail(ctx, ErrorCode.CHAT_MEMBER_NOT_FOUND);
 
 	const uuid = crypto.randomUUID();
 	const now = Date.now();
 	const guest = data?.guests === true ? await newGuestToken() : null;
+	const repeats = repeatColumns(repeat);
 	await Database.begin(async (tx) => {
 		await tx`
 			INSERT INTO chat_conversations(uuid, project, kind, name, created_by, created, updated)
@@ -448,13 +463,16 @@ Server.app.post(`${base}/meetings`, ...chat, async (ctx) => {
 		await addParticipants(tx, uuid, [username], true, 0, joined);
 		await addParticipants(tx, uuid, accounts, false, 0, joined);
 		await tx`
-			INSERT INTO chat_meetings(conversation, starts_at, duration_minutes, guest_token, guest_token_hash, created, updated)
-			VALUES(${uuid}, ${times.starts_at}, ${times.duration_minutes}, ${guest?.sealed ?? null}, ${guest?.hash ?? null}, ${now}, ${now})
+			INSERT INTO chat_meetings(conversation, starts_at, duration_minutes, guest_token, guest_token_hash, repeat_unit, repeat_interval,
+				repeat_weekdays, repeat_until, created, updated)
+			VALUES(${uuid}, ${times.starts_at}, ${times.duration_minutes}, ${guest?.sealed ?? null}, ${guest?.hash ?? null}, ${repeats.repeat_unit},
+				${repeats.repeat_interval}, ${repeats.repeat_weekdays}, ${repeats.repeat_until}, ${now}, ${now})
 		`;
 	});
 	const [conversation] = (await Database`SELECT * FROM chat_conversations WHERE uuid = ${uuid}`) as ChatConversationRow[];
-	await audit(ctx, "chat.meeting_scheduled", uuid, { name, accounts, ...times, guests: guest !== null });
+	await audit(ctx, "chat.meeting_scheduled", uuid, { name, accounts, ...times, guests: guest !== null, repeat });
 	await notify(conversation, { type: "chat.conversation" });
+	await announceCalendar(project.uuid);
 	return Utils.ok(ctx, await presentConversation(conversation, username), 201);
 });
 
@@ -467,6 +485,12 @@ Server.app.patch(`${base}/conversations/:conversation/meeting`, ...chat, async (
 	const data = await body(ctx);
 	const times = data ? readMeetingTimes(data, meeting) : null;
 	if (times === null || (data?.guests !== undefined && typeof data.guests !== "boolean")) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
+	const timezone = Permissions.project(ctx).timezone;
+	const previousRepeat = repeatOf(meeting);
+	const repeat = readRepeat(data?.repeat === undefined ? previousRepeat : data.repeat, localDate(times.starts_at, timezone));
+	if (repeat === undefined) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
+	const repeats = repeatColumns(repeat);
+	const skips = times.starts_at === Number(meeting.starts_at) && sameRepeat(previousRepeat, repeat) ? meeting.repeat_skips : null;
 
 	const wantsGuests = data?.guests === undefined ? meeting.guest_token_hash !== null : data.guests;
 	const reset = data?.reset_guest_link === true;
@@ -475,11 +499,35 @@ Server.app.patch(`${base}/conversations/:conversation/meeting`, ...chat, async (
 	const hash = !wantsGuests ? null : (guest?.hash ?? meeting.guest_token_hash);
 	await Database`
 		UPDATE chat_meetings SET starts_at = ${times.starts_at}, duration_minutes = ${times.duration_minutes}, guest_token = ${sealed},
-			guest_token_hash = ${hash}, updated = ${Date.now()}
+			guest_token_hash = ${hash}, repeat_unit = ${repeats.repeat_unit}, repeat_interval = ${repeats.repeat_interval},
+			repeat_weekdays = ${repeats.repeat_weekdays}, repeat_until = ${repeats.repeat_until}, repeat_skips = ${skips}, updated = ${Date.now()}
 		WHERE conversation = ${found.conversation.uuid}
 	`;
-	await audit(ctx, "chat.meeting_updated", found.conversation.uuid, { ...times, guests: wantsGuests, guest_link_reset: guest !== null });
+	await audit(ctx, "chat.meeting_updated", found.conversation.uuid, { ...times, guests: wantsGuests, guest_link_reset: guest !== null, repeat });
 	await notify(found.conversation, { type: "chat.conversation" });
+	await announceCalendar(found.conversation.project);
+	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
+});
+
+Server.app.delete(`${base}/conversations/:conversation/meeting`, ...chat, async (ctx) => {
+	const found = await joined(ctx);
+	if (!found) return Utils.fail(ctx, ErrorCode.CONVERSATION_NOT_FOUND);
+	const meeting = await meetingOf(found.conversation.uuid);
+	if (!meeting) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
+	if (!found.participant.admin) return Utils.fail(ctx, ErrorCode.CONVERSATION_ADMIN_REQUIRED);
+	const query = ctx.query();
+	const startsOn = localDate(Number(meeting.starts_at), Permissions.project(ctx).timezone);
+	const removal = seriesRemoval(meeting, startsOn, query.get("occurrence"), query.get("scope"));
+	if (removal === null) return Utils.fail(ctx, ErrorCode.INVALID_MEETING);
+
+	const now = Date.now();
+	if (removal === "all") await Database`DELETE FROM chat_meetings WHERE conversation = ${found.conversation.uuid}`;
+	else if ("until" in removal) {
+		await Database`UPDATE chat_meetings SET repeat_until = ${removal.until}, updated = ${now} WHERE conversation = ${found.conversation.uuid}`;
+	} else await Database`UPDATE chat_meetings SET repeat_skips = ${removal.skips}, updated = ${now} WHERE conversation = ${found.conversation.uuid}`;
+	await audit(ctx, "chat.meeting_cancelled", found.conversation.uuid, { occurrence: query.get("occurrence"), scope: query.get("scope") ?? "all" });
+	await notify(found.conversation, { type: "chat.conversation" });
+	await announceCalendar(found.conversation.project);
 	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
 });
 

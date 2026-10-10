@@ -156,6 +156,37 @@ seats and see nothing of the project except the meeting title, the company
 name and the time. A group admin can replace the link, which makes the old
 one stop working, or turn guest access off.
 
+Calendar, in the Work menu, needs the same chat permission and license as
+Chat. GET /projects/:uuid/calendar?from=&to= (dates, at most 100 days apart)
+returns the people and one entry per occurrence of four kinds: meetings,
+personal events, absences and holidays. Privacy is applied on the server. A
+meeting carries its title and conversation only for its participants, others
+get a busy entry with the participant accounts. A personal event has a
+visibility of details, busy or private, and private events are only returned
+to their owner. Approved absences are returned without their kind unless the
+reader owns them or holds timesheet.view, and a pending absence is only
+returned to its owner. Each person also carries their presence and, while in
+a call, the conversation and title of that call if the reader takes part in
+it.
+
+Personal events live in calendar_events and are managed with POST, PATCH and
+DELETE under /projects/:uuid/calendar/events. Meetings and events can repeat.
+The repeat object has a unit (day, week, month, year), an interval, optional
+weekdays (1 is Monday) for weekly rules and an optional until date. Occurrences
+are computed in the project time zone, so a 9:00 meeting stays at 9:00 across
+a clock change. DELETE takes occurrence and scope (one, following, all): one
+adds the date to the skipped dates, following ends the series the day before,
+all removes it. For a meeting, DELETE
+/projects/:uuid/chat/conversations/:conversation/meeting works the same way
+and removing everything keeps the group conversation. Changing the start or
+the repeat rule clears the skipped dates. There are no per-occurrence edits.
+
+Every 30 seconds the server sends a calendar.reminder realtime event for
+meetings and timed events that start in 10 minutes, to the participants or
+the owner. The reminder position is kept in memory, so a restart can skip
+the reminders of the minutes it was down. Changes are announced with a
+calendar.changed event to everyone with the chat permission in the project.
+
 Record, in any call, records in the browser of the member who pressed it:
 the voices of everyone in the call mixed together and the shared screen, or a
 title card while nobody shares. Everyone in the call, guests included, sees

@@ -217,6 +217,11 @@ export namespace GroupCalls {
 		return false;
 	}
 
+	export function conversationOf(username: string): string | null {
+		for (const call of calls.values()) if (call.people.has(username)) return call.conversation.uuid;
+		return null;
+	}
+
 	export function infoOf(conversation: string): GroupCallInfo | null {
 		const call = calls.get(conversation);
 		return call ? { call: call.uuid, people: call.people.size, started: call.started, started_by: call.starter.name } : null;

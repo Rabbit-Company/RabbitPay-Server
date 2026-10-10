@@ -49,6 +49,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 	},
 	{ id: "tickets", label: "nav.tickets", suffix: "/tickets", permissions: [Permission.TICKET_VIEW], group: "work", workforce: true },
 	{ id: "chat", label: "nav.chat", suffix: "/chat", permissions: [Permission.CHAT_USE], group: "work", workforce: true },
+	{ id: "calendar", label: "nav.calendar", suffix: "/calendar", permissions: [Permission.CHAT_USE], group: "work", workforce: true },
 	{ id: "files", label: "nav.files", suffix: "/files", permissions: [Permission.FILE_USE], group: "work" },
 	{ id: "employees", label: "nav.employees", suffix: "/employees", permissions: [Permission.EMPLOYEE_VIEW], group: "work", workforce: true },
 	{ id: "payroll", label: "nav.payroll", suffix: "/payroll", permissions: [Permission.EMPLOYEE_VIEW], group: "work", workforce: true },

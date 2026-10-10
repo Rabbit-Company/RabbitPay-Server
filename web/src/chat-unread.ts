@@ -7,6 +7,7 @@ import { toast } from "./ui";
 import { markdownText } from "../../server/markdown";
 import { watchCalls } from "./calls";
 import { followOwnStatus, ownStatus } from "./chat-status";
+import { watchCalendarReminders } from "./calendar-reminders";
 
 const REFRESH_DELAY_MS = 250;
 const PREVIEW_LENGTH = 120;
@@ -66,6 +67,7 @@ export function chatUnreadBadge(project: string): HTMLElement {
 		onRealtime(onEvent);
 		watchCalls();
 		followOwnStatus();
+		watchCalendarReminders();
 	}
 	const count = counts.get(project) ?? 0;
 	if (!counts.has(project)) counts.set(project, 0);

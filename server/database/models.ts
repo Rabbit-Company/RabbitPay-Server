@@ -1465,6 +1465,34 @@ export interface ChatMeetingRow {
 	duration_minutes: number;
 	guest_token: string | null;
 	guest_token_hash: string | null;
+	repeat_unit: string | null;
+	repeat_interval: number;
+	repeat_weekdays: string | null;
+	repeat_until: string | null;
+	repeat_skips: string | null;
+	created: number;
+	updated: number;
+}
+
+export type CalendarVisibility = "details" | "busy" | "private";
+
+export interface CalendarEventRow {
+	uuid: string;
+	project: string;
+	account: string;
+	title: string;
+	note: string | null;
+	visibility: CalendarVisibility;
+	all_day: number;
+	starts_at: number | null;
+	duration_minutes: number | null;
+	starts_on: string | null;
+	ends_on: string | null;
+	repeat_unit: string | null;
+	repeat_interval: number;
+	repeat_weekdays: string | null;
+	repeat_until: string | null;
+	repeat_skips: string | null;
 	created: number;
 	updated: number;
 }

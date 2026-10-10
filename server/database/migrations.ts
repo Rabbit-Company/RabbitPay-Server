@@ -25,6 +25,7 @@ import {
 import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema, LICENSE_TYPES_WITH_ACCOUNTING } from "./accounting-schema";
 import { createRegistrySchema } from "./registry-schema";
 import { createChatSchema } from "./chat-schema";
+import { createCalendarSchema } from "./calendar-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string) {
@@ -652,6 +653,7 @@ export const MIGRATIONS: Migration[] = [
 			await sql.unsafe(`ALTER TABLE accounts ADD COLUMN chat_status ${types.text("status")}`);
 		},
 	},
+	{ version: 55, name: "calendar", up: createCalendarSchema },
 ];
 
 export class SchemaTooNew extends Error {

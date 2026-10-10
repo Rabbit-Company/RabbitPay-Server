@@ -926,10 +926,81 @@ export interface ChatConversation {
 	last_message: ChatMessage | null;
 	last_message_at: number | null;
 	call: ChatGroupCall | null;
-	meeting: { starts_at: number; duration_minutes: number; guests: boolean } | null;
+	meeting: { starts_at: number; duration_minutes: number; guests: boolean; repeat: CalendarRepeat | null } | null;
 	unread: number;
 	created: number;
 	updated: number;
+}
+
+export type CalendarRepeatUnit = "day" | "week" | "month" | "year";
+export type CalendarVisibility = "details" | "busy" | "private";
+export type CalendarSeriesScope = "one" | "following" | "all";
+
+export interface CalendarRepeat {
+	unit: CalendarRepeatUnit;
+	interval: number;
+	weekdays: number[] | null;
+	until: string | null;
+}
+
+export interface CalendarEntry {
+	id: string;
+	kind: "meeting" | "event" | "absence" | "holiday";
+	series: string | null;
+	occurrence: string;
+	accounts: string[];
+	title: string | null;
+	note: string | null;
+	all_day: boolean;
+	starts_at: number | null;
+	ends_at: number | null;
+	starts_on: string | null;
+	ends_on: string | null;
+	mine: boolean;
+	editable: boolean;
+	repeat: CalendarRepeat | null;
+	series_starts_at: number | null;
+	series_starts_on: string | null;
+	series_ends_on: string | null;
+	conversation: string | null;
+	live: boolean;
+	guests: boolean;
+	visibility: CalendarVisibility | null;
+	absence_kind: AbsenceKind | null;
+	pending: boolean;
+	holiday_name: { en: string; sl: string } | null;
+	work_free: boolean;
+}
+
+export interface CalendarPerson extends ChatPerson {
+	member: string;
+	call: { conversation: string | null; title: string | null } | null;
+}
+
+export interface CalendarFeed {
+	timezone: string;
+	today: string;
+	me: string;
+	meetings: boolean;
+	reminder_minutes: number;
+	people: CalendarPerson[];
+	entries: CalendarEntry[];
+}
+
+export interface CalendarEventInput {
+	title: string;
+	note: string | null;
+	visibility: CalendarVisibility;
+	all_day: boolean;
+	starts_at?: number;
+	duration_minutes?: number;
+	starts_on?: string;
+	ends_on?: string;
+	repeat: CalendarRepeat | null;
+}
+
+function seriesQuery(occurrence?: string, scope?: CalendarSeriesScope): string {
+	return occurrence && scope ? `?occurrence=${occurrence}&scope=${scope}` : "";
 }
 
 export interface TicketAssignee {
@@ -3962,12 +4033,39 @@ export const Api = {
 		return request<null>("POST", `/projects/${uuid}/chat/calls/${call}/end`);
 	},
 
-	scheduleMeeting(uuid: string, meeting: { title: string; starts_at: number; duration_minutes: number; accounts: string[]; guests: boolean }) {
+	scheduleMeeting(
+		uuid: string,
+		meeting: { title: string; starts_at: number; duration_minutes: number; accounts: string[]; guests: boolean; repeat?: CalendarRepeat | null }
+	) {
 		return request<ChatConversation>("POST", `/projects/${uuid}/chat/meetings`, meeting);
 	},
 
-	updateMeeting(uuid: string, conversation: string, changes: { starts_at?: number; duration_minutes?: number; guests?: boolean; reset_guest_link?: boolean }) {
+	updateMeeting(
+		uuid: string,
+		conversation: string,
+		changes: { starts_at?: number; duration_minutes?: number; guests?: boolean; reset_guest_link?: boolean; repeat?: CalendarRepeat | null }
+	) {
 		return request<ChatConversation>("PATCH", `/projects/${uuid}/chat/conversations/${conversation}/meeting`, changes);
+	},
+
+	cancelMeeting(uuid: string, conversation: string, occurrence?: string, scope?: CalendarSeriesScope) {
+		return request<ChatConversation>("DELETE", `/projects/${uuid}/chat/conversations/${conversation}/meeting${seriesQuery(occurrence, scope)}`);
+	},
+
+	calendar(uuid: string, from: string, to: string) {
+		return request<CalendarFeed>("GET", `/projects/${uuid}/calendar?from=${from}&to=${to}`);
+	},
+
+	createCalendarEvent(uuid: string, event: CalendarEventInput) {
+		return request<{ uuid: string }>("POST", `/projects/${uuid}/calendar/events`, event);
+	},
+
+	updateCalendarEvent(uuid: string, event: string, changes: CalendarEventInput) {
+		return request<{ uuid: string }>("PATCH", `/projects/${uuid}/calendar/events/${event}`, changes);
+	},
+
+	removeCalendarEvent(uuid: string, event: string, occurrence?: string, scope?: CalendarSeriesScope) {
+		return request<{ removed: boolean }>("DELETE", `/projects/${uuid}/calendar/events/${event}${seriesQuery(occurrence, scope)}`);
 	},
 
 	meetingGuestLink(uuid: string, conversation: string) {

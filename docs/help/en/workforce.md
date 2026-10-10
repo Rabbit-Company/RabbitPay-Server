@@ -147,6 +147,40 @@ For a single recording you can choose differently: in the call, press the small 
 
 The recording is made in your browser, so keep the tab open. If the tab closes, what was recorded up to the last minute or two is still saved and appears in the conversation a few minutes later. In a call between two people the recording is added to your conversation with that person.
 
+## Plan with the calendar
+
+**Calendar** shows your meetings, your own events, approved absences and holidays in one place, and lets you see when colleagues are free.
+
+- **Day**, **Week** and **Month** show the calendars of the people you tick under **People**. Each person has their own color. In **Day**, several ticked people appear side by side.
+- **Team** shows everyone for the week, one row per person, with a bar for each day from 7:00 to 19:00. Use it to find a time when everybody is free.
+- Next to each name you see what the person is doing now: free, in a call, in a meeting until a certain time, away or absent.
+
+### Add an event
+
+1. Press **New**, or click an empty time in the calendar.
+2. Enter a title and the time, or turn on **All day** and pick the first and last day.
+3. Under **Who can see it**, choose whether colleagues see the details, only that you are busy, or nothing at all.
+
+### Schedule a meeting from the calendar
+
+1. Press **New** and choose **Meeting**.
+2. Enter the title and the time and tick the people to invite. Next to each name you see whether they are **Free**, **Busy** or **Absent** at that time.
+3. Press **Schedule meeting**.
+
+The meeting is the same as one scheduled in Chat. Click it in the calendar to start or join the call or to open its conversation. Everyone invited gets a reminder 10 minutes before the start.
+
+### Repeat an event or a meeting
+
+Under **Repeat**, choose every day, every working day, every week, every 2 weeks, every month or every year. **Custom** lets you set your own interval and the days of the week. Fill in **Repeat until** if the series should end.
+
+To remove a repeating entry, open it and press the delete button. You can remove only that date, that date and all later ones, or the whole series. Editing always changes the whole series.
+
+### What colleagues see
+
+- A meeting you are not part of shows only as **In a meeting**, without its title.
+- An event marked as busy shows only as **Busy**.
+- An absence shows only as **Absent**. The reason is visible to you and to people who manage timesheets.
+
 ## Keep and share files
 
 **Files** is a shared place for documents, pictures and videos. Create folders, upload files with **Upload files**, drop them onto the page or paste a screenshot.

@@ -147,6 +147,40 @@ Za posamezen posnetek lahko izberete drugače: v klicu pritisnite puščico ob g
 
 Posnetek nastaja v vašem brskalniku, zato imejte zavihek odprt. Če se zavihek zapre, se ohrani vse, kar je bilo posneto do zadnje minute ali dveh, in se v pogovoru prikaže nekaj minut pozneje. Pri klicu med dvema osebama se posnetek doda v vaš pogovor s to osebo.
 
+## Načrtujte s koledarjem
+
+**Koledar** na enem mestu prikaže vaše sestanke, vaše dogodke, odobrene odsotnosti in praznike ter pokaže, kdaj so sodelavci prosti.
+
+- **Dan**, **Teden** in **Mesec** prikažejo koledarje oseb, ki jih označite pod **Osebe**. Vsaka oseba ima svojo barvo. V pogledu **Dan** je več označenih oseb prikazanih druga ob drugi.
+- **Ekipa** prikaže vse za izbrani teden, vsako osebo v svoji vrstici, s trakom za vsak dan od 7:00 do 19:00. Tako najdete termin, ko so vsi prosti.
+- Ob vsakem imenu vidite, kaj oseba trenutno počne: prosto, v klicu, na sestanku do določene ure, odsotnost.
+
+### Dodajte dogodek
+
+1. Pritisnite **Novo** ali kliknite prazen termin v koledarju.
+2. Vnesite naslov in čas ali vklopite **Ves dan** ter izberite prvi in zadnji dan.
+3. Pod **Kdo lahko vidi** izberite, ali sodelavci vidijo podrobnosti, samo zaseden termin ali ničesar.
+
+### Načrtujte sestanek iz koledarja
+
+1. Pritisnite **Novo** in izberite **Sestanek**.
+2. Vnesite naslov in čas ter označite osebe, ki jih vabite. Ob vsakem imenu vidite, ali je oseba takrat **Prosto**, **Zasedeno** ali **Odsotnost**.
+3. Pritisnite **Načrtuj sestanek**.
+
+Sestanek je enak tistemu, ki ga načrtujete v klepetu. Kliknite ga v koledarju, da začnete klic, se mu pridružite ali odprete pogovor. Vsi povabljeni dobijo opomnik 10 minut pred začetkom.
+
+### Ponavljajte dogodek ali sestanek
+
+Pod **Ponavljanje** izberite vsak dan, vsak delovni dan, vsak teden, vsaka 2 tedna, vsak mesec ali vsako leto. **Po meri** omogoča lasten interval in dneve v tednu. Izpolnite **Ponavljaj do**, če naj se niz konča.
+
+Če želite odstraniti ponavljajoč se vnos, ga odprite in pritisnite gumb za brisanje. Odstranite lahko samo ta datum, ta datum in vse poznejše ali celoten niz. Urejanje vedno spremeni celoten niz.
+
+### Kaj vidijo sodelavci
+
+- Sestanek, na katerega niste povabljeni, je prikazan samo kot **Na sestanku**, brez naslova.
+- Dogodek, označen kot zaseden, je prikazan samo kot **Zasedeno**.
+- Odsotnost je prikazana samo kot **Odsotnost**. Razlog vidite vi in osebe, ki upravljajo delovni čas.
+
 ## Shranjujte in delite datoteke
 
 **Datoteke** so skupen prostor za dokumente, slike in videoposnetke. Ustvarite mape, datoteke naložite z gumbom **Naloži datoteke**, jih spustite na stran ali prilepite posnetek zaslona.
