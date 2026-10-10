@@ -53,8 +53,8 @@ export const sl: UiDictionary = {
 	"expenses.category_salaries": "Plače",
 	"expenses.category_note_representation":
 		"DDV od stroškov reprezentance ni odbiten, davčno priznana pa je le polovica stroška. Odbitni DDV je nastavljen na nič.",
-	"expenses.category_note_fines": "Kazni nimajo DDV in niso davčno priznan odhodek.",
-	"expenses.category_note_donations": "Donacije nimajo odbitnega DDV. Niso davčno priznan odhodek, lahko pa se upoštevajo pri olajšavi za donacije.",
+	"expenses.category_note_fines": "Kazni ne vključujejo DDV in niso davčno priznani odhodki.",
+	"expenses.category_note_donations": "Pri donacijah ni odbitnega DDV. Niso davčno priznani odhodki, lahko pa se upoštevajo pri olajšavi za donacije.",
 	"expenses.category_note_fuel": "DDV od goriva za osebne avtomobile ni odbiten, razen za vozila za prevoz potnikov, šolanje voznikov, taksi ali najem.",
 	"expenses.category_note_salaries":
 		"Samo za plače, ki niso obračunane v RabbitPay. Zaključen obračun plač se knjiži sam, zato bi bile plače, vnesene tudi tu, knjižene dvakrat.",
@@ -91,7 +91,7 @@ export const sl: UiDictionary = {
 	"expenses.issue_date": "Datum izdaje računa",
 	"expenses.receipt_date": "Datum prejema računa",
 	"expenses.supply_date": "Datum dobave",
-	"expenses.due_date_hint": "Kdaj dobavitelj pričakuje plačilo. Odprte postavke ga uporabijo za starost obveznosti.",
+	"expenses.due_date_hint": "Datum, do katerega dobavitelj pričakuje plačilo. Odprte postavke ga uporabijo za prikaz zapadlosti obveznosti.",
 	"expenses.due_date": "Datum zapadlosti",
 	"expenses.vat_treatment": "Obravnava v evidencah DDV",
 	"expenses.vat_not_reported": "Ni vključeno v evidence DDV",
@@ -179,7 +179,7 @@ export const sl: UiDictionary = {
 	"financial.categories": "Stroški po kategorijah",
 	"financial.empty": "V tem obdobju ni finančne aktivnosti.",
 	"financial.note":
-		"Prihodki vključujejo izdane račune brez davka in dobropisov. Stroški vključujejo vnesene stroške brez odbitnega davka ter provizije plačil. Denarni tok vključuje prejeta plačila brez vračil, provizij in plačanih stroškov. Valute so prikazane ločeno. Obdobja uporabljajo UTC. Ocena zajema zapise v RabbitPay.",
+		"Prihodki temeljijo na izdanih računih, zmanjšanih za davek in dobropise. Stroški vključujejo vnesene stroške, zmanjšane za odbitni davek, ter provizije plačil. Denarni tok temelji na prejetih plačilih, zmanjšanih za vračila, provizije in plačane stroške. Valute so prikazane ločeno. Obdobja so določena po UTC. Ocena zajema zapise v RabbitPay.",
 	"financial.export_note": "Zneski v CSV so v najmanjših enotah valute.",
 
 	"app.converter": "Pretvornik",
@@ -210,14 +210,16 @@ export const sl: UiDictionary = {
 	"account.disabled_body": "Račun po geslu zaščitite z varnostnim ključem ali aplikacijo za preverjanje pristnosti.",
 	"account.setup": "Nastavi aplikacijo za preverjanje",
 	"account.setup_title": "Povežite aplikacijo za preverjanje pristnosti",
-	"account.setup_body": "Skenirajte to kodo QR ali ročno vnesite skrivnost. Nato potrdite s trenutno kodo. Nastavitev poteče čez {minutes} minut.",
+	"account.setup_body":
+		"Skenirajte to kodo QR ali ročno vnesite skrivni ključ. Nato potrdite s trenutno kodo iz aplikacije. Nastavitev poteče čez {minutes} minut.",
 	"account.manual_secret": "Skrivnost za ročno nastavitev",
 	"account.copy_secret": "Kopiraj skrivnost",
 	"account.authenticator_code": "Koda iz avtentikatorja",
 	"account.enable": "Poveži aplikacijo za preverjanje",
 	"account.enabled": "Aplikacija za preverjanje je povezana.",
 	"account.enabled_status": "Vklopljeno",
-	"account.enabled_body": "Za prijavo so potrebni geslo in varnostni ključ, koda iz avtentikatorja ali obnovitvena koda.",
+	"account.enabled_body":
+		"Za prijavo potrebujete geslo in enega od naslednjih načinov potrditve: varnostni ključ, kodo iz aplikacije za preverjanje ali obnovitveno kodo.",
 	"account.recovery_title": "Shranite obnovitvene kode",
 	"account.recovery_once": "Te kode so prikazane samo zdaj. Varno jih shranite. Vsako lahko uporabite enkrat.",
 	"account.copy_recovery": "Kopiraj vse obnovitvene kode",
@@ -602,7 +604,7 @@ export const sl: UiDictionary = {
 	"processor.monero": "Monero",
 	"processor.stripe": "Stripe",
 	"processor.paypal": "PayPal",
-	"processor.credit": "Dobropis na računu",
+	"processor.credit": "Dobroimetje na računu",
 	"tx_type.payment": "plačilo",
 	"tx_type.refund": "vračilo",
 	"tx_type.partial_refund": "delno vračilo",
@@ -3208,7 +3210,7 @@ export const sl: UiDictionary = {
 	"license.employees_exceeded":
 		"V delovni sili je več ljudi, kot jih pokriva licenca. Evidenca, odsotnosti in zahtevki so samo za branje, dokler ne unovčite ključa za zaposlene ali odstranite ljudi.",
 	"workforce.seats_exceeded":
-		"Število ljudi v delovni sili ({used}) presega licenco ({limit}). Vse lahko še vedno berete in izvozite. Za nove vnose unovčite ključ za zaposlene ali odstranite ljudi.",
+		"Število ljudi v delovni sili ({used}) presega dovoljeno število ({limit}). Vse lahko še vedno berete in izvozite. Za nove vnose unovčite ključ za zaposlene ali odstranite ljudi.",
 	"workforce.tab_time": "Ure",
 	"workforce.tab_absences": "Odsotnosti",
 	"workforce.tab_report": "Mesečno poročilo",
@@ -3760,7 +3762,7 @@ export const sl: UiDictionary = {
 	"payroll.payslip": "Plačilna lista",
 	"payroll.delete_title": "Izbrišem ta obračun?",
 	"payroll.delete_body": "Izbrišejo se tudi dodatki in odtegljaji, dodani v obračun.",
-	"payroll.finalized_by": "Zaključil(a) {name}, {date}.",
+	"payroll.finalized_by": "Zaključek obračuna: {name}, {date}.",
 	"payroll.draft_hint": "Osnutek: zneski sledijo trenutni evidenci ur ob vsakem ponovnem izračunu.",
 	"payroll.no_people": "Ta mesec ni delal nihče s podatki o zaposlitvi.",
 	"payroll.contributions": "Prispevki delavca",
@@ -3832,7 +3834,7 @@ export const sl: UiDictionary = {
 	"payroll.dependent_amounts_hint": "Za prvega, drugega, tretjega in naprej, ločeno s podpičji.",
 	"payroll.dependent_step": "Povečanje za vsakega nadaljnjega otroka v {currency}",
 	"payroll.rates_note": "Opomba, na primer vir vrednosti",
-	"payroll.rates_checked": "Vse vrednosti sem preveril(a) z uradnimi tabelami",
+	"payroll.rates_checked": "Potrjujem, da so vse vrednosti preverjene glede na uradne tabele",
 	"payroll.rates_checked_hint":
 		"Vgrajene vrednosti so povzete po objavah FURS, ZZZS in SURS za to obdobje. Predpisi se spreminjajo, zato jih pred uporabo preverite. Obračun je mogoče zaključiti samo s preverjeno tabelo.",
 	"payroll.download": "Prenesi",

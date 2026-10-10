@@ -81,7 +81,7 @@ Osnutek, ki ga ne potrebujete več, preprosto odstranite z **Več** > **Izbriši
 
 S predračunom kupca prosite za plačilo, preden izdate račun. Ima svoje zaporedje številk, ni račun in se ne potrjuje pri FURS niti ne vodi v vaših evidencah DDV.
 
-Ustvarite ga z **Ustvari predračun** na obrazcu za nov račun ali iz osnutka pod **Več**. Pošljete ga z **Pošlji** > **Pošlji predračun po e-pošti**. Urejate ga lahko do prvega plačila. Ni ga mogoče izbrisati, le preklicati.
+Ustvarite ga z **Ustvari predračun** na obrazcu za nov račun ali iz osnutka pod **Več**. Pošljete ga prek **Pošlji** > **Pošlji predračun po e-pošti**. Urejate ga lahko do prvega plačila. Ni ga mogoče izbrisati, le preklicati.
 
 Sami izberete, kaj se zgodi, ko je plačan:
 

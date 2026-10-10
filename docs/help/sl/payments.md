@@ -53,11 +53,11 @@ Bitcoin in Ethereum potrebujeta le razširjeni javni ključ vaše denarnice. Rab
 
 Monero potrebuje denarnico samo za ogled, ki jo poganjate sami, ker plačil Monero ni mogoče javno preveriti.
 
-Cena se določi v trenutku, ko kupec izbere plačilo s kovancem, in znesek je za ta naslov stalen. Sprememba na trgu med plačevanjem ne povzroči premajhnega plačila.
+Cena v kriptovaluti se določi, ko kupec izbere ta način plačila, znesek za plačilo na dodeljeni naslov pa ostane nespremenjen. Sprememba tečaja med plačevanjem zato ne povzroči premajhnega plačila.
 
 ## Plačilna stran
 
-Vsak izdan račun ima svojo plačilno stran, za katero ni potreben uporabniški račun. Pošljete jo z **Pošlji** > **Kopiraj povezavo za plačilo** na računu ali povezavo dodate v e-pošto z računom.
+Vsak izdan račun ima svojo plačilno stran, za katero ni potreben uporabniški račun. Povezavo do nje kopirate na računu prek **Pošlji** > **Kopiraj povezavo za plačilo** ali jo dodate v e-pošto z računom.
 
 Stran pokaže, koliko je treba plačati, ponudi načine, ki ste jih vklopili, in se sama osveži, ko denar prispe. Osnutek nima plačilne strani.
 
@@ -75,7 +75,7 @@ Stran lahko odpre vsak, ki ima povezavo, zato jo delite le s kupcem, ki mu je na
 
 1. Tapnite izdelke iz svojih **Artiklov**, jih poiščite ali skenirajte črtno kodo ali pa na tipkovnici vnesite znesek.
 2. Pritisnite **Zaračunaj**.
-3. Pri gotovini vnesite izročeni znesek in RabbitPay pokaže, koliko je treba vrniti. Pri drugih načinih kupec skenira kodo QR in plača na svojem telefonu.
+3. Pri gotovini vnesite izročeni znesek in RabbitPay pokaže, koliko je treba vrniti. Pri drugih načinih kupec skenira kodo QR in plača s telefonom.
 
 Vsaka prodaja je izdan račun, ki ga lahko natisnete ali pošljete po e-pošti. V slovenskem projektu z davčnim potrjevanjem se gotovinske in kartične prodaje takoj pošljejo FURS. Preklic prodaje izda dobropis.
 

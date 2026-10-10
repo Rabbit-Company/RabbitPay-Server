@@ -37,7 +37,7 @@ Odprite **Nastavitve** > **Načini plačila** in vklopite vsaj enega. Bančno na
 
 1. Odprite **Računi** in pritisnite **Nov račun**.
 2. Dodajte kupca in postavke.
-3. Pritisnite **Ustvari in izdaj**, nato ga pošljite z **Pošlji** > **Pošlji račun**.
+3. Pritisnite **Ustvari in izdaj**, nato račun pošljite prek **Pošlji** > **Pošlji račun**.
 
 Vse drugo o računih, od predračunov do dobropisov, je v članku [Računi](invoices). Če iste stvari prodajate pogosto, jih enkrat shranite pod **Artikli** in jih izberite na vsakem računu.
 
