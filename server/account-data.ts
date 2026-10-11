@@ -59,7 +59,7 @@ export async function deleteAccount(username: string, plan: DeletionPlan): Promi
 
 export async function exportAccount(account: AccountRow) {
 	const username = account.username;
-	const [keys, acceptances, memberships, accessLogs, auditEntries] = await Promise.all([
+	const [keys, acceptances, memberships, accessLogs, auditEntries, notificationChoices, pushDevices] = await Promise.all([
 		TwoFactor.securityKeys(username),
 		Database`SELECT kind, version, accepted, ip_address, user_agent FROM legal_acceptances WHERE account_username = ${username} ORDER BY accepted ASC`,
 		Database`
@@ -75,6 +75,8 @@ export async function exportAccount(account: AccountRow) {
 			SELECT created, action, project, entity_type, entity_id, ip_address, user_agent
 			FROM audit_log WHERE account = ${username} ORDER BY created ASC
 		`,
+		Database`SELECT kind, channel, enabled, updated FROM notification_preferences WHERE account = ${username} ORDER BY kind ASC, channel ASC`,
+		Database`SELECT endpoint, language, user_agent, created, updated FROM push_subscriptions WHERE account = ${username} ORDER BY created ASC`,
 	]);
 
 	return {
@@ -98,6 +100,19 @@ export async function exportAccount(account: AccountRow) {
 		legal_acceptances: (acceptances as { kind: string; version: number; accepted: number; ip_address: string | null; user_agent: string | null }[]).map(
 			(row) => ({ document: row.kind, version: Number(row.version), accepted: iso(row.accepted), ip_address: row.ip_address, user_agent: row.user_agent })
 		),
+		notification_choices: (notificationChoices as { kind: string; channel: string; enabled: number; updated: number }[]).map((row) => ({
+			notification: row.kind,
+			channel: row.channel,
+			enabled: Number(row.enabled) === 1,
+			changed: iso(row.updated),
+		})),
+		push_devices: (pushDevices as { endpoint: string; language: string; user_agent: string | null; created: number; updated: number }[]).map((row) => ({
+			push_service: new URL(row.endpoint).host,
+			user_agent: row.user_agent,
+			language: row.language,
+			registered: iso(row.created),
+			last_registered: iso(row.updated),
+		})),
 		project_memberships: (
 			memberships as { uuid: string; name: string; role: string; status: string; full_name: string | null; accepted_at: number | null; created: number }[]
 		).map((row) => ({

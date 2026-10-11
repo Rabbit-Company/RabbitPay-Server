@@ -38,7 +38,7 @@ import {
 } from "../../workforce/timesheets";
 import { overlapsAbsence, presentAbsence, readAbsence } from "../../workforce/absences";
 import { monthReport, monthReportCsv, vacationBalance } from "../../workforce/reports";
-import { notifyAbsenceDecided, notifyAbsenceRequested } from "../../workforce/notifications";
+import { notifyAbsenceDecided, notifyAbsenceRequested, notifyTimesheetDecided, notifyTimesheetSubmitted } from "../../workforce/notifications";
 import { monthReportPdf } from "../../workforce/report-pdf";
 import { pdfResponse } from "../../invoice-pdf";
 import { locksTimesheet, presentTimesheetPeriod, timesheetPeriod, timesheetPeriodLocked, timesheetPeriods } from "../../workforce/approvals";
@@ -263,6 +263,7 @@ Server.app.post(`${base}/timesheets/periods/:period/submit`, Auth.required(), Pe
 		presented,
 		previous ? presentTimesheetPeriod(access.self.uuid, period, previous) : undefined
 	);
+	await notifyTimesheetSubmitted(row, access.self);
 	return await okWithNames(ctx, presented);
 });
 
@@ -295,6 +296,7 @@ Server.app.post(
 		`;
 		const current = await timesheetPeriod(project.uuid, subject.uuid, period);
 		await audit(ctx, `timesheet.${status}`, "timesheet_period", previous.uuid, current, presentTimesheetPeriod(subject.uuid, period, previous));
+		await notifyTimesheetDecided(previous, subject, status, note, accessOf(ctx).self);
 		return await okWithNames(ctx, current);
 	}
 );

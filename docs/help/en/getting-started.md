@@ -56,6 +56,35 @@ Open **Team**, press **Invite teammate**, enter the person's email address, choo
 
 Give each person the smallest role that lets them do their work.
 
+## Choose your notifications
+
+Open the menu with your email address in the top right corner and choose **Notifications**. The page lists everything RabbitPay can tell you about, grouped by area, with a switch for each of the two ways it can reach you:
+
+- **In browser** shows a message in the corner of RabbitPay while you have it open. Switch on **Desktop notifications on this device** to also get a notification from your browser when RabbitPay is in the background or closed. Your browser asks for permission the first time, and you decide this separately on every device. The device stops receiving them when you sign out, when RabbitPay is opened there after your session expired, or after 30 days without you using RabbitPay on it. The page lists every device that receives your notifications, so you can remove one you no longer use or forgot to sign out of. On an iPhone or iPad, add RabbitPay to the home screen first.
+- **Email** sends the same news to the address you sign in with.
+
+You only see notifications for the parts of RabbitPay you have access to. Your choices are saved as you make them and follow your account on every device. **Reset to defaults** brings back the settings RabbitPay starts with.
+
+RabbitPay starts with these settings:
+
+| Notification                                                | In browser | Email    |
+| ----------------------------------------------------------- | ---------- | -------- |
+| New chat messages, incoming calls, missed calls             | On         | Not sent |
+| Meeting invitations and changes                             | On         | On       |
+| Reminders 10 minutes before a meeting or event              | On         | Off      |
+| Tickets assigned to you, tickets and replies from customers | On         | On       |
+| Comments from colleagues on your tickets                    | On         | Off      |
+| Absence requests and decisions                              | On         | On       |
+| Timesheets waiting for your review                          | On         | Off      |
+| Decisions on your timesheet                                 | On         | On       |
+| New store orders                                            | On         | On       |
+| Online payments, overdue invoices                           | On         | Off      |
+| Fiscal verification problems                                | On         | Always   |
+
+Emails about new store orders, online payments and overdue invoices count toward the project's email allowance, like emails to customers. All other notification emails are free.
+
+Emails about fiscal verification problems go to project owners and cannot be switched off, because a legal deadline depends on them. While your chat status is **Do not disturb**, nothing is shown in the browser, and emails are still sent.
+
 ## What is included and what needs a license
 
 **License** in your project shows how many payments and how much document storage are included, how much you have used, and lets you redeem a license key for more.

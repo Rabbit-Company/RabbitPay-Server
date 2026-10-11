@@ -14,7 +14,7 @@ namespace TaskCalendar {
 			const until = now + LEAD_MS;
 			const after = remindedUntil ?? until;
 			remindedUntil = until;
-			sendReminders(await dueReminders(after, until));
+			await sendReminders(await dueReminders(after, until));
 		} catch (err) {
 			Logger.error(`[CALENDAR] Reminder check failed: ${err}`);
 		} finally {

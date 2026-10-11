@@ -3,6 +3,7 @@ import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, sendRealtime, type RealtimeEvent } from "./realtime";
 import { reportError, toast } from "./ui";
+import { notify } from "./notifications";
 import { dropGroupCall, inGroupCall, watchGroupCalls } from "./group-call";
 import { callControl, controlPick, qualityPick, splitControl } from "./call-controls";
 import {
@@ -866,6 +867,16 @@ function onEvent(event: RealtimeEvent) {
 		});
 		startRinging();
 		render();
+		notify(
+			{
+				kind: "call_incoming",
+				title: t(event.video === true ? "calls.incoming_video" : "calls.incoming"),
+				body: from.name,
+				path: null,
+				tag: event.call,
+			},
+			{ desktopOnly: true }
+		);
 		return;
 	}
 

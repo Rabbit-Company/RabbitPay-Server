@@ -4,8 +4,10 @@ import { stopRealtime } from "./realtime";
 import { forgetChatUnread } from "./chat-unread";
 import { forgetOwnStatus } from "./chat-status";
 import { dropCall } from "./calls";
+import { forgetNotifications, releaseDevice } from "./notifications";
 
 export async function signOut() {
+	await releaseDevice();
 	try {
 		await Api.logout();
 	} catch {
@@ -16,6 +18,7 @@ export async function signOut() {
 	stopRealtime();
 	forgetChatUnread();
 	forgetOwnStatus();
+	forgetNotifications();
 	navigate("/login");
 }
 

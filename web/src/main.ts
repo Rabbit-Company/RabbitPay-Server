@@ -39,6 +39,8 @@ import { licenseView } from "./views/license";
 import { adminAccountsView, adminInvitesView, adminLegalView, adminLicensesView, adminOverviewView, adminProjectsView, adminSettingsView } from "./views/admin";
 import { handleShortcutRender, installKeyboardShortcuts, showShortcutModal } from "./keyboard";
 import { accountView, confirmEmailView } from "./views/account";
+import { notificationsView } from "./views/notifications";
+import { forgetNotifications, releaseDevice, watchNotifications } from "./notifications";
 import { customerOrdersView, customerProfileView } from "./views/customer-profile";
 import { storeSettingsView } from "./views/store";
 import { storeCategoriesView, storeProductsView, storeProductView } from "./views/store-products";
@@ -108,6 +110,7 @@ function header(): HTMLElement {
 				{
 					links: [
 						{ label: t("account.title"), href: "/account", current: window.location.pathname === "/account" },
+						{ label: t("notifications.title"), href: "/account/notifications", current: window.location.pathname === "/account/notifications" },
 						{ label: t("portal.title"), href: "/customer" },
 						{ label: t("help.title"), href: "/help", newTab: true },
 						{ label: t("shortcuts.open"), hint: "F1", onSelect: showShortcutModal },
@@ -149,6 +152,7 @@ function mountShell() {
 	if (!path.startsWith("/pay/") && !path.endsWith("/print") && !storefront) resetBranding();
 
 	const chrome = getToken() !== null && !isStandalone();
+	if (chrome) watchNotifications();
 	shell.replaceChildren(...(chrome ? [header(), outlet] : [outlet]));
 }
 
@@ -267,6 +271,7 @@ for (const option of UI_LANGUAGES) {
 	if (option.value !== DEFAULT_UI_LANGUAGE) define(landingPath(option.value), () => landingRoute(option.value), false);
 }
 define("/account", () => accountView());
+define("/account/notifications", () => notificationsView());
 define("/account/email", () => confirmEmailView(), false);
 define("/converter", () => converterView());
 define("/accounting", () => accountingClientsView());
@@ -579,6 +584,8 @@ configure({
 setErrorView(failureView);
 
 setUnauthorizedHandler(() => {
+	forgetNotifications();
+	void releaseDevice();
 	if (window.location.pathname === "/customer" || window.location.pathname.startsWith("/customer/")) return;
 	if (isStorefront(window.location.pathname)) return;
 	toast(t("app.session_expired"), "error");

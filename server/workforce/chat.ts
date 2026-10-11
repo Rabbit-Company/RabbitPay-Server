@@ -323,8 +323,18 @@ export async function recipientsOf(conversation: Pick<ChatConversationRow, "uuid
 	return rows.filter((member) => Permissions.isActive(member) && Permissions.has(member, Permission.CHAT_USE)).map((member) => member.account_username!);
 }
 
+type ChatMessageListener = (conversation: Pick<ChatConversationRow, "uuid" | "project">, message: PresentedMessage, recipients: string[]) => unknown;
+
+let messageListener: ChatMessageListener | null = null;
+
+export function onChatMessage(listener: ChatMessageListener | null) {
+	messageListener = listener;
+}
+
 export async function notify(conversation: Pick<ChatConversationRow, "uuid" | "project">, event: RealtimeEvent, also: string[] = []) {
-	Realtime.send([...(await recipientsOf(conversation)), ...also], { ...event, project: conversation.project, conversation: conversation.uuid });
+	const recipients = await recipientsOf(conversation);
+	Realtime.send([...recipients, ...also], { ...event, project: conversation.project, conversation: conversation.uuid });
+	if (event.type === "chat.message" && messageListener) void messageListener(conversation, event.message as PresentedMessage, recipients);
 }
 
 async function unreadCounts(conversations: string[], username: string): Promise<Map<string, number>> {

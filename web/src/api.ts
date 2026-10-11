@@ -1,3 +1,4 @@
+import type { NotificationChannel, NotificationGroup, NotificationKind } from "../../server/notifications/kinds";
 import type { EmailKind, EmailRoute, EmailStatus, ExpenseRow, RecurringExpenseRow } from "../../server/database/models";
 import type { ExpenseInput, ExpenseScheduleInput, ExpenseVatLineInput } from "../../server/expense-types";
 import type { FinancialReport } from "../../server/expense-types";
@@ -504,6 +505,35 @@ export interface Account {
 	projects: number;
 	created: number;
 	accessed: number;
+}
+
+export interface NotificationChannelPreference {
+	enabled: boolean;
+	default: boolean;
+	locked: boolean;
+}
+
+export interface NotificationPreference {
+	kind: NotificationKind;
+	group: NotificationGroup;
+	relevant: boolean;
+	browser: NotificationChannelPreference;
+	email: NotificationChannelPreference | null;
+}
+
+export interface PushDevice {
+	id: string;
+	endpoint_hash: string;
+	user_agent: string | null;
+	language: string;
+	created: number;
+	seen: number;
+}
+
+export interface NotificationChange {
+	kind: NotificationKind;
+	channel: NotificationChannel;
+	enabled: boolean;
 }
 
 export interface HelpSummary {
@@ -3947,6 +3977,34 @@ export const Api = {
 			`/projects/${uuid}/tickets/invoice`,
 			{ tickets }
 		);
+	},
+
+	notificationPreferences() {
+		return request<{ preferences: NotificationPreference[]; email_ready: boolean }>("GET", "/auth/notifications");
+	},
+
+	saveNotificationPreferences(changes: NotificationChange[]) {
+		return request<{ preferences: NotificationPreference[]; email_ready: boolean }>("PATCH", "/auth/notifications", { changes });
+	},
+
+	resetNotificationPreferences() {
+		return request<{ preferences: NotificationPreference[]; email_ready: boolean }>("DELETE", "/auth/notifications");
+	},
+
+	pushKey() {
+		return request<{ public_key: string; devices: PushDevice[] }>("GET", "/auth/push");
+	},
+
+	removePushDevice(device: string) {
+		return request<{ devices: PushDevice[] }>("DELETE", "/auth/push", { device });
+	},
+
+	savePush(subscription: { endpoint: string; keys: { p256dh: string; auth: string }; language: string }) {
+		return request<void>("PUT", "/auth/push", subscription);
+	},
+
+	forgetPush(endpoint: string) {
+		return request<void>("POST", "/push/forget", { endpoint });
 	},
 
 	realtimeTicket() {

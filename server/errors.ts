@@ -213,6 +213,8 @@ export enum Error {
 	INVALID_CALENDAR_EVENT = 1334,
 	CALENDAR_EVENT_NOT_FOUND = 1335,
 	INVALID_CALENDAR_RANGE = 1336,
+	INVALID_NOTIFICATION_PREFERENCE = 1337,
+	INVALID_PUSH_SUBSCRIPTION = 1338,
 	INVALID_EXPENSE_ATTACHMENT = 1121,
 	EXPENSE_ATTACHMENT_NOT_FOUND = 1122,
 	INVALID_MEMBER_PROFILE = 1120,
@@ -769,6 +771,8 @@ namespace Errors {
 		},
 		1335: { message: "This event does not exist or belongs to someone else.", httpCode: 404 },
 		1336: { message: "The calendar range needs a from and a to date at most 100 days apart.", httpCode: 400 },
+		1337: { message: "That notification cannot be switched on or off.", httpCode: 400 },
+		1338: { message: "This browser's push registration is not valid.", httpCode: 400 },
 		1313: { message: "The folder cannot be moved there. A folder cannot go inside itself and folders nest at most 20 deep.", httpCode: 409 },
 		1285: { message: "The Idempotency-Key header takes 1 to 128 letters, digits, dots, colons, hyphens or underscores.", httpCode: 400 },
 		1286: {

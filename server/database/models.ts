@@ -517,7 +517,16 @@ export type EmailKind =
 	| "ticket_customer"
 	| "ticket_assigned"
 	| "absence_requested"
-	| "absence_decided";
+	| "absence_decided"
+	| "ticket_comment"
+	| "timesheet_submitted"
+	| "timesheet_decided"
+	| "meeting_scheduled"
+	| "meeting_reminder"
+	| "event_reminder"
+	| "store_order"
+	| "invoice_paid"
+	| "invoice_overdue";
 export type EmailStatus = "pending" | "sent" | "failed";
 export type EmailRoute = "server" | "project";
 

@@ -88,6 +88,25 @@ export function toast(message: string, variant: "success" | "error" | "info" = "
 	}, 4200);
 }
 
+const NOTICE_TOAST_MS = 7000;
+
+export function noticeToast(title: string, body: string, onOpen: (() => void) | null) {
+	const node = el(onOpen ? "button" : "div", { class: "toast toast-info toast-notice" }, el("strong", {}, title), el("span", {}, body));
+	const leave = () => {
+		node.classList.add("leaving");
+		setTimeout(() => node.remove(), 200);
+	};
+	if (onOpen) {
+		node.setAttribute("type", "button");
+		node.addEventListener("click", () => {
+			node.remove();
+			onOpen();
+		});
+	}
+	host().appendChild(node);
+	setTimeout(leave, NOTICE_TOAST_MS);
+}
+
 export function reportError(error: unknown) {
 	if (error instanceof ApiError) {
 		toast(errorText(error.code, error.message), "error");

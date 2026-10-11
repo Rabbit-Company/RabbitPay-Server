@@ -13,8 +13,8 @@
 		"logs:export": "bun run server/storage-cli.ts export-access-logs",
 		"license:keygen": "bun run server/license-cli.ts keygen",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
-		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
-		"watch:web": "bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
+		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && bun build web/src/push-worker.ts --outfile web/dist/push-worker.js --minify && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
+		"watch:web": "bun build web/src/push-worker.ts --outfile web/dist/push-worker.js && bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
 		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
 	},
 	"repository": {
@@ -54,7 +54,7 @@
 		"ethereumjs-wallet": "^1.0.2",
 		"highlight.js": "^11.12.0",
 		"livekit-client": "^2.22.4",
-		"nodemailer": "^10.0.16",
+		"nodemailer": "^10.1.0",
 		"pdfkit": "^0.20.2",
 		"tiny-secp256k1": "^2.2.4"
 	}

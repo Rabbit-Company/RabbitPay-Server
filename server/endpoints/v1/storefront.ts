@@ -18,6 +18,7 @@ import { nextSeriesNumber } from "../../invoice-numbers";
 import { OutOfStock, stockShortage } from "../../item-keys";
 import { canEmail } from "../../email/mailer";
 import { queueInvoiceEmail } from "../../email/messages";
+import { notifyStoreOrder } from "../../notifications/sales";
 import { documentStorage } from "../../document-storage";
 import { brandImages, imagePath, storeBySlug, type LoadedStore } from "../../store/store";
 import { isSlug } from "../../store/config";
@@ -436,6 +437,13 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 	if (coupon && quote.coupon) await recordRedemption(coupon, invoice.uuid, email, quote.discount_amount);
 	await recordLicenseOrder(invoice.uuid, store.project.uuid, quote.licenses);
 	if (input.save_profile) await writeProfile(email, profileFromCheckout(input));
+	void notifyStoreOrder(store.project, {
+		invoice: invoice.uuid,
+		reference: number,
+		customer: input.customer.name?.trim() || email,
+		amount: invoice.total_amount,
+		currency: invoice.currency,
+	});
 
 	if (canEmail(store.project)) {
 		try {

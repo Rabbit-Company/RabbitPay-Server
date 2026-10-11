@@ -5,6 +5,7 @@ import { deliverKeysSoon } from "../key-delivery";
 import { issueDraftsSoon } from "../paid-drafts";
 import { queueInvoiceVerification, submitFiscalSoon } from "../fiscal/documents";
 import { enqueueLater, type WebhookEvent } from "../webhooks/events";
+import { notifyInvoicePaid, ONLINE_PROCESSORS, queueOverdueNotice } from "../notifications/sales";
 import type { InvoiceRow, InvoiceStatus } from "../database/models";
 
 export const SETTLED_PAYMENT_STATUSES = ["confirmed", "completed", "refunded", "partially_refunded"];
@@ -53,6 +54,14 @@ function resolveStatus(invoice: InvoiceRow, paid: number, refunded: number, net:
 	return statusForPayment(due, net, invoice.due_date, Date.now());
 }
 
+async function paidOnline(sql: SQL, invoiceId: string): Promise<boolean> {
+	const [latest] = (await sql`
+		SELECT processor FROM transactions WHERE invoice = ${invoiceId} AND type = 'payment' AND status IN ${sql(SETTLED_PAYMENT_STATUSES)}
+		ORDER BY created DESC LIMIT 1
+	`) as { processor: string }[];
+	return latest !== undefined && ONLINE_PROCESSORS.includes(latest.processor);
+}
+
 const STATUS_EVENTS: Partial<Record<InvoiceStatus, WebhookEvent>> = {
 	paid: "invoice.paid",
 	partially_paid: "invoice.partially_paid",
@@ -96,6 +105,8 @@ export async function applyBalance(sql: SQL, invoiceId: string, paidAt = Date.no
 				outstanding: balance.outstanding,
 			});
 		}
+		if (balance.status === "overdue") queueOverdueNotice(invoice, balance.outstanding);
+		if (balance.status === "paid" && (await paidOnline(sql, invoice.uuid))) void notifyInvoicePaid(invoice, balance.paid_amount);
 	}
 
 	return balance;

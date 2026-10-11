@@ -654,6 +654,61 @@ export const MIGRATIONS: Migration[] = [
 		},
 	},
 	{ version: 55, name: "calendar", up: createCalendarSchema },
+	{
+		version: 56,
+		name: "notification preferences",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS notification_preferences(
+					account ${types.text("account")} NOT NULL,
+					kind ${types.text("kind")} NOT NULL,
+					channel ${types.text("status")} NOT NULL CHECK (channel IN ('browser', 'email')),
+					enabled ${types.flag} NOT NULL CHECK (enabled IN (0, 1)),
+					updated ${types.int64} NOT NULL,
+					PRIMARY KEY (account, kind, channel),
+					FOREIGN KEY (account) REFERENCES accounts(username) ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_notification_preferences_kind ON notification_preferences(kind, channel)`,
+			]);
+		},
+	},
+	{
+		version: 57,
+		name: "push notifications",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS push_keys(
+					slot INTEGER PRIMARY KEY CHECK (slot = 1),
+					public_key ${types.text("public_key")} NOT NULL,
+					private_key ${types.text("private_key")} NOT NULL,
+					created ${types.int64} NOT NULL
+				)`,
+				`CREATE TABLE IF NOT EXISTS push_subscriptions(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					account ${types.text("account")} NOT NULL,
+					endpoint_hash ${types.text("token_hash")} NOT NULL UNIQUE,
+					endpoint ${types.text("endpoint")} NOT NULL,
+					p256dh ${types.text("public_key")} NOT NULL,
+					auth ${types.text("auth")} NOT NULL,
+					language ${types.text("language")} NOT NULL,
+					created ${types.int64} NOT NULL,
+					updated ${types.int64} NOT NULL,
+					FOREIGN KEY (account) REFERENCES accounts(username) ON DELETE CASCADE
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_account ON push_subscriptions(account)`,
+			]);
+		},
+	},
+	{
+		version: 58,
+		name: "push device names",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(`ALTER TABLE push_subscriptions ADD COLUMN user_agent ${types.text("user_agent")}`);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

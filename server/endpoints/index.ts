@@ -51,3 +51,4 @@ import "./v1/fixed-assets";
 import "./v1/realtime";
 import "./v1/chat";
 import "./v1/calendar";
+import "./v1/notifications";

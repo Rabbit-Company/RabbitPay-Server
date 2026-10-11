@@ -7,6 +7,7 @@ import { authBrand, authPage } from "../auth-page";
 import { formatDate } from "../money";
 import { modal, reportError, toast } from "../ui";
 import { legalInfo } from "./legal";
+import { accountTabs } from "./account-tabs";
 import { createSecurityKey, getSecurityKey, securityKeyCancelled, securityKeysSupported } from "../webauthn";
 
 type Reload = (recoveryCodes?: string[] | null) => Promise<void>;
@@ -450,5 +451,11 @@ export async function accountView(): Promise<HTMLElement> {
 
 	show(initial, null);
 
-	return el("div", { class: "page" }, el("div", { class: "page-head" }, el("div", {}, el("h1", {}, t("account.title")), intro)), content);
+	return el(
+		"div",
+		{ class: "page" },
+		el("div", { class: "page-head" }, el("div", {}, el("h1", {}, t("account.title")), intro)),
+		accountTabs("security"),
+		content
+	);
 }

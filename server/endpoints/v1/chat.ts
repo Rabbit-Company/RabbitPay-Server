@@ -68,6 +68,7 @@ import { accountNames } from "../../accounts";
 import { localDate } from "../../timezone";
 import { readRepeat, repeatColumns, repeatOf, sameRepeat } from "../../workforce/recurrence";
 import { announceCalendar, seriesRemoval } from "../../workforce/team-calendar";
+import { notifyMeeting } from "../../workforce/notifications";
 import type { AppState, ChatConversationRow, ChatMeetingRow, ChatMessageRow, ChatParticipantRow, ProjectFileRow, ProjectRow } from "../../database/models";
 
 const base = "/api/v1/projects/:uuid/chat";
@@ -473,6 +474,7 @@ Server.app.post(`${base}/meetings`, ...chat, async (ctx) => {
 	await audit(ctx, "chat.meeting_scheduled", uuid, { name, accounts, ...times, guests: guest !== null, repeat });
 	await notify(conversation, { type: "chat.conversation" });
 	await announceCalendar(project.uuid);
+	await notifyMeeting(conversation, "scheduled", times.starts_at, Permissions.member(ctx));
 	return Utils.ok(ctx, await presentConversation(conversation, username), 201);
 });
 
@@ -506,6 +508,7 @@ Server.app.patch(`${base}/conversations/:conversation/meeting`, ...chat, async (
 	await audit(ctx, "chat.meeting_updated", found.conversation.uuid, { ...times, guests: wantsGuests, guest_link_reset: guest !== null, repeat });
 	await notify(found.conversation, { type: "chat.conversation" });
 	await announceCalendar(found.conversation.project);
+	if (times.starts_at !== Number(meeting.starts_at)) await notifyMeeting(found.conversation, "moved", times.starts_at, Permissions.member(ctx));
 	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
 });
 
@@ -528,6 +531,7 @@ Server.app.delete(`${base}/conversations/:conversation/meeting`, ...chat, async 
 	await audit(ctx, "chat.meeting_cancelled", found.conversation.uuid, { occurrence: query.get("occurrence"), scope: query.get("scope") ?? "all" });
 	await notify(found.conversation, { type: "chat.conversation" });
 	await announceCalendar(found.conversation.project);
+	if (removal === "all") await notifyMeeting(found.conversation, "cancelled", Number(meeting.starts_at), Permissions.member(ctx));
 	return Utils.ok(ctx, await presentConversation(found.conversation, Auth.account(ctx).username));
 });
 

@@ -56,6 +56,35 @@ Odprite **Ekipa**, pritisnite **Povabi člana**, vnesite e-poštni naslov osebe,
 
 Vsaki osebi dodelite najmanjšo vlogo, s katero lahko opravlja svoje delo.
 
+## Izberite svoja obvestila
+
+Odprite meni s svojim e-poštnim naslovom v zgornjem desnem kotu in izberite **Obvestila**. Stran našteje vse, o čemer vas RabbitPay lahko obvesti, razdeljeno po področjih, z enim stikalom za vsakega od dveh načinov obveščanja:
+
+- **V brskalniku** prikaže sporočilo v kotu, ko imate RabbitPay odprt. Vklopite **Namizna obvestila na tej napravi**, da vas brskalnik obvesti tudi takrat, ko je RabbitPay v ozadju ali zaprt. Brskalnik vas prvič vpraša za dovoljenje, o tem pa se odločite na vsaki napravi posebej. Naprava jih preneha prejemati, ko se odjavite, ko nekdo na njej odpre RabbitPay po izteku vaše seje ali po 30 dneh, v katerih RabbitPaya na njej niste uporabljali. Stran našteje vse naprave, ki prejemajo vaša obvestila, zato lahko odstranite napravo, ki je ne uporabljate več ali na kateri ste se pozabili odjaviti. Na iPhonu ali iPadu RabbitPay najprej dodajte na začetni zaslon.
+- **E-pošta** pošlje isto novico na naslov, s katerim se prijavljate.
+
+Vidite samo obvestila za dele RabbitPaya, do katerih imate dostop. Izbira se shranjuje sproti in velja za vaš račun na vseh napravah. **Ponastavi na privzeto** vrne nastavitve, s katerimi RabbitPay začne.
+
+RabbitPay začne s temi nastavitvami:
+
+| Obvestilo                                                | V brskalniku | E-pošta       |
+| -------------------------------------------------------- | ------------ | ------------- |
+| Nova sporočila v klepetu, dohodni klici, zgrešeni klici  | Vklopljeno   | Se ne pošilja |
+| Vabila na sestanke in spremembe                          | Vklopljeno   | Vklopljeno    |
+| Opomniki 10 minut pred sestankom ali dogodkom            | Vklopljeno   | Izklopljeno   |
+| Zahtevki, dodeljeni vam, ter zahtevki in odgovori strank | Vklopljeno   | Vklopljeno    |
+| Komentarji sodelavcev na vaših zahtevkih                 | Vklopljeno   | Izklopljeno   |
+| Prošnje za odsotnost in odločitve o njih                 | Vklopljeno   | Vklopljeno    |
+| Evidence, ki čakajo na vaš pregled                       | Vklopljeno   | Izklopljeno   |
+| Odločitve o vaši evidenci                                | Vklopljeno   | Vklopljeno    |
+| Nova naročila v trgovini                                 | Vklopljeno   | Vklopljeno    |
+| Spletna plačila, zapadli računi                          | Vklopljeno   | Izklopljeno   |
+| Težave z davčnim potrjevanjem                            | Vklopljeno   | Vedno         |
+
+E-poštna sporočila o novih naročilih v trgovini, spletnih plačilih in zapadlih računih se štejejo v kvoto e-poštnih sporočil projekta, enako kot sporočila kupcem. Vsa druga e-poštna obvestila so brezplačna.
+
+E-pošto o težavah z davčnim potrjevanjem prejmejo lastniki projekta in je ni mogoče izklopiti, ker je od nje odvisen zakonski rok. Ko je vaš status v klepetu **Ne moti**, se v brskalniku ne prikaže nič, e-pošta pa se pošilja naprej.
+
 ## Kaj je vključeno in kaj potrebuje licenco
 
 **Licenca** v projektu pokaže, koliko plačil in koliko prostora za dokumente je vključenih, koliko ste jih porabili, in omogoča unovčenje licenčnega ključa za več.

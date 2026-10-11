@@ -1,5 +1,6 @@
 import Database from "./database/database";
 import { applyBalance } from "./payments/ledger";
+import { flushOverdueNotices } from "./notifications/sales";
 
 export const OVERDUE_BATCH = 500;
 
@@ -15,5 +16,6 @@ export async function markOverdueInvoices(now = Date.now()): Promise<number> {
 		if (balance.status === "overdue") marked++;
 	}
 
+	await flushOverdueNotices();
 	return marked;
 }

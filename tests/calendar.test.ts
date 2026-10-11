@@ -391,11 +391,23 @@ describe("reminders", () => {
 
 		const anna = listen("cal-anna");
 		const boris = listen("cal-boris");
-		sendReminders(reminders);
-		expect(anna.events).toEqual([
-			{ type: "calendar.reminder", project, kind: "meeting", title: "Planning", starts_at: soon, conversation: scheduled.data.uuid },
+		await sendReminders(reminders);
+		const notified = (events: any[]) => events.filter((event) => event.type === "notification");
+		expect(notified(anna.events)).toMatchObject([
+			{
+				type: "notification",
+				kind: "meeting_reminder",
+				project,
+				params: { title: "Planning", starts_at: soon },
+				path: `/projects/${project}/chat/${scheduled.data.uuid}`,
+			},
 		]);
-		expect(boris.events.map((event) => event.title).sort()).toEqual(["Call supplier", "Daily check"]);
+		expect(notified(boris.events).map((event) => event.kind)).toEqual(["event_reminder", "event_reminder"]);
+		expect(
+			notified(boris.events)
+				.map((event) => event.params.title)
+				.sort()
+		).toEqual(["Call supplier", "Daily check"]);
 		anna.stop();
 		boris.stop();
 	});

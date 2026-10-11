@@ -16,7 +16,7 @@ import { isIsoDate } from "../../workforce/calendar";
 import { findMember, personName } from "../../workforce/people";
 import { requireWorkforce } from "../../workforce/access";
 import { workedMinutes } from "../../workforce/timesheets";
-import { notifyAssigned, notifyCustomerReply, notifyCustomerStatus } from "../../workforce/notifications";
+import { notifyAssigned, notifyCustomerReply, notifyCustomerStatus, notifyTicketComment } from "../../workforce/notifications";
 import {
 	assigneesOf,
 	fixedPriceInvoicesOf,
@@ -327,6 +327,7 @@ Server.app.post(`${base}/tickets/:ticket/comments`, Auth.required(), Permissions
 	const [row] = (await Database`SELECT * FROM ticket_comments WHERE uuid = ${uuid}`) as TicketCommentRow[];
 	await audit(ctx, "ticket.commented", ticket.uuid, { comment: uuid, internal: comment.internal });
 	if (!comment.internal) await notifyCustomerReply(ticket, personName(Permissions.member(ctx)), comment.body, account.username);
+	await notifyTicketComment(ticket, comment, Permissions.member(ctx));
 	return await okWithNames(ctx, presentComment(row), 201);
 });
 

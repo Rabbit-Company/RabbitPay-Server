@@ -3,11 +3,10 @@ import { el } from "./dom";
 import { t } from "./i18n";
 import { onRealtime, type RealtimeEvent } from "./realtime";
 import { currentPath } from "./router";
-import { toast } from "./ui";
+import { notify } from "./notifications";
 import { markdownText } from "../../server/markdown";
 import { watchCalls } from "./calls";
-import { followOwnStatus, ownStatus } from "./chat-status";
-import { watchCalendarReminders } from "./calendar-reminders";
+import { followOwnStatus } from "./chat-status";
 
 const REFRESH_DELAY_MS = 250;
 const PREVIEW_LENGTH = 120;
@@ -42,13 +41,23 @@ function refresh(project: string) {
 	);
 }
 
-function announce(project: string, message: ChatMessage) {
-	if (message.author === getUsername() || message.deleted || message.body === null || ownStatus() === "dnd") return;
-	if (currentPath().startsWith(`/projects/${project}/chat`) && document.visibilityState === "visible") return;
+function announce(project: string, conversation: string, message: ChatMessage) {
+	if (message.author === getUsername() || message.deleted || message.body === null) return;
 	if (message.call !== null && message.call.outcome !== "missed") return;
+	const reading = currentPath().startsWith(`/projects/${project}/chat`) && document.visibilityState === "visible";
+	if (reading && document.hasFocus()) return;
 	const text = message.call ? t("calls.log_missed") : message.body ? markdownText(message.body, PREVIEW_LENGTH) || t("code.title") : t("chat.attachment");
 	const preview = text.length > PREVIEW_LENGTH ? `${text.slice(0, PREVIEW_LENGTH)}...` : text;
-	toast(`${message.author_name}: ${preview}`, "info");
+	notify(
+		{
+			kind: message.call ? "call_missed" : "chat_message",
+			title: message.author_name,
+			body: preview,
+			path: `/projects/${project}/chat/${conversation}`,
+			tag: message.uuid,
+		},
+		{ desktopOnly: reading }
+	);
 }
 
 function onEvent(event: RealtimeEvent) {
@@ -57,7 +66,7 @@ function onEvent(event: RealtimeEvent) {
 		return;
 	}
 	if (!event.type.startsWith("chat.") || typeof event.project !== "string" || !counts.has(event.project)) return;
-	if (event.type === "chat.message") announce(event.project, event.message as ChatMessage);
+	if (event.type === "chat.message") announce(event.project, String(event.conversation), event.message as ChatMessage);
 	refresh(event.project);
 }
 
@@ -67,7 +76,6 @@ export function chatUnreadBadge(project: string): HTMLElement {
 		onRealtime(onEvent);
 		watchCalls();
 		followOwnStatus();
-		watchCalendarReminders();
 	}
 	const count = counts.get(project) ?? 0;
 	if (!counts.has(project)) counts.set(project, 0);

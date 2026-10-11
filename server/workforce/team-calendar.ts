@@ -9,6 +9,7 @@ import { Calls, GroupCalls } from "./calls";
 import { chatMembers, participantsOf, recipientsOf } from "./chat";
 import { mediaNodes } from "./media-nodes";
 import { personName } from "./people";
+import { notifyStartingSoon } from "./notifications";
 import { PresenceBoard, type Presence } from "./presence";
 import {
 	daysApart,
@@ -443,15 +444,6 @@ export async function dueReminders(after: number, until: number): Promise<Calend
 	return reminders;
 }
 
-export function sendReminders(reminders: CalendarReminder[]) {
-	for (const reminder of reminders) {
-		Realtime.send(reminder.accounts, {
-			type: "calendar.reminder",
-			project: reminder.project,
-			kind: reminder.kind,
-			title: reminder.title,
-			starts_at: reminder.starts_at,
-			conversation: reminder.conversation,
-		});
-	}
+export async function sendReminders(reminders: CalendarReminder[]) {
+	for (const reminder of reminders) await notifyStartingSoon(reminder);
 }

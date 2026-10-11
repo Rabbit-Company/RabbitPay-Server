@@ -5,6 +5,7 @@ import { canEmail } from "../email/mailer";
 import { deliverSoon, queueEmail } from "../email/outbox";
 import { brandFor } from "../email/messages";
 import { fiscalAlertEmail, type FiscalAlertLine } from "../email/templates";
+import { notifyFiscalAlert } from "../notifications/sales";
 import type { FiscalAlert, FiscalDocumentRow, ProjectRow } from "../database/models";
 
 export const DUE_SOON_MS = 24 * 60 * 60 * 1000;
@@ -101,6 +102,7 @@ export async function sendFiscalAlerts(now = Date.now()): Promise<{ projects: nu
 			}
 		});
 
+		await notifyFiscalAlert(projectId, entries.length);
 		Logger.warn(`[FURS] Told ${owners.length} owners of ${projectId} about ${entries.length} invoices that need attention`);
 		projects++;
 		documents += entries.length;
