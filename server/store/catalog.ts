@@ -1,3 +1,4 @@
+import { sellableUnits } from "../inventory/stock";
 import type { SQL } from "bun";
 import Database from "../database/database";
 import { convertedPrice, sellerOf } from "../pos-sale";
@@ -62,6 +63,7 @@ function availableColumn(sql: SQL) {
 	return sql`CASE WHEN c.license IS NOT NULL THEN NULL
 		WHEN c.delivers_keys = 1
 		THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available')
+		WHEN c.stock_kind IS NOT NULL THEN ${sellableUnits(sql)}
 		ELSE sp.stock END`;
 }
 
@@ -75,7 +77,7 @@ function selectProducts(sql: SQL) {
 }
 
 function normalized(row: ProductRow): ProductRow {
-	return { ...row, available: row.available === null ? null : Number(row.available) };
+	return { ...row, available: row.available === null ? null : Math.floor(Number(row.available)) };
 }
 
 export async function categoriesOf(projectId: string): Promise<StoreCategoryRow[]> {

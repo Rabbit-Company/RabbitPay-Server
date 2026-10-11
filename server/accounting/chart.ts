@@ -79,7 +79,20 @@ export type SystemAccount =
 	| "current_loss"
 	| "carried_loss"
 	| "income_tax"
-	| "income_tax_liability";
+	| "income_tax_liability"
+	| "material_purchase"
+	| "material_purchase_costs"
+	| "material_purchase_clearing"
+	| "material_stock"
+	| "goods_purchase"
+	| "goods_purchase_costs"
+	| "goods_purchase_clearing"
+	| "goods_stock"
+	| "cost_of_goods_sold"
+	| "stock_write_down"
+	| "other_losses"
+	| "goods_revenue_domestic"
+	| "goods_revenue_foreign";
 
 export interface ChartAccount {
 	code: string;
@@ -107,6 +120,7 @@ export const DEFAULT_CHART: ChartAccount[] = [
 	{ code: "1200", name: "Kratkoročne terjatve do kupcev v državi", kind: "asset", key: "receivables_domestic" },
 	{ code: "1210", name: "Kratkoročne terjatve do kupcev v tujini", kind: "asset", key: "receivables_foreign" },
 	{ code: "1290", name: "Oslabitev vrednosti kratkoročnih terjatev do kupcev", kind: "asset", key: null },
+	{ code: "1320", name: "Kratkoročni predujmi, dani za zaloge materiala in blaga ter še ne opravljene storitve", kind: "asset", key: null },
 	{ code: "1330", name: "Drugi dani kratkoročni predujmi in preplačila", kind: "asset", key: null },
 	{ code: "1600", name: "Kratkoročne terjatve za odbitni DDV", kind: "asset", key: "input_vat" },
 	{ code: "1610", name: "Kratkoročne terjatve za davek od dohodkov pravnih oseb", kind: "asset", key: null },
@@ -134,6 +148,10 @@ export const DEFAULT_CHART: ChartAccount[] = [
 	{ code: "2850", name: "Ostale kratkoročne poslovne obveznosti", kind: "liability", key: "other_liabilities" },
 	{ code: "2900", name: "Vnaprej vračunani stroški oziroma odhodki", kind: "liability", key: null },
 	{ code: "2910", name: "Kratkoročno odloženi prihodki", kind: "liability", key: null },
+	{ code: "3000", name: "Vrednost surovin in materiala po obračunih dobaviteljev", kind: "asset", key: "material_purchase" },
+	{ code: "3010", name: "Odvisni stroški nabave surovin in materiala", kind: "asset", key: "material_purchase_costs" },
+	{ code: "3090", name: "Obračun nabave surovin in materiala", kind: "asset", key: "material_purchase_clearing" },
+	{ code: "3100", name: "Zaloge surovin in materiala v skladišču", kind: "asset", key: "material_stock" },
 	{ code: "4000", name: "Stroški materiala", kind: "expense", key: "material" },
 	{ code: "4020", name: "Stroški energije", kind: "expense", key: "utilities" },
 	{ code: "4021", name: "Stroški goriva", kind: "expense", key: "fuel" },
@@ -169,22 +187,28 @@ export const DEFAULT_CHART: ChartAccount[] = [
 	{ code: "4741", name: "Delodajalčevi prispevki za pokojninsko in invalidsko zavarovanje", kind: "expense", key: "employer_pension" },
 	{ code: "4800", name: "Dajatve, ki niso odvisne od stroškov dela ali drugih vrst stroškov", kind: "expense", key: "levies" },
 	{ code: "4890", name: "Ostali stroški", kind: "expense", key: "other_costs" },
+	{ code: "6500", name: "Vrednost blaga po obračunih dobaviteljev", kind: "asset", key: "goods_purchase" },
+	{ code: "6510", name: "Odvisni stroški nabave blaga", kind: "asset", key: "goods_purchase_costs" },
+	{ code: "6590", name: "Obračun nabave blaga", kind: "asset", key: "goods_purchase_clearing" },
+	{ code: "6600", name: "Blago v lastnem skladišču", kind: "asset", key: "goods_stock" },
+	{ code: "7020", name: "Nabavna vrednost prodanih materiala in blaga", kind: "expense", key: "cost_of_goods_sold" },
 	{
 		code: "7200",
 		name: "Prevrednotovalni poslovni odhodki pri neopredmetenih sredstvih in opredmetenih osnovnih sredstvih",
 		kind: "expense",
 		key: "asset_write_off",
 	},
+	{ code: "7210", name: "Prevrednotovalni poslovni odhodki v zvezi z zalogami", kind: "expense", key: "stock_write_down" },
 	{ code: "7450", name: "Odhodki iz obveznosti do dobaviteljev, terjatev do kupcev in meničnih obveznosti", kind: "expense", key: "fx_losses" },
 	{ code: "7520", name: "Denarne kazni, ki niso povezane s poslovnimi učinki", kind: "expense", key: "fines" },
 	{ code: "7540", name: "Donacije", kind: "expense", key: "donations" },
 	{ code: "7580", name: "Negativne evrske izravnave", kind: "expense", key: null },
-	{ code: "7590", name: "Ostali odhodki, ki niso povezani s poslovnimi učinki", kind: "expense", key: null },
+	{ code: "7590", name: "Ostali odhodki, ki niso povezani s poslovnimi učinki", kind: "expense", key: "other_losses" },
 	{ code: "7600", name: "Prihodki od prodaje proizvodov in storitev na domačem trgu", kind: "revenue", key: "revenue_domestic" },
 	{ code: "7610", name: "Prihodki od prodaje proizvodov in storitev na tujem trgu v EU", kind: "revenue", key: "revenue_eu" },
 	{ code: "7611", name: "Prihodki od prodaje proizvodov in storitev na tujem trgu zunaj EU", kind: "revenue", key: "revenue_export" },
-	{ code: "7620", name: "Prihodki od prodaje trgovskega blaga in materiala na domačem trgu", kind: "revenue", key: null },
-	{ code: "7630", name: "Prihodki od prodaje trgovskega blaga in materiala na tujem trgu", kind: "revenue", key: null },
+	{ code: "7620", name: "Prihodki od prodaje trgovskega blaga in materiala na domačem trgu", kind: "revenue", key: "goods_revenue_domestic" },
+	{ code: "7630", name: "Prihodki od prodaje trgovskega blaga in materiala na tujem trgu", kind: "revenue", key: "goods_revenue_foreign" },
 	{ code: "7680", name: "Drugi prihodki, povezani s poslovnimi učinki", kind: "revenue", key: null },
 	{ code: "7770", name: "Finančni prihodki iz poslovnih terjatev in poslovnih obveznosti do drugih", kind: "revenue", key: "fx_gains" },
 	{ code: "7880", name: "Pozitivne evrske izravnave", kind: "revenue", key: null },

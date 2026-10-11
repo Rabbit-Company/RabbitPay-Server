@@ -34,6 +34,14 @@ const ID_COLUMNS = new Set([
 	"file",
 	"folder",
 	"parent",
+	"warehouse",
+	"target_warehouse",
+	"document",
+	"document_line",
+	"cost_source",
+	"supplier_id",
+	"purchase_order",
+	"order_line",
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
@@ -149,6 +157,20 @@ const TEXT_LENGTHS: Record<string, number> = {
 	match_type: 32,
 	matched_by: 30,
 	removed_by: 30,
+	stock_kind: 16,
+	stock_purchase: 16,
+	movement_kind: 32,
+	canceled_by: 30,
+	warehouse_code: 16,
+	partner_name: 240,
+	partner_tax_number: 80,
+	external_reference: 120,
+	opening_offset: 16,
+	bic: 11,
+	postal_code: 32,
+	city: 120,
+	phone: 64,
+	country: 2,
 };
 
 export function schemaTypes(dialect: Dialect) {

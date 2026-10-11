@@ -166,7 +166,7 @@ export async function yearsView(uuid: string): Promise<HTMLElement> {
 	const close = async (year: AccountingYear) => {
 		const confirmed = await confirmDialog({
 			title: t("years.close_title", { year: year.year }),
-			body: t("years.close_body", { year: year.year, next: year.year + 1 }),
+			body: `${t("years.close_body", { year: year.year, next: year.year + 1 })}${year.stock_uncounted ? ` ${t("years.stock_uncounted", { year: year.year })}` : ""}`,
 			confirmLabel: t("years.close"),
 		});
 		if (!confirmed) return;
@@ -217,7 +217,8 @@ export async function yearsView(uuid: string): Promise<HTMLElement> {
 														? t("years.closed_on", { date: formatDate(year.closed_at, project.date_format as DateFormat, project.timezone) })
 														: t("years.closed")
 												)
-											: el("span", { class: "pill pill-draft" }, t("years.open"))
+											: el("span", { class: "pill pill-draft" }, t("years.open")),
+										year.stock_uncounted && !year.closed ? el("div", { class: "warn" }, t("years.stock_uncounted", { year: year.year })) : null
 									),
 									el(
 										"td",

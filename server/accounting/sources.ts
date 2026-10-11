@@ -27,8 +27,10 @@ import type {
 	ProjectRow,
 	RecordedInvoiceLineRow,
 	RecordedInvoiceRow,
+	StockPurchase,
 	TransactionRow,
 } from "../database/models";
+import { StockPlanner } from "./stock-entries";
 
 export interface PlannedLine {
 	account: LedgerAccountRow;
@@ -139,6 +141,13 @@ export const PARTNER_ACCOUNTS = new Set<SystemAccount>(["receivables_domestic", 
 
 const REVERSE_CHARGE_PURCHASES = ["domestic_reverse_charge", "eu_goods", "eu_services"];
 
+const STOCK_PURCHASE_ACCOUNTS: Record<StockPurchase, SystemAccount> = {
+	goods: "goods_purchase",
+	material: "material_purchase",
+	goods_costs: "goods_purchase_costs",
+	material_costs: "material_purchase_costs",
+};
+
 const MONEY_ACCOUNTS: Record<string, SystemAccount> = {
 	cash: "cash",
 	bank_transfer: "bank",
@@ -149,7 +158,7 @@ const MONEY_ACCOUNTS: Record<string, SystemAccount> = {
 	monero: "crypto",
 };
 
-class EntryBuilder {
+export class EntryBuilder {
 	private readonly balances = new Map<string, { account: LedgerAccountRow; partner: string | null; amount: number }>();
 
 	debit(account: LedgerAccountRow, amount: number, partner: string | null = null) {
@@ -207,6 +216,7 @@ interface SalesLine {
 	vat: number;
 	treatment: string | null;
 	advance: boolean;
+	goods: boolean;
 }
 
 function advanceDeduction(item: InvoiceItemRow): boolean {
@@ -267,11 +277,13 @@ export class LedgerPlanner {
 		return this.chart.system(this.region(document.buyer_country) === "domestic" ? "receivables_domestic" : "receivables_foreign");
 	}
 
-	private revenue(document: SalesDocument, treatment: string | null): LedgerAccountRow {
+	private revenue(document: SalesDocument, treatment: string | null, goods: boolean): LedgerAccountRow {
 		const kind = isTaxTreatment(treatment) ? treatment : "domestic";
+		const foreign = kind === "oss" || kind === "reverse_charge" || kind === "intra_eu_goods" || kind === "export";
+		const region = foreign ? "foreign" : this.region(document.buyer_country);
+		if (goods) return this.chart.system(region === "domestic" ? "goods_revenue_domestic" : "goods_revenue_foreign");
 		if (kind === "oss" || kind === "reverse_charge" || kind === "intra_eu_goods") return this.chart.system("revenue_eu");
 		if (kind === "export") return this.chart.system("revenue_export");
-		const region = this.region(document.buyer_country);
 		return this.chart.system(region === "domestic" ? "revenue_domestic" : region === "eu" ? "revenue_eu" : "revenue_export");
 	}
 
@@ -299,7 +311,7 @@ export class LedgerPlanner {
 			if (document.advance || line.advance) {
 				entry.credit(this.chart.system("advances_received"), sign * (net + vat));
 				entry.debit(this.chart.system("advance_vat"), sign * vat);
-			} else entry.credit(this.revenue(document, line.treatment), sign * net);
+			} else entry.credit(this.revenue(document, line.treatment, line.goods), sign * net);
 			entry.credit(this.vat(line.treatment), sign * vat);
 			receivable += net + vat;
 		}
@@ -367,12 +379,27 @@ export class LedgerPlanner {
 				.filter(advanceDeduction)
 				.map((item) => item.uuid)
 		);
+		const stockedSince = new Map(
+			(
+				(await Database`
+					SELECT uuid, stock_since FROM catalog_items WHERE project = ${project} AND stock_kind IS NOT NULL AND stock_since IS NOT NULL
+				`) as { uuid: string; stock_since: number }[]
+			).map((row) => [row.uuid, Number(row.stock_since)])
+		);
+		const goodsLines = new Set<string>();
+		for (const invoice of invoices) {
+			for (const line of items.get(invoice.uuid) ?? []) {
+				const since = line.item === null ? undefined : stockedSince.get(line.item);
+				if (since !== undefined && invoice.issued_at! >= since) goodsLines.add(line.uuid);
+			}
+		}
 		const invoiceLines = (invoice: InvoiceRow): SalesLine[] =>
 			(items.get(invoice.uuid) ?? []).map((line) => ({
 				net: line.total_price - line.discount_amount,
 				vat: line.tax_amount,
 				treatment: line.tax_treatment,
 				advance: deductions.has(line.uuid),
+				goods: goodsLines.has(line.uuid),
 			}));
 		const noteLines = (note: CreditNoteRow): SalesLine[] =>
 			(noteItems.get(note.uuid) ?? []).map((line) => ({
@@ -380,6 +407,7 @@ export class LedgerPlanner {
 				vat: line.tax_amount,
 				treatment: line.tax_treatment,
 				advance: line.invoice_item !== null && deductions.has(line.invoice_item),
+				goods: line.invoice_item !== null && goodsLines.has(line.invoice_item),
 			}));
 
 		for (const invoice of invoices) {
@@ -489,6 +517,8 @@ export class LedgerPlanner {
 		);
 		for (const run of runs) this.planPayroll(run, payrollLines.get(run.uuid) ?? []);
 		this.flagPayrollOverlap(expenses, runs);
+
+		this.entries.push(...(await new StockPlanner(project, this.chart).plan()));
 	}
 
 	private flagPayrollOverlap(expenses: ExpenseRow[], runs: PayrollRunRow[]) {
@@ -626,7 +656,7 @@ export class LedgerPlanner {
 		};
 		const sign = record.document_type === "credit_note" ? -1 : 1;
 		const entry = new EntryBuilder();
-		const planned = lines.map((line) => ({ net: line.net_amount, vat: line.tax_amount, treatment: line.tax_treatment, advance: false }));
+		const planned = lines.map((line) => ({ net: line.net_amount, vat: line.tax_amount, treatment: line.tax_treatment, advance: false, goods: false }));
 		if (!this.salesLines(entry, document, planned, sign, ref, record.issued_at, true)) {
 			this.missing("recorded_invoice", record.uuid, record.reference);
 			return;
@@ -654,6 +684,7 @@ export class LedgerPlanner {
 	}
 
 	private costAccount(expense: ExpenseRow): LedgerAccountRow {
+		if (expense.stock_purchase !== null) return this.chart.system(STOCK_PURCHASE_ACCOUNTS[expense.stock_purchase]);
 		if (expense.asset_type === "real_estate") return this.chart.system("real_estate");
 		if (expense.asset_type === "fixed_asset") return this.chart.system(expense.category === "Software" ? "intangible" : "equipment");
 		return this.chart.forCategory(expense.category);

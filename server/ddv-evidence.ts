@@ -18,6 +18,7 @@ import { canSubmitSlovenianDdvEvidence, isTaxTreatment, splitVatNumber, type Tax
 import type { InvoiceRecipient } from "./invoice-recipient";
 import { DEFAULT_TIMEZONE, isCompleteLocalVatPeriod, localDate, zonedParts } from "./timezone";
 import { zipArchive } from "./zip";
+import { taxableStockDocuments } from "./inventory/vat";
 
 export interface DdvExportOptions {
 	from: number;
@@ -32,7 +33,7 @@ export interface DdvExportOptions {
 
 export interface DdvValidationIssue {
 	code: string;
-	source: "header" | "invoice" | "credit_note" | "expense" | "recorded_invoice";
+	source: "header" | "invoice" | "credit_note" | "expense" | "recorded_invoice" | "stock_document";
 	id: string | null;
 	reference: string | null;
 	message: string;
@@ -83,6 +84,13 @@ const rates = new Map([
 	[9.5, { output: "P15", euGoods: "P19", euServices: "P20", reverse: "P24", deductible: "P19" }],
 	[5, { output: "P16", euGoods: "P21", euServices: "P22", reverse: "P25", deductible: "P20" }],
 ]);
+
+const STOCK_VAT_NOTES: Record<string, string> = {
+	stocktake: "Interni dokument: inventurni primanjkljaj",
+	shortage: "Interni dokument: primanjkljaj blaga",
+	own_use: "Interni dokument: lastna raba blaga",
+	gift: "Interni dokument: brezplačna odtujitev blaga",
+};
 
 function date(value: number, timezone: string): string {
 	return localDate(value, timezone);
@@ -497,6 +505,30 @@ export async function buildDdvEvidence(project: ProjectRow, options: DdvExportOp
 			kir.push(output.record);
 			kirSourceVat = addIntegers(kirSourceVat, output.vat);
 		}
+	}
+
+	for (const document of await taxableStockDocuments(project.uuid, options.from, options.to)) {
+		const record: Record<string, string | number> = {
+			ZAPST: 0,
+			OBDOBJE: period,
+			P2: date(document.date, project.timezone),
+			P3: document.number.slice(0, 250),
+			P4: date(document.date, project.timezone),
+			OBRAVNAVA: "1",
+			P28: STOCK_VAT_NOTES[document.document_type === "stocktake" ? "stocktake" : (document.reason ?? "shortage")] ?? STOCK_VAT_NOTES.shortage,
+		};
+		for (const line of document.lines) {
+			const mapping = rates.get(line.rate);
+			if (!mapping && line.vat !== 0) {
+				issue(errors, "stock_document", document.uuid, document.number, "unsupported_vat_rate", `VAT rate ${line.rate}% cannot be mapped to a FURS KIR field.`);
+				continue;
+			}
+			add(record, "P7", line.base);
+			if (mapping) add(record, mapping.output, line.vat);
+			kirSourceBase = addIntegers(kirSourceBase, line.base);
+			kirSourceVat = addIntegers(kirSourceVat, line.vat);
+		}
+		kir.push(record);
 	}
 
 	kir.forEach((record, index) => (record.ZAPST = index + 1));

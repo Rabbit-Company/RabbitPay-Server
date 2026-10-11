@@ -76,6 +76,16 @@ export async function accountingYears(project: ProjectRow): Promise<AccountingYe
 		WHERE jl.project = ${project.uuid} AND je.source_type = 'deductible_share' AND la.system_key = 'input_vat'
 		GROUP BY je.source_id
 	`) as { source_id: string; amount: number }[];
+	const [firstStock] = (await Database`SELECT MIN(movement_date) AS first FROM stock_movements WHERE project = ${project.uuid}`) as {
+		first: number | null;
+	}[];
+	const stockSince = firstStock?.first === null || firstStock === undefined ? null : zonedParts(Number(firstStock.first), project.timezone).year;
+	const stocktakes = (
+		(await Database`
+			SELECT document_date FROM stock_documents WHERE project = ${project.uuid} AND document_type = 'stocktake' AND status = 'posted'
+		`) as { document_date: number }[]
+	).map((row) => zonedParts(Number(row.document_date), project.timezone));
+	const counted = (year: number) => stocktakes.some((date) => date.year === year || (date.year === year + 1 && date.month === 1));
 	const current = zonedParts(Date.now(), project.timezone).year;
 	const years = new Set([
 		...counts.map((row) => Number(row.year)),
@@ -100,6 +110,7 @@ export async function accountingYears(project: ProjectRow): Promise<AccountingYe
 					const found = adjustments.find((row) => row.source_id === String(year));
 					return found ? safeInteger(found.amount) : null;
 				})(),
+				stock_uncounted: stockSince !== null && year >= stockSince && year < current && !counted(year),
 			};
 		});
 }

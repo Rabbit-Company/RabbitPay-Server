@@ -22,6 +22,7 @@ export function describeLicense(license: Pick<LicensePreview, "type" | "transact
 	if (license.type === "store") return t("license.grants_store", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "workforce") return t("license.grants_workforce", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "accounting") return t("license.grants_accounting", { days: tn("count.days", license.duration_days ?? 0) });
+	if (license.type === "inventory") return t("license.grants_inventory", { days: tn("count.days", license.duration_days ?? 0) });
 	if (license.type === "employees") {
 		return t("license.grants_employees", { employees: tn("count.employees", license.employees ?? 0), days: tn("count.days", license.duration_days ?? 0) });
 	}
@@ -685,6 +686,27 @@ function accountingCard(uuid: string, state: ProjectLicense): HTMLElement {
 	);
 }
 
+function inventoryCard(uuid: string, state: ProjectLicense): HTMLElement {
+	const status = !state.enforced
+		? el("p", {}, t("license.inventory_included"))
+		: state.inventory
+			? el("p", {}, el("span", { class: "pill pill-active" }, t("status.active")), ` ${t("license.until", { date: formatDate(state.inventory_until) })}`)
+			: el(
+					"p",
+					{ class: "warn" },
+					state.inventory_until ? t("license.inventory_ended", { date: formatDate(state.inventory_until) }) : t("license.inventory_offer")
+				);
+
+	return el(
+		"div",
+		{ class: "card stack" },
+		el("h2", {}, t("license.inventory")),
+		status,
+		el("p", { class: "muted" }, t("license.inventory_hint")),
+		el("div", { class: "line-actions" }, el("a", { class: "button ghost", href: `/projects/${uuid}/inventory` }, t("license.inventory_open")))
+	);
+}
+
 function historyCard(state: ProjectLicense): HTMLElement {
 	if (state.licenses.length === 0) return el("div", {});
 
@@ -741,6 +763,7 @@ export async function licenseView(uuid: string): Promise<HTMLElement> {
 			storeCard(uuid, state),
 			workforceCard(uuid, state),
 			accountingCard(uuid, state),
+			inventoryCard(uuid, state),
 			historyCard(state)
 		);
 	};

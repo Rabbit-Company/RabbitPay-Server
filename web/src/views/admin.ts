@@ -69,6 +69,7 @@ const LICENSE_TYPE_FILTERS = [
 	{ value: "workforce", label: "Workforce" },
 	{ value: "employees", label: "Employee seats" },
 	{ value: "accounting", label: "Accounting" },
+	{ value: "inventory", label: "Inventory" },
 ];
 
 const LICENSE_PILLS: Record<License["status"], string> = { available: "open", redeemed: "active", revoked: "canceled" };
@@ -275,6 +276,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			{ value: "workforce", label: "Workforce (timesheets, tickets, employees)" },
 			{ value: "employees", label: "Employee seats" },
 			{ value: "accounting", label: "Accounting (ledger, books, year end)" },
+			{ value: "inventory", label: "Inventory (stock, warehouses, stocktakes)" },
 		],
 		"transactions"
 	);
@@ -316,6 +318,7 @@ function licenseForm(onCreated: (licenses: License[]) => void) {
 			type.value === "workforce" ||
 			type.value === "employees" ||
 			type.value === "accounting" ||
+			type.value === "inventory" ||
 			storageSelected;
 		const employeesSelected = type.value === "employees";
 		const emailsSelected = type.value === "emails";

@@ -1,3 +1,4 @@
+import { sellableUnits } from "../../inventory/stock";
 import type { Context } from "@rabbit-company/web";
 import { bodyLimit } from "@rabbit-company/web-middleware/body-limit";
 import { rateLimit } from "@rabbit-company/web-middleware/rate-limit";
@@ -609,6 +610,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 		SELECT c.*, sp.slug AS store_slug, sp.name AS store_name, sp.published, sp.featured, sp.store_category, sp.summary,
 			CASE WHEN c.license IS NOT NULL THEN NULL
 				WHEN c.delivers_keys = 1 THEN (SELECT COUNT(*) FROM item_keys k WHERE k.item = c.uuid AND k.status = 'available')
+				WHEN c.stock_kind IS NOT NULL THEN ${sellableUnits(Database)}
 				ELSE sp.stock END AS stock,
 			CASE WHEN sp.item IS NULL THEN 0 ELSE 1 END AS has_store
 		FROM catalog_items c LEFT JOIN store_products sp ON sp.item = c.uuid
@@ -638,7 +640,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 			featured: Boolean(row.featured),
 			category: row.store_category,
 			summary: row.summary,
-			stock: row.stock === null ? null : Number(row.stock),
+			stock: row.stock === null ? null : Math.floor(Number(row.stock)),
 			image: images.get(row.uuid)?.[0] ? imagePath(images.get(row.uuid)![0]) : null,
 		})),
 		total: Number(counted.count),
@@ -702,6 +704,7 @@ async function productState(project: ProjectRow, item: CatalogItemRow) {
 			license: item.license !== null,
 			archived: Boolean(item.archived),
 			keys_available: keys ? Number(keys[0].count) : null,
+			keeps_stock: item.stock_kind !== null,
 		},
 		listed: Boolean(product),
 		name: product?.name ?? null,

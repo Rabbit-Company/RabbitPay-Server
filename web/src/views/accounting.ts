@@ -244,6 +244,9 @@ const SOURCES: JournalEntryView["source_type"][] = [
 	"year_closing",
 	"year_opening",
 	"manual",
+	"stock_document",
+	"stock_sale",
+	"stock_return",
 ];
 
 interface JournalFilterControls {

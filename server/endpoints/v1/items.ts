@@ -120,7 +120,23 @@ Server.app.get("/api/v1/projects/:uuid/items", Auth.required(), Permissions.requ
 		items.filter((item) => item.delivers_keys).map((item) => item.uuid)
 	);
 
-	return Utils.ok(ctx, { items: items.map((item) => present(item, stock.get(item.uuid))), total: Number(counted.count), limit, offset });
+	const stocked = items.filter((item) => item.stock_kind !== null).map((item) => item.uuid);
+	const held = new Map(
+		stocked.length
+			? (
+					(await Database`SELECT item, SUM(quantity) AS quantity FROM stock_levels WHERE item IN ${Database(stocked)} GROUP BY item`) as {
+						item: string;
+						quantity: number;
+					}[]
+				).map((row) => [row.item, Number(row.quantity)])
+			: []
+	);
+	return Utils.ok(ctx, {
+		items: items.map((item) => ({ ...present(item, stock.get(item.uuid)), stock_quantity: item.stock_kind === null ? null : (held.get(item.uuid) ?? 0) })),
+		total: Number(counted.count),
+		limit,
+		offset,
+	});
 });
 
 Server.app.post("/api/v1/projects/:uuid/items", Auth.required(), Permissions.require(Permission.ITEM_CREATE), async (ctx) => {
@@ -325,6 +341,10 @@ Server.app.delete("/api/v1/projects/:uuid/items/:item", Auth.required(), Permiss
 
 	const [used] = (await Database`SELECT COUNT(*) AS count FROM invoice_items WHERE item = ${itemId}`) as { count: number }[];
 	if (Number(used.count) > 0) return Utils.fail(ctx, ErrorCode.ITEM_IN_USE);
+	const [stocked] = (await Database`
+		SELECT (SELECT COUNT(*) FROM stock_movements WHERE item = ${itemId}) + (SELECT COUNT(*) FROM stock_document_lines WHERE item = ${itemId}) AS count
+	`) as { count: number }[];
+	if (Number(stocked.count) > 0) return Utils.fail(ctx, ErrorCode.ITEM_IN_USE);
 
 	const images = (await Database`SELECT uuid, storage_key FROM store_images WHERE item = ${itemId}`) as { uuid: string; storage_key: string }[];
 	await Database`DELETE FROM catalog_items WHERE uuid = ${itemId}`;

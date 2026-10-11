@@ -26,7 +26,18 @@ type TabGroup = "sales" | "finance" | "work" | "project";
 
 export const STORE_PERMISSIONS = [Permission.PROJECT_EDIT, Permission.ITEM_VIEW, Permission.INVOICE_VIEW];
 
-const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[]; group?: TabGroup; workforce?: boolean; accounting?: boolean }[] = [
+interface ProjectTab {
+	id: string;
+	label: UiKey;
+	suffix: string;
+	permissions: Permission[];
+	group?: TabGroup;
+	workforce?: boolean;
+	accounting?: boolean;
+	inventory?: boolean;
+}
+
+const TABS: ProjectTab[] = [
 	{ id: "overview", label: "nav.overview", suffix: "", permissions: [Permission.PROJECT_VIEW] },
 	{ id: "invoices", label: "nav.invoices", suffix: "/invoices", permissions: [Permission.INVOICE_VIEW], group: "sales" },
 	{ id: "recurring", label: "nav.recurring", suffix: "/recurring", permissions: [Permission.SUBSCRIPTION_VIEW], group: "sales" },
@@ -34,6 +45,7 @@ const TABS: { id: string; label: UiKey; suffix: string; permissions: Permission[
 	{ id: "emails", label: "nav.emails", suffix: "/emails", permissions: [Permission.EMAIL_VIEW], group: "sales" },
 	{ id: "customers", label: "nav.customers", suffix: "/customers", permissions: [Permission.CUSTOMER_VIEW], group: "sales" },
 	{ id: "items", label: "nav.items", suffix: "/items", permissions: [Permission.ITEM_VIEW], group: "sales" },
+	{ id: "inventory", label: "nav.inventory", suffix: "/inventory", permissions: [Permission.STOCK_VIEW], group: "sales", inventory: true },
 	{ id: "store", label: "nav.store", suffix: "/store", permissions: STORE_PERMISSIONS, group: "sales" },
 	{ id: "pos", label: "nav.terminal", suffix: "/pos", permissions: [Permission.POS_SELL], group: "sales" },
 	{ id: "expenses", label: "nav.expenses", suffix: "/expenses", permissions: [Permission.EXPENSE_VIEW], group: "finance" },
@@ -88,7 +100,10 @@ export function projectLayout(project: Project, content: HTMLElement): HTMLEleme
 
 	const workforce = project.workforce || project.workforce_until !== null;
 	const accounting = project.accounting || project.accounting_until !== null;
-	const available = TABS.filter((tab) => canAny(project, tab.permissions) && (!tab.workforce || workforce) && (!tab.accounting || accounting));
+	const inventory = project.inventory || project.inventory_until !== null;
+	const available = TABS.filter(
+		(tab) => canAny(project, tab.permissions) && (!tab.workforce || workforce) && (!tab.accounting || accounting) && (!tab.inventory || inventory)
+	);
 	let activeLabel = t("nav.menu");
 	const groups = new Map<TabGroup | null, HTMLElement[]>();
 	for (const tab of available) {

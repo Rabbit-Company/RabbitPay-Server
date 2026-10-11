@@ -49,6 +49,13 @@ export async function purgeProject(project: Pick<ProjectRow, "uuid">): Promise<P
 	const objects = await storedObjects(project.uuid);
 	await Database.begin(async (tx) => {
 		await tx`DELETE FROM audit_log WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM stock_levels WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM stock_movements WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM stock_document_lines WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM stock_documents WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM purchase_order_lines WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM purchase_orders WHERE project = ${project.uuid}`;
+		await tx`DELETE FROM suppliers WHERE project = ${project.uuid}`;
 		await tx`DELETE FROM projects WHERE uuid = ${project.uuid}`;
 	});
 

@@ -26,6 +26,7 @@ import type { DateFormat } from "../../../server/formats";
 import { includedTaxAtRate } from "../../../server/expense-types";
 import { STANDARD_RATES } from "../../../server/tax";
 import { countryOptions } from "../countries";
+import { paymentFileDialog } from "./expense-payments";
 import type { ExpenseVatLineInput } from "../../../server/expense-types";
 
 function fileBase64(file: File): Promise<string> {
@@ -171,6 +172,23 @@ async function editor(
 		],
 		initial?.asset_type ?? "expense"
 	);
+	const stockPurchase = select(
+		[
+			{ value: "", label: t("expenses.stock_purchase_none") },
+			{ value: "goods", label: t("expenses.stock_purchase_goods") },
+			{ value: "material", label: t("expenses.stock_purchase_material") },
+			{ value: "goods_costs", label: t("expenses.stock_purchase_goods_costs") },
+			{ value: "material_costs", label: t("expenses.stock_purchase_material_costs") },
+		],
+		(initial && "stock_purchase" in initial ? initial.stock_purchase : null) ?? ""
+	);
+	const keepsStock = !recurring && (project.inventory || project.inventory_until !== null);
+	const syncStockPurchase = () => {
+		if (stockPurchase.value) assetType.value = "expense";
+		assetType.disabled = stockPurchase.value !== "";
+	};
+	stockPurchase.addEventListener("change", syncStockPurchase);
+	syncStockPurchase();
 	const category = combobox({
 		options: expenseCategoryOptions(),
 		selected: initial?.category ? { value: initial.category, label: expenseCategoryLabel(initial.category) } : null,
@@ -279,6 +297,8 @@ async function editor(
 	const receiptDate = input("date", { value: expense?.receipt_date ? toDateInput(expense.receipt_date, project.timezone) : date.value });
 	const supplyDate = input("date", { value: expense?.supply_date ? toDateInput(expense.supply_date, project.timezone) : "" });
 	const dueDate = input("date", { value: expense?.due_date ? toDateInput(expense.due_date, project.timezone) : "" });
+	const payeeIban = input("text", { value: expense?.payee_iban ?? "", maxlength: "42", placeholder: "SI56" });
+	const payeeReference = input("text", { value: expense?.payee_reference ?? "", maxlength: "64", placeholder: "SI12" });
 	const vatHandling = select(
 		[
 			{ value: "1", label: t("expenses.vat_handling_regular") },
@@ -407,6 +427,7 @@ async function editor(
 			field(t("expenses.supply_date"), supplyDate)
 		),
 		field(t("expenses.asset_type"), assetType),
+		keepsStock ? field(t("expenses.stock_purchase"), stockPurchase, t("expenses.stock_purchase_hint")) : null,
 		vatLinesBody,
 		exchangeFields,
 		field(t("expenses.vat_handling"), vatHandling),
@@ -495,6 +516,14 @@ async function editor(
 		recurring
 			? field(t("expenses.start"), date)
 			: el("div", { class: "grid" }, field(t("expenses.date"), date), field(t("expenses.due_date"), dueDate, t("expenses.due_date_hint"))),
+		recurring
+			? null
+			: el(
+					"div",
+					{ class: "grid" },
+					field(t("expenses.payee_iban"), payeeIban, t("expenses.payee_iban_hint")),
+					field(t("expenses.payee_reference"), payeeReference)
+				),
 		el(
 			"div",
 			{ class: "field" },
@@ -522,6 +551,7 @@ async function editor(
 			description: description.value,
 			supplier: supplier.value.trim() || null,
 			supplier_tax_number: supplierTaxNumber.value.trim() || null,
+			...(recurring ? {} : { payee_iban: payeeIban.value.trim() || null, payee_reference: payeeReference.value.trim() || null }),
 			supplier_country: supplierCountry.value || null,
 			invoice_number: recurring ? null : invoiceNumber.value.trim() || null,
 			category: category.selected?.value ?? category.value.trim(),
@@ -537,6 +567,7 @@ async function editor(
 			due_date: recurring || !dueDate.value ? null : dayStartFromDateInput(dueDate.value, project.timezone),
 			vat_treatment: recurring ? "not_reported" : vatTreatment.value,
 			asset_type: recurring ? "expense" : assetType.value,
+			...(keepsStock ? { stock_purchase: (stockPurchase.value || null) as ExpenseInput["stock_purchase"] } : {}),
 			vat_handling: recurring ? "1" : vatHandling.value,
 			self_assessment_period: recurring || vatHandling.value === "1" ? null : assessmentPeriod.value.trim() || null,
 			self_assessment_tax: recurring || vatHandling.value === "1" ? null : toMinorUnits(Number(assessmentTax.value), currency.value),
@@ -862,7 +893,8 @@ export async function expensesView(uuid: string): Promise<HTMLElement> {
 							addExpense,
 							action(t("expenses.import"), async () => importEinvoice(project, reload)),
 							action(t("expenses.import_csv"), async () => importCsv(project, reload)),
-							action(t("expenses.add_recurring"), async () => editor(project, true, null, reload))
+							action(t("expenses.add_recurring"), async () => editor(project, true, null, reload)),
+							can(project, Permission.EXPENSE_EDIT) ? action(t("payments_file.button"), async () => paymentFileDialog(project, () => void reload())) : null
 						)
 					: null
 			),

@@ -92,6 +92,7 @@ export interface ProjectRow {
 	store_until: number | null;
 	workforce_until: number | null;
 	accounting_until: number | null;
+	inventory_until: number | null;
 	bookkeeping: Bookkeeping;
 	logo_updated: number | null;
 	email_server: string | null;
@@ -406,6 +407,9 @@ export interface CatalogItemRow {
 	license: string | null;
 	unit: string | null;
 	archived: number;
+	stock_kind: StockKind | null;
+	stock_since: number | null;
+	stock_minimum: number | null;
 	created: number;
 	updated: number;
 }
@@ -597,7 +601,7 @@ export interface TransactionRow {
 
 export type LicenseBilling = "free" | "paid" | "unmetered";
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files" | "inventory";
 
 export type LicenseStatus = "available" | "redeemed" | "revoked";
 
@@ -696,6 +700,10 @@ export interface ExpenseRow {
 	due_date: number | null;
 	vat_treatment: string;
 	asset_type: string;
+	stock_purchase: StockPurchase | null;
+	payee_iban: string | null;
+	payee_reference: string | null;
+	payment_ordered_at: number | null;
 	vat_handling: string;
 	provisional_share: number;
 	self_assessment_period: string | null;
@@ -1259,7 +1267,10 @@ export type JournalSourceType =
 	| "year_result"
 	| "year_closing"
 	| "year_opening"
-	| "manual";
+	| "manual"
+	| "stock_document"
+	| "stock_sale"
+	| "stock_return";
 
 export interface JournalEntryRow {
 	uuid: string;
@@ -1504,4 +1515,182 @@ export interface CalendarEventRow {
 	repeat_skips: string | null;
 	created: number;
 	updated: number;
+}
+
+export type StockKind = "goods" | "material";
+export type StockPurchase = "goods" | "material" | "goods_costs" | "material_costs";
+export type StockDocumentType = "receipt" | "issue" | "transfer" | "stocktake" | "opening";
+export type StockDocumentStatus = "draft" | "posted" | "canceled";
+export type StockMovementKind =
+	| "receipt"
+	| "opening"
+	| "customer_return"
+	| "sale"
+	| "sale_return"
+	| "issue"
+	| "transfer_out"
+	| "transfer_in"
+	| "surplus"
+	| "shortage";
+export type StockIssueReason =
+	| "consumption"
+	| "own_use"
+	| "gift"
+	| "damage"
+	| "expiry"
+	| "shortage"
+	| "natural_loss"
+	| "theft"
+	| "force_majeure"
+	| "supplier_return";
+export type StockReceiptReason = "purchase" | "customer_return" | "other";
+export type OpeningOffset = "none" | "expense";
+
+export interface InventorySettingsRow {
+	project: string;
+	config: string;
+	updated: number;
+}
+
+export interface WarehouseRow {
+	uuid: string;
+	project: string;
+	name: string;
+	code: string;
+	address: string | null;
+	is_default: number;
+	archived: number;
+	created: number;
+	updated: number;
+}
+
+export interface StockDocumentRow {
+	uuid: string;
+	project: string;
+	document_type: StockDocumentType;
+	status: StockDocumentStatus;
+	year: number | null;
+	sequence_number: number | null;
+	number: string | null;
+	warehouse: string;
+	target_warehouse: string | null;
+	document_date: number;
+	reason: string | null;
+	partner: string | null;
+	partner_tax_number: string | null;
+	external_reference: string | null;
+	expense: string | null;
+	invoice: string | null;
+	extra_costs: number;
+	charge_vat: number;
+	opening_offset: OpeningOffset | null;
+	ledger_account: string | null;
+	notes: string | null;
+	created_by: string | null;
+	posted_by: string | null;
+	posted_at: number | null;
+	canceled_by: string | null;
+	canceled_at: number | null;
+	cancel_reason: string | null;
+	purchase_order: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface StockDocumentLineRow {
+	uuid: string;
+	document: string;
+	project: string;
+	item: string;
+	quantity: number;
+	value: number | null;
+	expected_quantity: number | null;
+	tax_rate: number | null;
+	note: string | null;
+	sort_order: number;
+	order_line: string | null;
+}
+
+export interface StockMovementRow {
+	uuid: string;
+	project: string;
+	item: string;
+	warehouse: string;
+	movement_date: number;
+	sequence: number;
+	movement_kind: StockMovementKind;
+	quantity: number;
+	entered_value: number | null;
+	cost_source: string | null;
+	value: number;
+	correction: number;
+	document: string | null;
+	document_line: string | null;
+	invoice: string | null;
+	invoice_item: string | null;
+	created: number;
+}
+
+export interface StockLevelRow {
+	item: string;
+	warehouse: string;
+	project: string;
+	quantity: number;
+	value: number;
+	state: string;
+	updated: number;
+}
+
+export type PurchaseOrderStatus = "draft" | "ordered" | "received" | "canceled";
+
+export interface SupplierRow {
+	uuid: string;
+	project: string;
+	name: string;
+	tax_number: string | null;
+	country: string | null;
+	address_line1: string | null;
+	postal_code: string | null;
+	city: string | null;
+	email: string | null;
+	phone: string | null;
+	iban: string | null;
+	bic: string | null;
+	payment_days: number | null;
+	notes: string | null;
+	archived: number;
+	created: number;
+	updated: number;
+}
+
+export interface PurchaseOrderRow {
+	uuid: string;
+	project: string;
+	supplier: string;
+	status: PurchaseOrderStatus;
+	year: number | null;
+	sequence_number: number | null;
+	number: string | null;
+	warehouse: string;
+	order_date: number;
+	expected_date: number | null;
+	supplier_reference: string | null;
+	notes: string | null;
+	created_by: string | null;
+	ordered_by: string | null;
+	ordered_at: number | null;
+	closed_at: number | null;
+	created: number;
+	updated: number;
+}
+
+export interface PurchaseOrderLineRow {
+	uuid: string;
+	purchase_order: string;
+	project: string;
+	item: string;
+	quantity: number;
+	value: number;
+	note: string | null;
+	sort_order: number;
 }

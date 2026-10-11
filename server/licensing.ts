@@ -12,10 +12,21 @@ export { MAX_LICENSE_DAYS, MAX_LICENSE_EMAILS, MAX_LICENSE_EMPLOYEES, MAX_LICENS
 import type { LicenseBilling, LicenseKeyRow, LicenseType, ProjectRow, ProjectUsageRow } from "./database/models";
 
 export const DAY = 24 * 60 * 60 * 1000;
-export const LICENSE_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails", "files"];
-export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage", "files"];
+export const LICENSE_TYPES: LicenseType[] = [
+	"transactions",
+	"white_label",
+	"storage",
+	"store",
+	"workforce",
+	"employees",
+	"accounting",
+	"emails",
+	"files",
+	"inventory",
+];
+export const TIMED_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "employees", "accounting", "storage", "files", "inventory"];
 export const SCHEDULED_LICENSE_TYPES: LicenseType[] = ["employees", "storage", "files"];
-export const ADD_ON_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "accounting"];
+export const ADD_ON_LICENSE_TYPES: LicenseType[] = ["white_label", "store", "workforce", "accounting", "inventory"];
 export const MAX_LICENSE_BATCH = 100;
 export const STORAGE_GB_BYTES = 1_000_000_000;
 
@@ -117,6 +128,11 @@ export function workforceActive(project: Pick<ProjectRow, "workforce_until">, no
 export function accountingActive(project: Pick<ProjectRow, "accounting_until">, now = Date.now()): boolean {
 	if (!licensingEnforced()) return true;
 	return project.accounting_until !== null && project.accounting_until > now;
+}
+
+export function inventoryActive(project: Pick<ProjectRow, "inventory_until">, now = Date.now()): boolean {
+	if (!licensingEnforced()) return true;
+	return project.inventory_until !== null && project.inventory_until > now;
 }
 
 export function extendWhiteLabel(current: number | null, days: number, now = Date.now()): number {
@@ -255,6 +271,8 @@ export interface ProjectUsage {
 	workforce_until: number | null;
 	accounting: boolean;
 	accounting_until: number | null;
+	inventory: boolean;
+	inventory_until: number | null;
 	employees_included: number;
 	employees_licensed: number;
 	employees_used: number;
@@ -459,8 +477,12 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 
 	const period = periodOf(now);
 	const [project] = (await Database`
-		SELECT free_transactions, paid_transactions, white_label_until, store_until, workforce_until, accounting_until FROM projects WHERE uuid = ${projectId}
-	`) as Pick<ProjectRow, "free_transactions" | "paid_transactions" | "white_label_until" | "store_until" | "workforce_until" | "accounting_until">[];
+		SELECT free_transactions, paid_transactions, white_label_until, store_until, workforce_until, accounting_until, inventory_until
+		FROM projects WHERE uuid = ${projectId}
+	`) as Pick<
+		ProjectRow,
+		"free_transactions" | "paid_transactions" | "white_label_until" | "store_until" | "workforce_until" | "accounting_until" | "inventory_until"
+	>[];
 	const [usage] = (await Database`SELECT * FROM project_usage WHERE project = ${projectId} AND period = ${period}`) as ProjectUsageRow[];
 
 	const enforced = licensingEnforced();
@@ -485,6 +507,8 @@ export async function usageFor(projectId: string, now = Date.now()): Promise<Pro
 		workforce_until: project.workforce_until,
 		accounting: accountingActive(project, now),
 		accounting_until: project.accounting_until,
+		inventory: inventoryActive(project, now),
+		inventory_until: project.inventory_until,
 		...(await employeeSeatsFor(projectId, now)),
 		...storage,
 		...(await fileStorageFor(projectId, now)),
@@ -647,19 +671,20 @@ export function readLicenseStart(value: unknown): number | null | undefined {
 	return isLicenseStart(value) ? value : undefined;
 }
 
-type AddOnDates = Pick<ProjectRow, "white_label_until" | "store_until" | "workforce_until" | "accounting_until">;
+type AddOnDates = Pick<ProjectRow, "white_label_until" | "store_until" | "workforce_until" | "accounting_until" | "inventory_until">;
 
 function addOnUntil(project: AddOnDates, type: LicenseType): number | null {
 	if (type === "white_label") return project.white_label_until;
 	if (type === "store") return project.store_until;
 	if (type === "workforce") return project.workforce_until;
 	if (type === "accounting") return project.accounting_until;
+	if (type === "inventory") return project.inventory_until;
 	return null;
 }
 
 async function addOnDates(sql: SQL, projectId: string): Promise<AddOnDates | null> {
 	const [project] = (await sql`
-		SELECT white_label_until, store_until, workforce_until, accounting_until FROM projects WHERE uuid = ${projectId}
+		SELECT white_label_until, store_until, workforce_until, accounting_until, inventory_until FROM projects WHERE uuid = ${projectId}
 	`) as AddOnDates[];
 	return project ?? null;
 }
@@ -673,6 +698,7 @@ async function extendAddOn(sql: SQL, projectId: string, type: LicenseType, days:
 	else if (type === "store") await sql`UPDATE projects SET store_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 	else if (type === "workforce") await sql`UPDATE projects SET workforce_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 	else if (type === "accounting") await sql`UPDATE projects SET accounting_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
+	else if (type === "inventory") await sql`UPDATE projects SET inventory_until = ${until}, updated = ${timestamp} WHERE uuid = ${projectId}`;
 }
 
 async function runningUntil(projectId: string, type: LicenseType, now: number): Promise<number | null> {

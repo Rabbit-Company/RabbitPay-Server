@@ -4,6 +4,7 @@ import Database from "../database/database";
 import { safeInteger } from "../database/numbers";
 import { localDate, zonedParts } from "../timezone";
 import { ensureChart } from "./chart";
+import { syncSales } from "../inventory/stock";
 import { LedgerPlanner, type OpenItemMovement, type PlannedEntry } from "./sources";
 import type { LedgerIssue } from "./types";
 import type { JournalEntryRow, JournalLineRow, JournalSourceType, ProjectRow } from "../database/models";
@@ -250,7 +251,14 @@ async function changeStamp(project: ProjectRow): Promise<string> {
 			(SELECT MAX(updated) FROM ledger_category_accounts WHERE project = ${uuid}) AS categories_updated,
 			(SELECT COUNT(*) FROM accounting_years WHERE project = ${uuid}) AS years,
 			(SELECT MAX(closed_at) FROM accounting_years WHERE project = ${uuid}) AS years_closed,
-			(SELECT MAX(reopened_at) FROM accounting_years WHERE project = ${uuid}) AS years_reopened
+			(SELECT MAX(reopened_at) FROM accounting_years WHERE project = ${uuid}) AS years_reopened,
+			(SELECT COUNT(*) FROM stock_movements WHERE project = ${uuid}) AS stock_movements,
+			(SELECT MAX(sequence) FROM stock_movements WHERE project = ${uuid}) AS stock_sequence,
+			(SELECT SUM(value) FROM stock_movements WHERE project = ${uuid}) AS stock_value,
+			(SELECT SUM(correction) FROM stock_movements WHERE project = ${uuid}) AS stock_corrections,
+			(SELECT MAX(updated) FROM stock_documents WHERE project = ${uuid}) AS stock_documents_updated,
+			(SELECT COUNT(stock_kind) FROM catalog_items WHERE project = ${uuid}) AS stock_items,
+			(SELECT MAX(stock_since) FROM catalog_items WHERE project = ${uuid}) AS stock_items_since
 	`;
 	const settings = [project.currency, project.tax_currency, project.tax_country, project.timezone, project.bookkeeping];
 	return JSON.stringify([sources, settings, localDate(Date.now(), project.timezone)]);
@@ -260,6 +268,7 @@ export function syncLedger(project: ProjectRow, options: { force?: boolean } = {
 	return withLedger(project.uuid, async () => {
 		const previous = synced.get(project.uuid);
 		if (!previous) await ensureChart(project.uuid);
+		await syncSales(project);
 		const stamp = await changeStamp(project);
 		if (!options.force && previous?.stamp === stamp) return { posted: 0, reversed: 0, issues: previous.issues };
 		const { result, movements } = await synchronize(project);

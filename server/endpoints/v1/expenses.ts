@@ -13,6 +13,7 @@ import { firstRunFrom, nextRunAfter, startOfDay } from "../../recurring-schedule
 import { insertExpense, validExpense, validExpenseSchedule, type ExpenseInput, type ExpenseScheduleInput } from "../../expense-service";
 import type { AppState, ExpenseAttachmentRow, ExpenseRow, ExpenseVatLineRow, RecurringExpenseRow } from "../../database/models";
 import { documentStorage } from "../../document-storage";
+import { normalizeIban } from "../../payments/bank";
 import { hasStorageCapacity } from "../../licensing";
 import { accountingPeriodLocked } from "../../accounting-periods";
 import { parseExpenseImport } from "../../expense-import";
@@ -216,7 +217,9 @@ Server.app.patch(`${base}/expenses/:expense`, Auth.required(), Permissions.requi
 			receipt_date = ${data.receipt_date}, supply_date = ${data.supply_date}, due_date = ${data.due_date}, vat_treatment = ${data.vat_treatment}, asset_type = ${data.asset_type},
 			vat_handling = ${data.vat_handling}, self_assessment_period = ${data.self_assessment_period}, self_assessment_tax = ${data.self_assessment_tax},
 			tax_exchange_rate = ${data.tax_exchange_rate}, tax_rate_date = ${data.tax_rate_date},
-			paid_at = ${data.paid_at}, notes = ${data.notes?.trim() || null}, provisional_share = ${data.provisional_share ? 1 : 0}, updated = ${Date.now()}
+			paid_at = ${data.paid_at}, notes = ${data.notes?.trim() || null}, provisional_share = ${data.provisional_share ? 1 : 0},
+			stock_purchase = ${data.stock_purchase ?? null}, payee_iban = ${data.payee_iban ? normalizeIban(data.payee_iban) : null},
+			payee_reference = ${data.payee_reference?.trim() || null}, updated = ${Date.now()}
 			WHERE uuid = ${row.uuid}`;
 		await tx`DELETE FROM expense_vat_lines WHERE expense = ${row.uuid}`;
 		for (const [sort, line] of data.vat_lines.entries()) {

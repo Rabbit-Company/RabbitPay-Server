@@ -115,6 +115,7 @@ export interface AccountingYear {
 	final_share: number | null;
 	provisional_expenses: number;
 	share_adjustment: number | null;
+	stock_uncounted: boolean;
 }
 
 export interface StatementLine {

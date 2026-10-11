@@ -46,6 +46,7 @@ import {
 	returnStock,
 	shippingAddressOf,
 	takeStock,
+	checkoutTurn,
 	upsertCustomer,
 	writeProfile,
 	type CheckoutInput,
@@ -377,93 +378,98 @@ Server.app.post("/api/v1/store/:slug/checkout", checkoutLimit, CustomerAuth.requ
 		store.project.uuid,
 		input.lines.map((line) => line.product)
 	);
-	if (coupon && !(await claimCoupon(coupon))) return Utils.fail(ctx, ErrorCode.COUPON_USED_UP);
-	if (!(await takeStock(store.project.uuid, products, input.lines))) {
-		if (coupon) await unclaimCoupon(coupon.uuid);
-		return Utils.fail(ctx, ErrorCode.STORE_OUT_OF_STOCK);
-	}
-
-	const now = Date.now();
-	const number = await Database.begin((tx) => nextSeriesNumber(tx, store.project.uuid, "order", now));
-	let invoice: InvoiceRow;
+	const finishTurn = await checkoutTurn(store.project.uuid);
 	try {
-		const customer = await upsertCustomer(store.project.uuid, email, input.customer);
-		const totals = calculateTotals(quote.invoice_items, quote.invoice_discount);
-		await prepareInvoiceIssue(
-			store.project,
-			{ currency: quote.currency, customer, due_date: now, supply_date: now, tax_amount: totals.tax_amount },
-			totals.items,
-			now
-		);
-		invoice = await createInvoice(
-			store.project.uuid,
-			{
-				customer,
-				currency: quote.currency,
-				items: quote.invoice_items,
-				discount_amount: quote.invoice_discount,
-				due_date: now + store.config.checkout.payment_days * DAY,
-				supply_date: null,
-				notes: null,
-				metadata: {
-					store: store.settings.slug,
-					order: number,
-					terms_accepted_at: now,
-					...(quote.withdrawal_waiver ? { withdrawal_waived_at: now } : {}),
-					...(quote.license_scope ? { license_scope_accepted_at: now } : {}),
-					...(quote.coupon ? { coupon: quote.coupon.code } : {}),
-				},
-				status: "draft",
-				source: "invoice",
-				created_by: null,
-			},
-			{ draftReference: number, holdKeys: true }
-		);
-	} catch (err) {
-		await returnStock(store.project.uuid, input.lines);
-		if (coupon) await unclaimCoupon(coupon.uuid);
-		if (err instanceof OutOfStock) return Utils.fail(ctx, ErrorCode.STORE_OUT_OF_STOCK);
-		if (err instanceof InvoiceDataIncomplete) return Utils.failWithReason(ctx, ErrorCode.STORE_CHECKOUT_UNAVAILABLE, err.message);
-		throw err;
-	}
+		if (coupon && !(await claimCoupon(coupon))) return Utils.fail(ctx, ErrorCode.COUPON_USED_UP);
+		if (!(await takeStock(store.project.uuid, products, input.lines))) {
+			if (coupon) await unclaimCoupon(coupon.uuid);
+			return Utils.fail(ctx, ErrorCode.STORE_OUT_OF_STOCK);
+		}
 
-	const address = shippingAddressOf(input, quote);
-	await Database`
+		const now = Date.now();
+		const number = await Database.begin((tx) => nextSeriesNumber(tx, store.project.uuid, "order", now));
+		let invoice: InvoiceRow;
+		try {
+			const customer = await upsertCustomer(store.project.uuid, email, input.customer);
+			const totals = calculateTotals(quote.invoice_items, quote.invoice_discount);
+			await prepareInvoiceIssue(
+				store.project,
+				{ currency: quote.currency, customer, due_date: now, supply_date: now, tax_amount: totals.tax_amount },
+				totals.items,
+				now
+			);
+			invoice = await createInvoice(
+				store.project.uuid,
+				{
+					customer,
+					currency: quote.currency,
+					items: quote.invoice_items,
+					discount_amount: quote.invoice_discount,
+					due_date: now + store.config.checkout.payment_days * DAY,
+					supply_date: null,
+					notes: null,
+					metadata: {
+						store: store.settings.slug,
+						order: number,
+						terms_accepted_at: now,
+						...(quote.withdrawal_waiver ? { withdrawal_waived_at: now } : {}),
+						...(quote.license_scope ? { license_scope_accepted_at: now } : {}),
+						...(quote.coupon ? { coupon: quote.coupon.code } : {}),
+					},
+					status: "draft",
+					source: "invoice",
+					created_by: null,
+				},
+				{ draftReference: number, holdKeys: true }
+			);
+		} catch (err) {
+			await returnStock(store.project.uuid, input.lines);
+			if (coupon) await unclaimCoupon(coupon.uuid);
+			if (err instanceof OutOfStock) return Utils.fail(ctx, ErrorCode.STORE_OUT_OF_STOCK);
+			if (err instanceof InvoiceDataIncomplete) return Utils.failWithReason(ctx, ErrorCode.STORE_CHECKOUT_UNAVAILABLE, err.message);
+			throw err;
+		}
+
+		const address = shippingAddressOf(input, quote);
+		await Database`
 		INSERT INTO store_orders(invoice, project, email, fulfillment, shipping_method, shipping_address, note, tracking_url, stock_returned, number,
 			created, updated)
 		VALUES(${invoice.uuid}, ${store.project.uuid}, ${email}, 'pending', ${quote.shipping?.name ?? null}, ${address ? JSON.stringify(address) : null},
 			${input.note}, NULL, 0, ${number}, ${now}, ${now})
 	`;
-	if (coupon && quote.coupon) await recordRedemption(coupon, invoice.uuid, email, quote.discount_amount);
-	await recordLicenseOrder(invoice.uuid, store.project.uuid, quote.licenses);
-	if (input.save_profile) await writeProfile(email, profileFromCheckout(input));
-	void notifyStoreOrder(store.project, {
-		invoice: invoice.uuid,
-		reference: number,
-		customer: input.customer.name?.trim() || email,
-		amount: invoice.total_amount,
-		currency: invoice.currency,
-	});
+		if (coupon && quote.coupon) await recordRedemption(coupon, invoice.uuid, email, quote.discount_amount);
+		await recordLicenseOrder(invoice.uuid, store.project.uuid, quote.licenses);
+		if (input.save_profile) await writeProfile(email, profileFromCheckout(input));
+		void notifyStoreOrder(store.project, {
+			invoice: invoice.uuid,
+			reference: number,
+			customer: input.customer.name?.trim() || email,
+			amount: invoice.total_amount,
+			currency: invoice.currency,
+		});
 
-	if (canEmail(store.project)) {
-		try {
-			await queueInvoiceEmail(store.project, invoice, {
-				to: email,
-				kind: "order_placed",
-				message: null,
-				sentBy: null,
-				attachInvoice: true,
-				attachEslog: false,
-				payLink: true,
-			});
-		} catch (err) {
-			Logger.error(`[STORE] Could not queue the order email for ${invoice.reference}: ${err}`);
+		if (canEmail(store.project)) {
+			try {
+				await queueInvoiceEmail(store.project, invoice, {
+					to: email,
+					kind: "order_placed",
+					message: null,
+					sentBy: null,
+					attachInvoice: true,
+					attachEslog: false,
+					payLink: true,
+				});
+			} catch (err) {
+				Logger.error(`[STORE] Could not queue the order email for ${invoice.reference}: ${err}`);
+			}
 		}
+
+		Logger.info(`[STORE] Order ${invoice.reference} placed in ${store.settings.slug}`);
+
+		return Utils.ok(ctx, { invoice: invoice.uuid, reference: invoice.reference, total_amount: invoice.total_amount, currency: invoice.currency }, 201);
+	} finally {
+		finishTurn();
 	}
-
-	Logger.info(`[STORE] Order ${invoice.reference} placed in ${store.settings.slug}`);
-
-	return Utils.ok(ctx, { invoice: invoice.uuid, reference: invoice.reference, total_amount: invoice.total_amount, currency: invoice.currency }, 201);
 });
 
 Server.app.get("/api/v1/store/:slug/orders/:invoice", browseLimit, CustomerAuth.required(), async (ctx) => {

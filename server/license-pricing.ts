@@ -11,7 +11,18 @@ export const RATE_PAYMENTS = 1000;
 export const RATE_EMAILS = 1000;
 
 const SERVER_ID = /^RPS(?:-[0-9A-HJKMNP-TV-Z]{5}){4}$/;
-const PRODUCT_TYPES: LicenseType[] = ["transactions", "white_label", "storage", "store", "workforce", "employees", "accounting", "emails", "files"];
+const PRODUCT_TYPES: LicenseType[] = [
+	"transactions",
+	"white_label",
+	"storage",
+	"store",
+	"workforce",
+	"employees",
+	"accounting",
+	"emails",
+	"files",
+	"inventory",
+];
 
 export interface LicenseGrant {
 	type: LicenseType;
@@ -68,7 +79,15 @@ export function storesGigabytes(type: LicenseType): boolean {
 }
 
 export function usesDays(type: LicenseType): boolean {
-	return type === "white_label" || type === "store" || type === "workforce" || type === "employees" || type === "accounting" || storesGigabytes(type);
+	return (
+		type === "white_label" ||
+		type === "store" ||
+		type === "workforce" ||
+		type === "employees" ||
+		type === "accounting" ||
+		type === "inventory" ||
+		storesGigabytes(type)
+	);
 }
 
 export function amountLimit(type: LicenseType): number {

@@ -7,6 +7,7 @@ import { calculateTotals, type InvoiceItemInput } from "./invoicing";
 import { isTaxTreatment, isZeroRated } from "./tax";
 import { isUnitCode } from "./measure-units";
 import { reserveKeys, stockShortage } from "./item-keys";
+import { syncSalesSoon } from "./inventory/stock";
 import { MANUAL_RATE_SOURCE, validTaxExchangeRate, type IssueSnapshot } from "./tax-reporting";
 import { invoiceRecipient } from "./invoice-recipient";
 import { resolveInvoiceIssuer } from "./invoice-issuer";
@@ -144,6 +145,7 @@ export async function stampIssue(
 		`;
 	}
 	await saveIssuePresentation(sql, invoiceId, presentation, snapshot.issued_at);
+	if (invoice) syncSalesSoon(invoice.project);
 }
 
 export interface CreateOptions {

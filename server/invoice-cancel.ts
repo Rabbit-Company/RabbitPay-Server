@@ -1,6 +1,7 @@
 import Database from "./database/database";
 import { creditRemaining } from "./credit-notes";
 import { releaseKeys } from "./item-keys";
+import { syncSalesSoon } from "./inventory/stock";
 import { enqueueLater } from "./webhooks/events";
 import { prepareIssuePresentation } from "./invoice-snapshot";
 import { archiveIssuedCreditNote } from "./credit-note-archive";
@@ -19,6 +20,7 @@ export async function cancelInvoice(project: ProjectRow, invoice: InvoiceRow, re
 		return await creditRemaining(tx as typeof Database, canceled, { reason, createdBy: canceledBy, presentation: presentation! });
 	});
 	if (creditNote) await archiveIssuedCreditNote(project.uuid, creditNote.uuid);
+	if (creditNote) syncSalesSoon(project.uuid);
 
 	enqueueLater(invoice.project, "invoice.canceled", {
 		invoice: invoice.uuid,

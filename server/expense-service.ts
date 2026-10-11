@@ -1,12 +1,13 @@
 import type { SQL } from "bun";
 import Database from "./database/database";
 import Validate from "./validate";
+import { isPlausibleIban, normalizeIban } from "./payments/bank";
 import { Logger } from "./logger";
 import { isIntervalCount, isIntervalUnit, MAX_CATCH_UP, MAX_OCCURRENCES, nextRunAfter } from "./recurring-schedule";
 import type { ProjectRow, RecurringExpenseRow } from "./database/models";
 import { assertAccountingPeriodUnlocked } from "./accounting-periods";
 
-import { EXPENSE_ASSET_TYPES, EXPENSE_VAT_TREATMENTS, type ExpenseInput, type ExpenseScheduleInput } from "./expense-types";
+import { EXPENSE_ASSET_TYPES, EXPENSE_STOCK_PURCHASES, EXPENSE_VAT_TREATMENTS, type ExpenseInput, type ExpenseScheduleInput } from "./expense-types";
 export type { ExpenseInput, ExpenseScheduleInput } from "./expense-types";
 
 export function validExpenseDate(value: unknown): value is number {
@@ -62,6 +63,11 @@ export function validExpense(data: ExpenseInput): boolean {
 		validDueDate(data) &&
 		EXPENSE_VAT_TREATMENTS.includes(data.vat_treatment as (typeof EXPENSE_VAT_TREATMENTS)[number]) &&
 		EXPENSE_ASSET_TYPES.includes(data.asset_type as (typeof EXPENSE_ASSET_TYPES)[number]) &&
+		(data.payee_iban === undefined || data.payee_iban === null || data.payee_iban === "" || isPlausibleIban(data.payee_iban)) &&
+		Validate.optionalText(data.payee_reference, 64) &&
+		(data.stock_purchase === undefined ||
+			data.stock_purchase === null ||
+			(EXPENSE_STOCK_PURCHASES.includes(data.stock_purchase) && data.asset_type === "expense")) &&
 		["1", "2", "3"].includes(data.vat_handling) &&
 		(data.self_assessment_period === null || /^\d{8}$/.test(data.self_assessment_period)) &&
 		(data.self_assessment_tax === null || Validate.minorUnitAmount(data.self_assessment_tax)) &&
@@ -107,12 +113,13 @@ export async function insertExpense(
 			INSERT INTO expenses(uuid, project, description, supplier, supplier_tax_number, supplier_country, invoice_number, category, currency,
 				total_amount, tax_amount, deductible_tax_amount, expense_date, issue_date, receipt_date, supply_date, due_date, vat_treatment, asset_type,
 				vat_handling, self_assessment_period, self_assessment_tax, tax_exchange_rate, tax_rate_date, paid_at, notes, recurring, occurrence, created_by, created, updated,
-				provisional_share)
+				provisional_share, stock_purchase, payee_iban, payee_reference)
 			VALUES(${uuid}, ${project}, ${data.description.trim()}, ${data.supplier?.trim() || null}, ${data.supplier_tax_number?.trim() || null},
 				${data.supplier_country}, ${data.invoice_number?.trim() || null}, ${data.category.trim()}, ${data.currency}, ${data.total_amount},
 				${data.tax_amount}, ${data.deductible_tax_amount}, ${data.expense_date}, ${data.issue_date}, ${data.receipt_date}, ${data.supply_date}, ${data.due_date ?? null},
 				${data.vat_treatment}, ${data.asset_type}, ${data.vat_handling}, ${data.self_assessment_period}, ${data.self_assessment_tax}, ${data.tax_exchange_rate}, ${data.tax_rate_date}, ${data.paid_at},
-				${data.notes?.trim() || null}, ${recurring}, ${occurrence}, ${author}, ${now}, ${now}, ${data.provisional_share ? 1 : 0})
+				${data.notes?.trim() || null}, ${recurring}, ${occurrence}, ${author}, ${now}, ${now}, ${data.provisional_share ? 1 : 0},
+				${data.stock_purchase ?? null}, ${data.payee_iban ? normalizeIban(data.payee_iban) : null}, ${data.payee_reference?.trim() || null})
 	`;
 	for (const [sort, line] of data.vat_lines.entries()) {
 		await sql`INSERT INTO expense_vat_lines(uuid, expense, rate, tax_base, tax_amount, deductible_tax_amount, sort_order)

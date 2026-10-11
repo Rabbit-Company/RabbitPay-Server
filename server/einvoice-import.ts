@@ -1,3 +1,4 @@
+import { isPlausibleIban, normalizeIban } from "./payments/bank";
 import Database from "./database/database";
 import { companyFor } from "./company";
 import { minorUnitDigits } from "./invoicing";
@@ -347,6 +348,8 @@ export async function suggestExpense(project: ProjectRow, invoice: IncomingInvoi
 			paid_at: invoice.amount_due <= 0 ? issued : null,
 			notes: notes.length > 0 ? notes.join("\n") : null,
 			vat_lines: vatLines,
+			payee_iban: invoice.iban && isPlausibleIban(invoice.iban) ? normalizeIban(invoice.iban) : null,
+			payee_reference: invoice.payment_reference?.trim().slice(0, 64) || null,
 		},
 	};
 }

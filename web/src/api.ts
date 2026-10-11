@@ -165,6 +165,7 @@ export interface StoreProductDetails {
 		license: boolean;
 		archived: boolean;
 		keys_available: number | null;
+		keeps_stock: boolean;
 	};
 	listed: boolean;
 	name: string | null;
@@ -1500,6 +1501,8 @@ export interface Project {
 	workforce_until: number | null;
 	accounting: boolean;
 	accounting_until: number | null;
+	inventory: boolean;
+	inventory_until: number | null;
 	bookkeeping?: "company" | "sole_double" | "sole_simplified" | "sole_flat_rate";
 	has_logo: boolean;
 	custom_email_server: boolean;
@@ -1560,7 +1563,7 @@ export interface Branding {
 	logo: string | null;
 }
 
-export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files";
+export type LicenseType = "transactions" | "white_label" | "storage" | "store" | "workforce" | "employees" | "accounting" | "emails" | "files" | "inventory";
 
 export interface License {
 	uuid: string;
@@ -1643,6 +1646,8 @@ export interface ProjectLicense extends LicenseIdentity {
 	workforce_until: number | null;
 	accounting: boolean;
 	accounting_until: number | null;
+	inventory: boolean;
+	inventory_until: number | null;
 	employees_included: number;
 	employees_licensed: number;
 	employees_used: number;
@@ -1762,6 +1767,8 @@ export interface AdminProject {
 	workforce_until: number | null;
 	accounting: boolean;
 	accounting_until: number | null;
+	inventory: boolean;
+	inventory_until: number | null;
 	storage_included: number;
 	storage_licensed: number;
 	storage_used: number;
@@ -2474,6 +2481,9 @@ export interface CatalogItem {
 	unit: string | null;
 	keys: KeyStock | null;
 	archived: boolean;
+	stock_kind?: StockKind | null;
+	stock_minimum?: number | null;
+	stock_quantity?: number | null;
 	created: number;
 	updated: number;
 }
@@ -4393,5 +4403,475 @@ export const AdminApi = {
 
 	revokeInvite(uuid: string) {
 		return request<RegistrationInvite>("POST", `/admin/invites/${uuid}/revoke`, {});
+	},
+};
+
+export type StockKind = "goods" | "material";
+export type ValuationMethod = "average" | "fifo";
+export type StockDocumentType = "receipt" | "issue" | "transfer" | "stocktake" | "opening";
+export type StockDocumentStatus = "draft" | "posted" | "canceled";
+export type StockFilter = "all" | "in_stock" | "low" | "negative" | "empty";
+export type StockMovementKind =
+	| "receipt"
+	| "opening"
+	| "customer_return"
+	| "sale"
+	| "sale_return"
+	| "issue"
+	| "transfer_out"
+	| "transfer_in"
+	| "surplus"
+	| "shortage";
+
+export interface Warehouse {
+	uuid: string;
+	name: string;
+	code: string;
+	address: string | null;
+	is_default: boolean;
+	archived: boolean;
+}
+
+export interface InventorySettings {
+	method: ValuationMethod;
+	methods: { from: string; method: ValuationMethod }[];
+	negative_stock: boolean;
+	pos_warehouse: string | null;
+	has_movements: boolean;
+}
+
+export interface InventoryOverview {
+	licensed: boolean;
+	inventory_until: number | null;
+	currency: string;
+	settings: InventorySettings;
+	warehouses: Warehouse[];
+	totals: { goods: number; material: number; items: number; low: number; negative: number; drafts: number };
+	ledger: { kind: StockKind; code: string; name: string; ledger: number; stock: number; difference: number }[];
+	document_types: StockDocumentType[];
+	issue_reasons: string[];
+	receipt_reasons: string[];
+	taxable_issue_reasons: string[];
+}
+
+export interface StockRow {
+	item: string;
+	name: string;
+	sku: string | null;
+	unit: string | null;
+	stock_kind: StockKind;
+	archived: boolean;
+	quantity: number;
+	value: number;
+	reserved: number;
+	on_order: number;
+	minimum: number | null;
+	low: boolean;
+}
+
+export interface StockMovement {
+	uuid: string;
+	date: number;
+	kind: StockMovementKind;
+	warehouse: string;
+	quantity: number;
+	value: number;
+	correction: number;
+	balance_quantity: number;
+	balance_value: number;
+	document: string | null;
+	document_number: string | null;
+	document_type: StockDocumentType | null;
+	reason: string | null;
+	partner: string | null;
+	invoice: string | null;
+	invoice_reference: string | null;
+}
+
+export interface StockItemCard {
+	currency: string;
+	item: {
+		uuid: string;
+		name: string;
+		sku: string | null;
+		unit: string | null;
+		supply_type: string;
+		tax_rate: number;
+		stock_kind: StockKind | null;
+		stock_since: number | null;
+		stock_minimum: number | null;
+		archived: boolean;
+	};
+	levels: { warehouse: string; quantity: number; value: number; layers: { quantity: number; value: number }[]; deficit: { quantity: number; value: number } }[];
+	movements: StockMovement[];
+	total: number;
+}
+
+export interface StockDocumentSummary {
+	uuid: string;
+	document_type: StockDocumentType;
+	status: StockDocumentStatus;
+	number: string | null;
+	date: string;
+	reason: string | null;
+	partner: string | null;
+	external_reference: string | null;
+	warehouse: string;
+	warehouse_name: string;
+	target_name: string | null;
+	lines: number;
+	value: number;
+}
+
+export interface StockDocumentLine {
+	uuid: string;
+	item: string;
+	name: string;
+	sku: string | null;
+	unit: string | null;
+	stock_kind: StockKind | null;
+	quantity: number;
+	value: number | null;
+	expected_quantity: number | null;
+	tax_rate: number | null;
+	item_tax_rate: number;
+	note: string | null;
+	order_line: string | null;
+	booked_value: number | null;
+}
+
+export interface StockDocument {
+	uuid: string;
+	document_type: StockDocumentType;
+	status: StockDocumentStatus;
+	number: string | null;
+	date: string;
+	warehouse: string;
+	target_warehouse: string | null;
+	reason: string | null;
+	partner: string | null;
+	partner_tax_number: string | null;
+	external_reference: string | null;
+	expense: string | null;
+	invoice: string | null;
+	extra_costs: number;
+	charge_vat: boolean;
+	opening_offset: "none" | "expense" | null;
+	ledger_account: string | null;
+	purchase_order: string | null;
+	notes: string | null;
+	created_by: string | null;
+	posted_by: string | null;
+	posted_at: number | null;
+	canceled_by: string | null;
+	canceled_at: number | null;
+	cancel_reason: string | null;
+	currency: string;
+	lines: StockDocumentLine[];
+}
+
+export interface StockDocumentInput {
+	document_type: StockDocumentType;
+	warehouse: string;
+	target_warehouse?: string | null;
+	date: string;
+	reason?: string | null;
+	partner?: string | null;
+	partner_tax_number?: string | null;
+	external_reference?: string | null;
+	expense?: string | null;
+	invoice?: string | null;
+	extra_costs?: number;
+	charge_vat?: boolean;
+	opening_offset?: "none" | "expense";
+	ledger_account?: string | null;
+	purchase_order?: string | null;
+	notes?: string | null;
+	lines: { item: string; quantity: number; value?: number | null; tax_rate?: number | null; note?: string | null; order_line?: string | null }[];
+}
+
+export interface StockValuation {
+	date: string;
+	method: ValuationMethod;
+	currency: string;
+	items: { item: string; name: string; sku: string | null; unit: string | null; stock_kind: StockKind; quantity: number; value: number }[];
+	goods: number;
+	material: number;
+}
+
+export interface StockPurchase {
+	uuid: string;
+	description: string;
+	supplier: string | null;
+	supplier_tax_number: string | null;
+	invoice_number: string | null;
+	date: string;
+	stock_purchase: "goods" | "material";
+	value: number | null;
+}
+
+export interface StockPurchaseLine {
+	description: string;
+	quantity: number;
+	value: number | null;
+	item: { uuid: string; name: string; sku: string | null; unit: string | null } | null;
+}
+
+export interface Supplier {
+	uuid: string;
+	name: string;
+	tax_number: string | null;
+	country: string | null;
+	address_line1: string | null;
+	postal_code: string | null;
+	city: string | null;
+	email: string | null;
+	phone: string | null;
+	iban: string | null;
+	bic: string | null;
+	payment_days: number | null;
+	notes: string | null;
+	archived: boolean;
+}
+
+export type SupplierInput = Omit<Supplier, "uuid" | "archived"> & { archived?: boolean };
+export type PurchaseOrderStatus = "draft" | "ordered" | "received" | "canceled";
+
+export interface PurchaseOrderSummary {
+	uuid: string;
+	number: string | null;
+	status: PurchaseOrderStatus;
+	supplier: string;
+	supplier_name: string;
+	date: string;
+	expected_date: string | null;
+	value: number;
+	ordered_quantity: number;
+	received_quantity: number;
+}
+
+export interface PurchaseOrder {
+	uuid: string;
+	number: string | null;
+	status: PurchaseOrderStatus;
+	warehouse: string;
+	date: string;
+	expected_date: string | null;
+	supplier_reference: string | null;
+	notes: string | null;
+	ordered_by: string | null;
+	ordered_at: number | null;
+	currency: string;
+	supplier: Supplier | null;
+	ordered_value: number;
+	received_value: number;
+	invoiced_value: number;
+	lines: {
+		uuid: string;
+		item: string;
+		name: string;
+		sku: string | null;
+		unit: string | null;
+		quantity: number;
+		value: number;
+		note: string | null;
+		received: number;
+		remaining: number;
+	}[];
+	receipts: { uuid: string; number: string | null; status: StockDocumentStatus; date: string | null; value: number }[];
+	invoices: { uuid: string; invoice_number: string | null; date: string | null; currency: string; net_amount: number; paid: boolean }[];
+}
+
+export interface PurchaseOrderInput {
+	supplier: string;
+	warehouse: string;
+	date: string;
+	expected_date?: string | null;
+	supplier_reference?: string | null;
+	notes?: string | null;
+	lines: { item: string; quantity: number; value: number; note?: string | null }[];
+}
+
+export interface ReorderSuggestion {
+	item: string;
+	name: string;
+	sku: string | null;
+	unit: string | null;
+	quantity: number;
+	minimum: number;
+	on_order: number;
+	suggested: number;
+	supplier: string | null;
+	supplier_name: string | null;
+	last_quantity: number | null;
+	last_value: number | null;
+}
+
+export interface PayableExpense {
+	uuid: string;
+	supplier: string | null;
+	invoice_number: string | null;
+	description: string;
+	amount: number;
+	currency: string;
+	due_date: string | null;
+	expense_date: string;
+	iban: string | null;
+	reference: string | null;
+	payment_ordered_at: number | null;
+}
+
+export const PurchasingApi = {
+	suppliers(uuid: string, options: { search?: string; archived?: boolean } = {}) {
+		return request<{ suppliers: Supplier[] }>(
+			"GET",
+			`/projects/${uuid}/inventory/suppliers${listQuery({ search: options.search, archived: options.archived ? 1 : undefined })}`
+		);
+	},
+
+	createSupplier(uuid: string, data: SupplierInput) {
+		return request<Supplier>("POST", `/projects/${uuid}/inventory/suppliers`, data);
+	},
+
+	updateSupplier(uuid: string, supplier: string, data: SupplierInput) {
+		return request<Supplier>("PUT", `/projects/${uuid}/inventory/suppliers/${supplier}`, data);
+	},
+
+	deleteSupplier(uuid: string, supplier: string) {
+		return request<void>("DELETE", `/projects/${uuid}/inventory/suppliers/${supplier}`);
+	},
+
+	orders(uuid: string, options: { status?: PurchaseOrderStatus; search?: string; limit?: number; offset?: number } = {}) {
+		return request<{ currency: string; orders: PurchaseOrderSummary[]; total: number }>("GET", `/projects/${uuid}/inventory/orders${listQuery(options)}`);
+	},
+
+	order(uuid: string, order: string) {
+		return request<PurchaseOrder>("GET", `/projects/${uuid}/inventory/orders/${order}`);
+	},
+
+	createOrder(uuid: string, data: PurchaseOrderInput) {
+		return request<PurchaseOrder>("POST", `/projects/${uuid}/inventory/orders`, data);
+	},
+
+	updateOrder(uuid: string, order: string, data: PurchaseOrderInput) {
+		return request<PurchaseOrder>("PUT", `/projects/${uuid}/inventory/orders/${order}`, data);
+	},
+
+	orderAction(uuid: string, order: string, action: "confirm" | "close" | "cancel") {
+		return request<PurchaseOrder | null>("POST", `/projects/${uuid}/inventory/orders/${order}/${action}`, {});
+	},
+
+	reorder(uuid: string) {
+		return request<{ currency: string; items: ReorderSuggestion[] }>("GET", `/projects/${uuid}/inventory/reorder`);
+	},
+
+	payable(uuid: string) {
+		return request<{ debtor_iban: string | null; today: string; expenses: PayableExpense[] }>("GET", `/projects/${uuid}/expense-payments`);
+	},
+
+	async paymentFile(uuid: string, data: { expenses: string[]; execution_date: string; iban?: string }): Promise<{ blob: Blob; name: string }> {
+		const response = await send("POST", `/projects/${uuid}/expense-payments/file`, data);
+		const disposition = response.headers.get("Content-Disposition");
+		if (!response.ok || !disposition) {
+			await payloadOf<never>(response);
+			throw new ApiError(-1, response.status, "The server returned an unreadable response.");
+		}
+		return { blob: await response.blob(), name: filenameOf(disposition, `placila-${data.execution_date}.xml`) };
+	},
+};
+
+export const InventoryApi = {
+	overview(uuid: string) {
+		return request<InventoryOverview>("GET", `/projects/${uuid}/inventory/overview`);
+	},
+
+	saveSettings(uuid: string, data: { method?: ValuationMethod; from?: string; negative_stock?: boolean; pos_warehouse?: string | null }) {
+		return request<InventorySettings>("PUT", `/projects/${uuid}/inventory/settings`, data);
+	},
+
+	createWarehouse(uuid: string, data: { name: string; code: string; address?: string | null }) {
+		return request<Warehouse>("POST", `/projects/${uuid}/inventory/warehouses`, data);
+	},
+
+	updateWarehouse(uuid: string, warehouse: string, data: { name?: string; code?: string; address?: string | null; archived?: boolean; is_default?: true }) {
+		return request<Warehouse>("PATCH", `/projects/${uuid}/inventory/warehouses/${warehouse}`, data);
+	},
+
+	stock(uuid: string, options: { warehouse?: string; search?: string; filter?: StockFilter; limit?: number; offset?: number } = {}) {
+		return request<{ currency: string; items: StockRow[]; total: number; value: number }>("GET", `/projects/${uuid}/inventory/stock${listQuery(options)}`);
+	},
+
+	item(uuid: string, item: string, options: { warehouse?: string; limit?: number; offset?: number } = {}) {
+		return request<StockItemCard>("GET", `/projects/${uuid}/inventory/items/${item}${listQuery(options)}`);
+	},
+
+	trackItem(
+		uuid: string,
+		item: string,
+		data: { stock_kind?: StockKind | null; stock_minimum?: number | null; opening?: { quantity: number; value: number; offset: "none" | "expense" } | null }
+	) {
+		return request<{ uuid: string; stock_kind: StockKind | null; stock_minimum: number | null }>("PUT", `/projects/${uuid}/inventory/items/${item}`, data);
+	},
+
+	candidates(uuid: string, search = "", item?: string) {
+		return request<{ items: { uuid: string; name: string; sku: string | null; unit: string | null; store_stock: number | null }[] }>(
+			"GET",
+			`/projects/${uuid}/inventory/candidates${listQuery({ search, item })}`
+		);
+	},
+
+	documents(uuid: string, options: { type?: StockDocumentType; status?: StockDocumentStatus; search?: string; limit?: number; offset?: number } = {}) {
+		return request<{ currency: string; documents: StockDocumentSummary[]; total: number }>("GET", `/projects/${uuid}/inventory/documents${listQuery(options)}`);
+	},
+
+	document(uuid: string, document: string) {
+		return request<StockDocument>("GET", `/projects/${uuid}/inventory/documents/${document}`);
+	},
+
+	createDocument(uuid: string, data: StockDocumentInput) {
+		return request<StockDocument>("POST", `/projects/${uuid}/inventory/documents`, data);
+	},
+
+	updateDocument(uuid: string, document: string, data: StockDocumentInput) {
+		return request<StockDocument>("PUT", `/projects/${uuid}/inventory/documents/${document}`, data);
+	},
+
+	deleteDocument(uuid: string, document: string) {
+		return request<void>("DELETE", `/projects/${uuid}/inventory/documents/${document}`);
+	},
+
+	postDocument(uuid: string, document: string) {
+		return request<StockDocument>("POST", `/projects/${uuid}/inventory/documents/${document}/post`, {});
+	},
+
+	cancelDocument(uuid: string, document: string, reason: string | null) {
+		return request<StockDocument>("POST", `/projects/${uuid}/inventory/documents/${document}/cancel`, { reason });
+	},
+
+	countSheet(uuid: string, warehouse: string, date: string) {
+		return request<{ date: string; items: { item: string; name: string; sku: string | null; unit: string | null; stock_kind: StockKind; booked: number }[] }>(
+			"GET",
+			`/projects/${uuid}/inventory/count-sheet${listQuery({ warehouse, date })}`
+		);
+	},
+
+	booked(uuid: string, warehouse: string, item: string, date: string) {
+		return request<{ quantity: number; value: number }>("GET", `/projects/${uuid}/inventory/booked${listQuery({ warehouse, item, date })}`);
+	},
+
+	valuation(uuid: string, date: string, warehouse?: string) {
+		return request<StockValuation>("GET", `/projects/${uuid}/inventory/valuation${listQuery({ date, warehouse })}`);
+	},
+
+	valuationCsv(uuid: string, date: string, warehouse?: string) {
+		return requestDownload(`/projects/${uuid}/inventory/valuation${listQuery({ date, warehouse, format: "csv" })}`, `zaloga-${date}.csv`);
+	},
+
+	purchases(uuid: string) {
+		return request<{ currency: string; expenses: StockPurchase[] }>("GET", `/projects/${uuid}/inventory/purchases`);
+	},
+
+	purchaseLines(uuid: string, expense: string) {
+		return request<{ currency: string; lines: StockPurchaseLine[] }>("GET", `/projects/${uuid}/inventory/purchases/${expense}/lines`);
 	},
 };

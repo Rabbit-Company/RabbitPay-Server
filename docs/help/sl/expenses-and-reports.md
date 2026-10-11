@@ -26,6 +26,17 @@ Izvirni XML se priloži strošku, ker je pravni izvirnik računa. RabbitPay vas 
 
 Več stroškov hkrati lahko prenesete z **Uvozi CSV**.
 
+## Plačajte dobaviteljem s plačilno datoteko
+
+Namesto da vsako plačilo vtipkate v spletno banko, prenesite eno datoteko z vsemi.
+
+1. Na strošku vnesite IBAN dobavitelja in sklic za plačilo. Uvožen e-račun ju izpolni sam. Če na strošku ni IBAN-a, se uporabi IBAN dobavitelja pod **Zaloge**, **Dobavitelji**.
+2. Na strani **Stroški** pritisnite **Plačilna datoteka**. Neplačani računi, ki zapadejo v enem tednu, so že označeni.
+3. Izberite datum plačila in račun, s katerega plačujete, nato pritisnite **Prenesi plačilno datoteko**.
+4. Datoteko naložite v spletno banko kot paket plačil SEPA (pain.001) in jo tam potrdite.
+
+RabbitPay sam nikoli ne pošilja denarja. Strošek ostane neplačan, dokler ga ne označite kot plačanega ali povežete z bančnim izpiskom, označen pa je kot že vključen, da ga ne plačate dvakrat.
+
 ## Nastavite ponavljajoče stroške
 
 Najemnino, naročnine in druge stroške, ki se ponavljajo, lahko vnašate samodejno.

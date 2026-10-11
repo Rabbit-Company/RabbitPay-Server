@@ -26,6 +26,17 @@ The original XML is attached to the expense, because it is the legal original of
 
 Many expenses at once can be brought in with **Import CSV**.
 
+## Pay suppliers with a payment file
+
+Instead of typing every payment into your online bank, download one file with all of them.
+
+1. Enter the supplier's IBAN and payment reference on the expense. An imported e-invoice fills them in by itself. Without an IBAN on the expense, the IBAN of the supplier under **Inventory**, **Suppliers** is used.
+2. Press **Payment file** on the **Expenses** page. Unpaid invoices due within a week are already ticked.
+3. Choose the payment date and the account you pay from, then press **Download payment file**.
+4. Upload the file to your online bank as a batch of SEPA payments (pain.001) and confirm it there.
+
+RabbitPay never sends money itself. An expense stays unpaid until you mark it as paid or match it on a bank statement, and it is marked as already included so it is not paid twice.
+
 ## Set up recurring expenses
 
 Rent, subscriptions and other costs that repeat can be entered automatically.

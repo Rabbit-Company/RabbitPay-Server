@@ -478,6 +478,97 @@ a status of `refunded`.
 Overpayment is recorded as it happened rather than rejected, since a crypto
 payment can easily arrive slightly over.
 
+## Inventory
+
+Needs the inventory license to change anything. Reading keeps working without it,
+and a write without it returns error `1339`.
+
+| Method   | Path                                                          | Permission     |
+| -------- | ------------------------------------------------------------- | -------------- |
+| `GET`    | `/api/v1/projects/:uuid/inventory/overview`                   | `stock.view`   |
+| `PUT`    | `/api/v1/projects/:uuid/inventory/settings`                   | `project.edit` |
+| `POST`   | `/api/v1/projects/:uuid/inventory/warehouses`                 | `project.edit` |
+| `PATCH`  | `/api/v1/projects/:uuid/inventory/warehouses/:warehouse`      | `project.edit` |
+| `GET`    | `/api/v1/projects/:uuid/inventory/stock`                      | `stock.view`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/items/:item`                | `stock.view`   |
+| `PUT`    | `/api/v1/projects/:uuid/inventory/items/:item`                | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/documents`                  | `stock.view`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/documents`                  | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/documents/:document`        | `stock.view`   |
+| `PUT`    | `/api/v1/projects/:uuid/inventory/documents/:document`        | `stock.edit`   |
+| `DELETE` | `/api/v1/projects/:uuid/inventory/documents/:document`        | `stock.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/documents/:document/post`   | `stock.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/documents/:document/cancel` | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/count-sheet`                | `stock.view`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/valuation`                  | `stock.view`   |
+
+Quantities are whole thousandths of the item's unit, so `1500` is 1.5. Values
+are minor units of the project's tax currency and never include VAT. Dates of
+documents are local dates in the form `YYYY-MM-DD`.
+
+An item keeps stock once `PUT .../items/:item` sets `stock_kind` to `goods` or
+`material`. Only items with the supply type `goods` can, anything else returns
+error `1344`. The same call takes `stock_minimum` and, when stock keeping starts,
+an optional `opening` with `quantity`, `value` and `offset` (`none` or
+`expense`), which posts an opening stock document in the default warehouse. From
+then on every issued invoice with the item reduces its stock. There is no call
+for that, the movement follows the invoice.
+
+A document has a `document_type` of `receipt`, `issue`, `transfer`, `stocktake`
+or `opening`, a `warehouse`, a `date` and `lines` with `item` and `quantity`.
+Receipt and opening lines also carry `value`. A receipt takes `reason`
+(`purchase`, `customer_return`, `other`), `partner`, `extra_costs` and optionally
+`expense`, `invoice` or `purchase_order`. An issue takes a `reason` and
+`charge_vat`. A transfer takes `target_warehouse`. A stocktake line's `quantity`
+is the counted quantity. A document is created as a draft, gets its number when
+it is posted and can afterwards only be canceled. Posting returns error `1346`
+when one of the items was counted in a stocktake on or after the date, `1345`
+when stock would go below zero and that is switched off, and `1275` in a closed
+business year.
+
+`GET .../stock` takes `warehouse`, `search`, `filter` (`all`, `in_stock`, `low`,
+`negative`, `empty`), `limit` and `offset`. `GET .../valuation` takes `date` and
+`warehouse` and returns CSV with `format=csv`. `PUT .../settings` takes
+`negative_stock`, `pos_warehouse` and `method` (`average` or `fifo`). Once stock
+has moved, a method change also needs `from` set to the first of January of a
+business year that is not closed.
+
+## Purchasing
+
+Part of the inventory license.
+
+| Method   | Path                                                     | Permission     |
+| -------- | -------------------------------------------------------- | -------------- |
+| `GET`    | `/api/v1/projects/:uuid/inventory/suppliers`             | `stock.view`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/suppliers`             | `stock.edit`   |
+| `PUT`    | `/api/v1/projects/:uuid/inventory/suppliers/:supplier`   | `stock.edit`   |
+| `DELETE` | `/api/v1/projects/:uuid/inventory/suppliers/:supplier`   | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/orders`                | `stock.view`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/orders`                | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/orders/:order`         | `stock.view`   |
+| `PUT`    | `/api/v1/projects/:uuid/inventory/orders/:order`         | `stock.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/orders/:order/confirm` | `stock.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/orders/:order/close`   | `stock.edit`   |
+| `POST`   | `/api/v1/projects/:uuid/inventory/orders/:order/cancel`  | `stock.edit`   |
+| `GET`    | `/api/v1/projects/:uuid/inventory/reorder`               | `stock.view`   |
+| `GET`    | `/api/v1/projects/:uuid/expense-payments`                | `expense.view` |
+| `POST`   | `/api/v1/projects/:uuid/expense-payments/file`           | `expense.edit` |
+
+A purchase order takes `supplier`, `warehouse`, `date`, optional
+`expected_date`, and `lines` with `item`, `quantity` and `value`. It is a draft
+until it is confirmed, which gives it a number. Goods are received with a receipt
+document that names the order in `purchase_order` and the order line in each
+line's `order_line`. The order turns to `received` by itself when every line has
+arrived and back to `ordered` when a receipt is canceled. An order with receipts
+cannot be canceled, only closed.
+
+`POST .../expense-payments/file` takes `expenses` (UUIDs of unpaid expenses in
+EUR), `execution_date` and optionally `iban` of the paying account, and returns a
+SEPA credit transfer file (pain.001.001.03). Each payment goes to the expense's
+`payee_iban`, or to the IBAN of the supplier with the same tax number or name.
+Missing data returns the list of `problems`. The file does not mark anything as
+paid.
+
 ## Members
 
 | Method   | Path                                     | Permission        |

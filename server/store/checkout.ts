@@ -1,3 +1,5 @@
+import { sellableQuantities, syncSales } from "../inventory/stock";
+import type { ProjectRow } from "../database/models";
 import Database, { dialect } from "../database/database";
 import Validate, { normalizeEmail } from "../validate";
 import { ErrorCode } from "../errors";
@@ -381,11 +383,41 @@ export async function quoteCart(
 	};
 }
 
+const turns = new Map<string, Promise<void>>();
+
+export async function checkoutTurn(project: string): Promise<() => void> {
+	const previous = turns.get(project) ?? Promise.resolve();
+	let finish!: () => void;
+	const current = new Promise<void>((resolve) => (finish = resolve));
+	const chained = previous.then(() => current);
+	turns.set(project, chained);
+	await previous;
+	return () => {
+		finish();
+		if (turns.get(project) === chained) turns.delete(project);
+	};
+}
+
 export async function takeStock(projectId: string, rows: Map<string, ProductRow>, lines: CartLineInput[]): Promise<boolean> {
 	const taken: CartLineInput[] = [];
+	const kept = lines.filter((line) => rows.get(line.product)?.stock_kind);
+	if (kept.length > 0) {
+		const [project] = (await Database`SELECT uuid, timezone, language FROM projects WHERE uuid = ${projectId}`) as Pick<
+			ProjectRow,
+			"uuid" | "timezone" | "language"
+		>[];
+		if (project) await syncSales(project);
+		const sellable = await sellableQuantities(
+			projectId,
+			kept.map((line) => line.product)
+		);
+		for (const line of kept) {
+			if (!rows.get(line.product)!.allow_backorder && Math.floor(sellable.get(line.product) ?? 0) < line.quantity) return false;
+		}
+	}
 	for (const line of lines) {
 		const row = rows.get(line.product);
-		if (!row || row.delivers_keys || row.stock === null) continue;
+		if (!row || row.delivers_keys || row.stock_kind || row.stock === null) continue;
 		const updated = row.allow_backorder
 			? await Database`UPDATE store_products SET stock = CASE WHEN stock > ${line.quantity} THEN stock - ${line.quantity} ELSE 0 END WHERE item = ${line.product} AND project = ${projectId}`
 			: await Database`UPDATE store_products SET stock = stock - ${line.quantity} WHERE item = ${line.product} AND project = ${projectId} AND stock >= ${line.quantity}`;
@@ -400,7 +432,10 @@ export async function takeStock(projectId: string, rows: Map<string, ProductRow>
 
 export async function returnStock(projectId: string, lines: Pick<CartLineInput, "product" | "quantity">[]) {
 	for (const line of lines) {
-		await Database`UPDATE store_products SET stock = stock + ${line.quantity} WHERE item = ${line.product} AND project = ${projectId} AND stock IS NOT NULL`;
+		await Database`
+			UPDATE store_products SET stock = stock + ${line.quantity} WHERE item = ${line.product} AND project = ${projectId} AND stock IS NOT NULL
+				AND NOT EXISTS (SELECT 1 FROM catalog_items c WHERE c.uuid = store_products.item AND c.stock_kind IS NOT NULL)
+		`;
 	}
 }
 

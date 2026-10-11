@@ -15,11 +15,11 @@ export interface SepaProblem {
 	person?: string;
 }
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
 	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function sepaText(value: string, limit: number): string {
+export function sepaText(value: string, limit: number): string {
 	const latin = value
 		.normalize("NFD")
 		.replace(/[̀-ͯ]/g, "")
@@ -29,7 +29,7 @@ function sepaText(value: string, limit: number): string {
 	return escapeXml(latin.slice(0, limit).trim() || "-");
 }
 
-function amount(cents: number): string {
+export function sepaAmount(cents: number): string {
 	return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
 }
 
@@ -66,7 +66,7 @@ export function salaryTransfersXml(run: PayrollRunRow, lines: PayrollCalculation
 			[
 				"<CdtTrfTxInf>",
 				`<PmtId><EndToEndId>${escapeXml(`SAL-${run.period}-${index + 1}`)}</EndToEndId></PmtId>`,
-				`<Amt><InstdAmt Ccy="EUR">${amount(line.payout!)}</InstdAmt></Amt>`,
+				`<Amt><InstdAmt Ccy="EUR">${sepaAmount(line.payout!)}</InstdAmt></Amt>`,
 				`<Cdtr><Nm>${sepaText(line.person, 70)}</Nm></Cdtr>`,
 				`<CdtrAcct><Id><IBAN>${normalizeIban(line.employee.iban!)}</IBAN></Id></CdtrAcct>`,
 				"<Purp><Cd>SALA</Cd></Purp>",
@@ -80,9 +80,9 @@ export function salaryTransfersXml(run: PayrollRunRow, lines: PayrollCalculation
 		`<?xml version="1.0" encoding="UTF-8"?>\n` +
 		`<Document xmlns="${NAMESPACE}"><CstmrCdtTrfInitn>` +
 		`<GrpHdr><MsgId>${escapeXml(messageId)}</MsgId><CreDtTm>${stamp}</CreDtTm><NbOfTxs>${payments.length}</NbOfTxs>` +
-		`<CtrlSum>${amount(total)}</CtrlSum><InitgPty><Nm>${sepaText(debtor.name, 70)}</Nm></InitgPty></GrpHdr>` +
+		`<CtrlSum>${sepaAmount(total)}</CtrlSum><InitgPty><Nm>${sepaText(debtor.name, 70)}</Nm></InitgPty></GrpHdr>` +
 		`<PmtInf><PmtInfId>${escapeXml(messageId)}</PmtInfId><PmtMtd>TRF</PmtMtd><BtchBookg>true</BtchBookg>` +
-		`<NbOfTxs>${payments.length}</NbOfTxs><CtrlSum>${amount(total)}</CtrlSum>` +
+		`<NbOfTxs>${payments.length}</NbOfTxs><CtrlSum>${sepaAmount(total)}</CtrlSum>` +
 		`<PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl><CtgyPurp><Cd>SALA</Cd></CtgyPurp></PmtTpInf>` +
 		`<ReqdExctnDt>${run.pay_date}</ReqdExctnDt><Dbtr><Nm>${sepaText(debtor.name, 70)}</Nm></Dbtr>` +
 		`<DbtrAcct><Id><IBAN>${normalizeIban(debtor.iban)}</IBAN></Id></DbtrAcct>${debtorAgent}<ChrgBr>SLEV</ChrgBr>` +

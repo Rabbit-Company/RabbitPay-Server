@@ -131,6 +131,7 @@ function rowsOf(state: ProjectLicense, now: number): Row[] {
 		addOnRow(state, "store", t("license.store"), state.store, state.store_until, now),
 		addOnRow(state, "workforce", t("license.workforce"), state.workforce, state.workforce_until, now),
 		addOnRow(state, "accounting", t("license.accounting"), state.accounting, state.accounting_until, now),
+		addOnRow(state, "inventory", t("license.inventory"), state.inventory, state.inventory_until, now),
 	];
 	const gigabytes = (amount: number) => `${amount.toLocaleString()} GB`;
 	if (state.workforce || seats.length > 0) {

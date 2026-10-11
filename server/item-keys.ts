@@ -1,3 +1,4 @@
+import { inventoryShortage, type SalesChannel } from "./inventory/stock";
 import type { SQL } from "bun";
 import Database from "./database/database";
 import { ErrorCode } from "./errors";
@@ -120,7 +121,8 @@ export function demandOf(lines: KeyLine[], keyItems: Set<string>): Map<string, n
 	return demand;
 }
 
-export async function stockShortage(projectId: string, lines: KeyLine[]): Promise<ErrorCode | null> {
+export async function stockShortage(projectId: string, lines: KeyLine[], channel: SalesChannel = "invoice"): Promise<ErrorCode | null> {
+	if (await inventoryShortage(projectId, lines, channel)) return ErrorCode.INSUFFICIENT_STOCK;
 	const itemIds = [...new Set(lines.map((line) => line.item).filter((item): item is string => typeof item === "string"))];
 	const keyItems = await keyItemsAmong(projectId, itemIds);
 	const demand = demandOf(lines, keyItems);

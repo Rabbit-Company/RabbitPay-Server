@@ -466,7 +466,7 @@ function productEditor(
 	const stockFields = el("div", { class: "form-grid" }, field(t("store.stock_quantity"), stock));
 	const deliveryFields = el("div", { class: "form-grid" }, field(t("store.shipping_days_min"), minDays), field(t("store.shipping_days_max"), maxDays));
 	const sync = () => {
-		stockFields.hidden = !tracked.checked || item.delivers_keys;
+		stockFields.hidden = !tracked.checked || item.delivers_keys || item.keeps_stock;
 		deliveryFields.hidden = !customDelivery.checked;
 	};
 	tracked.addEventListener("change", sync);
@@ -605,7 +605,15 @@ function productEditor(
 					? el("p", { class: "muted" }, t("store.inventory_license"))
 					: item.delivers_keys
 						? el("p", { class: "muted" }, t("store.inventory_keys", { count: item.keys_available ?? 0 }))
-						: el("label", { class: "switch" }, tracked, el("span", {}, t("store.track_stock"))),
+						: item.keeps_stock
+							? el(
+									"p",
+									{ class: "muted" },
+									t("store.inventory_stock"),
+									" ",
+									el("a", { href: `/projects/${uuid}/inventory/items/${item.uuid}` }, t("store.inventory_stock_open"))
+								)
+							: el("label", { class: "switch" }, tracked, el("span", {}, t("store.track_stock"))),
 				stockFields,
 				el("label", { class: "switch" }, backorder, el("span", {}, t("store.allow_backorder"))),
 				field(t("store.restock_at"), restock, t("store.restock_hint"))

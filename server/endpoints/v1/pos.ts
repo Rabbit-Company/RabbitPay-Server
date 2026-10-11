@@ -164,7 +164,7 @@ Server.app.post("/api/v1/projects/:uuid/pos/sales", Auth.required(), Permissions
 	if (!(await hasStorageCapacity(project.uuid))) return Utils.fail(ctx, ErrorCode.STORAGE_LIMIT_REACHED);
 	if (await accountingPeriodLocked(project.uuid, Date.now())) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
 
-	const short = await stockShortage(project.uuid, priced);
+	const short = await stockShortage(project.uuid, priced, "pos");
 	if (short !== null) return Utils.fail(ctx, short);
 
 	const now = Date.now();

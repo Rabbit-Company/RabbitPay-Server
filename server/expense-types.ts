@@ -1,9 +1,10 @@
-import type { ExpenseRow } from "./database/models";
+import type { ExpenseRow, StockPurchase } from "./database/models";
 
 export const EXPENSE_VAT_TREATMENTS = ["not_reported", "domestic", "domestic_reverse_charge", "eu_goods", "eu_services", "import", "exempt"] as const;
 export type ExpenseVatTreatment = (typeof EXPENSE_VAT_TREATMENTS)[number];
 export const EXPENSE_ASSET_TYPES = ["expense", "real_estate", "fixed_asset"] as const;
 export type ExpenseAssetType = (typeof EXPENSE_ASSET_TYPES)[number];
+export const EXPENSE_STOCK_PURCHASES = ["goods", "material", "goods_costs", "material_costs"] as const;
 export type ExpenseVatHandling = "1" | "2" | "3";
 
 export interface ExpenseVatLineInput {
@@ -44,7 +45,13 @@ export type ExpenseInput = Pick<
 	| "tax_rate_date"
 	| "paid_at"
 	| "notes"
-> & { vat_lines: ExpenseVatLineInput[]; provisional_share?: boolean | number };
+> & {
+	vat_lines: ExpenseVatLineInput[];
+	provisional_share?: boolean | number;
+	stock_purchase?: StockPurchase | null;
+	payee_iban?: string | null;
+	payee_reference?: string | null;
+};
 export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at" | "due_date"> & {
 	interval_unit: string;
 	interval_count: number;

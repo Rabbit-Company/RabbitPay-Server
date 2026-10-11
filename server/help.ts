@@ -8,6 +8,8 @@ import expensesEn from "../docs/help/en/expenses-and-reports.md" with { type: "t
 import expensesSl from "../docs/help/sl/expenses-and-reports.md" with { type: "text" };
 import storeEn from "../docs/help/en/online-store.md" with { type: "text" };
 import storeSl from "../docs/help/sl/online-store.md" with { type: "text" };
+import inventoryEn from "../docs/help/en/inventory.md" with { type: "text" };
+import inventorySl from "../docs/help/sl/inventory.md" with { type: "text" };
 import portalEn from "../docs/help/en/customer-portal.md" with { type: "text" };
 import portalSl from "../docs/help/sl/customer-portal.md" with { type: "text" };
 import workforceEn from "../docs/help/en/workforce.md" with { type: "text" };
@@ -42,6 +44,7 @@ const SOURCES: Record<string, Record<HelpLanguage, string>> = {
 	payments: { en: paymentsEn, sl: paymentsSl },
 	"expenses-and-reports": { en: expensesEn, sl: expensesSl },
 	"online-store": { en: storeEn, sl: storeSl },
+	inventory: { en: inventoryEn, sl: inventorySl },
 	"customer-portal": { en: portalEn, sl: portalSl },
 	workforce: { en: workforceEn, sl: workforceSl },
 	slovenia: { en: sloveniaEn, sl: sloveniaSl },

@@ -26,6 +26,8 @@ import { addExpenseDueDate, createAccountingSchema, createBankMatchSchema, LICEN
 import { createRegistrySchema } from "./registry-schema";
 import { createChatSchema } from "./chat-schema";
 import { createCalendarSchema } from "./calendar-schema";
+import { createInventorySchema } from "./inventory-schema";
+import { createPurchasingSchema } from "./purchasing-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string) {
@@ -709,6 +711,8 @@ export const MIGRATIONS: Migration[] = [
 			await sql.unsafe(`ALTER TABLE push_subscriptions ADD COLUMN user_agent ${types.text("user_agent")}`);
 		},
 	},
+	{ version: 59, name: "inventory", rebuildsSqliteTables: true, up: createInventorySchema },
+	{ version: 60, name: "purchasing", up: createPurchasingSchema },
 ];
 
 export class SchemaTooNew extends Error {

@@ -62,6 +62,10 @@ import { chatAttachmentsView } from "./views/chat-attachments";
 import { employeesView } from "./views/employees";
 import { payrollRatesView, payrollRunsView, payrollRunView } from "./views/payroll";
 import { accountingClientsView, accountingJournalView, accountLedgerView, ledgerAccountsView, trialBalanceView } from "./views/accounting";
+import { inventoryItemView, inventorySettingsView, inventoryStockView, inventoryValuationView } from "./views/inventory";
+import { inventoryDocumentsView, inventoryDocumentView } from "./views/inventory-documents";
+import { inventoryCountSheetView, inventoryDocumentPrintView, inventoryOrderPrintView } from "./views/inventory-print";
+import { inventoryOrdersView, inventoryOrderView, inventorySuppliersView } from "./views/inventory-purchasing";
 import { recordedInvoicesView } from "./views/recorded-invoices";
 import { bankView } from "./views/bank";
 import { yearsView } from "./views/years";
@@ -397,6 +401,54 @@ define(
 define(
 	"/projects/:uuid/recurring/:recurring/edit",
 	projectRoute([Permission.SUBSCRIPTION_EDIT], (params) => recurringFormView(params.uuid, params.recurring))
+);
+define(
+	"/projects/:uuid/inventory",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryStockView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/documents",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryDocumentsView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/documents/:document",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryDocumentView(params.uuid, params.document))
+);
+define(
+	"/projects/:uuid/inventory/documents/:document/print",
+	guarded([Permission.STOCK_VIEW], (params) => inventoryDocumentPrintView(params.uuid, params.document))
+);
+define(
+	"/projects/:uuid/inventory/count-sheet",
+	guarded([Permission.STOCK_VIEW], (params) => inventoryCountSheetView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/orders",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryOrdersView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/orders/:order",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryOrderView(params.uuid, params.order))
+);
+define(
+	"/projects/:uuid/inventory/orders/:order/print",
+	guarded([Permission.STOCK_VIEW], (params) => inventoryOrderPrintView(params.uuid, params.order))
+);
+define(
+	"/projects/:uuid/inventory/suppliers",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventorySuppliersView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/items/:item",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryItemView(params.uuid, params.item))
+);
+define(
+	"/projects/:uuid/inventory/valuation",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventoryValuationView(params.uuid))
+);
+define(
+	"/projects/:uuid/inventory/settings",
+	projectRoute([Permission.STOCK_VIEW], (params) => inventorySettingsView(params.uuid))
 );
 define(
 	"/projects/:uuid/accounting",

@@ -1,3 +1,4 @@
+import { formatQuantity } from "./inventory";
 import { pagination, PAGE_SIZE } from "../pagination";
 import { Api, ApiError, isAdmin, type CatalogItem, type ItemKey, type Project } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
@@ -23,6 +24,7 @@ const LICENSE_TYPES: { value: LicenseProduct["type"]; label: UiKey; rate: UiKey;
 	{ value: "store", label: "items.license_store", rate: "items.license_rate_days", amount: null },
 	{ value: "workforce", label: "items.license_workforce", rate: "items.license_rate_days", amount: null },
 	{ value: "accounting", label: "items.license_accounting", rate: "items.license_rate_days", amount: null },
+	{ value: "inventory", label: "items.license_inventory", rate: "items.license_rate_days", amount: null },
 	{ value: "employees", label: "items.license_employees", rate: "items.license_rate_employees", amount: "items.license_amount_employees" },
 ];
 
@@ -468,6 +470,22 @@ export async function itemsView(uuid: string): Promise<HTMLElement> {
 				return;
 			}
 
+			const showsStock = (project.inventory || project.inventory_until !== null) && can(project, Permission.STOCK_VIEW);
+			const inventoryCell = (item: CatalogItem) => {
+				if (item.stock_kind) {
+					const quantity = item.stock_quantity ?? 0;
+					const low = item.stock_minimum !== null && item.stock_minimum !== undefined && quantity < item.stock_minimum;
+					return el(
+						"a",
+						{ class: quantity < 0 || low ? "warn" : "", href: `/projects/${uuid}/inventory/items/${item.uuid}` },
+						formatQuantity(quantity, item.unit)
+					);
+				}
+				if (item.supply_type !== "goods" || item.delivers_keys || item.license || item.archived || !project.inventory) return "";
+				return can(project, Permission.STOCK_EDIT)
+					? el("a", { class: "muted", href: `/projects/${uuid}/inventory?track=${item.uuid}` }, t("items.keep_stock"))
+					: "";
+			};
 			const rows = result.items.map((item) =>
 				el(
 					"tr",
@@ -477,6 +495,7 @@ export async function itemsView(uuid: string): Promise<HTMLElement> {
 					el("td", { class: "mono" }, formatMoney(item.unit_price, item.currency)),
 					el("td", {}, describeTax(item)),
 					el("td", {}, stockCell(item)),
+					showsStock ? el("td", { class: "num" }, inventoryCell(item)) : null,
 					el(
 						"td",
 						{ class: "actions" },
@@ -504,7 +523,20 @@ export async function itemsView(uuid: string): Promise<HTMLElement> {
 				)
 			);
 
-			body.replaceChildren(table([t("items.column_item"), t("items.sku"), t("items.column_price"), t("customers.column_vat"), t("items.keys"), ""], rows));
+			body.replaceChildren(
+				table(
+					[
+						t("items.column_item"),
+						t("items.sku"),
+						t("items.column_price"),
+						t("customers.column_vat"),
+						t("items.keys"),
+						...(showsStock ? [{ label: t("items.column_stock"), class: "num" }] : []),
+						"",
+					],
+					rows
+				)
+			);
 		} catch (error) {
 			if (controls.state.current(round)) {
 				controls.fail();
