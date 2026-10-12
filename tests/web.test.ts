@@ -79,7 +79,7 @@ describe("web interface", () => {
 		expect(html).toContain('<meta name="robots" content="index, follow" />');
 		expect(html).toContain('<meta name="rabbitpay-landing" content="1" data-free-payments="50" data-free-storage="1" data-license-store="" />');
 		expect(html).toContain('<meta property="og:url" content="http://127.0.0.1:8099/" />');
-		expect(html).toContain("<title>RabbitPay | Invoicing and payments</title>");
+		expect(html).toContain("<title>RabbitPay | Invoices, payments, stock and accounting</title>");
 	});
 
 	test("links the pricing to the license store only when it is a web address", async () => {

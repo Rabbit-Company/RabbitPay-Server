@@ -122,16 +122,16 @@ const HOME_PAGES: HomePage[] = [
 	{
 		language: "en",
 		path: "/",
-		title: "RabbitPay | Invoicing and payments",
+		title: "RabbitPay | Invoices, payments, stock and accounting",
 		description:
-			"Invoicing and payments for Slovenian businesses, with FURS fiscal verification, e-SLOG e-invoices and VAT reports built in. Accept cards, PayPal, bank transfers and crypto.",
+			"Business software for Slovenian companies: invoicing with FURS fiscal verification, payments, inventory, accounting, payroll and an online store. Start free, or run it on your own server.",
 	},
 	{
 		language: "sl",
 		path: "/sl",
-		title: "RabbitPay | Računi in plačila",
+		title: "RabbitPay | Računi, plačila, zaloge in knjigovodstvo",
 		description:
-			"Izdajanje računov in plačila za slovenska podjetja, z davčnim potrjevanjem računov pri FURS, e-računi e-SLOG in poročili DDV. Sprejemajte kartice, PayPal, bančna nakazila in kriptovalute.",
+			"Poslovni program za slovenska podjetja: računi z davčnim potrjevanjem pri FURS, plačila, zaloge, knjigovodstvo, plače in spletna trgovina. Začnite brezplačno ali ga namestite na svoj strežnik.",
 	},
 ];
 

@@ -203,7 +203,7 @@ describe("home page", () => {
 	test("is described in English at the root", async () => {
 		const html = await (await get("/")).text();
 		expect(html).toContain('<html lang="en">');
-		expect(html).toContain("<title>RabbitPay | Invoicing and payments</title>");
+		expect(html).toContain("<title>RabbitPay | Invoices, payments, stock and accounting</title>");
 		expect(html).toContain(`<link rel="canonical" href="${Utils.publicUrl()}/" />`);
 		expect(html).toContain(`<link rel="alternate" hreflang="sl" href="${Utils.publicUrl()}/sl" />`);
 		expect(html).toContain(`<link rel="alternate" hreflang="x-default" href="${Utils.publicUrl()}/" />`);
@@ -213,9 +213,9 @@ describe("home page", () => {
 		for (const path of ["/sl", "/sl/"]) {
 			const html = await (await get(path)).text();
 			expect(html).toContain('<html lang="sl">');
-			expect(html).toContain("<title>RabbitPay | Računi in plačila</title>");
+			expect(html).toContain("<title>RabbitPay | Računi, plačila, zaloge in knjigovodstvo</title>");
 			expect(html).toContain('<meta name="robots" content="index, follow" />');
-			expect(html).toContain('<meta name="description" content="Izdajanje računov in plačila za slovenska podjetja');
+			expect(html).toContain('<meta name="description" content="Poslovni program za slovenska podjetja');
 			expect(html).toContain(`<link rel="canonical" href="${Utils.publicUrl()}/sl" />`);
 			expect(html).toContain(`<link rel="alternate" hreflang="en" href="${Utils.publicUrl()}/" />`);
 		}

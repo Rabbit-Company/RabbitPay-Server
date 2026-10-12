@@ -32,6 +32,9 @@ const ICONS: Record<string, string> = {
 	archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/>',
 	brush:
 		'<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9.2 12Z"/><path d="M7 14.5c-2 0-3.5 1.5-3.5 3.5 0 1.2-.5 2-1.5 2.5 1 .5 2.5 1 4 1 2.5 0 4.5-2 4.5-4.5Z"/>',
+	box: '<path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5M12 12v9"/>',
+	ledger: '<path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2Z"/><path d="M5 18a2 2 0 0 1 2-2h12M9 8h6M9 12h4"/>',
+	folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
 	check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
 	arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
 	github:
@@ -168,22 +171,56 @@ function paymentMethods(): HTMLElement {
 	);
 }
 
+function areas(): HTMLElement {
+	const items: { icon: string; name: string; licensed: boolean }[] = [
+		{ icon: "invoice", name: "sales", licensed: false },
+		{ icon: "chart", name: "costs", licensed: false },
+		{ icon: "store", name: "store", licensed: true },
+		{ icon: "box", name: "stock", licensed: true },
+		{ icon: "ledger", name: "books", licensed: true },
+		{ icon: "clock", name: "people", licensed: true },
+	];
+	return el(
+		"div",
+		{ class: "landing-areas" },
+		...items.map(({ icon, name, licensed }) =>
+			el(
+				"article",
+				{ class: "landing-area" },
+				el(
+					"div",
+					{ class: "landing-area-head" },
+					glyph(icon),
+					el("span", { class: `pill ${licensed ? "pill-open" : "pill-active"}` }, t(licensed ? "landing.area_license" : "landing.area_included"))
+				),
+				el("h3", {}, t(`landing.area_${name}` as UiKey)),
+				el("p", {}, t(`landing.area_${name}_body` as UiKey)),
+				el(
+					"ul",
+					{ class: "landing-checks" },
+					...[1, 2, 3, 4].map((point) => el("li", {}, glyph("check", 18), el("span", {}, t(`landing.area_${name}_${point}` as UiKey))))
+				)
+			)
+		)
+	);
+}
+
 function features(): HTMLElement {
 	const items: [string, UiKey, UiKey][] = [
-		["invoice", "landing.feature_invoices", "landing.feature_invoices_body"],
-		["repeat", "landing.feature_recurring", "landing.feature_recurring_body"],
-		["portal", "landing.feature_portal", "landing.feature_portal_body"],
-		["store", "landing.feature_store", "landing.feature_store_body"],
-		["terminal", "landing.feature_pos", "landing.feature_pos_body"],
-		["chart", "landing.feature_reports", "landing.feature_reports_body"],
 		["team", "landing.feature_team", "landing.feature_team_body"],
-		["clock", "landing.feature_workforce", "landing.feature_workforce_body"],
+		["folder", "landing.feature_files", "landing.feature_files_body"],
+		["brush", "landing.feature_brand", "landing.feature_brand_body"],
 		["code", "landing.feature_api", "landing.feature_api_body"],
 	];
 	return el(
 		"div",
-		{ class: "landing-features" },
-		...items.map(([icon, title, body]) => el("article", { class: "landing-feature" }, glyph(icon), el("h3", {}, t(title)), el("p", {}, t(body))))
+		{ class: "landing-platform" },
+		el("h3", { class: "landing-platform-title" }, t("landing.platform_title")),
+		el(
+			"div",
+			{ class: "landing-features" },
+			...items.map(([icon, title, body]) => el("article", { class: "landing-feature" }, glyph(icon), el("h3", {}, t(title)), el("p", {}, t(body))))
+		)
 	);
 }
 
@@ -196,6 +233,8 @@ function compliance(): HTMLElement {
 		"landing.eu_oss",
 		"landing.eu_sepa",
 		"landing.eu_import",
+		"landing.eu_stock",
+		"landing.eu_reports",
 		"landing.eu_languages",
 	];
 	return el(
@@ -266,6 +305,7 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 		"landing.license_storage",
 		"landing.license_files",
 		"landing.license_store",
+		"landing.license_inventory",
 		"landing.license_workforce",
 		"landing.license_accounting",
 		"landing.license_white_label",
@@ -321,8 +361,8 @@ export async function landingView(): Promise<HTMLElement> {
 			el(
 				"nav",
 				{ class: "landing-links" },
-				jump("payments", "landing.nav_payments"),
 				jump("features", "landing.nav_features"),
+				jump("payments", "landing.nav_payments"),
 				allowance("freePayments") !== null ? jump("pricing", "landing.nav_pricing") : null,
 				jump("self-hosting", "landing.nav_self_hosting")
 			),
@@ -399,8 +439,8 @@ export async function landingView(): Promise<HTMLElement> {
 			"main",
 			{ class: "landing-main" },
 			hero,
+			section("features", "landing.features_eyebrow", "landing.features_title", "landing.features_lead", areas(), features()),
 			section("payments", "landing.pay_eyebrow", "landing.pay_title", "landing.pay_lead", paymentMethods()),
-			section("features", "landing.features_eyebrow", "landing.features_title", "landing.features_lead", features()),
 			compliance(),
 			pricing(register("landing.create_account", "wide")),
 			section("self-hosting", "landing.host_eyebrow", "landing.host_title", "landing.host_lead", selfHosting()),
