@@ -1,6 +1,7 @@
 import {
 	InventoryApi,
 	PurchasingApi,
+	type CompanyLookup,
 	type InventoryOverview,
 	type Project,
 	type PurchaseOrder,
@@ -15,6 +16,7 @@ import { formatMoney, toDateInput, toMajorUnits, toMinorUnits } from "../money";
 import { t, type UiKey } from "../i18n";
 import { combobox, staticCombobox, type Combobox, type ComboOption } from "../combobox";
 import { countryOptions } from "../countries";
+import { companySearch, watchVatNumber } from "../company-lookup";
 import { remoteTable } from "../pagination";
 import { navigate } from "../router";
 import { confirmDialog, modal, reportError, toast } from "../ui";
@@ -44,8 +46,17 @@ function statusPill(status: PurchaseOrderStatus, partly = false): HTMLElement {
 }
 
 function supplierDialog(project: Project, supplier: Supplier | null, onSaved: (saved: Supplier) => void) {
-	const name = input("text", { maxlength: "240", required: true, value: supplier?.name ?? "" });
-	const taxNumber = input("text", { maxlength: "80", value: supplier?.tax_number ?? "" });
+	const lookup = companySearch();
+	const name = combobox({
+		search: (query) => lookup.search(query),
+		selected: supplier ? { value: supplier.name, label: supplier.name } : null,
+		freeText: true,
+		required: true,
+		class: "combo-customer",
+		placeholder: t("purchase.suppliers_search"),
+	});
+	name.input.maxLength = 240;
+	const taxNumber = input("text", { maxlength: "80", value: supplier?.tax_number ?? "", placeholder: "SI12345678" });
 	const country = select([{ value: "", label: t("ui.none") }, ...countryOptions()], supplier?.country ?? "SI");
 	const address = input("text", { maxlength: "255", value: supplier?.address_line1 ?? "" });
 	const postalCode = input("text", { maxlength: "32", value: supplier?.postal_code ?? "" });
@@ -57,6 +68,20 @@ function supplierDialog(project: Project, supplier: Supplier | null, onSaved: (s
 	const days = input("number", { min: "0", max: "365", step: "1", value: supplier?.payment_days === null || !supplier ? "" : String(supplier.payment_days) });
 	const notes = el("textarea", { rows: "2", maxlength: "2000" });
 	notes.value = supplier?.notes ?? "";
+	const fill = (found: CompanyLookup) => {
+		name.select({ value: found.name, label: found.name });
+		if (found.address_line1) address.value = found.address_line1;
+		if (found.postal_code) postalCode.value = found.postal_code;
+		if (found.city) city.value = found.city;
+		if (found.country) country.value = found.country;
+		taxNumber.value = found.vat_number ?? found.tax_number ?? taxNumber.value;
+		toast(t("lookup.filled", { source: t(found.source === "furs" ? "lookup.source_furs" : "lookup.source_vies"), name: found.name }));
+	};
+	name.onChange((option) => {
+		const found = lookup.found(option);
+		if (found) fill(found);
+	});
+	watchVatNumber(taxNumber, fill, () => !name.value.trim());
 	const submit = el("button", { class: "button primary", type: "submit" }, t("ui.save"));
 	const form = el(
 		"form",
@@ -64,6 +89,10 @@ function supplierDialog(project: Project, supplier: Supplier | null, onSaved: (s
 			class: "stack",
 			onSubmit: async (event) => {
 				event.preventDefault();
+				if (!name.value.trim()) {
+					name.input.focus();
+					return;
+				}
 				submit.disabled = true;
 				const data: SupplierInput = {
 					name: name.value.trim(),
@@ -91,21 +120,22 @@ function supplierDialog(project: Project, supplier: Supplier | null, onSaved: (s
 				}
 			},
 		},
-		el("div", { class: "grid" }, field(t("purchase.supplier_name"), name), field(t("stock.supplier_tax_number"), taxNumber)),
-		el("div", { class: "grid" }, field(t("stock.warehouse_address"), address), field(t("purchase.postal_code"), postalCode), field(t("purchase.city"), city)),
-		el("div", { class: "grid" }, field(t("purchase.country"), country), field(t("purchase.email"), email), field(t("purchase.phone"), phone)),
 		el(
 			"div",
 			{ class: "grid" },
-			field(t("purchase.iban"), iban, t("purchase.iban_hint")),
-			field(t("purchase.bic"), bic),
-			field(t("purchase.payment_days"), days, t("purchase.payment_days_hint"))
+			field(t("purchase.supplier_name"), name.element, t("purchase.supplier_name_hint")),
+			field(t("stock.supplier_tax_number"), taxNumber)
 		),
+		field(t("stock.warehouse_address"), address),
+		el("div", { class: "grid" }, field(t("purchase.postal_code"), postalCode), field(t("purchase.city"), city)),
+		el("div", { class: "grid" }, field(t("purchase.country"), country), field(t("purchase.email"), email)),
+		el("div", { class: "grid" }, field(t("purchase.phone"), phone), field(t("purchase.payment_days"), days, t("purchase.payment_days_hint"))),
+		el("div", { class: "grid" }, field(t("purchase.iban"), iban, t("purchase.iban_hint")), field(t("purchase.bic"), bic)),
 		field(t("stock.notes"), notes),
 		el("div", { class: "form-actions" }, submit)
 	);
 	const dialog = modal(supplier ? t("purchase.supplier_edit") : t("purchase.supplier_new"), form);
-	name.focus();
+	name.input.focus();
 }
 
 export async function inventorySuppliersView(uuid: string): Promise<HTMLElement> {

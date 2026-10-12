@@ -5042,4 +5042,5 @@ export const en = {
 	"landing.eu_stock": "Stock valued by SRS 4, with yearly stocktakes",
 	"landing.eu_reports": "REK-O forms and the AJPES annual report",
 	"landing.license_inventory": "Inventory and purchasing",
+	"purchase.supplier_name_hint": "Type a name or tax number to fill the details from the FURS register.",
 } as const;

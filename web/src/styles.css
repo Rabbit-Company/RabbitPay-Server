@@ -8494,3 +8494,7 @@ td a.warn {
 		grid-template-columns: 1fr;
 	}
 }
+
+.stock-page .ledger-controls > .switch {
+	margin-bottom: 0.9rem;
+}

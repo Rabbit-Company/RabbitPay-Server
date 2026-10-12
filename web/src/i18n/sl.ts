@@ -5052,4 +5052,5 @@ export const sl: UiDictionary = {
 	"landing.eu_stock": "Vrednotenje zalog po SRS 4 z letnimi inventurami",
 	"landing.eu_reports": "Obrazci REK-O in letno poročilo AJPES",
 	"landing.license_inventory": "Zaloge in nabava",
+	"purchase.supplier_name_hint": "Vpišite naziv ali davčno številko, da se podatki izpolnijo iz registra FURS.",
 };
