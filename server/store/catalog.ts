@@ -10,6 +10,7 @@ import { parseLicenseProduct } from "../license-pricing";
 import { productTexts, translatedCategories, type ProductText } from "./translations";
 import type { Availability } from "./config";
 import type { CatalogItemRow, StoreAttributeRow, StoreCategoryRow, StoreImageRow, StoreProductRow } from "../database/models";
+import { searchPatterns, textLike } from "../text-search";
 
 export const LOW_STOCK = 5;
 export const MAX_FILTER_VALUES = 50;
@@ -112,21 +113,21 @@ export interface ProductQuery {
 }
 
 function baseFilter(sql: SQL, projectId: string, query: Pick<ProductQuery, "categories" | "search" | "language">) {
-	const pattern = query.search === null ? null : `%${query.search.toLowerCase()}%`;
+	const patterns = query.search === null ? null : searchPatterns(query.search);
 	const category = query.categories === null ? sql`` : sql`AND sp.store_category IN ${sql(query.categories)}`;
 	const search =
-		pattern === null
+		patterns === null
 			? sql``
-			: sql`AND (LOWER(COALESCE(sp.name, c.name)) LIKE ${pattern} OR LOWER(COALESCE(sp.summary, '')) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}
-				OR c.uuid IN (SELECT a.item FROM store_attributes a WHERE a.project = ${projectId} AND LOWER(a.attribute_value) LIKE ${pattern})
-				${translatedSearch(sql, projectId, query.language, pattern)})`;
+			: sql`AND (${textLike(sql, sql`COALESCE(sp.name, c.name)`, patterns)} OR ${textLike(sql, sql`sp.summary`, patterns)} OR ${textLike(sql, sql`c.sku`, patterns)}
+				OR c.uuid IN (SELECT a.item FROM store_attributes a WHERE a.project = ${projectId} AND ${textLike(sql, sql`a.attribute_value`, patterns)})
+				${translatedSearch(sql, projectId, query.language, patterns)})`;
 	return sql`sp.project = ${projectId} AND sp.published = 1 AND c.archived = 0 ${category} ${search}`;
 }
 
-function translatedSearch(sql: SQL, projectId: string, language: string | null, pattern: string) {
+function translatedSearch(sql: SQL, projectId: string, language: string | null, patterns: string[]) {
 	if (language === null) return sql``;
 	return sql`OR c.uuid IN (SELECT t.item FROM store_product_translations t WHERE t.project = ${projectId} AND t.language = ${language}
-		AND (LOWER(COALESCE(t.name, '')) LIKE ${pattern} OR LOWER(COALESCE(t.summary, '')) LIKE ${pattern}))`;
+		AND (${textLike(sql, sql`t.name`, patterns)} OR ${textLike(sql, sql`t.summary`, patterns)}))`;
 }
 
 function attributeFilter(sql: SQL, projectId: string, filters: Map<string, string[]>) {

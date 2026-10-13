@@ -6,6 +6,7 @@ import { movementRow, replayItem } from "./stock";
 import { onOrderQuantities } from "./purchasing";
 import { emptyState, onHand, type StockLayer } from "./valuation";
 import type { CatalogItemRow, ProjectRow, StockDocumentRow, StockKind, StockLevelRow, StockMovementRow } from "../database/models";
+import { textSearch } from "../text-search";
 
 export type StockFilter = "all" | "in_stock" | "low" | "negative" | "empty";
 
@@ -29,10 +30,9 @@ export interface StockListRow {
 type TrackedItem = Pick<CatalogItemRow, "uuid" | "name" | "sku" | "unit" | "stock_kind" | "stock_minimum" | "archived">;
 
 async function trackedItems(project: string, search: string | null): Promise<TrackedItem[]> {
-	const pattern = `%${search ?? ""}%`;
 	return (await Database`
 		SELECT uuid, name, sku, unit, stock_kind, stock_minimum, archived FROM catalog_items
-		WHERE project = ${project} AND stock_kind IS NOT NULL AND (name LIKE ${pattern} OR sku LIKE ${pattern})
+		WHERE project = ${project} AND stock_kind IS NOT NULL AND ${textSearch(Database, search ?? "", [Database`name`, Database`sku`])}
 		ORDER BY name ASC, uuid ASC
 	`) as TrackedItem[];
 }

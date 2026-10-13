@@ -16,6 +16,7 @@ export interface ShotOptions {
 const THEMES: Theme[] = ["dark", "light"];
 const PUBLIC_ADDRESS = "https://rabbitpay.net";
 const MARK_CLASS = "help-shot-mark";
+const BACKDROP_CLASS = "help-shot-backdrop";
 const MARK_STYLE =
 	"position:absolute;z-index:2147483647;pointer-events:none;box-sizing:border-box;border:3px solid #ff3d71;border-radius:10px;box-shadow:0 0 0 4px rgba(255,61,113,0.28)";
 
@@ -40,7 +41,8 @@ export class Studio {
 		readonly out: string,
 		readonly language: UiLanguage,
 		readonly module: string,
-		readonly mailbox: string[] = []
+		readonly mailbox: string[] = [],
+		readonly database = ""
 	) {}
 
 	linkFromEmail(path: string): string {
@@ -113,6 +115,12 @@ export class Studio {
 			await this.browser.eval(`scrollTo(0, 0)`);
 			await this.browser.stretch((await this.browser.pageSize()).height);
 		} else if (options.scroll) await this.browser.scrollTo(options.scroll);
+		const plain = overlay && list(options.target).length > 0;
+		if (plain) {
+			await this.browser.eval(
+				`(() => { const style = document.createElement("style"); style.className = "${BACKDROP_CLASS}"; style.textContent = ".overlay { background: var(--bg) !important; backdrop-filter: none !important; }"; document.head.appendChild(style); })()`
+			);
+		}
 		await this.mark(list(options.mark));
 		const clip = await this.clip(options);
 		const key = `${this.language}/${this.module}/${page}/${name}`;
@@ -127,7 +135,7 @@ export class Studio {
 					.slice(0, 8);
 		}
 		await this.browser.theme("dark");
-		await this.browser.eval(`document.querySelectorAll(".${MARK_CLASS}").forEach((node) => node.remove())`);
+		await this.browser.eval(`document.querySelectorAll(".${MARK_CLASS}, .${BACKDROP_CLASS}").forEach((node) => node.remove())`);
 		if (stretched) await this.browser.stretch(null);
 		this.shots.set(key, [Math.round(clip.width), Math.round(clip.height), version]);
 		console.log(`  ${key} (${Math.round(clip.width)} x ${Math.round(clip.height)})`);

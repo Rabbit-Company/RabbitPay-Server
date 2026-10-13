@@ -82,7 +82,7 @@ export class Browser {
 	private listeners = new Map<string, ((params: any) => void)[]>();
 	private process!: ReturnType<typeof Bun.spawn>;
 	private session = "";
-	size = { width: 1120, height: 760, scale: 2 };
+	size = { width: 1280, height: 800, scale: 2 };
 
 	static async launch(port = 9333): Promise<Browser> {
 		const browser = new Browser();

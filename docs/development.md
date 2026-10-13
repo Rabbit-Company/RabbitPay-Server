@@ -69,12 +69,24 @@ also rewrites [`server/help-shots.ts`](../server/help-shots.ts) with the size
 and a version of every image, so pages reserve the right space and browsers
 fetch a changed image again. Commit that file together with the pages.
 
-| Option                    | What it does                                                        |
-| ------------------------- | ------------------------------------------------------------------- |
-| `--languages en`          | Only one language                                                   |
-| `--out <folder>`          | Where the images go, `cdn` by default                               |
-| `--keep`                  | Leaves the throwaway server running, to look at it or to continue   |
-| `--reuse --steps <names>` | Runs only the named steps of a guide against the server kept before |
+| Option                    | What it does                                                           |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `--languages en`          | Only one language                                                      |
+| `--out <folder>`          | Where the images go, `cdn` by default                                  |
+| `--from <module>`         | Starts at this module, from the state saved after the module before it |
+| `--to <module>`           | Stops after this module                                                |
+| `--keep`                  | Leaves the throwaway server running, to look at it or to continue      |
+| `--reuse --steps <names>` | Runs only the named steps of a guide against the server kept before    |
+
+A full run saves the database after every module, so `--from invoices --to
+invoices` replays only the invoices guide without registering the accounts
+again. Each guide builds on the one before it: the project made in Getting
+started is the one the invoices are issued in.
+
+Emails go to a small mail server inside the tool, VAT numbers are answered by a
+stand-in for VIES, and the FURS company register is downloaded once and then
+kept in the temporary folder. Exchange rates are still read from the internet,
+so the crypto payment page needs a connection.
 
 The people and companies in the screenshots are defined in
 [`tools/help-shots/demo.ts`](../tools/help-shots/demo.ts). The business that

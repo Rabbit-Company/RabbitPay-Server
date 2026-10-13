@@ -156,7 +156,7 @@ async function findYourWay(studio: Studio, session: Session) {
 	await studio.shot(page, "phone");
 	await browser.click(".project-nav-toggle");
 	await studio.shot(page, "phone-menu");
-	await browser.viewport(1120, 760);
+	await browser.viewport(1280, 800);
 }
 
 async function companyDetails(studio: Studio, session: Session) {

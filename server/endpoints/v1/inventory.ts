@@ -48,6 +48,7 @@ import type {
 	StockMovementRow,
 	WarehouseRow,
 } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 const base = "/api/v1/projects/:uuid/inventory";
 const view = [Auth.required(), Permissions.require(Permission.STOCK_VIEW)] as const;
@@ -415,14 +416,14 @@ Server.app.put(`${base}/items/:item`, ...edit, async (ctx) => {
 
 Server.app.get(`${base}/candidates`, ...view, async (ctx) => {
 	const project = Permissions.project(ctx);
-	const pattern = `%${ctx.query().get("search")?.trim() ?? ""}%`;
+	const search = ctx.query().get("search")?.trim() ?? "";
 	const wanted = ctx.query().get("item");
 	const only = wanted && Validate.uuid(wanted) ? Database`AND c.uuid = ${wanted}` : Database``;
 	const items = (await Database`
 		SELECT c.uuid, c.name, c.sku, c.unit, (SELECT sp.stock FROM store_products sp WHERE sp.item = c.uuid) AS store_stock
 		FROM catalog_items c
 		WHERE c.project = ${project.uuid} AND c.archived = 0 AND c.stock_kind IS NULL AND c.supply_type = 'goods' AND c.delivers_keys = 0
-			AND c.license IS NULL AND (c.name LIKE ${pattern} OR c.sku LIKE ${pattern}) ${only}
+			AND c.license IS NULL AND ${textSearch(Database, search, [Database`c.name`, Database`c.sku`])} ${only}
 		ORDER BY c.name ASC LIMIT 200
 	`) as (Pick<CatalogItemRow, "uuid" | "name" | "sku" | "unit"> & { store_stock: number | null })[];
 	return Utils.ok(ctx, { items: items.map((item) => ({ ...item, store_stock: item.store_stock === null ? null : safeInteger(item.store_stock) })) });
@@ -437,13 +438,13 @@ Server.app.get(`${base}/documents`, ...view, async (ctx) => {
 	const query = ctx.query();
 	const type = documentType(query.get("type"));
 	const status = ["draft", "posted", "canceled"].includes(query.get("status") ?? "") ? query.get("status") : null;
-	const pattern = `%${query.get("search")?.trim() ?? ""}%`;
+	const search = query.get("search")?.trim() ?? "";
 	const { limit, offset } = page(ctx);
 	const ofType = type ? Database`AND d.document_type = ${type}` : Database``;
 	const inStatus = status ? Database`AND d.status = ${status}` : Database``;
 	const where = Database`
 		d.project = ${project.uuid} ${ofType} ${inStatus}
-		AND (COALESCE(d.number, '') LIKE ${pattern} OR COALESCE(d.partner, '') LIKE ${pattern} OR COALESCE(d.external_reference, '') LIKE ${pattern})
+		AND ${textSearch(Database, search, [Database`d.number`, Database`d.partner`, Database`d.external_reference`])}
 	`;
 	const rows = (await Database`
 		SELECT d.*, w.name AS warehouse_name, t.name AS target_name,

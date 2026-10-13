@@ -58,6 +58,7 @@ import type {
 	StoreImageRow,
 	StoreProductRow,
 } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 const base = "/api/v1/projects/:uuid/store";
 const imageBody = bodyLimit<AppState>({ maxSize: STORE_IMAGE_BODY_LIMIT, message: "The image is too large." });
@@ -588,7 +589,6 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 	const limit = Math.min(Math.max(Number(query.get("limit")) || 50, 1), 200);
 	const offset = Math.max(Number(query.get("offset")) || 0, 0);
 	const search = query.get("search")?.trim().toLowerCase() || null;
-	const pattern = `%${search ?? ""}%`;
 	const status = query.get("status");
 	const category = query.get("category");
 	if (category !== null && category !== "none" && !Validate.uuid(category)) return Utils.fail(ctx, ErrorCode.STORE_CATEGORY_NOT_FOUND);
@@ -604,7 +604,7 @@ Server.app.get(`${base}/products`, Auth.required(), Permissions.require(Permissi
 	const categoryFilter =
 		category === null ? Database`` : category === "none" ? Database`AND sp.store_category IS NULL` : Database`AND sp.store_category = ${category}`;
 	const where = Database`c.project = ${project.uuid} AND c.archived = 0
-		AND (LOWER(c.name) LIKE ${pattern} OR LOWER(COALESCE(c.sku, '')) LIKE ${pattern}) ${statusFilter} ${categoryFilter}`;
+		AND ${textSearch(Database, search ?? "", [Database`c.name`, Database`c.sku`])} ${statusFilter} ${categoryFilter}`;
 
 	const rows = (await Database`
 		SELECT c.*, sp.slug AS store_slug, sp.name AS store_name, sp.published, sp.featured, sp.store_category, sp.summary,
@@ -956,7 +956,6 @@ Server.app.get(`${base}/orders`, Auth.required(), Permissions.require(Permission
 	const search = query.get("search")?.trim().toLowerCase() || null;
 	if (fulfillment !== null && !isFulfillment(fulfillment)) return Utils.fail(ctx, ErrorCode.INVALID_STORE_ORDER);
 
-	const pattern = `%${search ?? ""}%`;
 	const fulfillmentFilter = fulfillment === null ? Database`` : Database`AND o.fulfillment = ${fulfillment}`;
 	const paymentFilter =
 		payment === "paid"
@@ -967,8 +966,7 @@ Server.app.get(`${base}/orders`, Auth.required(), Permissions.require(Permission
 					? Database`AND i.status = 'paid' AND o.fulfillment IN ('pending', 'processing')`
 					: Database``;
 	const where = Database`o.project = ${project.uuid} ${fulfillmentFilter} ${paymentFilter}
-		AND (LOWER(i.reference) LIKE ${pattern} OR LOWER(COALESCE(o.number, '')) LIKE ${pattern}
-			OR LOWER(o.email) LIKE ${pattern} OR LOWER(COALESCE(c.name, '')) LIKE ${pattern})`;
+		AND ${textSearch(Database, search ?? "", [Database`i.reference`, Database`o.number`, Database`o.email`, Database`c.name`])}`;
 
 	const rows = (await Database`
 		SELECT o.*, i.reference, i.status, i.issued_at, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount, i.due_date,

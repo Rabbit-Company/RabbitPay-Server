@@ -177,7 +177,7 @@ describe("help endpoints", () => {
 		const module = (await (await get("/api/v1/help/en/invoices")).json()) as { data: { title: string; content: string; page: string | null } };
 		expect(module.data.title).toBe("Invoices");
 		expect(module.data.page).toBeNull();
-		expect(module.data.content).toContain("## Create an invoice");
+		expect(module.data.content).toContain("## Everyday work");
 
 		const page = (await (await get("/api/v1/help/en/getting-started/create-account")).json()) as { data: { title: string; module: string; page: string } };
 		expect(page.data.title).toBe("Create your account");

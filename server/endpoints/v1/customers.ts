@@ -14,6 +14,7 @@ import { isPlausibleIban, normalizeIban } from "../../payments/bank";
 import { checkVatNumber, isEnabled as viesEnabled, ViesUnavailable } from "../../vies";
 import { customerStats, type CustomerInvoiceFacts } from "../../customer-stats";
 import type { CustomerRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 interface CustomerBody {
 	name?: string | null;
@@ -106,21 +107,13 @@ Server.app.get("/api/v1/projects/:uuid/customers", Auth.required(), Permissions.
 	const offset = Math.max(Number(query.get("offset")) || 0, 0);
 	const search = query.get("search");
 
-	const searchPattern = `%${search}%`;
-	const customers = search
-		? ((await Database`
-				SELECT * FROM customers
-				WHERE project = ${project.uuid} AND (email LIKE ${searchPattern} OR name LIKE ${searchPattern} OR vat_number LIKE ${searchPattern} OR tax_number LIKE ${searchPattern})
-				ORDER BY created DESC, uuid ASC LIMIT ${limit} OFFSET ${offset}
-			`) as CustomerRow[])
-		: ((await Database`
-				SELECT * FROM customers WHERE project = ${project.uuid}
-				ORDER BY created DESC, uuid ASC LIMIT ${limit} OFFSET ${offset}
-			`) as CustomerRow[]);
-
 	const searchFilter = search
-		? Database`AND (email LIKE ${searchPattern} OR name LIKE ${searchPattern} OR vat_number LIKE ${searchPattern} OR tax_number LIKE ${searchPattern})`
+		? Database`AND ${textSearch(Database, search, [Database`email`, Database`name`, Database`vat_number`, Database`tax_number`])}`
 		: Database``;
+	const customers = (await Database`
+		SELECT * FROM customers WHERE project = ${project.uuid} ${searchFilter}
+		ORDER BY created DESC, uuid ASC LIMIT ${limit} OFFSET ${offset}
+	`) as CustomerRow[];
 	const [total] = (await Database`SELECT COUNT(*) AS count FROM customers WHERE project = ${project.uuid} ${searchFilter}`) as { count: number }[];
 
 	return Utils.ok(ctx, { customers: customers.map(present), total: total.count, limit, offset });

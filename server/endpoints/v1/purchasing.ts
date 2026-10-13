@@ -28,6 +28,7 @@ import {
 } from "../../inventory/purchasing";
 import { stockList } from "../../inventory/reports";
 import type { AppState, PurchaseOrderRow, PurchaseOrderStatus, SupplierRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 const base = "/api/v1/projects/:uuid/inventory";
 const view = [Auth.required(), Permissions.require(Permission.STOCK_VIEW)] as const;
@@ -54,11 +55,11 @@ async function audit(ctx: Context<AppState>, action: string, entityType: string,
 Server.app.get(`${base}/suppliers`, ...view, async (ctx) => {
 	const project = Permissions.project(ctx);
 	const query = ctx.query();
-	const pattern = `%${query.get("search")?.trim() ?? ""}%`;
+	const search = query.get("search")?.trim() ?? "";
 	const archived = query.get("archived") === "1" ? 1 : 0;
 	const rows = (await Database`
 		SELECT * FROM suppliers WHERE project = ${project.uuid} AND archived = ${archived}
-			AND (name LIKE ${pattern} OR COALESCE(tax_number, '') LIKE ${pattern})
+			AND ${textSearch(Database, search, [Database`name`, Database`tax_number`])}
 		ORDER BY name ASC LIMIT 500
 	`) as SupplierRow[];
 	return Utils.ok(ctx, { suppliers: rows.map(presentSupplier) });
@@ -110,11 +111,11 @@ Server.app.get(`${base}/orders`, ...view, async (ctx) => {
 	const project = Permissions.project(ctx);
 	const query = ctx.query();
 	const status = ORDER_STATUSES.includes(query.get("status") as PurchaseOrderStatus) ? query.get("status") : null;
-	const pattern = `%${query.get("search")?.trim() ?? ""}%`;
+	const search = query.get("search")?.trim() ?? "";
 	const limit = Math.min(Math.max(Number(query.get("limit")) || 50, 1), 500);
 	const offset = Math.max(Number(query.get("offset")) || 0, 0);
 	const inStatus = status ? Database`AND po.status = ${status}` : Database``;
-	const where = Database`po.project = ${project.uuid} ${inStatus} AND (COALESCE(po.number, '') LIKE ${pattern} OR s.name LIKE ${pattern})`;
+	const where = Database`po.project = ${project.uuid} ${inStatus} AND ${textSearch(Database, search, [Database`po.number`, Database`s.name`])}`;
 	const rows = (await Database`
 		SELECT po.*, s.name AS supplier_name,
 			(SELECT COALESCE(SUM(pl.value), 0) FROM purchase_order_lines pl WHERE pl.purchase_order = po.uuid) AS ordered_value,

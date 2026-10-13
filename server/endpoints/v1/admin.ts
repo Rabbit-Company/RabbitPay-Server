@@ -56,6 +56,7 @@ import {
 import { MAX_INVITE_USES, createInvite, presentInvite } from "../../registration";
 import { purgeProject } from "../../project-purge";
 import type { AccountRow, LicenseKeyRow, LicenseStatus, ProjectRow, RegistrationInviteRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 const guard = [Auth.required(), Admin.required()] as const;
 
@@ -367,14 +368,12 @@ Server.app.get("/api/v1/admin/licenses", ...guard, async (ctx) => {
 
 	const statusFilter = status !== null && LICENSE_STATUSES.includes(status as LicenseStatus) ? status : null;
 	const typeFilter = isLicenseType(type) ? type : null;
-	const pattern = search === null ? null : `%${search}%`;
 	const byStatus = statusFilter === null ? Database`` : Database`AND l.status = ${statusFilter}`;
 	const byType = typeFilter === null ? Database`` : Database`AND l.type = ${typeFilter}`;
 	const bySearch =
-		pattern === null
+		search === null
 			? Database``
-			: Database`AND (LOWER(l.code) LIKE ${pattern} OR LOWER(COALESCE(l.buyer_name, '')) LIKE ${pattern}
-				OR LOWER(COALESCE(l.buyer_email, '')) LIKE ${pattern} OR LOWER(COALESCE(l.note, '')) LIKE ${pattern})`;
+			: Database`AND ${textSearch(Database, search, [Database`l.code`, Database`l.buyer_name`, Database`l.buyer_email`, Database`l.note`])}`;
 
 	const rows = (await Database`
 		SELECT l.*, p.name AS project_name FROM license_keys l
@@ -506,13 +505,11 @@ Server.app.post("/api/v1/admin/licenses/:license/revoke", ...guard, async (ctx) 
 
 Server.app.get("/api/v1/admin/projects", ...guard, async (ctx) => {
 	const { limit, offset, search } = paging(ctx.query());
-	const pattern = search === null ? null : `%${search}%`;
 	const bySearch =
-		pattern === null
+		search === null
 			? Database``
-			: Database`AND (LOWER(name) LIKE ${pattern} OR LOWER(COALESCE(display_name, '')) LIKE ${pattern}
-				OR LOWER(created_by) LIKE ${pattern} OR LOWER(uuid) LIKE ${pattern}
-				OR created_by IN (SELECT username FROM accounts WHERE LOWER(email) LIKE ${pattern}))`;
+			: Database`AND (${textSearch(Database, search, [Database`name`, Database`display_name`, Database`created_by`, Database`uuid`])}
+				OR created_by IN (SELECT username FROM accounts WHERE ${textSearch(Database, search, [Database`email`])}))`;
 
 	await meterAll();
 
@@ -718,8 +715,7 @@ Server.app.post("/api/v1/admin/projects/:project/licenses", ...guard, async (ctx
 
 Server.app.get("/api/v1/admin/invites", ...guard, async (ctx) => {
 	const { limit, offset, search } = paging(ctx.query());
-	const pattern = search === null ? null : `%${search}%`;
-	const bySearch = pattern === null ? Database`` : Database`AND (LOWER(code) LIKE ${pattern} OR LOWER(COALESCE(note, '')) LIKE ${pattern})`;
+	const bySearch = search === null ? Database`` : Database`AND ${textSearch(Database, search, [Database`code`, Database`note`])}`;
 
 	const rows = (await Database`
 		SELECT * FROM registration_invites
@@ -787,8 +783,7 @@ Server.app.post("/api/v1/admin/invites/:invite/revoke", ...guard, async (ctx) =>
 
 Server.app.get("/api/v1/admin/accounts", ...guard, async (ctx) => {
 	const { limit, offset, search } = paging(ctx.query());
-	const pattern = search === null ? null : `%${search}%`;
-	const bySearch = pattern === null ? Database`` : Database`AND (LOWER(a.username) LIKE ${pattern} OR LOWER(a.email) LIKE ${pattern})`;
+	const bySearch = search === null ? Database`` : Database`AND ${textSearch(Database, search, [Database`a.username`, Database`a.email`])}`;
 
 	const rows = (await Database`
 		SELECT a.*, (

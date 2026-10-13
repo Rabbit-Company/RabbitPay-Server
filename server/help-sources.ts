@@ -20,8 +20,46 @@ import gettingStartedLicensesEn from "../docs/help/en/getting-started/licenses.m
 import gettingStartedLicensesSl from "../docs/help/sl/getting-started/licenses.md" with { type: "text" };
 import invoicesEn from "../docs/help/en/invoices/index.md" with { type: "text" };
 import invoicesSl from "../docs/help/sl/invoices/index.md" with { type: "text" };
+import invoicesCreateInvoiceEn from "../docs/help/en/invoices/create-invoice.md" with { type: "text" };
+import invoicesCreateInvoiceSl from "../docs/help/sl/invoices/create-invoice.md" with { type: "text" };
+import invoicesDraftsEn from "../docs/help/en/invoices/drafts.md" with { type: "text" };
+import invoicesDraftsSl from "../docs/help/sl/invoices/drafts.md" with { type: "text" };
+import invoicesSendEn from "../docs/help/en/invoices/send.md" with { type: "text" };
+import invoicesSendSl from "../docs/help/sl/invoices/send.md" with { type: "text" };
+import invoicesPrintAndDownloadEn from "../docs/help/en/invoices/print-and-download.md" with { type: "text" };
+import invoicesPrintAndDownloadSl from "../docs/help/sl/invoices/print-and-download.md" with { type: "text" };
+import invoicesRecordPaymentEn from "../docs/help/en/invoices/record-payment.md" with { type: "text" };
+import invoicesRecordPaymentSl from "../docs/help/sl/invoices/record-payment.md" with { type: "text" };
+import invoicesCreditNotesEn from "../docs/help/en/invoices/credit-notes.md" with { type: "text" };
+import invoicesCreditNotesSl from "../docs/help/sl/invoices/credit-notes.md" with { type: "text" };
+import invoicesProFormaEn from "../docs/help/en/invoices/pro-forma.md" with { type: "text" };
+import invoicesProFormaSl from "../docs/help/sl/invoices/pro-forma.md" with { type: "text" };
+import invoicesRecurringEn from "../docs/help/en/invoices/recurring.md" with { type: "text" };
+import invoicesRecurringSl from "../docs/help/sl/invoices/recurring.md" with { type: "text" };
+import invoicesCustomersEn from "../docs/help/en/invoices/customers.md" with { type: "text" };
+import invoicesCustomersSl from "../docs/help/sl/invoices/customers.md" with { type: "text" };
+import invoicesItemsEn from "../docs/help/en/invoices/items.md" with { type: "text" };
+import invoicesItemsSl from "../docs/help/sl/invoices/items.md" with { type: "text" };
+import invoicesNumberingEn from "../docs/help/en/invoices/numbering.md" with { type: "text" };
+import invoicesNumberingSl from "../docs/help/sl/invoices/numbering.md" with { type: "text" };
+import invoicesDesignEn from "../docs/help/en/invoices/design.md" with { type: "text" };
+import invoicesDesignSl from "../docs/help/sl/invoices/design.md" with { type: "text" };
 import paymentsEn from "../docs/help/en/payments/index.md" with { type: "text" };
 import paymentsSl from "../docs/help/sl/payments/index.md" with { type: "text" };
+import paymentsPaymentMethodsEn from "../docs/help/en/payments/payment-methods.md" with { type: "text" };
+import paymentsPaymentMethodsSl from "../docs/help/sl/payments/payment-methods.md" with { type: "text" };
+import paymentsBankTransferEn from "../docs/help/en/payments/bank-transfer.md" with { type: "text" };
+import paymentsBankTransferSl from "../docs/help/sl/payments/bank-transfer.md" with { type: "text" };
+import paymentsCardsEn from "../docs/help/en/payments/cards.md" with { type: "text" };
+import paymentsCardsSl from "../docs/help/sl/payments/cards.md" with { type: "text" };
+import paymentsPaypalEn from "../docs/help/en/payments/paypal.md" with { type: "text" };
+import paymentsPaypalSl from "../docs/help/sl/payments/paypal.md" with { type: "text" };
+import paymentsCryptoEn from "../docs/help/en/payments/crypto.md" with { type: "text" };
+import paymentsCryptoSl from "../docs/help/sl/payments/crypto.md" with { type: "text" };
+import paymentsPaymentPageEn from "../docs/help/en/payments/payment-page.md" with { type: "text" };
+import paymentsPaymentPageSl from "../docs/help/sl/payments/payment-page.md" with { type: "text" };
+import paymentsFollowPaymentsEn from "../docs/help/en/payments/follow-payments.md" with { type: "text" };
+import paymentsFollowPaymentsSl from "../docs/help/sl/payments/follow-payments.md" with { type: "text" };
 import expensesAndReportsEn from "../docs/help/en/expenses-and-reports/index.md" with { type: "text" };
 import expensesAndReportsSl from "../docs/help/sl/expenses-and-reports/index.md" with { type: "text" };
 import onlineStoreEn from "../docs/help/en/online-store/index.md" with { type: "text" };
@@ -62,8 +100,39 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "licenses", en: gettingStartedLicensesEn, sl: gettingStartedLicensesSl },
 		],
 	},
-	{ slug: "invoices", en: invoicesEn, sl: invoicesSl, pages: [] },
-	{ slug: "payments", en: paymentsEn, sl: paymentsSl, pages: [] },
+	{
+		slug: "invoices",
+		en: invoicesEn,
+		sl: invoicesSl,
+		pages: [
+			{ slug: "create-invoice", en: invoicesCreateInvoiceEn, sl: invoicesCreateInvoiceSl },
+			{ slug: "drafts", en: invoicesDraftsEn, sl: invoicesDraftsSl },
+			{ slug: "send", en: invoicesSendEn, sl: invoicesSendSl },
+			{ slug: "print-and-download", en: invoicesPrintAndDownloadEn, sl: invoicesPrintAndDownloadSl },
+			{ slug: "record-payment", en: invoicesRecordPaymentEn, sl: invoicesRecordPaymentSl },
+			{ slug: "credit-notes", en: invoicesCreditNotesEn, sl: invoicesCreditNotesSl },
+			{ slug: "pro-forma", en: invoicesProFormaEn, sl: invoicesProFormaSl },
+			{ slug: "recurring", en: invoicesRecurringEn, sl: invoicesRecurringSl },
+			{ slug: "customers", en: invoicesCustomersEn, sl: invoicesCustomersSl },
+			{ slug: "items", en: invoicesItemsEn, sl: invoicesItemsSl },
+			{ slug: "numbering", en: invoicesNumberingEn, sl: invoicesNumberingSl },
+			{ slug: "design", en: invoicesDesignEn, sl: invoicesDesignSl },
+		],
+	},
+	{
+		slug: "payments",
+		en: paymentsEn,
+		sl: paymentsSl,
+		pages: [
+			{ slug: "payment-methods", en: paymentsPaymentMethodsEn, sl: paymentsPaymentMethodsSl },
+			{ slug: "bank-transfer", en: paymentsBankTransferEn, sl: paymentsBankTransferSl },
+			{ slug: "cards", en: paymentsCardsEn, sl: paymentsCardsSl },
+			{ slug: "paypal", en: paymentsPaypalEn, sl: paymentsPaypalSl },
+			{ slug: "crypto", en: paymentsCryptoEn, sl: paymentsCryptoSl },
+			{ slug: "payment-page", en: paymentsPaymentPageEn, sl: paymentsPaymentPageSl },
+			{ slug: "follow-payments", en: paymentsFollowPaymentsEn, sl: paymentsFollowPaymentsSl },
+		],
+	},
 	{ slug: "expenses-and-reports", en: expensesAndReportsEn, sl: expensesAndReportsSl, pages: [] },
 	{ slug: "online-store", en: onlineStoreEn, sl: onlineStoreSl, pages: [] },
 	{ slug: "inventory", en: inventoryEn, sl: inventorySl, pages: [] },

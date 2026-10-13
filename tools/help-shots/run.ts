@@ -1,3 +1,4 @@
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { UiLanguage } from "../../web/src/i18n/dictionary";
@@ -7,9 +8,12 @@ import { signIn } from "./actions";
 import { DEMOS, type Session } from "./demo";
 import { startScratchServer } from "./scratch-server";
 import { startMailSink } from "./mail-sink";
+import { startViesMock } from "./vies-mock";
 import { prepareServer } from "./setup";
 import { Studio, type ShotRecord } from "./studio";
 import { gettingStarted } from "./guides/getting-started";
+import { invoices } from "./guides/invoices";
+import { payments } from "./guides/payments";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
@@ -18,7 +22,7 @@ export interface Guide {
 	steps: [name: string, run: Step][];
 }
 
-const GUIDES: Guide[] = [gettingStarted];
+const GUIDES: Guide[] = [gettingStarted, invoices, payments];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
 
@@ -42,26 +46,59 @@ const languages = option("languages", "en,sl").split(",") as UiLanguage[];
 const work = resolve(option("work", resolve(tmpdir(), "rabbitpay-help-shots")));
 const only = option("steps", "").split(",").filter(Boolean);
 const reuse = process.argv.includes("--reuse");
+const from = option("from", "");
+const to = option("to", "");
+const snapshots = resolve(work, "..", "rabbitpay-help-shots-snapshots");
+
+function chosenGuides(): Guide[] {
+	const first = from === "" ? 0 : GUIDES.findIndex((guide) => guide.module === from);
+	const last = to === "" ? GUIDES.length - 1 : GUIDES.findIndex((guide) => guide.module === to);
+	if (first < 0 || last < 0) throw new Error(`Unknown module. Choose from ${GUIDES.map((guide) => guide.module).join(", ")}`);
+	return GUIDES.slice(first, last + 1);
+}
+
+function copyState(source: string, target: string) {
+	mkdirSync(target, { recursive: true });
+	for (const name of readdirSync(source)) {
+		if (name.startsWith("help-shots.sqlite") || name.startsWith("session-")) cpSync(resolve(source, name), resolve(target, name));
+	}
+	if (existsSync(resolve(source, "documents"))) cpSync(resolve(source, "documents"), resolve(target, "documents"), { recursive: true });
+}
+
+const guides = chosenGuides();
+const previous = GUIDES[GUIDES.indexOf(guides[0]) - 1];
+const resumed = reuse || previous !== undefined;
+if (previous && !reuse) {
+	const snapshot = resolve(snapshots, previous.module);
+	if (!existsSync(snapshot)) throw new Error(`No snapshot after ${previous.module} yet. Run it once with --to ${previous.module}.`);
+	rmSync(work, { recursive: true, force: true });
+	copyState(snapshot, work);
+}
 
 const mail = startMailSink(port + 1000);
-const server = await startScratchServer(work, port, mail.port, !reuse);
+const vies = startViesMock(port + 2000, resolve(work, "help-shots.sqlite"));
+let server = await startScratchServer(work, port, mail.port, vies.port, !resumed);
 const browser = await Browser.launch();
 const shots = new Map<string, ShotRecord>();
 
 try {
-	if (!reuse) await prepareServer(server);
-	for (const language of languages) {
-		const saved = Bun.file(resolve(work, `session-${language}.json`));
-		const session: Session = reuse && (await saved.exists()) ? await saved.json() : { demo: DEMOS[language], totpSecret: null, project: null };
-		await browser.viewport(1120, 760);
-		await browser.theme("dark");
-		await browser.send("Emulation.setLocaleOverride", { locale: DEMOS[language].locale });
-		await browser.send("Emulation.setTimezoneOverride", { timezoneId: DEMOS[language].timezone });
-		await browser.goto(`${server.base}/login`);
-		await browser.eval(`(() => { localStorage.clear(); localStorage.setItem("rabbitpay.language", "${language}"); })()`);
-		for (const guide of GUIDES) {
-			const studio = new Studio(browser, server.base, out, language, guide.module, mail.messages);
-			if (reuse) await signIn(studio, session);
+	if (!resumed) await prepareServer(server);
+	for (const guide of guides) {
+		for (const language of languages) {
+			const saved = Bun.file(resolve(work, `session-${language}.json`));
+			const session: Session = (await saved.exists()) ? await saved.json() : { demo: DEMOS[language], totpSecret: null, project: null };
+			session.demo = {
+				...DEMOS[language],
+				company: { ...DEMOS[language].company, taxNumber: session.demo.company.taxNumber, vatNumber: session.demo.company.vatNumber },
+			};
+			await browser.viewport(1280, 800);
+			await browser.theme("dark");
+			await browser.send("Emulation.setLocaleOverride", { locale: DEMOS[language].locale });
+			await browser.send("Emulation.setTimezoneOverride", { timezoneId: DEMOS[language].timezone });
+			await browser.goto(`${server.base}/login`);
+			await browser.eval(`(() => { localStorage.clear(); localStorage.setItem("rabbitpay.language", "${language}"); })()`);
+			const studio = new Studio(browser, server.base, out, language, guide.module, mail.messages, server.database);
+			if (session.project !== null) await signIn(studio, session);
 			for (const [name, run] of guide.steps) {
 				if (only.length > 0 && !only.includes(name) && !only.includes(`${guide.module}/${name}`)) continue;
 				console.log(`${language} | ${guide.module} | ${name}`);
@@ -70,12 +107,18 @@ try {
 			}
 			for (const [key, shot] of studio.shots) shots.set(key, shot);
 		}
+		if (only.length === 0 && languages.length === Object.keys(DEMOS).length && server.owned) {
+			await server.stop();
+			copyState(work, resolve(snapshots, guide.module));
+			server = await startScratchServer(work, port, mail.port, vies.port, false);
+		}
 	}
 	await writeManifest(shots);
 	console.log(`Saved ${shots.size * 2} images under ${out}`);
 } finally {
 	await browser.close();
 	mail.stop();
+	vies.stop();
 	if (process.argv.includes("--keep")) console.log(`Scratch server still running on ${server.base}, database ${server.database}`);
 	else await server.stop();
 }

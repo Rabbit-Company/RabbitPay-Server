@@ -44,10 +44,11 @@ function recallRegistry(database: Database) {
 export interface ScratchServer {
 	base: string;
 	database: string;
+	owned: boolean;
 	stop: () => Promise<void>;
 }
 
-export async function startScratchServer(work: string, port: number, mailPort: number, fresh: boolean): Promise<ScratchServer> {
+export async function startScratchServer(work: string, port: number, mailPort: number, viesPort: number, fresh: boolean): Promise<ScratchServer> {
 	if (fresh) rmSync(work, { recursive: true, force: true });
 	mkdirSync(work, { recursive: true });
 	const database = join(work, "help-shots.sqlite");
@@ -58,7 +59,7 @@ export async function startScratchServer(work: string, port: number, mailPort: n
 		.catch(() => false);
 	if (running) {
 		if (fresh) throw new Error(`Something already answers on ${base}. Stop it or choose another --port.`);
-		return { base, database, stop: async () => {} };
+		return { base, database, owned: false, stop: async () => {} };
 	}
 
 	const settings = new Database(database);
@@ -73,6 +74,7 @@ export async function startScratchServer(work: string, port: number, mailPort: n
 		"email.host": "127.0.0.1",
 		"email.port": mailPort,
 		"email.from_address": "no-reply@rabbitpay.net",
+		"vies.api_url": `http://127.0.0.1:${viesPort}`,
 		"btc.enabled": true,
 		"eth.enabled": true,
 		"xmr.enabled": true,
@@ -106,6 +108,7 @@ export async function startScratchServer(work: string, port: number, mailPort: n
 			return {
 				base,
 				database,
+				owned: true,
 				stop: async () => {
 					child.kill();
 					await child.exited;

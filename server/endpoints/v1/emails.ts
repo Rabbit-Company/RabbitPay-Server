@@ -21,6 +21,7 @@ import { archivedInvoiceAttachment } from "../../invoice-archive";
 import { archivedCreditNoteAttachment } from "../../credit-note-archive";
 import { invoicePdf } from "../../invoice-pdf";
 import type { CreditNoteRow, CustomerRow, EmailKind, EmailMessageRow, EmailStatus, ProjectMemberRow, ProjectRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 interface InvoiceEmailBody {
 	to?: string | null;
@@ -200,7 +201,6 @@ Server.app.get("/api/v1/projects/:uuid/emails", Auth.required(), Permissions.req
 	if (search !== null && !Validate.shortText(search, 64)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	if (from === undefined || to === undefined) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
-	const pattern = `%${(search ?? "").toLowerCase()}%`;
 	const statusFilter = status === null ? Database`` : Database`AND m.status = ${status}`;
 	const kindFilter = kind === null ? Database`` : Database`AND m.kind = ${kind}`;
 	const invoiceFilter = invoice === null ? Database`` : Database`AND m.invoice = ${invoice}`;
@@ -208,7 +208,7 @@ Server.app.get("/api/v1/projects/:uuid/emails", Auth.required(), Permissions.req
 	const fromFilter = from === null ? Database`` : Database`AND m.created >= ${from}`;
 	const toFilter = to === null ? Database`` : Database`AND m.created <= ${to}`;
 	const searchFilter =
-		search === null ? Database`` : Database`AND (LOWER(m.recipient) LIKE ${pattern} OR LOWER(m.subject) LIKE ${pattern} OR LOWER(i.reference) LIKE ${pattern})`;
+		search === null ? Database`` : Database`AND ${textSearch(Database, search, [Database`m.recipient`, Database`m.subject`, Database`i.reference`])}`;
 
 	const emails = (await Database`
 		SELECT m.uuid, m.project, m.invoice, m.credit_note, m.ticket, m.member, m.kind, m.recipient, m.subject, m.attachment_name, m.eslog_document,

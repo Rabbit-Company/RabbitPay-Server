@@ -23,6 +23,7 @@ import { accountingPeriodLocked, closedYear } from "../../accounting-periods";
 import { prepareIssuePresentation } from "../../invoice-snapshot";
 import { archiveIssuedCreditNote } from "../../credit-note-archive";
 import { hasStorageCapacity } from "../../licensing";
+import { textSearch } from "../../text-search";
 
 interface RecordPaymentBody {
 	invoice?: string;
@@ -77,13 +78,12 @@ Server.app.get("/api/v1/projects/:uuid/transactions", Auth.required(), Permissio
 	if (type !== null && !TYPE_FILTERS.has(type)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 	if (search !== null && !Validate.shortText(search, 64)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
-	const pattern = `%${(search ?? "").toLowerCase()}%`;
 	const invoiceFilter = invoice === null ? Database`` : Database`AND t.invoice = ${invoice}`;
 	const statusFilter = status === null ? Database`` : Database`AND t.status = ${status}`;
 	const typeFilter = type === null ? Database`` : type === "payment" ? Database`AND t.type = 'payment'` : Database`AND t.type IN ${Database(REFUND_TYPES)}`;
 	const processorFilter = processor === null ? Database`` : Database`AND t.processor = ${processor}`;
 	const customerFilter = customer === null ? Database`` : Database`AND COALESCE(t.customer, i.customer) = ${customer}`;
-	const searchFilter = search === null ? Database`` : Database`AND (LOWER(i.reference) LIKE ${pattern} OR LOWER(t.processor_tx_id) LIKE ${pattern})`;
+	const searchFilter = search === null ? Database`` : Database`AND ${textSearch(Database, search, [Database`i.reference`, Database`t.processor_tx_id`])}`;
 
 	const transactions = (await Database`
 		SELECT t.*, i.reference AS invoice_reference, c.name AS customer_name, c.email AS customer_email

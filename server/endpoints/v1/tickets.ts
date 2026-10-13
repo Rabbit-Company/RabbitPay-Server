@@ -35,6 +35,7 @@ import {
 } from "../../workforce/tickets";
 import { discardFiles, filesOfTicket, filesOnlyOnTicket, maxFileBytes, presentFile } from "../../files";
 import type { AppState, CustomerRow, TicketCommentRow, TicketPortalAccessRow, TicketRow, TicketStatus, TimeEntryRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 const base = "/api/v1/projects/:uuid";
 const DAY = 24 * 60 * 60 * 1000;
@@ -111,15 +112,11 @@ Server.app.get(`${base}/tickets`, Auth.required(), Permissions.require(Permissio
 		status === "all" ? Database`` : status === "active" ? Database`AND t.status IN ('open', 'in_progress', 'waiting')` : Database`AND t.status = ${status}`;
 	const customerFilter = customer ? Database`AND t.customer = ${customer}` : Database``;
 	const assigneeFilter = assigned ? Database`AND t.uuid IN (SELECT ticket FROM ticket_assignees WHERE member = ${assigned})` : Database``;
-	const pattern = `%${(search ?? "").toLowerCase().replace(/[!%_]/g, (character) => `!${character}`)}%`;
+	const titled = textSearch(Database, search ?? "", [Database`t.title`]);
 	const numberText = search?.startsWith("#") ? search.slice(1) : search;
 	const parsedNumber = numberText && /^\d+$/.test(numberText) ? Number(numberText) : null;
 	const ticketNumber = parsedNumber !== null && Number.isSafeInteger(parsedNumber) && parsedNumber > 0 ? parsedNumber : null;
-	const searchFilter = search
-		? ticketNumber === null
-			? Database`AND LOWER(t.title) LIKE ${pattern} ESCAPE '!'`
-			: Database`AND (LOWER(t.title) LIKE ${pattern} ESCAPE '!' OR t.number = ${ticketNumber})`
-		: Database``;
+	const searchFilter = search ? (ticketNumber === null ? Database`AND ${titled}` : Database`AND (${titled} OR t.number = ${ticketNumber})`) : Database``;
 	const orderBy =
 		sort === "custom"
 			? Database`t.sort_order DESC, t.number DESC`

@@ -28,6 +28,7 @@ import { pdfResponse } from "../../invoice-pdf";
 import { recurringPreviewPdf } from "../../recurring-preview";
 import { isIntervalCount, isIntervalUnit } from "../../recurring-schedule";
 import type { AppState, InvoiceRow, RecurringInvoiceItemRow, RecurringInvoiceRow, RecurringStatus } from "../../database/models";
+import { searchPatterns, textLike } from "../../text-search";
 
 const LISTED_STATUSES = new Set<RecurringStatus>(["active", "paused", "completed", "canceled"]);
 const OPEN_STATUSES: RecurringStatus[] = ["active", "paused"];
@@ -82,14 +83,15 @@ Server.app.get("/api/v1/projects/:uuid/recurring", Auth.required(), Permissions.
 	if (customer !== null && !Validate.uuid(customer)) return Utils.fail(ctx, ErrorCode.INVALID_CUSTOMER_ID);
 	if (search !== null && !Validate.shortText(search, 64)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
 
-	const pattern = `%${(search ?? "").toLowerCase()}%`;
+	const patterns = searchPatterns(search ?? "");
 	const statusFilter = status === null ? Database`` : Database`AND r.status = ${status}`;
 	const customerFilter = customer === null ? Database`` : Database`AND r.customer = ${customer}`;
 	const searchFilter =
 		search === null
 			? Database``
-			: Database`AND (LOWER(COALESCE(r.title, '')) LIKE ${pattern} OR LOWER(COALESCE(c.name, '')) LIKE ${pattern} OR LOWER(c.email) LIKE ${pattern}
-				OR EXISTS (SELECT 1 FROM recurring_invoice_items ri WHERE ri.recurring = r.uuid AND LOWER(ri.description) LIKE ${pattern}))`;
+			: Database`AND (${textLike(Database, Database`r.title`, patterns)} OR ${textLike(Database, Database`c.name`, patterns)}
+				OR ${textLike(Database, Database`c.email`, patterns)}
+				OR EXISTS (SELECT 1 FROM recurring_invoice_items ri WHERE ri.recurring = r.uuid AND ${textLike(Database, Database`ri.description`, patterns)}))`;
 
 	const rows = (await Database`
 		SELECT r.*, c.name AS customer_name, c.email AS customer_email FROM recurring_invoices r

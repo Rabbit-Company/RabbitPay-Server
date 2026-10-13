@@ -18,6 +18,7 @@ import { licenseSalesOpen } from "../../license-orders";
 import { isLicenseIssuer } from "../../license-signing";
 import type { Context } from "@rabbit-company/web";
 import type { AppState, CatalogItemRow } from "../../database/models";
+import { textSearch } from "../../text-search";
 
 interface ItemBody {
 	name?: string;
@@ -101,18 +102,16 @@ Server.app.get("/api/v1/projects/:uuid/items", Auth.required(), Permissions.requ
 	const offset = Math.max(Number(query.get("offset")) || 0, 0);
 	const search = query.get("search")?.trim() || null;
 	const archived = query.get("archived") === "1" ? 1 : 0;
-	const pattern = `%${search ?? ""}%`;
+	const matching = search === null ? Database`` : Database`AND ${textSearch(Database, search, [Database`name`, Database`sku`, Database`description`])}`;
 
 	const items = (await Database`
 		SELECT * FROM catalog_items
-		WHERE project = ${project.uuid} AND archived = ${archived}
-			AND (name LIKE ${pattern} OR sku LIKE ${pattern} OR description LIKE ${pattern})
+		WHERE project = ${project.uuid} AND archived = ${archived} ${matching}
 		ORDER BY name ASC, uuid ASC LIMIT ${limit} OFFSET ${offset}
 	`) as CatalogItemRow[];
 
 	const [counted] = (await Database`
-		SELECT COUNT(*) AS count FROM catalog_items WHERE project = ${project.uuid} AND archived = ${archived}
-			AND (name LIKE ${pattern} OR sku LIKE ${pattern} OR description LIKE ${pattern})
+		SELECT COUNT(*) AS count FROM catalog_items WHERE project = ${project.uuid} AND archived = ${archived} ${matching}
 	`) as { count: number }[];
 
 	const stock = await stockFor(

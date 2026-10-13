@@ -42,3 +42,19 @@ export function projectPath(session: Session, suffix = ""): string {
 	if (!session.project) throw new Error("The project has not been created yet");
 	return `/projects/${session.project}${suffix}`;
 }
+
+export async function api<T = any>(studio: Studio, method: string, path: string, body?: unknown): Promise<T> {
+	const result = await studio.browser.eval<{ error: number; info: string; data: T }>(
+		`fetch("/api/v1" + ${JSON.stringify(path)}, { method: ${JSON.stringify(method)}, headers: { Authorization: "Bearer " + localStorage.getItem("rabbitpay.token"), "Content-Type": "application/json" }, body: ${body === undefined ? "undefined" : JSON.stringify(JSON.stringify(body))} }).then((response) => response.json())`
+	);
+	if (result.error !== 0) throw new Error(`${method} ${path} failed: ${result.info}`);
+	return result.data;
+}
+
+export function projectApi<T = any>(studio: Studio, session: Session, method: string, path: string, body?: unknown): Promise<T> {
+	return api<T>(studio, method, `/projects/${session.project}${path}`, body);
+}
+
+export function daysFromNow(days: number): number {
+	return Date.now() + days * 24 * 60 * 60 * 1000;
+}

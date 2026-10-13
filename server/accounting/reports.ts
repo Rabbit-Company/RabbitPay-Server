@@ -2,6 +2,7 @@ import Database from "../database/database";
 import { addIntegers, safeInteger } from "../database/numbers";
 import type { JournalEntryRow, JournalLineRow, LedgerAccountRow } from "../database/models";
 import type { AccountLedgerRow, JournalEntryView, JournalFilters, JournalLineView, TrialBalanceRow } from "./types";
+import { textSearch } from "../text-search";
 
 async function linesOf(entries: string[]): Promise<Map<string, JournalLineView[]>> {
 	const result = new Map<string, JournalLineView[]>();
@@ -31,8 +32,8 @@ export function journalFilter(filters: JournalFilters) {
 		filters.account ? Database`AND EXISTS (SELECT 1 FROM journal_lines fl WHERE fl.entry = e.uuid AND fl.ledger_account = ${filters.account})` : Database``,
 		filters.source ? Database`AND e.source_type = ${filters.source}` : Database``,
 		filters.text
-			? Database`AND (LOWER(e.description) LIKE ${`%${filters.text.toLowerCase()}%`}
-				OR EXISTS (SELECT 1 FROM journal_lines fl WHERE fl.entry = e.uuid AND LOWER(fl.partner) LIKE ${`%${filters.text.toLowerCase()}%`}))`
+			? Database`AND (${textSearch(Database, filters.text, [Database`e.description`])}
+				OR EXISTS (SELECT 1 FROM journal_lines fl WHERE fl.entry = e.uuid AND ${textSearch(Database, filters.text, [Database`fl.partner`])}))`
 			: Database``,
 		filters.amount !== null
 			? Database`AND EXISTS (SELECT 1 FROM journal_lines fl WHERE fl.entry = e.uuid AND (fl.debit = ${filters.amount} OR fl.credit = ${filters.amount}))`
@@ -140,7 +141,7 @@ export async function trialBalance(project: string, from: number, to: number, ye
 
 export async function accountLedger(project: string, account: LedgerAccountRow, from: number, to: number, yearStart: number, partner: string | null = null) {
 	const since = account.account_kind === "revenue" || account.account_kind === "expense" ? yearStart : 0;
-	const byPartner = partner ? Database`AND LOWER(jl.partner) LIKE ${`%${partner.toLowerCase()}%`}` : Database``;
+	const byPartner = partner ? Database`AND ${textSearch(Database, partner, [Database`jl.partner`])}` : Database``;
 	const [opening] = (await Database`
 		SELECT COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
 		FROM journal_lines jl JOIN journal_entries je ON je.uuid = jl.entry

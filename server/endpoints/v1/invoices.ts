@@ -29,6 +29,7 @@ import { idempotentRequest } from "../../idempotency";
 import { rateLimit } from "@rabbit-company/web-middleware/rate-limit";
 import { unsavedInvoicePdf } from "../../unsaved-invoice";
 import { pdfResponse } from "../../invoice-pdf";
+import { textSearch } from "../../text-search";
 
 const previewLimit = rateLimit({ windowMs: 60 * 1000, max: 30, message: "Too many previews. Please slow down." });
 
@@ -75,7 +76,7 @@ Server.app.get("/api/v1/projects/:uuid/invoices", Auth.required(), Permissions.r
 
 	const statusFilter = status === null ? Database`` : Database`AND i.status = ${status}`;
 	const customerFilter = customer === null ? Database`` : Database`AND i.customer = ${customer}`;
-	const referenceFilter = reference === null ? Database`` : Database`AND LOWER(i.reference) LIKE ${`%${reference.toLowerCase()}%`}`;
+	const referenceFilter = reference === null ? Database`` : Database`AND ${textSearch(Database, reference, [Database`i.reference`])}`;
 	const documentFilter =
 		document === "proforma"
 			? Database`AND i.status = 'draft' AND EXISTS (SELECT 1 FROM proformas p WHERE p.invoice = i.uuid)`
