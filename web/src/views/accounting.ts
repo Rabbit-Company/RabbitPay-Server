@@ -16,6 +16,7 @@ import { combobox, staticCombobox, type Combobox, type ComboOption } from "../co
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { invalidateProject, loadProject, projectLayout } from "./project";
+import { projectNameFields } from "./projects";
 import { redeemFlow } from "./license";
 import { currentPath, navigate } from "../router";
 import { expenseCategoryLabel } from "../expense-categories";
@@ -953,7 +954,7 @@ export async function ledgerAccountsView(uuid: string): Promise<HTMLElement> {
 }
 
 function clientDialog() {
-	const name = input("text", { placeholder: "podjetje-doo", required: true });
+	const { business, name, fields } = projectNameFields();
 	const submit = el("button", { class: "button primary", type: "submit" }, t("accounting.add_client"));
 	const form = el(
 		"form",
@@ -963,7 +964,7 @@ function clientDialog() {
 				event.preventDefault();
 				submit.disabled = true;
 				try {
-					const project = await Api.createProject(name.value.trim());
+					const project = await Api.createProject(name.value.trim(), business.value.trim());
 					dialog.close();
 					navigate(`/projects/${project.uuid}/settings`);
 				} catch (error) {
@@ -972,12 +973,12 @@ function clientDialog() {
 				}
 			},
 		},
-		field(t("projects.name"), name, t("login.username_hint")),
+		...fields,
 		el("p", { class: "muted" }, t("accounting.add_client_hint")),
 		el("div", { class: "dialog-actions" }, submit)
 	);
 	const dialog = modal(t("accounting.add_client"), form, undefined, "dialog-medium");
-	name.focus();
+	business.focus();
 }
 
 function clientRow(client: AccountingClient): HTMLElement {

@@ -12,6 +12,7 @@
 		"documents:encrypt": "bun run server/storage-cli.ts encrypt-documents",
 		"logs:export": "bun run server/storage-cli.ts export-access-logs",
 		"license:keygen": "bun run server/license-cli.ts keygen",
+		"help:shots": "bun run tools/help-shots/run.ts",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
 		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && bun build web/src/push-worker.ts --outfile web/dist/push-worker.js --minify && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
 		"watch:web": "bun build web/src/push-worker.ts --outfile web/dist/push-worker.js && bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
@@ -34,7 +35,7 @@
 	},
 	"homepage": "https://github.com/Rabbit-Company/RabbitPay-Server#readme",
 	"devDependencies": {
-		"@types/bun": "^1.4.2",
+		"@types/bun": "^1.4.3",
 		"@types/nodemailer": "^8.0.2",
 		"@types/pdfkit": "^0.17.6"
 	},

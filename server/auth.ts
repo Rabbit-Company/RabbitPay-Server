@@ -53,6 +53,28 @@ export default class Auth {
 		return await Cache.deleteString(await Auth.cacheKey(token));
 	}
 
+	private static revocationKey(username: string): string {
+		return `sessions_revoked_${username}`;
+	}
+
+	static async revokeSessions(username: string, keepToken?: string): Promise<boolean> {
+		const ttl = Auth.ttlSeconds();
+		const revoked = Date.now();
+		if (!(await Cache.setString(Auth.revocationKey(username), String(revoked), ttl, ttl))) return false;
+		if (keepToken === undefined) return true;
+
+		const key = await Auth.cacheKey(keepToken);
+		const raw = await Cache.getString(key);
+		if (raw === null) return true;
+		const session = JSON.parse(raw) as Session;
+		return await Cache.setString(key, JSON.stringify({ ...session, created: revoked }), ttl, ttl);
+	}
+
+	private static async isRevoked(session: Session): Promise<boolean> {
+		const revoked = await Cache.getString(Auth.revocationKey(session.username));
+		return revoked !== null && session.created < Number(revoked);
+	}
+
 	static required(): Middleware<AppState> {
 		return async (ctx, next) => {
 			const token = Utils.getBearerToken(ctx.req);
@@ -61,6 +83,10 @@ export default class Auth {
 
 			const session = await Auth.getSession(token);
 			if (session === null) return Utils.fail(ctx, ErrorCode.TOKEN_EXPIRED);
+			if (await Auth.isRevoked(session)) {
+				await Auth.destroySession(token);
+				return Utils.fail(ctx, ErrorCode.TOKEN_EXPIRED);
+			}
 
 			const [account] = (await Database`SELECT * FROM accounts WHERE username = ${session.username}`) as AccountRow[];
 			if (!account || Number(account.created) > session.created) return Utils.fail(ctx, ErrorCode.TOKEN_EXPIRED);

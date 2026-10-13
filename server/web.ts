@@ -7,7 +7,7 @@ import { escapeHtml } from "./markdown";
 import { normalizeHost, slugForHost, storeBySlug, storeUrl } from "./store/store";
 import { sitemapStores, storeLocation, storePageMeta, storeRoot, storeSitemap, STORE_PRIVATE_PATHS, type StorePageMeta } from "./store/seo";
 import { includedPayments, includedStorageGb, licensingEnforced } from "./licensing";
-import { HELP_LANGUAGES, HELP_SEED_ID, helpArticle, helpIndex, helpMarkup, helpSlugs, isHelpLanguage } from "./help";
+import { HELP_LANGUAGES, HELP_SEED_ID, helpDocument, helpIndex, helpMarkup, helpPaths, isHelpLanguage } from "./help";
 
 const IMMUTABLE_ASSET = /-[a-z0-9]{8,}\.(js|css|woff2?|ttf|png|svg|jpg|jpeg|webp|ico)$/i;
 
@@ -144,46 +144,48 @@ function homeUrl(page: HomePage): string {
 	return `${Utils.publicUrl()}${page.path}`;
 }
 
-const HELP_PATH = /^\/help\/([a-z]{2})(?:\/([a-z0-9]+(?:-[a-z0-9]+)*))?\/?$/;
+const HELP_SLUG = "[a-z0-9]+(?:-[a-z0-9]+)*";
+const HELP_PATH = new RegExp(`^/help/([a-z]{2})(?:/(${HELP_SLUG})(?:/(${HELP_SLUG}))?)?/?$`);
 const HELP_DEFAULT_LANGUAGE = "en";
 const APP_ROOT = '<div id="app"></div>';
 
-function helpUrl(language: string, slug: string | null): string {
-	return `${Utils.publicUrl()}/help/${language}${slug === null ? "" : `/${slug}`}`;
+function helpUrl(language: string, path: string | null): string {
+	return `${Utils.publicUrl()}/help/${language}${path === null ? "" : `/${path}`}`;
 }
 
 function helpUrls(): string[] {
-	return HELP_LANGUAGES.flatMap((language) => [helpUrl(language, null), ...helpSlugs().map((slug) => helpUrl(language, slug))]);
+	return HELP_LANGUAGES.flatMap((language) => [helpUrl(language, null), ...helpPaths().map((path) => helpUrl(language, path))]);
 }
 
 function helpHtml(html: string, pathname: string): string | null {
-	const [, language, slug = null] = pathname.match(HELP_PATH) ?? [];
+	const [, language, module = null, page = null] = pathname.match(HELP_PATH) ?? [];
 	if (!isHelpLanguage(language)) return null;
 	const index = helpIndex(language);
-	const article = slug === null ? null : helpArticle(language, slug);
-	const page = slug === null ? index : article;
-	if (page === null) return null;
+	const document = module === null ? null : helpDocument(language, module, page);
+	const described = module === null ? index : document;
+	if (described === null) return null;
 
-	const title = slug === null ? `${page.title} | RabbitPay` : `${page.title} | ${helpIndex(language).title} | RabbitPay`;
-	const url = helpUrl(language, slug);
+	const path = module === null ? null : page === null ? module : `${module}/${page}`;
+	const title = module === null ? `${described.title} | RabbitPay` : `${described.title} | ${index.title} | RabbitPay`;
+	const url = helpUrl(language, path);
 	const tags = [
-		`<meta name="description" content="${escapeHtml(page.description)}" />`,
+		`<meta name="description" content="${escapeHtml(described.description)}" />`,
 		`<link rel="canonical" href="${escapeHtml(url)}" />`,
-		...HELP_LANGUAGES.map((alternate) => `<link rel="alternate" hreflang="${alternate}" href="${escapeHtml(helpUrl(alternate, slug))}" />`),
-		`<link rel="alternate" hreflang="x-default" href="${escapeHtml(helpUrl(HELP_DEFAULT_LANGUAGE, slug))}" />`,
+		...HELP_LANGUAGES.map((alternate) => `<link rel="alternate" hreflang="${alternate}" href="${escapeHtml(helpUrl(alternate, path))}" />`),
+		`<link rel="alternate" hreflang="x-default" href="${escapeHtml(helpUrl(HELP_DEFAULT_LANGUAGE, path))}" />`,
 		`<meta property="og:site_name" content="RabbitPay" />`,
 		`<meta property="og:title" content="${escapeHtml(title)}" />`,
-		`<meta property="og:description" content="${escapeHtml(page.description)}" />`,
-		`<meta property="og:type" content="${slug === null ? "website" : "article"}" />`,
+		`<meta property="og:description" content="${escapeHtml(described.description)}" />`,
+		`<meta property="og:type" content="${module === null ? "website" : "article"}" />`,
 		`<meta property="og:url" content="${escapeHtml(url)}" />`,
-		`<script type="application/json" id="${HELP_SEED_ID}">${jsonLd({ language, index, article })}</script>`,
+		`<script type="application/json" id="${HELP_SEED_ID}">${jsonLd({ language, index, document })}</script>`,
 	].join("");
 	return html
 		.replace(/<html lang="[^"]*">/, `<html lang="${language}">`)
 		.replace(/<meta name="robots"[^>]*>/, robotsTag(true))
 		.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`)
 		.replace("</head>", `${tags}</head>`)
-		.replace(APP_ROOT, `<div id="app">${helpMarkup(language, slug)}</div>`);
+		.replace(APP_ROOT, `<div id="app">${helpMarkup(language, module, page)}</div>`);
 }
 
 function applicationHtml(html: string, pathname: string): string {

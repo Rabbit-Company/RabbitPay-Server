@@ -194,6 +194,7 @@ export async function loginView(): Promise<HTMLElement> {
 			mode === "register" ? acceptField : null,
 			mode === "login" ? codeField : null,
 			submit,
+			mode === "login" ? el("a", { class: "auth-forgot", href: "/account/password/reset" }, t("account.password_forgot")) : null,
 			mode === "login" ? keyButton : null
 		);
 

@@ -26,6 +26,7 @@ import type { ProformaSettlement, ProjectMemberRow, ProjectRow } from "../../dat
 
 interface CreateProjectBody {
 	name?: string;
+	display_name?: string | null;
 	currency?: string;
 }
 
@@ -152,8 +153,10 @@ Server.app.post("/api/v1/projects", Auth.required(), async (ctx) => {
 
 	if (!Validate.project(data.name)) return Utils.fail(ctx, ErrorCode.INVALID_PROJECT_NAME);
 	if (data.currency !== undefined && !Validate.currency(data.currency)) return Utils.fail(ctx, ErrorCode.INVALID_CURRENCY);
+	if (!Validate.optionalText(data.display_name, 120)) return Utils.fail(ctx, ErrorCode.INVALID_PROJECT_NAME);
 
 	const name = data.name!;
+	const displayName = data.display_name?.trim() || null;
 	const currency = data.currency ?? "EUR";
 
 	const duplicates = (await Database`
@@ -171,8 +174,8 @@ Server.app.post("/api/v1/projects", Auth.required(), async (ctx) => {
 
 	await Database.begin(async (tx) => {
 		await tx`
-			INSERT INTO projects(uuid, name, apikey, apikey2, webhook_secret, currency, status, created, updated, created_by)
-			VALUES(${uuid}, ${name}, ${apikey}, ${apikey2}, ${webhookSecret}, ${currency}, 'active', ${timestamp}, ${timestamp}, ${account.username})
+			INSERT INTO projects(uuid, name, display_name, apikey, apikey2, webhook_secret, currency, status, created, updated, created_by)
+			VALUES(${uuid}, ${name}, ${displayName}, ${apikey}, ${apikey2}, ${webhookSecret}, ${currency}, 'active', ${timestamp}, ${timestamp}, ${account.username})
 		`;
 
 		await tx`
@@ -181,7 +184,7 @@ Server.app.post("/api/v1/projects", Auth.required(), async (ctx) => {
 		`;
 	});
 
-	await Audit.record(ctx, { project: uuid, action: "project.created", entityType: "project", entityId: uuid, newValue: { name } });
+	await Audit.record(ctx, { project: uuid, action: "project.created", entityType: "project", entityId: uuid, newValue: { name, display_name: displayName } });
 	Logger.audit(`[PROJECT] Created "${name}" (${uuid}) by ${account.username}`);
 
 	return Utils.ok(
@@ -189,6 +192,8 @@ Server.app.post("/api/v1/projects", Auth.required(), async (ctx) => {
 		{
 			uuid,
 			name,
+			display_name: displayName,
+			public_name: displayNameOf({ name, display_name: displayName }),
 			role: ProjectRole.OWNER,
 			currency,
 			status: "active",

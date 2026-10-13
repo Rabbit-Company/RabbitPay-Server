@@ -427,6 +427,24 @@ export function emailChangedEmail(language: UiLanguage, url: string, current: st
 	});
 }
 
+export function passwordResetEmail(language: UiLanguage, url: string): EmailContent {
+	return render(accountBrand(language), translate(language, "account.password_mail_subject"), {
+		heading: translate(language, "account.password_mail_heading"),
+		paragraphs: [translate(language, "account.password_mail_body")],
+		button: { label: translate(language, "account.password_mail_button"), url },
+		closing: [translate(language, "account.password_mail_expiry")],
+	});
+}
+
+export function passwordChangedEmail(language: UiLanguage, url: string): EmailContent {
+	return render(accountBrand(language), translate(language, "account.password_notice_subject"), {
+		heading: translate(language, "account.password_notice_heading"),
+		paragraphs: [translate(language, "account.password_notice_body")],
+		button: { label: translate(language, "account.email_notice_button"), url },
+		closing: [translate(language, "account.email_notice_closing")],
+	});
+}
+
 export function invoiceEmail(
 	brand: EmailBrand,
 	kind: InvoiceEmailKind,

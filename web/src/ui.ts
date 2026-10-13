@@ -203,7 +203,7 @@ export function secretReveal(label: string, secret: string): HTMLElement {
 		t("ui.copy")
 	);
 
-	return el("div", { class: "secret-reveal" }, el("p", { class: "warn" }, `${label} is shown once and cannot be retrieved again. Store it now.`), value, copy);
+	return el("div", { class: "secret-reveal" }, el("p", { class: "warn" }, t("ui.secret_once", { label })), value, copy);
 }
 
 export async function withLoading<T>(container: HTMLElement, work: () => Promise<T>, render: (result: T) => HTMLElement) {

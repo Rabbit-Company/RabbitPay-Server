@@ -287,9 +287,9 @@ export async function membersView(uuid: string): Promise<HTMLElement> {
 							: null,
 						member.has_signature ? el("div", { class: "muted" }, t("members.signature_saved")) : null
 					),
-					el("td", {}, manages ? roleSelect : roleLabel(member.role)),
-					el("td", {}, el("span", { class: `pill pill-${member.status}` }, statusLabel(member.status))),
-					el("td", {}, formatDate(member.created)),
+					el("td", { class: "member-role" }, manages ? roleSelect : roleLabel(member.role)),
+					el("td", { class: "member-fixed" }, el("span", { class: `pill pill-${member.status}` }, statusLabel(member.status))),
+					el("td", { class: "member-fixed" }, formatDate(member.created)),
 					el(
 						"td",
 						{ class: "actions" },

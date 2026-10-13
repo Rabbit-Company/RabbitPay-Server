@@ -26,21 +26,61 @@ To work on it, run `bun run watch:web` alongside `bun run watch`.
 
 ## Help articles
 
-The help section at `/help` is built from [`docs/help`](help), with one Markdown
-file per article in each language: `docs/help/en/invoices.md` and
-`docs/help/sl/invoices.md` are the same article, served at `/help/en/invoices`
-and `/help/sl/invoices`. The first `# ` heading is the title, the first
-paragraph is the description shown on the index and to search engines, and
-every `## ` heading becomes an entry under On this page.
+The help section at `/help` is built from [`docs/help`](help). It is split into
+modules, and a module has pages. Each module is a folder per language:
+`docs/help/en/invoices/index.md` is the module itself, served at
+`/help/en/invoices`, and `docs/help/en/getting-started/first-invoice.md` is one
+of its pages, served at `/help/en/getting-started/first-invoice`. The Slovenian
+files sit under `docs/help/sl` with the same names. The first `# ` heading is
+the title, the first paragraph is the description shown on cards and to search
+engines, and every `## ` heading becomes an entry under On this page and a
+target for search.
 
-To add an article, write it in both languages under the same file name and
-register both files in `SOURCES` in [`server/help.ts`](../server/help.ts). The
-file name is the address, so keep it in lowercase English with dashes.
-[`tests/help.test.ts`](../tests/help.test.ts) fails when an article is missing
-in one language, is not registered, has a different number of sections in the
-two languages, or links to a section or an article that does not exist. Link to
-another article by its file name alone, as in `[Payments](payments)`, so the
-link stays in the reader's language.
+To add a page, write it in both languages under the same file name and register
+both files in [`server/help-sources.ts`](../server/help-sources.ts), in the
+order they should be read. The file name is the address, so keep it in lowercase
+English with dashes. [`tests/help.test.ts`](../tests/help.test.ts) fails when a
+page is missing in one language, is not registered, has a different number of
+sections in the two languages, links to a page or a section that does not
+exist, or shows a screenshot that was never captured. Link to another page from
+the root of the help, as in `[Payments](payments)` or
+`[Sign in](getting-started/create-account#sign-in)`, so the link stays in the
+reader's language.
+
+### Screenshots
+
+Screenshots are not kept in the repository. They live on the CDN under
+`https://cdn.rabbitpay.net/help/<language>/<theme>/<module>/<page>/<name>.webp`,
+once in the dark and once in the light theme. A page names only the dark one:
+
+```markdown
+![The registration form](https://cdn.rabbitpay.net/help/en/dark/getting-started/create-account/register.webp)
+```
+
+The help page shows the image that matches the reader's theme, with the alt text
+as its caption.
+
+`bun run help:shots` takes every screenshot again. It starts a throwaway server
+on port 8096 with an empty database, plays each guide in
+[`tools/help-shots/guides`](../tools/help-shots/guides) in a headless Chrome in
+both languages, and writes the images to `cdn/`, which is laid out exactly like
+the bucket. Upload the content of `cdn/` to the root of the bucket. The command
+also rewrites [`server/help-shots.ts`](../server/help-shots.ts) with the size
+and a version of every image, so pages reserve the right space and browsers
+fetch a changed image again. Commit that file together with the pages.
+
+| Option                    | What it does                                                        |
+| ------------------------- | ------------------------------------------------------------------- |
+| `--languages en`          | Only one language                                                   |
+| `--out <folder>`          | Where the images go, `cdn` by default                               |
+| `--keep`                  | Leaves the throwaway server running, to look at it or to continue   |
+| `--reuse --steps <names>` | Runs only the named steps of a guide against the server kept before |
+
+The people and companies in the screenshots are defined in
+[`tools/help-shots/demo.ts`](../tools/help-shots/demo.ts). The business that
+issues the invoices is made up and added to the throwaway copy of the company
+register, so the lookup finds it. Build the interface with `bun run build:web`
+first, because the throwaway server serves `web/dist`.
 
 The server sends a help page with the article already in it, along with its
 title, description and language alternates, so it reads before the interface

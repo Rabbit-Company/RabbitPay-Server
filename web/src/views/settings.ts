@@ -88,7 +88,7 @@ function companyFields(vatStatus: string | null): { key: keyof Company; label: s
 	];
 }
 
-function companySection(uuid: string, vatStatus: string | null, documentLanguage: Language): HTMLElement {
+function companySection(uuid: string, vatStatus: string | null, documentLanguage: Language, onSaved: (company: Company) => void): HTMLElement {
 	const container = el("div", { class: "stack" });
 
 	const load = async () => {
@@ -211,7 +211,7 @@ function companySection(uuid: string, vatStatus: string | null, documentLanguage
 						details.country = country.value || null;
 
 						try {
-							await Api.saveCompany(uuid, details);
+							onSaved(await Api.saveCompany(uuid, details));
 							toast(t("settings.company_saved"), "success");
 						} catch (error) {
 							reportError(error);
@@ -508,9 +508,9 @@ async function numberingSection(uuid: string, project: Project, series: NumberSe
 	);
 }
 
-async function taxSection(uuid: string, project: Project): Promise<HTMLElement> {
+async function taxSection(uuid: string, project: Project): Promise<{ element: HTMLElement; companySaved: (company: Company) => void }> {
 	const known = await currencyRates();
-	const company = await Api.company(uuid).catch(() => null);
+	let company = await Api.company(uuid).catch(() => null);
 
 	const country = staticCombobox(countryOptions(), project.tax_country ?? "", {
 		placeholder: t("country.search"),
@@ -580,7 +580,7 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 
 	const save = el("button", { class: "button primary", type: "submit" }, t("settings.save_tax"));
 
-	return el(
+	const element = el(
 		"form",
 		{
 			onSubmit: async (event) => {
@@ -621,6 +621,14 @@ async function taxSection(uuid: string, project: Project): Promise<HTMLElement> 
 		advice,
 		el("div", { class: "form-actions" }, save)
 	);
+
+	return {
+		element,
+		companySaved: (saved) => {
+			company = saved;
+			refresh();
+		},
+	};
 }
 
 function terminalSection(uuid: string, project: Project): HTMLElement {
@@ -810,7 +818,8 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 	const editable = can(project, Permission.PROJECT_EDIT);
 	const managesKeys = can(project, Permission.API_KEYS);
 	const managesWebhooks = can(project, Permission.API_WEBHOOKS);
-	const companyBox = editable ? companySection(uuid, project.vat_status, project.language as Language) : null;
+	const tax = editable ? await taxSection(uuid, project) : null;
+	const companyBox = editable ? companySection(uuid, project.vat_status, project.language as Language, (company) => tax?.companySaved(company)) : null;
 
 	const name = input("text", { value: project.name, required: true });
 	const displayName = input("text", { value: project.display_name ?? "", placeholder: project.name, maxlength: "120" });
@@ -1046,7 +1055,7 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 					el("p", { class: "muted" }, t("settings.order_intro")),
 					await numberingSection(uuid, project, "order")
 				),
-				el("div", { class: "card" }, el("h2", {}, t("settings.tax")), el("p", { class: "muted" }, t("settings.tax_intro")), await taxSection(uuid, project)),
+				el("div", { class: "card" }, el("h2", {}, t("settings.tax")), el("p", { class: "muted" }, t("settings.tax_intro")), tax?.element ?? null),
 				project.tax_country === "SI"
 					? el("div", { class: "card", id: "fiscal" }, el("h2", {}, t("fiscal.title")), el("p", { class: "muted" }, t("fiscal.intro")), fiscalSection(uuid))
 					: null,

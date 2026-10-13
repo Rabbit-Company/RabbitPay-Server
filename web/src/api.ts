@@ -541,16 +541,30 @@ export interface HelpSummary {
 	slug: string;
 	title: string;
 	description: string;
+	sections: string[];
 }
 
-export interface HelpArticle extends HelpSummary {
+export interface HelpModuleSummary extends HelpSummary {
+	pages: HelpSummary[];
+}
+
+export interface HelpDocument extends HelpSummary {
+	module: string;
+	page: string | null;
 	content: string;
+}
+
+export interface HelpSearchResult {
+	path: string;
+	title: string;
+	context: string;
+	snippet: string;
 }
 
 export interface HelpIndex {
 	title: string;
 	description: string;
-	articles: HelpSummary[];
+	modules: HelpModuleSummary[];
 }
 
 export type LegalKind = "terms" | "privacy";
@@ -2893,8 +2907,13 @@ export const Api = {
 		return request<HelpIndex>("GET", `/help/${language}`);
 	},
 
-	helpArticle(language: string, slug: string) {
-		return request<HelpArticle>("GET", `/help/${language}/${encodeURIComponent(slug)}`);
+	helpSearch(language: string, query: string) {
+		return request<HelpSearchResult[]>("GET", `/help/${language}/search?q=${encodeURIComponent(query)}`);
+	},
+
+	helpDocument(language: string, module: string, page: string | null) {
+		const path = page === null ? encodeURIComponent(module) : `${encodeURIComponent(module)}/${encodeURIComponent(page)}`;
+		return request<HelpDocument>("GET", `/help/${language}/${path}`);
 	},
 
 	acceptTerms(versions: LegalVersions) {
@@ -2927,6 +2946,18 @@ export const Api = {
 
 	changeEmail(email: string, password: string, language: string, factor?: SecondFactor) {
 		return request<{ email: string; pending: boolean }>("POST", "/auth/email", { email, password: hashPassword(password), language, ...factor });
+	},
+
+	changePassword(password: string, newPassword: string, language: string, factor?: SecondFactor) {
+		return request<null>("POST", "/auth/password", { password: hashPassword(password), new_password: hashPassword(newPassword), language, ...factor });
+	},
+
+	requestPasswordReset(email: string, language: string) {
+		return request<null>("POST", "/auth/password/reset", { email, language });
+	},
+
+	resetPassword(token: string, password: string) {
+		return request<{ email: string }>("POST", "/auth/password/reset/confirm", { token, password: hashPassword(password) });
 	},
 
 	confirmEmail(token: string) {
@@ -2980,8 +3011,8 @@ export const Api = {
 		return request<Project[]>("GET", "/projects");
 	},
 
-	createProject(name: string, currency?: string) {
-		return request<Project>("POST", "/projects", currency === undefined ? { name } : { name, currency });
+	createProject(name: string, displayName: string) {
+		return request<Project>("POST", "/projects", { name, display_name: displayName });
 	},
 
 	currencies() {

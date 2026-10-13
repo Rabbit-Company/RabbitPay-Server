@@ -123,7 +123,7 @@ export function projectLayout(project: Project, content: HTMLElement): HTMLEleme
 			el("div", { class: "nav-group" }, group ? el("span", { class: "nav-group-title" }, t(GROUP_LABELS[group])) : null, ...links)
 		)
 	);
-	nav.setAttribute("aria-label", project.name);
+	nav.setAttribute("aria-label", project.public_name);
 	const toggle = el("button", { type: "button", class: "project-nav-toggle" }, activeLabel);
 	toggle.setAttribute("aria-expanded", "false");
 	toggle.setAttribute("aria-controls", "project-nav");
@@ -142,7 +142,7 @@ export function projectLayout(project: Project, content: HTMLElement): HTMLEleme
 				"div",
 				{},
 				el("a", { class: "back-link", href: "/" }, t("project.all_projects")),
-				el("h1", {}, project.name),
+				el("h1", {}, project.public_name),
 				el("p", { class: "muted mono" }, project.uuid)
 			),
 			el("span", { class: `pill pill-${project.role}` }, roleLabel(project.role))

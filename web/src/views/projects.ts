@@ -2,7 +2,9 @@ import { pagedList } from "../pagination";
 import { Api, type Project } from "../api";
 import { el, emptyState, field, input } from "../dom";
 import { formatDate } from "../money";
-import { modal, reportError, secretReveal, withLoading } from "../ui";
+import { modal, reportError, toast, withLoading } from "../ui";
+import { navigate } from "../router";
+import { headingAnchor } from "../../../server/markdown";
 import { can, Permission, sellsOnly, terminalPath } from "../access";
 import { roleLabel, t } from "../i18n";
 
@@ -10,51 +12,68 @@ function projectCard(project: Project): HTMLElement {
 	return el(
 		"a",
 		{ class: "card project-card", href: sellsOnly(project) ? terminalPath(project.uuid) : `/projects/${project.uuid}` },
-		el("div", { class: "project-card-head" }, el("h3", {}, project.name), el("span", { class: `pill pill-${project.role}` }, roleLabel(project.role))),
+		el("div", { class: "project-card-head" }, el("h3", {}, project.public_name), el("span", { class: `pill pill-${project.role}` }, roleLabel(project.role))),
 		el("p", { class: "muted" }, t("projects.created", { date: formatDate(project.created) })),
 		project.webhook_url ? el("p", { class: "muted mono" }, project.webhook_url) : null
 	);
 }
 
-function createProjectDialog(onCreated: () => void) {
-	const name = input("text", { placeholder: "my-shop", required: true });
+const SLUG_LENGTH = 30;
+const SLUG_MINIMUM = 4;
+
+export function projectSlug(businessName: string): string {
+	const words = headingAnchor(businessName);
+	const lettered = /^[a-z]/.test(words) || words === "" ? words : `project-${words}`;
+	const padded = lettered !== "" && lettered.length < SLUG_MINIMUM ? `${lettered}-project` : lettered;
+	return padded.slice(0, SLUG_LENGTH).replace(/-+$/, "");
+}
+
+export function projectNameFields(): { business: HTMLInputElement; name: HTMLInputElement; fields: HTMLElement[] } {
+	const business = input("text", { placeholder: t("projects.business_placeholder"), required: true, maxlength: "120", autocomplete: "organization" });
+	const name = input("text", { placeholder: "my-shop", required: true, maxlength: String(SLUG_LENGTH) });
+	let chosen = false;
+	name.addEventListener("input", () => {
+		chosen = name.value !== "";
+	});
+	business.addEventListener("input", () => {
+		if (!chosen) name.value = projectSlug(business.value);
+	});
+	return {
+		business,
+		name,
+		fields: [field(t("projects.business_name"), business, t("projects.business_hint")), field(t("projects.name"), name, t("projects.name_hint"))],
+	};
+}
+
+function createProjectDialog() {
+	const { business, name, fields } = projectNameFields();
 	const submit = el("button", { class: "button primary", type: "submit" }, t("projects.create"));
 
 	const form = el(
 		"form",
 		{
+			class: "stack",
 			onSubmit: async (event) => {
 				event.preventDefault();
 				submit.disabled = true;
 
 				try {
-					const project = await Api.createProject(name.value.trim());
+					const project = await Api.createProject(name.value.trim(), business.value.trim());
 					dialog.close();
-
-					modal(
-						t("projects.created_title"),
-						el(
-							"div",
-							{ class: "stack" },
-							el("p", {}, t("projects.created_body", { name: project.name })),
-							secretReveal(t("projects.primary_key"), project.apikey ?? ""),
-							secretReveal(t("projects.secondary_key"), project.apikey2 ?? "")
-						)
-					);
-
-					onCreated();
+					toast(t("projects.created_toast", { name: project.public_name }), "success");
+					navigate(`/projects/${project.uuid}`);
 				} catch (error) {
 					reportError(error);
 					submit.disabled = false;
 				}
 			},
 		},
-		field(t("projects.name"), name, t("login.username_hint")),
+		...fields,
 		el("div", { class: "dialog-actions" }, submit)
 	);
 
 	const dialog = modal(t("projects.new"), form);
-	name.focus();
+	business.focus();
 }
 
 export function projectsView(): HTMLElement {
@@ -71,7 +90,7 @@ export function projectsView(): HTMLElement {
 				if (projects.length === 0) {
 					return emptyState(
 						t("projects.empty"),
-						el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog(load) }, t("projects.create_first"))
+						el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog() }, t("projects.create_first"))
 					);
 				}
 				return pagedList(projects, (page) => el("div", { class: "grid" }, ...page.map(projectCard)));
@@ -91,7 +110,7 @@ export function projectsView(): HTMLElement {
 				"div",
 				{ class: "line-actions" },
 				clients,
-				el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog(load) }, t("projects.new"))
+				el("button", { class: "button primary", type: "button", onClick: () => createProjectDialog() }, t("projects.new"))
 			)
 		),
 		list

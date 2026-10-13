@@ -24,6 +24,7 @@
 	"include": [
 		"server",
 		"tests",
+		"tools",
 		"web/src/i18n/dictionary.ts",
 		"web/src/i18n/en.ts",
 		"web/src/i18n/sl.ts",

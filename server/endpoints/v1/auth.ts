@@ -17,7 +17,7 @@ import { pendingTerms, recordAcceptance, requiredVersions, requiresTerms, sameVe
 import { exportAccount, exportResponse } from "../../account-data";
 import { accountByEmail, newAccountId, normalizeEmail } from "../../accounts";
 import { isEnabled, sendEmail } from "../../email/mailer";
-import { emailChangeEmail, emailChangedEmail } from "../../email/templates";
+import { emailChangeEmail, emailChangedEmail, passwordChangedEmail, passwordResetEmail } from "../../email/templates";
 import { isUiLanguage, type UiLanguage } from "../../../web/src/i18n/dictionary";
 import type { AccountRow } from "../../database/models";
 import { Realtime } from "../../realtime";
@@ -50,6 +50,17 @@ interface EmailChangeBody extends PasswordAndSecondFactorBody {
 	language?: string;
 }
 
+interface PasswordChangeBody extends PasswordAndSecondFactorBody {
+	new_password?: string;
+	language?: string;
+}
+
+interface PasswordReset {
+	username: string;
+	replaces: string;
+	language: UiLanguage;
+}
+
 interface EmailChange {
 	username: string;
 	from: string;
@@ -65,6 +76,11 @@ interface SecurityKeyBody {
 
 const TWO_FACTOR_SETUP_TTL = 10 * 60;
 const EMAIL_CHANGE_TTL = 60 * 60;
+const PASSWORD_RESET_TTL = 60 * 60;
+
+async function passwordResetCacheKey(token: string): Promise<string> {
+	return `password_reset_${await Utils.generateHash(token, "sha256")}`;
+}
 
 async function emailChangeCacheKey(token: string): Promise<string> {
 	return `email_change_${await Utils.generateHash(token, "sha256")}`;
@@ -376,6 +392,127 @@ Server.app.post("/api/v1/auth/email/confirm", credentialLimit, async (ctx) => {
 	}
 
 	return Utils.ok(ctx, { email: change.to });
+});
+
+async function tellAboutPasswordChange(email: string, language: UiLanguage) {
+	if (!isEnabled()) return;
+	try {
+		await sendEmail({ to: email, senderName: "RabbitPay", replyTo: null, ...passwordChangedEmail(language, `${Utils.publicUrl()}/account`) });
+	} catch (err) {
+		Logger.warn(`[AUTH] Could not tell ${email} about the password change: ${err}`);
+	}
+}
+
+Server.app.post("/api/v1/auth/password", Auth.required(), credentialLimit, async (ctx) => {
+	ctx.header("Cache-Control", "no-store");
+	let data: PasswordChangeBody;
+	try {
+		data = await ctx.body<PasswordChangeBody>();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	const account = Auth.account(ctx);
+	if (!Validate.password(data.password)) return Utils.fail(ctx, ErrorCode.INVALID_PASSWORD);
+	if (!Validate.password(data.new_password)) return Utils.fail(ctx, ErrorCode.PASSWORD_NOT_HASHED);
+	if (!(await Bun.password.verify(data.password!, account.password))) return Utils.fail(ctx, ErrorCode.INCORRECT_PASSWORD);
+	if (data.new_password === data.password) return Utils.fail(ctx, ErrorCode.PASSWORD_UNCHANGED);
+	if (account.two_factor_secret !== null) {
+		if (!Vault.isConfigured()) return Utils.fail(ctx, ErrorCode.MASTER_KEY_NOT_CONFIGURED);
+		if (!(await verifySecondFactor(account, data, "confirm"))) return Utils.fail(ctx, secondFactorError(data));
+	}
+
+	const password = await Bun.password.hash(data.new_password!);
+	const changed = await Database`
+		UPDATE accounts SET password = ${password}, updated = ${Date.now()} WHERE username = ${account.username} AND password = ${account.password}
+	`;
+	if (changed.count !== 1) return Utils.fail(ctx, ErrorCode.INCORRECT_PASSWORD);
+	if (!(await Auth.revokeSessions(account.username, ctx.get("sessionToken")))) return Utils.fail(ctx, ErrorCode.REDIS_CONNECTION_ERROR);
+	Realtime.closeAccount(account.username);
+
+	await Audit.record(ctx, { action: "account.password_changed", entityType: "account", entityId: account.username });
+	Logger.audit(`[AUTH] Password changed: ${account.username}`);
+	await tellAboutPasswordChange(account.email, isUiLanguage(data.language) ? data.language : "en");
+
+	return Utils.ok(ctx);
+});
+
+Server.app.post("/api/v1/auth/password/reset", credentialLimit, async (ctx) => {
+	ctx.header("Cache-Control", "no-store");
+	let data: { email?: string; language?: string };
+	try {
+		data = await ctx.body();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+
+	const email = normalizeEmail(data?.email);
+	if (!Validate.email(email)) return Utils.fail(ctx, ErrorCode.INVALID_EMAIL);
+	if (!isEnabled()) return Utils.fail(ctx, ErrorCode.PASSWORD_RESET_UNAVAILABLE);
+
+	const account = await accountByEmail<AccountRow>(Database, email);
+	if (!account || account.status !== "active") {
+		Logger.audit(`[AUTH] Password link requested for unknown or suspended "${email}" from ${Utils.clientIp(ctx)}`);
+		return Utils.ok(ctx);
+	}
+
+	const language: UiLanguage = isUiLanguage(data.language) ? data.language : "en";
+	const token = Utils.generateRandomText(128);
+	const key = await passwordResetCacheKey(token);
+	const reset: PasswordReset = { username: account.username, replaces: await Utils.generateHash(account.password, "sha256"), language };
+	if (!(await Cache.setString(key, JSON.stringify(reset), PASSWORD_RESET_TTL, PASSWORD_RESET_TTL))) return Utils.fail(ctx, ErrorCode.REDIS_CONNECTION_ERROR);
+
+	try {
+		await sendEmail({
+			to: account.email,
+			senderName: "RabbitPay",
+			replyTo: null,
+			...passwordResetEmail(language, `${Utils.publicUrl()}/account/password#token=${token}`),
+		});
+	} catch {
+		await Cache.deleteString(key);
+		return Utils.fail(ctx, ErrorCode.EMAIL_SERVER_FAILED);
+	}
+
+	Logger.audit(`[AUTH] Password link sent: ${account.username} from ${Utils.clientIp(ctx)}`);
+	return Utils.ok(ctx);
+});
+
+Server.app.post("/api/v1/auth/password/reset/confirm", credentialLimit, async (ctx) => {
+	ctx.header("Cache-Control", "no-store");
+	let data: { token?: string; password?: string };
+	try {
+		data = await ctx.body();
+	} catch {
+		return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	}
+	if (!Validate.token(data?.token)) return Utils.fail(ctx, ErrorCode.PASSWORD_LINK_EXPIRED);
+	if (!Validate.password(data.password)) return Utils.fail(ctx, ErrorCode.PASSWORD_NOT_HASHED);
+
+	const key = await passwordResetCacheKey(data.token!);
+	const stored = await Cache.getString(key);
+	if (!stored || !(await Cache.deleteString(key))) return Utils.fail(ctx, ErrorCode.PASSWORD_LINK_EXPIRED);
+
+	const reset = JSON.parse(stored) as PasswordReset;
+	const [account] = (await Database`SELECT * FROM accounts WHERE username = ${reset.username}`) as AccountRow[];
+	if (!account || account.status !== "active" || (await Utils.generateHash(account.password, "sha256")) !== reset.replaces) {
+		return Utils.fail(ctx, ErrorCode.PASSWORD_LINK_EXPIRED);
+	}
+
+	const password = await Bun.password.hash(data.password!);
+	const changed = await Database`
+		UPDATE accounts SET password = ${password}, updated = ${Date.now()} WHERE username = ${account.username} AND password = ${account.password}
+	`;
+	if (changed.count !== 1) return Utils.fail(ctx, ErrorCode.PASSWORD_LINK_EXPIRED);
+	if (!(await Auth.revokeSessions(reset.username))) return Utils.fail(ctx, ErrorCode.REDIS_CONNECTION_ERROR);
+	Realtime.closeAccount(reset.username);
+
+	ctx.set("account", account);
+	await Audit.record(ctx, { action: "account.password_reset", entityType: "account", entityId: reset.username });
+	Logger.audit(`[AUTH] Password reset: ${reset.username} from ${Utils.clientIp(ctx)}`);
+	await tellAboutPasswordChange(account.email, reset.language);
+
+	return Utils.ok(ctx, { email: account.email });
 });
 
 Server.app.get("/api/v1/auth/export", Auth.required(), exportLimit, async (ctx) => {

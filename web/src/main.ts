@@ -16,7 +16,7 @@ import { customerCreditNoteView, customerInvoiceView, customerInvoicesView, cust
 import { projectsView } from "./views/projects";
 import { landingEnabled, landingPath, landingView } from "./views/landing";
 import { checkPendingTerms, legalDocumentView, legalNoticeView, promptPendingTerms } from "./views/legal";
-import { helpArticleView, helpIndexView } from "./views/help";
+import { helpDocumentView, helpIndexView } from "./views/help";
 import { LICENSE_PERMISSIONS, loadProject, noAccessView, overviewView, SETTINGS_PERMISSIONS, STORE_PERMISSIONS } from "./views/project";
 import { canAny, Permission, sellsOnly, terminalPath, timesheetPath, worksOnly } from "./access";
 import { customersView } from "./views/customers";
@@ -38,7 +38,7 @@ import { creditNotePrintView, printView } from "./views/print";
 import { licenseView } from "./views/license";
 import { adminAccountsView, adminInvitesView, adminLegalView, adminLicensesView, adminOverviewView, adminProjectsView, adminSettingsView } from "./views/admin";
 import { handleShortcutRender, installKeyboardShortcuts, showShortcutModal } from "./keyboard";
-import { accountView, confirmEmailView } from "./views/account";
+import { accountView, choosePasswordView, confirmEmailView, requestPasswordView } from "./views/account";
 import { notificationsView } from "./views/notifications";
 import { forgetNotifications, releaseDevice, watchNotifications } from "./notifications";
 import { customerOrdersView, customerProfileView } from "./views/customer-profile";
@@ -139,6 +139,8 @@ function isStandalone(): boolean {
 		path.startsWith("/customer/") ||
 		path.startsWith("/pay/") ||
 		path === "/account/email" ||
+		path === "/account/password" ||
+		path === "/account/password/reset" ||
 		path === "/legal" ||
 		path === "/terms" ||
 		path === "/privacy" ||
@@ -243,8 +245,14 @@ define(
 	(params) => isUiLanguage(params.language)
 );
 define(
-	"/help/:language/:article",
-	(params) => helpArticleView(params.language, params.article),
+	"/help/:language/:module",
+	(params) => helpDocumentView(params.language, params.module, null),
+	false,
+	(params) => isUiLanguage(params.language)
+);
+define(
+	"/help/:language/:module/:page",
+	(params) => helpDocumentView(params.language, params.module, params.page),
 	false,
 	(params) => isUiLanguage(params.language)
 );
@@ -277,6 +285,8 @@ for (const option of UI_LANGUAGES) {
 define("/account", () => accountView());
 define("/account/notifications", () => notificationsView());
 define("/account/email", () => confirmEmailView(), false);
+define("/account/password", () => choosePasswordView(), false);
+define("/account/password/reset", () => requestPasswordView(), false);
 define("/converter", () => converterView());
 define("/accounting", () => accountingClientsView());
 define("/admin", () => adminOverviewView());

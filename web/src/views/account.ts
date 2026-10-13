@@ -1,9 +1,9 @@
-import { Api, getToken, type Account, type SecondFactor, type SecurityKey, type TwoFactorSetup } from "../api";
+import { Api, clearSession, getToken, type Account, type SecondFactor, type SecurityKey, type TwoFactorSetup } from "../api";
 import { el, field, input, saveFile } from "../dom";
 import { language, t } from "../i18n";
 import { navigate } from "../router";
 import { refreshAccount } from "../session";
-import { authBrand, authPage } from "../auth-page";
+import { authBrand, authFooter, authPage, passwordField } from "../auth-page";
 import { formatDate } from "../money";
 import { modal, reportError, toast } from "../ui";
 import { legalInfo } from "./legal";
@@ -81,6 +81,147 @@ function emailPanel(account: Account): HTMLElement {
 		factor?.element ?? null,
 		sent,
 		el("div", {}, submit)
+	);
+}
+
+function passwordPanel(account: Account): HTMLElement {
+	const current = input("password", { autocomplete: "current-password", required: true });
+	const next = input("password", { autocomplete: "new-password", required: true });
+	const repeat = input("password", { autocomplete: "new-password", required: true });
+	const factor = account.two_factor_enabled ? factorField(account) : null;
+	const submit = el("button", { class: "button primary", type: "submit" }, t("account.password_change"));
+
+	return el(
+		"form",
+		{
+			class: "card stack",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				if (next.value !== repeat.value) {
+					toast(t("account.password_mismatch"), "error");
+					repeat.focus();
+					return;
+				}
+				submit.disabled = true;
+				try {
+					await Api.changePassword(current.value, next.value, language(), factor ? await factor.value() : undefined);
+					toast(t("account.password_changed"), "success");
+					navigate("/account", true);
+				} catch (error) {
+					reportFailure(error);
+					submit.disabled = false;
+				}
+			},
+		},
+		el("h2", {}, t("account.password_title")),
+		el("p", { class: "muted" }, t("account.password_body")),
+		field(t("account.password_current"), current),
+		el("div", { class: "form-grid" }, field(t("account.password_new"), next), field(t("account.password_repeat"), repeat)),
+		factor?.element ?? null,
+		el("div", {}, submit)
+	);
+}
+
+export function requestPasswordView(): HTMLElement {
+	const email = input("email", {
+		placeholder: "you@example.com",
+		autocomplete: "username",
+		required: true,
+		maxlength: "254",
+		value: new URLSearchParams(window.location.search).get("email") ?? "",
+	});
+	const submit = el("button", { class: "button primary wide", type: "submit" }, t("account.password_reset_send"));
+	const slot = el("div", { class: "auth-slot" });
+
+	const form = el(
+		"form",
+		{
+			class: "auth-card",
+			onSubmit: async (event) => {
+				event.preventDefault();
+				submit.disabled = true;
+				try {
+					const address = email.value.trim();
+					await Api.requestPasswordReset(address, language());
+					slot.replaceChildren(
+						el(
+							"div",
+							{ class: "auth-card" },
+							authBrand(),
+							el("h1", {}, t("account.password_reset_sent_title")),
+							el("p", { class: "auth-subtitle" }, t("account.password_reset_sent", { email: address })),
+							el("a", { class: "button primary wide", href: "/login" }, t("account.password_reset_back"))
+						)
+					);
+				} catch (error) {
+					reportError(error);
+					submit.disabled = false;
+				}
+			},
+		},
+		authBrand(),
+		el("h1", {}, t("account.password_reset_title")),
+		el("p", { class: "auth-subtitle" }, t("account.password_reset_body")),
+		field(t("login.email"), email),
+		submit
+	);
+
+	slot.append(form);
+	return authPage(slot, authFooter("", t("account.password_reset_back"), "/login"));
+}
+
+export function choosePasswordView(): HTMLElement {
+	const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("token");
+	const token: string | null = fragmentToken ?? history.state?.passwordResetToken ?? null;
+	if (fragmentToken) history.replaceState({ passwordResetToken: fragmentToken }, "", "/account/password");
+
+	if (!token) {
+		return authPage(
+			el(
+				"div",
+				{ class: "auth-card" },
+				authBrand(),
+				el("h1", {}, t("account.password_choose_title")),
+				el("p", { class: "auth-subtitle" }, t("account.password_choose_missing")),
+				el("a", { class: "button primary wide", href: "/account/password/reset" }, t("account.password_reset_title"))
+			)
+		);
+	}
+
+	const next = input("password", { autocomplete: "new-password", required: true });
+	const repeat = input("password", { autocomplete: "new-password", required: true });
+	const submit = el("button", { class: "button primary wide", type: "submit" }, t("account.password_choose"));
+	return authPage(
+		el(
+			"form",
+			{
+				class: "auth-card",
+				onSubmit: async (event) => {
+					event.preventDefault();
+					if (next.value !== repeat.value) {
+						toast(t("account.password_mismatch"), "error");
+						repeat.focus();
+						return;
+					}
+					submit.disabled = true;
+					try {
+						const result = await Api.resetPassword(token, next.value);
+						clearSession();
+						toast(t("account.password_chosen"), "success");
+						navigate(`/login?email=${encodeURIComponent(result.email)}`, true);
+					} catch (error) {
+						reportError(error);
+						submit.disabled = false;
+					}
+				},
+			},
+			authBrand(),
+			el("h1", {}, t("account.password_choose_title")),
+			el("p", { class: "auth-subtitle" }, t("account.password_choose_body")),
+			field(t("account.password_new"), passwordField(next), t("login.password_hint")),
+			field(t("account.password_repeat"), passwordField(repeat)),
+			submit
+		)
 	);
 }
 
@@ -431,6 +572,7 @@ export async function accountView(): Promise<HTMLElement> {
 		intro.textContent = t("account.intro", { email: account.email });
 		content.replaceChildren(
 			emailPanel(account),
+			passwordPanel(account),
 			statusPanel(account),
 			recoveryCodes ? recoveryPanel(recoveryCodes) : "",
 			securityKeysPanel(account, reload),
