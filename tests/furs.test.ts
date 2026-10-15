@@ -13,7 +13,7 @@ const { readPkcs12, Pkcs12Error } = await import("../server/furs/pkcs12");
 const { certificateInfo, credentialsFromPkcs12 } = await import("../server/furs/credentials");
 const { signedToken, verifiedPayload, FursSignatureError } = await import("../server/furs/jws");
 const { fursAmount, fursTime, protectedId, verificationCode } = await import("../server/furs/zoi");
-const { setFursEndpoint } = await import("../server/furs/client");
+const { setFursEndpoint, testEndpointFrom } = await import("../server/furs/client");
 const { submitPendingDocuments, taxesFor, workingDaysAfter } = await import("../server/fiscal/documents");
 const { fixture, startFursMock, TAXPAYER_PASSWORD, TAXPAYER_TAX_NUMBER } = await import("./furs-mock");
 const { updateSettings } = await import("../server/settings");
@@ -179,6 +179,19 @@ describe("signed FURS messages", () => {
 		expect(() => verifiedPayload(unsigned, mock.endpoint.anchors)).toThrow(FursSignatureError);
 		const rogue = new X509Certificate(await Bun.file(`${import.meta.dir}/fixtures/furs/rogue.pem`).text());
 		expect(() => verifiedPayload(unsigned, [rogue])).toThrow(FursSignatureError);
+	});
+});
+
+describe("pointing the FURS test environment elsewhere", () => {
+	test("needs both the address and the authority file", () => {
+		const ca = `${import.meta.dir}/fixtures/furs/ca.pem`;
+		expect(testEndpointFrom({})).toBeNull();
+		expect(testEndpointFrom({ RABBITPAY_FURS_TEST_URL: "https://127.0.0.1:9443/v1/cash_registers" })).toBeNull();
+		expect(testEndpointFrom({ RABBITPAY_FURS_TEST_CA: ca })).toBeNull();
+
+		const endpoint = testEndpointFrom({ RABBITPAY_FURS_TEST_URL: " https://127.0.0.1:9443/v1/cash_registers ", RABBITPAY_FURS_TEST_CA: ca });
+		expect(endpoint?.url).toBe("https://127.0.0.1:9443/v1/cash_registers");
+		expect(endpoint?.anchors[0]?.subject).toContain("CN=Tax CA Test");
 	});
 });
 

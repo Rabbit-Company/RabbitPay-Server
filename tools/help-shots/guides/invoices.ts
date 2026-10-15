@@ -17,7 +17,7 @@ function lines(session: Session, chosen: Line[]) {
 	});
 }
 
-async function createInvoice(
+export async function createInvoice(
 	studio: Studio,
 	session: Session,
 	customer: string,
@@ -35,7 +35,7 @@ async function createInvoice(
 	});
 }
 
-async function pay(studio: Studio, session: Session, invoice: string, amount: number, reference: string) {
+export async function pay(studio: Studio, session: Session, invoice: string, amount: number, reference: string) {
 	await projectApi(studio, session, "POST", "/transactions", {
 		invoice,
 		processor: "bank_transfer",
@@ -48,7 +48,7 @@ async function pay(studio: Studio, session: Session, invoice: string, amount: nu
 	});
 }
 
-async function customerDetails(studio: Studio, customer: DemoCustomer) {
+export async function customerDetails(studio: Studio, customer: DemoCustomer) {
 	if (!customer.search) {
 		return {
 			name: customer.name,
@@ -176,13 +176,13 @@ async function customers(studio: Studio, session: Session) {
 	await studio.shot(page, "profile-actions", { target: `${CONTENT} .page-head, ${CONTENT} .line-actions`, padding: 12 });
 }
 
-async function chooseCustomer(studio: Studio, name: string) {
+export async function chooseCustomer(studio: Studio, name: string) {
 	const { browser } = studio;
 	await browser.fill(".combo-customer .combo-input", name.slice(0, 6));
 	await browser.waitFor(".combo-customer .combo-option");
 }
 
-async function addLine(studio: Studio, row: number, itemName: string) {
+export async function addLine(studio: Studio, row: number, itemName: string) {
 	const { browser } = studio;
 	const line = `.items .item-line:nth-child(${row})`;
 	await browser.fill(`${line} .combo-input`, itemName.slice(0, 8));

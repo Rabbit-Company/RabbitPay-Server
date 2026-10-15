@@ -15,7 +15,7 @@ async function call<T>(base: string, method: string, path: string, body?: unknow
 	return payload.data;
 }
 
-function taxNumberAfter(start: number, taken: (candidate: string) => boolean): string {
+export function taxNumberAfter(start: number, taken: (candidate: string) => boolean): string {
 	for (let body = start; ; body++) {
 		const digits = String(body).padStart(7, "0");
 		const sum = [...digits].reduce((total, digit, index) => total + Number(digit) * (8 - index), 0);

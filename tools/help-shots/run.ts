@@ -9,12 +9,15 @@ import { DEMOS, type Session } from "./demo";
 import { startScratchServer } from "./scratch-server";
 import { startMailSink } from "./mail-sink";
 import { startViesMock } from "./vies-mock";
+import { startHelpFurs } from "./furs";
 import { prepareServer } from "./setup";
 import { Studio, type ShotRecord } from "./studio";
 import { gettingStarted } from "./guides/getting-started";
 import { invoices } from "./guides/invoices";
 import { payments } from "./guides/payments";
 import { expenses } from "./guides/expenses";
+import { slovenia } from "./guides/slovenia";
+import { terminal } from "./guides/terminal";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
@@ -23,7 +26,7 @@ export interface Guide {
 	steps: [name: string, run: Step][];
 }
 
-const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses];
+const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses, slovenia, terminal];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
 
@@ -78,7 +81,9 @@ if (previous && !reuse) {
 
 const mail = startMailSink(port + 1000);
 const vies = startViesMock(port + 2000, resolve(work, "help-shots.sqlite"));
-let server = await startScratchServer(work, port, mail.port, vies.port, !resumed);
+const furs = await startHelpFurs(port + 3000, resolve(work, "help-shots.sqlite"));
+const services = { mailPort: mail.port, viesPort: vies.port, environment: furs.environment };
+let server = await startScratchServer(work, port, services, !resumed);
 let browser = await Browser.launch();
 const shots = new Map<string, ShotRecord>();
 
@@ -100,7 +105,7 @@ try {
 			await browser.send("Emulation.setTimezoneOverride", { timezoneId: DEMOS[language].timezone });
 			await browser.goto(`${server.base}/login`);
 			await browser.eval(`(() => { localStorage.clear(); localStorage.setItem("rabbitpay.language", "${language}"); })()`);
-			const studio = new Studio(browser, server.base, out, language, guide.module, mail.messages, server.database);
+			const studio = new Studio(browser, server.base, out, language, guide.module, mail.messages, server.database, furs);
 			if (session.project !== null) await signIn(studio, session);
 			for (const [name, run] of guide.steps) {
 				if (only.length > 0 && !only.includes(name) && !only.includes(`${guide.module}/${name}`)) continue;
@@ -113,7 +118,7 @@ try {
 		if (only.length === 0 && languages.length === Object.keys(DEMOS).length && server.owned) {
 			await server.stop();
 			copyState(work, resolve(snapshots, guide.module));
-			server = await startScratchServer(work, port, mail.port, vies.port, false);
+			server = await startScratchServer(work, port, services, false);
 		}
 	}
 	await writeManifest(shots);
@@ -122,6 +127,7 @@ try {
 	await browser.close();
 	mail.stop();
 	vies.stop();
+	furs.mock.stop();
 	if (process.argv.includes("--keep")) console.log(`Scratch server still running on ${server.base}, database ${server.database}`);
 	else await server.stop();
 }

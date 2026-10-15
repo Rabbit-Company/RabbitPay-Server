@@ -24,12 +24,4 @@ Začnite s stranjo [Načini plačila](payments/payment-methods), ki razloži kar
 
 ## Prodajajte osebno z blagajno
 
-**Blagajna** spremeni telefon, tablico ali napravo POS v blagajno.
-
-1. Tapnite izdelke iz svojih **Artiklov**, poiščite ali skenirajte črtno kodo ali vnesite znesek na tipkovnici.
-2. Pritisnite **Zaračunaj**.
-3. Pri gotovini vnesite prejeti znesek in RabbitPay pokaže, koliko vrniti. Pri drugih načinih kupec skenira kodo QR in plača na svojem telefonu.
-
-Vsaka prodaja je izdan račun, ki ga lahko natisnete ali pošljete po e-pošti. V slovenskem projektu z davčnim potrjevanjem se prodaje z gotovino in kartico takoj pošljejo FURS. Preklic prodaje izda dobropis.
-
-Član ekipe z vlogo **Blagajnik** vidi samo blagajno in svoje prodaje.
+**Blagajna** spremeni telefon, tablico ali napravo POS v blagajno, z gotovino in drobižem, kodo QR za plačilo s telefonom ter natisnjenimi ali poslanimi računi. Glejte [Blagajna](terminal).

@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, createSign, createVerify, X509Certificate } from "node:crypto";
-import { readPkcs12 } from "../server/furs/pkcs12";
+import { readPkcs12, type Pkcs12Contents } from "../server/furs/pkcs12";
 import type { FursEndpoint } from "../server/furs/client";
 
 const FIXTURES = `${import.meta.dir}/fixtures/furs`;
@@ -24,6 +24,7 @@ export interface FursMock {
 	echoes: number;
 	outage: boolean;
 	reject: { code: string; message: string } | null;
+	trust(taxpayer: Pkcs12Contents): void;
 	stop(): void;
 }
 
@@ -42,13 +43,20 @@ function taxNumberOf(certificate: X509Certificate): number | null {
 	return match ? Number(match[1]) : null;
 }
 
-export async function startFursMock(): Promise<FursMock> {
-	const read = (name: string) => Bun.file(`${FIXTURES}/${name}`).text();
+export interface FursMockOptions {
+	directory?: string;
+	taxpayers?: Pkcs12Contents[];
+	port?: number;
+}
+
+export async function startFursMock({ directory = FIXTURES, taxpayers, port = 0 }: FursMockOptions = {}): Promise<FursMock> {
+	const read = (name: string) => Bun.file(`${directory}/${name}`).text();
 	const ca = await read("ca.pem");
 	const signerKey = createPrivateKey(await read("signer.key"));
 	const signer = new X509Certificate(await read("signer.pem"));
-	const taxpayer = readPkcs12(await fixture("taxpayer.p12"), TAXPAYER_PASSWORD);
-	const known = new Map([[BigInt(`0x${taxpayer.certificate.serialNumber}`).toString(), taxpayer.certificate]]);
+	const known = new Map<string, Pkcs12Contents>();
+	const trust = (taxpayer: Pkcs12Contents) => known.set(BigInt(`0x${taxpayer.certificate.serialNumber}`).toString(), taxpayer);
+	for (const taxpayer of taxpayers ?? [readPkcs12(await fixture("taxpayer.p12"), TAXPAYER_PASSWORD)]) trust(taxpayer);
 
 	const signedHeader = `{"alg":"RS256","subject_name":"CN=DavPotRacTEST,OU=systems,O=state authorities,C=SI","issuer_name":"CN=Tax CA Test,O=state-institutions,C=SI","serial":1002,"x5c":[${JSON.stringify(Buffer.from(signer.raw).toString("base64"))}]}`;
 	const respond = (payload: unknown) => {
@@ -66,11 +74,12 @@ export async function startFursMock(): Promise<FursMock> {
 		echoes: 0,
 		outage: false,
 		reject: null,
+		trust,
 		stop: () => server.stop(true),
 	};
 
 	const server = Bun.serve({
-		port: 0,
+		port,
 		hostname: "127.0.0.1",
 		tls: { key: await read("server.key"), cert: await read("server.pem"), ca, requestCert: true, rejectUnauthorized: true },
 		async fetch(request) {
@@ -87,8 +96,9 @@ export async function startFursMock(): Promise<FursMock> {
 			const [headerPart, payloadPart, signaturePart] = String(body.token ?? "").split(".") as [string, string, string];
 			const rawHeader = Buffer.from(headerPart ?? "", "base64url").toString("utf8");
 			const serial = /"serial":(\d+)/.exec(rawHeader)?.[1];
-			const certificate = serial ? known.get(serial) : undefined;
-			if (!certificate) return error(key, "S004", "Identifikator digitalnega potrdila ni ustrezen");
+			const taxpayer = serial ? known.get(serial) : undefined;
+			const certificate = taxpayer?.certificate;
+			if (!taxpayer || !certificate) return error(key, "S004", "Identifikator digitalnega potrdila ni ustrezen");
 			const valid = createVerify("RSA-SHA256")
 				.update(`${headerPart}.${payloadPart}`)
 				.verify(certificate.publicKey, Buffer.from(signaturePart ?? "", "base64url"));

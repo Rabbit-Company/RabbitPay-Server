@@ -239,6 +239,13 @@ FURS test environment, request a test certificate at sd.fu@gov.si and run:
 FURS_TEST_P12=/path/to/test.p12 FURS_TEST_PASSWORD=secret bun test tests/furs-live.test.ts
 ```
 
+To point the FURS test environment of a running server somewhere else, for
+example at a stand-in, set `RABBITPAY_FURS_TEST_URL` to its address and
+`RABBITPAY_FURS_TEST_CA` to a PEM file with the authority that signed both its
+TLS certificate and its responses. Both are needed and only the test
+environment is affected, so production certificates always reach the real
+FURS.
+
 ## Company details on invoices (ZGD-1)
 
 Article 45 of ZGD-1 lists what a company must state on every letter it sends,

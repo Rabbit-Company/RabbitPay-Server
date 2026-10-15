@@ -16,13 +16,13 @@ function statusPill(status: string, t: ReturnType<typeof translator>) {
 	return el("span", { class: `pill pill-${status}` }, t(`status.${status}` as TranslationKey));
 }
 
-function qrFor(uri: string): HTMLElement {
+function qrFor(uri: string, t: ReturnType<typeof translator>): HTMLElement {
 	const wrapper = el("div", { class: "qr" });
 
 	try {
 		wrapper.innerHTML = toSVG(uri, { scale: 6, margin: 2 });
 	} catch {
-		wrapper.appendChild(el("p", { class: "muted" }, "Could not draw a QR code. Use the address below."));
+		wrapper.appendChild(el("p", { class: "muted" }, t("pay.qr_failed")));
 	}
 
 	return wrapper;
@@ -200,7 +200,7 @@ function instructionCard(instruction: PaymentInstruction, invoice: PublicInvoice
 	append(card, [
 		el("h3", {}, t("pay.with", { processor: processorName(instruction.processor) })),
 		expiry,
-		instruction.uri ? qrFor(instruction.uri) : null,
+		instruction.uri ? qrFor(instruction.uri, t) : null,
 		copyRow(t("pay.address"), instruction.address ?? "", t),
 		copyRow(t("pay.amount_in", { ticker: coin.ticker }), coin.amount, t),
 		el("p", { class: "muted" }, rateNote(instruction, invoice, coin, t)),

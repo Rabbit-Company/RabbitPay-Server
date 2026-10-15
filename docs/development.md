@@ -85,8 +85,13 @@ started is the one the invoices are issued in.
 
 Emails go to a small mail server inside the tool, VAT numbers are answered by a
 stand-in for VIES, and the FURS company register is downloaded once and then
-kept in the temporary folder. Exchange rates are still read from the internet,
-so the crypto payment page needs a connection.
+kept in the temporary folder. FURS is played by the stand-in from
+`tests/furs-mock.ts`: the tool makes its own test authority and a test
+certificate for each Slovenian demo company with `openssl`, keeps them in
+the temporary folder and points the throwaway server at the stand-in through
+`RABBITPAY_FURS_TEST_URL` and `RABBITPAY_FURS_TEST_CA`. Screenshots show
+**Production** in place of **Test environment**. Exchange rates are still read
+from the internet, so the crypto payment page needs a connection.
 
 The people and companies in the screenshots are defined in
 [`tools/help-shots/demo.ts`](../tools/help-shots/demo.ts). The business that

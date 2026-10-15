@@ -2540,6 +2540,9 @@ select:not([multiple]) {
 .toolbar-title {
 	margin: 0;
 }
+.toolbar > .toolbar-title:last-child {
+	margin-left: 0;
+}
 .line-actions {
 	display: flex;
 	align-items: center;

@@ -24,12 +24,4 @@ Start with [Payment methods](payments/payment-methods), which explains the card 
 
 ## Sell in person with the terminal
 
-**Terminal** turns a phone, a tablet or a POS device into a till.
-
-1. Tap products from your **Items**, search or scan a barcode, or enter an amount on the keypad.
-2. Press **Charge**.
-3. For cash, enter the amount handed over and RabbitPay shows the change to give back. For other methods the customer scans the QR code and pays on their phone.
-
-Every sale is an issued invoice with a receipt that you can print or email. In a Slovenian project with fiscal verification, cash and card sales are sent to FURS right away. Canceling a sale issues a credit note.
-
-A team member with the **Cashier** role sees only the terminal and their own sales.
+**Terminal** turns a phone, a tablet or a POS device into a till, with cash and change, a QR code to pay by phone and printed or emailed receipts. See [Terminal](terminal).

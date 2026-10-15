@@ -48,7 +48,13 @@ export interface ScratchServer {
 	stop: () => Promise<void>;
 }
 
-export async function startScratchServer(work: string, port: number, mailPort: number, viesPort: number, fresh: boolean): Promise<ScratchServer> {
+export interface ScratchServices {
+	mailPort: number;
+	viesPort: number;
+	environment: Record<string, string>;
+}
+
+export async function startScratchServer(work: string, port: number, services: ScratchServices, fresh: boolean): Promise<ScratchServer> {
 	if (fresh) rmSync(work, { recursive: true, force: true });
 	mkdirSync(work, { recursive: true });
 	const database = join(work, "help-shots.sqlite");
@@ -72,9 +78,9 @@ export async function startScratchServer(work: string, port: number, mailPort: n
 		"security.session_ttl": 86400,
 		"email.enabled": true,
 		"email.host": "127.0.0.1",
-		"email.port": mailPort,
+		"email.port": services.mailPort,
 		"email.from_address": "no-reply@rabbitpay.net",
-		"vies.api_url": `http://127.0.0.1:${viesPort}`,
+		"vies.api_url": `http://127.0.0.1:${services.viesPort}`,
 		"btc.enabled": true,
 		"eth.enabled": true,
 		"xmr.enabled": true,
@@ -89,6 +95,7 @@ export async function startScratchServer(work: string, port: number, mailPort: n
 		cwd: REPOSITORY,
 		env: {
 			...Bun.env,
+			...services.environment,
 			RABBITPAY_DB: `sqlite://${database}`,
 			RABBITPAY_MASTER_KEY: "help-shots-scratch-master-key-0123456789-abcdefghij",
 			DOCUMENT_STORAGE: "local",

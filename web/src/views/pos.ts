@@ -327,9 +327,9 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "pos-empty" },
-					el("p", {}, "No saved items yet."),
+					el("p", {}, t("pos.no_saved_items")),
 					el("p", { class: "muted" }, canManage ? (customAllowed ? t("pos.no_items_manage_keypad") : t("pos.no_items_manage")) : t("pos.no_items_ask")),
-					canManage ? el("a", { class: "button ghost", href: `/projects/${uuid}/items` }, "Manage items") : null
+					canManage ? el("a", { class: "button ghost", href: `/projects/${uuid}/items` }, t("pos.manage_items")) : null
 				)
 			);
 			return;
@@ -338,7 +338,7 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 		const matches = matchingItems();
 		catalogPages.update(matches.length);
 		const shown = matches.slice(catalogPages.state.offset, catalogPages.state.offset + PAGE_SIZE);
-		grid.replaceChildren(...(shown.length > 0 ? shown.map(itemTile) : [el("p", { class: "muted pos-empty" }, "No item matches.")]));
+		grid.replaceChildren(...(shown.length > 0 ? shown.map(itemTile) : [el("p", { class: "muted pos-empty" }, t("pos.no_item_matches"))]));
 	};
 
 	const renderKeypad = () => {
@@ -361,7 +361,7 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 
 		cartLines.replaceChildren(
 			...(lines.length === 0
-				? [el("p", { class: "muted pos-empty" }, customAllowed ? "Tap an item or use the keypad to start a sale." : "Tap an item to start a sale.")]
+				? [el("p", { class: "muted pos-empty" }, customAllowed ? t("pos.start_hint_keypad") : t("pos.start_hint"))]
 				: lines.map((line, index) => {
 						const calculated = totals.items[index];
 						return el(
@@ -376,9 +376,9 @@ export async function posView(uuid: string): Promise<HTMLElement> {
 							el(
 								"div",
 								{ class: "pos-qty" },
-								el("button", { class: "pos-qty-button", type: "button", title: "One less", onClick: () => updateQuantity(line.key, -1) }, "-"),
+								el("button", { class: "pos-qty-button", type: "button", title: t("pos.one_less"), onClick: () => updateQuantity(line.key, -1) }, "-"),
 								el("span", { class: "mono" }, String(line.quantity)),
-								el("button", { class: "pos-qty-button", type: "button", title: "One more", onClick: () => updateQuantity(line.key, 1) }, "+")
+								el("button", { class: "pos-qty-button", type: "button", title: t("pos.one_more"), onClick: () => updateQuantity(line.key, 1) }, "+")
 							),
 							el("span", { class: "pos-line-total mono" }, formatMoney(calculated.total_price + calculated.tax_amount, currency))
 						);

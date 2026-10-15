@@ -1,4 +1,5 @@
 import { X509Certificate } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { SI_TRUST_ROOT, SIGOV_CA } from "./authorities";
 import type { FursCredentials } from "./credentials";
 import { FursSignatureError, signedToken, verifiedPayload } from "./jws";
@@ -19,7 +20,16 @@ export const FURS_URLS: Record<FursEnvironment, string> = {
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
-let overrides: Partial<Record<FursEnvironment, FursEndpoint>> = {};
+export function testEndpointFrom(environment: Record<string, string | undefined>): FursEndpoint | null {
+	const url = environment.RABBITPAY_FURS_TEST_URL?.trim();
+	const caFile = environment.RABBITPAY_FURS_TEST_CA?.trim();
+	if (!url || !caFile) return null;
+	const ca = readFileSync(caFile, "utf8");
+	return { url, ca: [ca], anchors: [new X509Certificate(ca)] };
+}
+
+const configuredTest = testEndpointFrom(Bun.env);
+let overrides: Partial<Record<FursEnvironment, FursEndpoint>> = configuredTest ? { test: configuredTest } : {};
 
 export function setFursEndpoint(environment: FursEnvironment, endpoint: FursEndpoint | null) {
 	if (endpoint) overrides = { ...overrides, [environment]: endpoint };

@@ -21,7 +21,7 @@ import { canSubmitSlovenianDdvEvidence, isTaxTreatment } from "../../../server/t
 import { can, Permission } from "../access";
 import { taxTreatmentName } from "../options";
 import { t } from "../i18n";
-import { formatDate as formatDay, type DateFormat } from "../../../server/formats";
+import { formatDate as formatDay, formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
 import { endOfLocalDate, localDate, previousLocalMonth, startOfLocalDate } from "../../../server/timezone";
 import { modal, reportError, toast } from "../ui";
 
@@ -41,6 +41,8 @@ function ddvSection(uuid: string, project: Project): HTMLElement {
 		);
 	}
 	const initial = previousLocalMonth(Date.now(), project.timezone);
+	const dateFormat = project.date_format as DateFormat;
+	const period = (from: number, to: number, timezone: string) => `${formatDay(from, dateFormat, timezone)} - ${formatDay(to, dateFormat, timezone)}`;
 	const from = input("date", { value: localDate(initial.from, project.timezone), required: true });
 	const to = input("date", { value: localDate(initial.to, project.timezone), required: true });
 	const refund = input("checkbox");
@@ -100,7 +102,7 @@ function ddvSection(uuid: string, project: Project): HTMLElement {
 							...issues.map((entry) => el("li", {}, el("strong", {}, entry.reference ?? t("ddv.header")), el("span", { class: "muted" }, entry.message)))
 						)
 					)
-				: el("p", { class: "pill pill-paid" }, t("ddv.valid"))
+				: el("div", {}, el("span", { class: "pill pill-paid" }, t("ddv.valid")))
 		);
 	};
 	const unlockDialog = (lock: AccountingPeriodLock) => {
@@ -141,9 +143,9 @@ function ddvSection(uuid: string, project: Project): HTMLElement {
 								el(
 									"tr",
 									{},
-									el("td", {}, `${localDate(row.period_from, project.timezone)} - ${localDate(row.period_to, project.timezone)}`),
+									el("td", {}, period(row.period_from, row.period_to, project.timezone)),
 									el("td", { class: "mono" }, String(row.revision)),
-									el("td", {}, new Date(row.created).toLocaleString()),
+									el("td", {}, formatDateTime(row.created, dateFormat, project.time_format as TimeFormat, project.timezone)),
 									el(
 										"td",
 										{},
@@ -177,9 +179,9 @@ function ddvSection(uuid: string, project: Project): HTMLElement {
 								el(
 									"tr",
 									{},
-									el("td", {}, `${localDate(lock.period_from, lock.timezone)} - ${localDate(lock.period_to, lock.timezone)}`),
+									el("td", {}, period(lock.period_from, lock.period_to, lock.timezone)),
 									el("td", {}, t(lock.active ? "ddv.locked" : "ddv.unlocked_status")),
-									el("td", {}, new Date(lock.locked_at).toLocaleString()),
+									el("td", {}, formatDateTime(lock.locked_at, dateFormat, project.time_format as TimeFormat, project.timezone)),
 									el(
 										"td",
 										{},

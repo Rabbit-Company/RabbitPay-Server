@@ -76,7 +76,43 @@ export interface Session {
 	customerNames?: string[];
 	partial?: string;
 	marks?: Record<string, string>;
+	branch?: Branch;
 }
+
+export interface Branch {
+	project: string;
+	company: Company;
+	items: string[];
+	customers: string[];
+	customerNames: string[];
+}
+
+export const SLOVENIAN_BRANCH: Pick<Demo, "project" | "displayName" | "company" | "vatRate" | "customers" | "timezone"> = {
+	project: "harbour-lane-slovenia",
+	displayName: "Harbour Lane Slovenia",
+	company: {
+		legalName: "HARBOUR LANE STUDIO, oblikovanje, d.o.o.",
+		search: "Harbour Lane Studio",
+		address: "Trubarjeva cesta 21",
+		postalCode: "1000",
+		city: "Ljubljana",
+		country: "SI",
+		countryName: "Slovenia",
+		taxNumber: "",
+		vatNumber: "",
+		registrationNumber: "8914263000",
+		email: "ljubljana@harbourlane.example",
+		phone: "+386 1 555 02 17",
+		website: "https://harbourlane.example",
+		footer: ["Ljubljana", "7,500.00"],
+	},
+	vatRate: 22,
+	customers: [
+		{ search: "Slovenske železnice, d.o.o.", name: "", email: "invoices.sz@example.com", type: "business" },
+		{ search: "Telekom Slovenije", name: "", email: "invoices.telekom@example.com", type: "business" },
+	],
+	timezone: "Europe/Ljubljana",
+};
 
 export const ADMINISTRATOR = { email: "administrator@example.com", password: "Scratch-Server-Administrator-1" };
 

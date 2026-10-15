@@ -78,6 +78,22 @@ import expensesAndReportsVatReportEn from "../docs/help/en/expenses-and-reports/
 import expensesAndReportsVatReportSl from "../docs/help/sl/expenses-and-reports/vat-report.md" with { type: "text" };
 import expensesAndReportsItemSalesEn from "../docs/help/en/expenses-and-reports/item-sales.md" with { type: "text" };
 import expensesAndReportsItemSalesSl from "../docs/help/sl/expenses-and-reports/item-sales.md" with { type: "text" };
+import terminalEn from "../docs/help/en/terminal/index.md" with { type: "text" };
+import terminalSl from "../docs/help/sl/terminal/index.md" with { type: "text" };
+import terminalOpenTerminalEn from "../docs/help/en/terminal/open-terminal.md" with { type: "text" };
+import terminalOpenTerminalSl from "../docs/help/sl/terminal/open-terminal.md" with { type: "text" };
+import terminalSellEn from "../docs/help/en/terminal/sell.md" with { type: "text" };
+import terminalSellSl from "../docs/help/sl/terminal/sell.md" with { type: "text" };
+import terminalTakePaymentEn from "../docs/help/en/terminal/take-payment.md" with { type: "text" };
+import terminalTakePaymentSl from "../docs/help/sl/terminal/take-payment.md" with { type: "text" };
+import terminalReceiptsEn from "../docs/help/en/terminal/receipts.md" with { type: "text" };
+import terminalReceiptsSl from "../docs/help/sl/terminal/receipts.md" with { type: "text" };
+import terminalCancelSaleEn from "../docs/help/en/terminal/cancel-sale.md" with { type: "text" };
+import terminalCancelSaleSl from "../docs/help/sl/terminal/cancel-sale.md" with { type: "text" };
+import terminalSalesTodayEn from "../docs/help/en/terminal/sales-today.md" with { type: "text" };
+import terminalSalesTodaySl from "../docs/help/sl/terminal/sales-today.md" with { type: "text" };
+import terminalTerminalSettingsEn from "../docs/help/en/terminal/terminal-settings.md" with { type: "text" };
+import terminalTerminalSettingsSl from "../docs/help/sl/terminal/terminal-settings.md" with { type: "text" };
 import onlineStoreEn from "../docs/help/en/online-store/index.md" with { type: "text" };
 import onlineStoreSl from "../docs/help/sl/online-store/index.md" with { type: "text" };
 import inventoryEn from "../docs/help/en/inventory/index.md" with { type: "text" };
@@ -88,6 +104,20 @@ import workforceEn from "../docs/help/en/workforce/index.md" with { type: "text"
 import workforceSl from "../docs/help/sl/workforce/index.md" with { type: "text" };
 import sloveniaEn from "../docs/help/en/slovenia/index.md" with { type: "text" };
 import sloveniaSl from "../docs/help/sl/slovenia/index.md" with { type: "text" };
+import sloveniaFiscalVerificationEn from "../docs/help/en/slovenia/fiscal-verification.md" with { type: "text" };
+import sloveniaFiscalVerificationSl from "../docs/help/sl/slovenia/fiscal-verification.md" with { type: "text" };
+import sloveniaVerifiedInvoicesEn from "../docs/help/en/slovenia/verified-invoices.md" with { type: "text" };
+import sloveniaVerifiedInvoicesSl from "../docs/help/sl/slovenia/verified-invoices.md" with { type: "text" };
+import sloveniaEInvoicesEn from "../docs/help/en/slovenia/e-invoices.md" with { type: "text" };
+import sloveniaEInvoicesSl from "../docs/help/sl/slovenia/e-invoices.md" with { type: "text" };
+import sloveniaCompanyDetailsEn from "../docs/help/en/slovenia/company-details.md" with { type: "text" };
+import sloveniaCompanyDetailsSl from "../docs/help/sl/slovenia/company-details.md" with { type: "text" };
+import sloveniaReverseChargeEn from "../docs/help/en/slovenia/reverse-charge.md" with { type: "text" };
+import sloveniaReverseChargeSl from "../docs/help/sl/slovenia/reverse-charge.md" with { type: "text" };
+import sloveniaVatPeriodsEn from "../docs/help/en/slovenia/vat-periods.md" with { type: "text" };
+import sloveniaVatPeriodsSl from "../docs/help/sl/slovenia/vat-periods.md" with { type: "text" };
+import sloveniaDdvEvidenceEn from "../docs/help/en/slovenia/ddv-evidence.md" with { type: "text" };
+import sloveniaDdvEvidenceSl from "../docs/help/sl/slovenia/ddv-evidence.md" with { type: "text" };
 
 export interface HelpPageSource {
 	slug: string;
@@ -164,9 +194,36 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "item-sales", en: expensesAndReportsItemSalesEn, sl: expensesAndReportsItemSalesSl },
 		],
 	},
+	{
+		slug: "terminal",
+		en: terminalEn,
+		sl: terminalSl,
+		pages: [
+			{ slug: "open-terminal", en: terminalOpenTerminalEn, sl: terminalOpenTerminalSl },
+			{ slug: "sell", en: terminalSellEn, sl: terminalSellSl },
+			{ slug: "take-payment", en: terminalTakePaymentEn, sl: terminalTakePaymentSl },
+			{ slug: "receipts", en: terminalReceiptsEn, sl: terminalReceiptsSl },
+			{ slug: "cancel-sale", en: terminalCancelSaleEn, sl: terminalCancelSaleSl },
+			{ slug: "sales-today", en: terminalSalesTodayEn, sl: terminalSalesTodaySl },
+			{ slug: "terminal-settings", en: terminalTerminalSettingsEn, sl: terminalTerminalSettingsSl },
+		],
+	},
 	{ slug: "online-store", en: onlineStoreEn, sl: onlineStoreSl, pages: [] },
 	{ slug: "inventory", en: inventoryEn, sl: inventorySl, pages: [] },
 	{ slug: "customer-portal", en: customerPortalEn, sl: customerPortalSl, pages: [] },
 	{ slug: "workforce", en: workforceEn, sl: workforceSl, pages: [] },
-	{ slug: "slovenia", en: sloveniaEn, sl: sloveniaSl, pages: [] },
+	{
+		slug: "slovenia",
+		en: sloveniaEn,
+		sl: sloveniaSl,
+		pages: [
+			{ slug: "fiscal-verification", en: sloveniaFiscalVerificationEn, sl: sloveniaFiscalVerificationSl },
+			{ slug: "verified-invoices", en: sloveniaVerifiedInvoicesEn, sl: sloveniaVerifiedInvoicesSl },
+			{ slug: "e-invoices", en: sloveniaEInvoicesEn, sl: sloveniaEInvoicesSl },
+			{ slug: "company-details", en: sloveniaCompanyDetailsEn, sl: sloveniaCompanyDetailsSl },
+			{ slug: "reverse-charge", en: sloveniaReverseChargeEn, sl: sloveniaReverseChargeSl },
+			{ slug: "vat-periods", en: sloveniaVatPeriodsEn, sl: sloveniaVatPeriodsSl },
+			{ slug: "ddv-evidence", en: sloveniaDdvEvidenceEn, sl: sloveniaDdvEvidenceSl },
+		],
+	},
 ];

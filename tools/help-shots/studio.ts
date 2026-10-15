@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { translate, type UiKey, type UiLanguage } from "../../web/src/i18n/dictionary";
 import type { Box, Browser, Theme } from "./browser";
+import type { HelpFurs } from "./furs";
 
 export type ShotRecord = readonly [width: number, height: number, version: string];
 
@@ -42,7 +43,8 @@ export class Studio {
 		readonly language: UiLanguage,
 		readonly module: string,
 		readonly mailbox: string[] = [],
-		readonly database = ""
+		readonly database = "",
+		readonly furs: HelpFurs | null = null
 	) {}
 
 	linkFromEmail(path: string): string {
@@ -72,6 +74,14 @@ export class Studio {
 	private async showPublicAddress() {
 		await this.browser.eval(
 			`(() => { const local = ${JSON.stringify(this.base)}; const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); for (let node = walker.nextNode(); node; node = walker.nextNode()) if (node.nodeValue.includes(local)) node.nodeValue = node.nodeValue.replaceAll(local, "${PUBLIC_ADDRESS}"); for (const field of document.querySelectorAll("input, textarea")) if (field.value.includes(local)) field.value = field.value.replaceAll(local, "${PUBLIC_ADDRESS}"); })()`
+		);
+	}
+
+	private async showProductionFurs() {
+		const test = JSON.stringify(this.t("fiscal.environment_test"));
+		const production = JSON.stringify(this.t("fiscal.environment_production"));
+		await this.browser.eval(
+			`(() => { document.querySelectorAll(".doc-fiscal-test").forEach((node) => node.remove()); for (const pill of document.querySelectorAll(".fiscal-pills .pill")) if (pill.textContent === ${test}) pill.textContent = ${production}; })()`
 		);
 	}
 
@@ -106,6 +116,7 @@ export class Studio {
 	async shot(page: string, name: string, options: ShotOptions = {}) {
 		if (!options.keepToasts) await this.clearToasts();
 		await this.showPublicAddress();
+		await this.showProductionFurs();
 		const overlay = await this.browser.exists(".overlay");
 		const stretched = overlay || options.full || list(options.target).length > 0;
 		if (overlay) {
