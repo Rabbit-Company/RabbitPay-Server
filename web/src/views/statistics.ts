@@ -560,8 +560,8 @@ export async function statisticsView(uuid: string): Promise<HTMLElement> {
 		el("hr", { class: "divider" }),
 		vatSection(uuid, project),
 		el("hr", { class: "divider" }),
-		ddvSection(uuid, project),
-		el("hr", { class: "divider" }),
+		project.tax_country === "SI" ? ddvSection(uuid, project) : null,
+		project.tax_country === "SI" ? el("hr", { class: "divider" }) : null,
 		el("div", { class: "toolbar" }, el("h2", { class: "toolbar-title" }, t("stats.item_sales")), period),
 		controls,
 		body

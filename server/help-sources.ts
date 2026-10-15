@@ -62,6 +62,22 @@ import paymentsFollowPaymentsEn from "../docs/help/en/payments/follow-payments.m
 import paymentsFollowPaymentsSl from "../docs/help/sl/payments/follow-payments.md" with { type: "text" };
 import expensesAndReportsEn from "../docs/help/en/expenses-and-reports/index.md" with { type: "text" };
 import expensesAndReportsSl from "../docs/help/sl/expenses-and-reports/index.md" with { type: "text" };
+import expensesAndReportsRecordExpenseEn from "../docs/help/en/expenses-and-reports/record-expense.md" with { type: "text" };
+import expensesAndReportsRecordExpenseSl from "../docs/help/sl/expenses-and-reports/record-expense.md" with { type: "text" };
+import expensesAndReportsImportEInvoiceEn from "../docs/help/en/expenses-and-reports/import-e-invoice.md" with { type: "text" };
+import expensesAndReportsImportEInvoiceSl from "../docs/help/sl/expenses-and-reports/import-e-invoice.md" with { type: "text" };
+import expensesAndReportsImportCsvEn from "../docs/help/en/expenses-and-reports/import-csv.md" with { type: "text" };
+import expensesAndReportsImportCsvSl from "../docs/help/sl/expenses-and-reports/import-csv.md" with { type: "text" };
+import expensesAndReportsRecurringExpensesEn from "../docs/help/en/expenses-and-reports/recurring-expenses.md" with { type: "text" };
+import expensesAndReportsRecurringExpensesSl from "../docs/help/sl/expenses-and-reports/recurring-expenses.md" with { type: "text" };
+import expensesAndReportsPaySuppliersEn from "../docs/help/en/expenses-and-reports/pay-suppliers.md" with { type: "text" };
+import expensesAndReportsPaySuppliersSl from "../docs/help/sl/expenses-and-reports/pay-suppliers.md" with { type: "text" };
+import expensesAndReportsFinancialReportEn from "../docs/help/en/expenses-and-reports/financial-report.md" with { type: "text" };
+import expensesAndReportsFinancialReportSl from "../docs/help/sl/expenses-and-reports/financial-report.md" with { type: "text" };
+import expensesAndReportsVatReportEn from "../docs/help/en/expenses-and-reports/vat-report.md" with { type: "text" };
+import expensesAndReportsVatReportSl from "../docs/help/sl/expenses-and-reports/vat-report.md" with { type: "text" };
+import expensesAndReportsItemSalesEn from "../docs/help/en/expenses-and-reports/item-sales.md" with { type: "text" };
+import expensesAndReportsItemSalesSl from "../docs/help/sl/expenses-and-reports/item-sales.md" with { type: "text" };
 import onlineStoreEn from "../docs/help/en/online-store/index.md" with { type: "text" };
 import onlineStoreSl from "../docs/help/sl/online-store/index.md" with { type: "text" };
 import inventoryEn from "../docs/help/en/inventory/index.md" with { type: "text" };
@@ -133,7 +149,21 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "follow-payments", en: paymentsFollowPaymentsEn, sl: paymentsFollowPaymentsSl },
 		],
 	},
-	{ slug: "expenses-and-reports", en: expensesAndReportsEn, sl: expensesAndReportsSl, pages: [] },
+	{
+		slug: "expenses-and-reports",
+		en: expensesAndReportsEn,
+		sl: expensesAndReportsSl,
+		pages: [
+			{ slug: "record-expense", en: expensesAndReportsRecordExpenseEn, sl: expensesAndReportsRecordExpenseSl },
+			{ slug: "import-e-invoice", en: expensesAndReportsImportEInvoiceEn, sl: expensesAndReportsImportEInvoiceSl },
+			{ slug: "import-csv", en: expensesAndReportsImportCsvEn, sl: expensesAndReportsImportCsvSl },
+			{ slug: "recurring-expenses", en: expensesAndReportsRecurringExpensesEn, sl: expensesAndReportsRecurringExpensesSl },
+			{ slug: "pay-suppliers", en: expensesAndReportsPaySuppliersEn, sl: expensesAndReportsPaySuppliersSl },
+			{ slug: "financial-report", en: expensesAndReportsFinancialReportEn, sl: expensesAndReportsFinancialReportSl },
+			{ slug: "vat-report", en: expensesAndReportsVatReportEn, sl: expensesAndReportsVatReportSl },
+			{ slug: "item-sales", en: expensesAndReportsItemSalesEn, sl: expensesAndReportsItemSalesSl },
+		],
+	},
 	{ slug: "online-store", en: onlineStoreEn, sl: onlineStoreSl, pages: [] },
 	{ slug: "inventory", en: inventoryEn, sl: inventorySl, pages: [] },
 	{ slug: "customer-portal", en: customerPortalEn, sl: customerPortalSl, pages: [] },

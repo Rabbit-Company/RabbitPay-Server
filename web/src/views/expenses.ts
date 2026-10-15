@@ -138,7 +138,8 @@ async function editor(
 	});
 	supplier.input.maxLength = 240;
 	const expense = recurring ? null : (initial as Expense | null);
-	const supplierTaxNumber = input("text", { value: initial?.supplier_tax_number ?? "", maxlength: "80", placeholder: "SI12345678" });
+	const slovenian = project.tax_country === "SI";
+	const supplierTaxNumber = input("text", { value: initial?.supplier_tax_number ?? "", maxlength: "80", placeholder: slovenian ? "SI12345678" : "" });
 	const supplierCountry = select([{ value: "", label: t("ui.none") }, ...countryOptions()], initial?.supplier_country ?? "");
 	supplier.onChange((option) => {
 		const selectedSupplier = suppliers.find((candidate) => candidate === option)?.customer;
@@ -162,7 +163,7 @@ async function editor(
 			{ value: "import", label: t("expenses.vat_import") },
 			{ value: "exempt", label: t("expenses.vat_exempt") },
 		],
-		initial?.vat_treatment ?? "not_reported"
+		slovenian ? (initial?.vat_treatment ?? "not_reported") : "not_reported"
 	);
 	const assetType = select(
 		[
@@ -297,8 +298,8 @@ async function editor(
 	const receiptDate = input("date", { value: expense?.receipt_date ? toDateInput(expense.receipt_date, project.timezone) : date.value });
 	const supplyDate = input("date", { value: expense?.supply_date ? toDateInput(expense.supply_date, project.timezone) : "" });
 	const dueDate = input("date", { value: expense?.due_date ? toDateInput(expense.due_date, project.timezone) : "" });
-	const payeeIban = input("text", { value: expense?.payee_iban ?? "", maxlength: "42", placeholder: "SI56" });
-	const payeeReference = input("text", { value: expense?.payee_reference ?? "", maxlength: "64", placeholder: "SI12" });
+	const payeeIban = input("text", { value: expense?.payee_iban ?? "", maxlength: "42", placeholder: slovenian ? "SI56" : "" });
+	const payeeReference = input("text", { value: expense?.payee_reference ?? "", maxlength: "64", placeholder: slovenian ? "SI12" : "" });
 	const vatHandling = select(
 		[
 			{ value: "1", label: t("expenses.vat_handling_regular") },
@@ -421,7 +422,6 @@ async function editor(
 		el(
 			"div",
 			{ class: "grid" },
-			field(t("expenses.invoice_number"), invoiceNumber),
 			field(t("expenses.issue_date"), issueDate),
 			field(t("expenses.receipt_date"), receiptDate),
 			field(t("expenses.supply_date"), supplyDate)
@@ -433,10 +433,17 @@ async function editor(
 		field(t("expenses.vat_handling"), vatHandling),
 		assessmentFields,
 		el("label", { class: "switch" }, provisionalShare, el("span", {}, t("expenses.provisional_share"))),
-		el("p", { class: "muted" }, t("expenses.provisional_share_hint")),
-		field(t("expenses.attachment"), attachment, t("expenses.attachment_hint")),
-		attachmentActions
+		el("p", { class: "muted" }, t("expenses.provisional_share_hint"))
 	);
+	const documentFields = recurring
+		? null
+		: el(
+				"div",
+				{ class: "stack" },
+				field(t("expenses.invoice_number"), invoiceNumber),
+				field(t("expenses.attachment"), attachment, t("expenses.attachment_hint")),
+				attachmentActions
+			);
 	const syncVatTreatment = () => {
 		const reporting = !recurring && vatTreatment.value !== "not_reported";
 		ddvFields.hidden = !reporting;
@@ -462,7 +469,7 @@ async function editor(
 		assessmentFields.hidden = vatHandling.value === "1";
 	};
 	const syncCategory = (changed: boolean) => {
-		const note = expenseCategoryNote(categoryValue());
+		const note = slovenian ? expenseCategoryNote(categoryValue()) : null;
 		categoryNote.textContent = note ?? "";
 		categoryNote.hidden = note === null;
 		if (!changed || !categoryWithoutDeduction()) return;
@@ -495,7 +502,7 @@ async function editor(
 	const end = input("date", { value: schedule?.end_date ? toDateInput(schedule.end_date, project.timezone) : "" });
 	const maximum = input("number", { value: String(schedule?.max_occurrences ?? ""), min: "1", max: "1000" });
 	const notes = el("textarea", { maxlength: "5000" }, initial?.notes ?? "");
-	const save = el("button", { class: "button primary", type: "submit" }, t("ui.save"));
+	const save = el("button", { class: "button primary", type: "submit" }, row ? t("ui.save") : t(recurring ? "expenses.add_recurring" : "expenses.add"));
 	const form = el(
 		"form",
 		{ class: "stack" },
@@ -503,7 +510,7 @@ async function editor(
 		field(t("expenses.description"), description),
 		el("div", { class: "grid" }, field(t("expenses.supplier"), supplier.element), field(t("expenses.category"), category.element, t("expenses.category_hint"))),
 		categoryNote,
-		recurring ? null : field(t("expenses.vat_treatment"), vatTreatment),
+		recurring || !slovenian ? null : field(t("expenses.vat_treatment"), vatTreatment),
 		el("div", { class: "grid" }, field(t("expenses.amount"), amount), field(t("expenses.currency"), currency.element)),
 		el(
 			"div",
@@ -513,6 +520,7 @@ async function editor(
 		),
 		taxSummary,
 		ddvFields,
+		documentFields,
 		recurring
 			? field(t("expenses.start"), date)
 			: el("div", { class: "grid" }, field(t("expenses.date"), date), field(t("expenses.due_date"), dueDate, t("expenses.due_date_hint"))),
@@ -536,7 +544,7 @@ async function editor(
 					"div",
 					{ class: "grid" },
 					field(t("expenses.interval"), intervalCount),
-					field(t("expenses.interval"), intervalUnit),
+					field(t("recurring.period"), intervalUnit),
 					field(t("expenses.end"), end),
 					field(t("expenses.max"), maximum)
 				)

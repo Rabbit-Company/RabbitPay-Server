@@ -45,7 +45,15 @@ window.__helpShots = {
 			return kind === "fieldbox" ? labels : labels.map((label) => label.querySelector("input, select, textarea")).filter(Boolean);
 		}
 		if (kind === "processor") return pick(".processor", (node) => this.text(node.querySelector(".switch span") ?? node) === value);
-		if (kind === "card") return pick(".card", (node) => [...node.querySelectorAll("h2, h3")].some((heading) => this.text(heading) === value));
+		if (kind === "switch") return pick("label.switch", (node) => this.text(node) === value);
+		if (kind === "section") {
+			return pick(".toolbar-title", (node) => this.text(node) === value).map((heading) => {
+				let section = heading;
+				while (section.parentElement && !section.parentElement.matches(".project-content > .stack")) section = section.parentElement;
+				return section;
+			});
+		}
+		if (kind === "card") return pick(".card", (node) => [...node.querySelectorAll("h2, h3, .toolbar-title")].some((heading) => this.text(heading) === value));
 		if (kind === "text") {
 			const hits = pick("*", (node) => this.text(node).includes(value));
 			return hits.filter((node) => !hits.some((other) => other !== node && node.contains(other)));
@@ -84,7 +92,7 @@ export class Browser {
 	private session = "";
 	size = { width: 1280, height: 800, scale: 2 };
 
-	static async launch(port = 9333): Promise<Browser> {
+	static async launch(port = 9333, locale = "en-US"): Promise<Browser> {
 		const browser = new Browser();
 		browser.process = Bun.spawn(
 			[
@@ -95,9 +103,14 @@ export class Browser {
 				"--no-first-run",
 				"--disable-gpu",
 				"--font-render-hinting=none",
+				`--lang=${locale}`,
 				"about:blank",
 			],
-			{ stdout: "ignore", stderr: "ignore" }
+			{
+				stdout: "ignore",
+				stderr: "ignore",
+				env: { ...Bun.env, LANG: `${locale.replace("-", "_")}.UTF-8`, LANGUAGE: locale.replace("-", "_"), LC_ALL: `${locale.replace("-", "_")}.UTF-8` },
+			}
 		);
 		let endpoint = "";
 		for (let attempt = 0; attempt < 80 && !endpoint; attempt++) {
@@ -272,6 +285,17 @@ export class Browser {
 		const choice = `.combo-option >> text:${option}`;
 		await this.waitFor(choice);
 		await this.click(choice);
+	}
+
+	async chooseFile(spec: string, path: string) {
+		await this.send("Page.setInterceptFileChooserDialog", { enabled: true });
+		const opened = new Promise<number>((resolve) => this.on("Page.fileChooserOpened", (event) => resolve(event.backendNodeId)));
+		await this.click(spec, 100);
+		const backendNodeId = await Promise.race([opened, Bun.sleep(5000).then(() => -1)]);
+		await this.send("Page.setInterceptFileChooserDialog", { enabled: false });
+		if (backendNodeId < 0) throw new Error(`No file chooser opened for ${spec}`);
+		await this.send("DOM.setFileInputFiles", { files: [path], backendNodeId });
+		await Bun.sleep(1500);
 	}
 
 	async blur() {

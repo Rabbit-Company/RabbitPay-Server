@@ -14,6 +14,7 @@ import { Studio, type ShotRecord } from "./studio";
 import { gettingStarted } from "./guides/getting-started";
 import { invoices } from "./guides/invoices";
 import { payments } from "./guides/payments";
+import { expenses } from "./guides/expenses";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
@@ -22,7 +23,7 @@ export interface Guide {
 	steps: [name: string, run: Step][];
 }
 
-const GUIDES: Guide[] = [gettingStarted, invoices, payments];
+const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
 
@@ -78,7 +79,7 @@ if (previous && !reuse) {
 const mail = startMailSink(port + 1000);
 const vies = startViesMock(port + 2000, resolve(work, "help-shots.sqlite"));
 let server = await startScratchServer(work, port, mail.port, vies.port, !resumed);
-const browser = await Browser.launch();
+let browser = await Browser.launch();
 const shots = new Map<string, ShotRecord>();
 
 try {
@@ -86,6 +87,8 @@ try {
 	for (const guide of guides) {
 		for (const language of languages) {
 			const saved = Bun.file(resolve(work, `session-${language}.json`));
+			await browser.close();
+			browser = await Browser.launch(9333, DEMOS[language].locale);
 			const session: Session = (await saved.exists()) ? await saved.json() : { demo: DEMOS[language], totpSecret: null, project: null };
 			session.demo = {
 				...DEMOS[language],

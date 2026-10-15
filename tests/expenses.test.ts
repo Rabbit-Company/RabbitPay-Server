@@ -71,7 +71,7 @@ beforeAll(async () => {
 	accountant = await account("expense-accountant");
 	project = (await call("POST", "/api/v1/projects", { name: "expenses-test", currency: "EUR" })).data.uuid;
 	other = (await call("POST", "/api/v1/projects", { name: "expenses-other", currency: "EUR" })).data.uuid;
-	await call("PATCH", base(), { timezone: "UTC" });
+	await call("PATCH", base(), { timezone: "UTC", tax_country: "SI" });
 	await call("POST", `${base()}/members`, { email: "expense-viewer@example.com", role: "viewer" });
 	await call("POST", `${base()}/members`, { email: "expense-accountant@example.com", role: "accountant" });
 });
@@ -153,6 +153,21 @@ describe("expense CSV import", () => {
 		"Kavarna;K-5;;;5.3.2026;Marketing;;;12,00;;",
 		"Google Ireland;G-9;IE6388047V;IE;6.3.2026;Software;eu_services;22;80,00;17,60;",
 	].join("\n");
+
+	test("keeps rows out of the Slovenian DDV evidence for a business outside Slovenia", async () => {
+		await call("PATCH", `/api/v1/projects/${other}`, { tax_country: "IE" });
+		const rows = ["supplier,supplier_country,invoice_number,issue_date,vat_rate,net_amount,vat_amount", "Primer Print,IE,PP-1,2026-03-04,23,100.00,23.00"].join(
+			"\n"
+		);
+		const preview = await call("POST", `/api/v1/projects/${other}/expenses/import-csv/preview`, { content: rows });
+		expect(preview.data.errors).toEqual([]);
+		expect(preview.data.documents[0].input).toMatchObject({
+			total_amount: 12300,
+			tax_amount: 2300,
+			deductible_tax_amount: 2300,
+			vat_treatment: "not_reported",
+		});
+	});
 
 	test("groups VAT lines per supplier invoice, handles reverse charge and imports once", async () => {
 		const preview = await call("POST", `${base()}/expenses/import-csv/preview`, { content: csv });

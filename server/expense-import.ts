@@ -216,7 +216,7 @@ export async function parseExpenseImport(content: string, project: ProjectRow): 
 		const input = group.input;
 		if (rateText || vat > 0) {
 			input.vat_lines.push({ rate, tax_base: net, tax_amount: vat, deductible_tax_amount: deductible });
-			if (!cell(cells, "vat_treatment") && input.vat_treatment === "not_reported") input.vat_treatment = "domestic";
+			if (!cell(cells, "vat_treatment") && input.vat_treatment === "not_reported" && project.tax_country === "SI") input.vat_treatment = "domestic";
 		}
 		input.tax_amount += vat;
 		input.deductible_tax_amount += deductible;
