@@ -35,17 +35,17 @@ For a pending invitation you can press **Copy link** to copy the link again, **E
 
 ## Choose the right role
 
-| Role              | What they can do                                                             |
-| ----------------- | ---------------------------------------------------------------------------- |
-| **Owner**         | Everything, including deleting the project and managing the team             |
-| **Administrator** | Everything except deleting the project                                       |
-| **Manager**       | Payments, invoices, customers and recurring invoices                         |
-| **Accountant**    | See the financial data and export it, without changing it                    |
-| **Developer**     | Manage API keys and webhooks for connecting other software                   |
-| **Viewer**        | Look, but not change anything                                                |
-| **Cashier**       | Sell at the terminal and see their own sales, nothing else                   |
-| **Supervisor**    | Manage everyone's timesheets, absences and tickets and run work hour reports |
-| **Employee**      | Log their own working hours and absences and work on tickets                 |
+| Role              | What they can do                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Owner**         | Everything, including deleting the project and managing the team                                                                           |
+| **Administrator** | Everything except deleting the project                                                                                                     |
+| **Manager**       | Payments, invoices, customers and recurring invoices                                                                                       |
+| **Accountant**    | Keep the books and record expenses and stock. See and export invoices, payments and reports, without issuing invoices or changing settings |
+| **Developer**     | Manage API keys and webhooks for connecting other software                                                                                 |
+| **Viewer**        | Look, but not change anything                                                                                                              |
+| **Cashier**       | Sell at the terminal and see their own sales, nothing else                                                                                 |
+| **Supervisor**    | Manage everyone's timesheets, absences and tickets and run work hour reports                                                               |
+| **Employee**      | Log their own working hours and absences and work on tickets                                                                               |
 
 Give each person the smallest role that lets them do their work. The roles **Supervisor** and **Employee** are for the [timesheets and tickets](workforce) module.
 

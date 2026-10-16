@@ -89,6 +89,12 @@ export function sectionHead(title: string, ...controls: Child[]): HTMLElement {
 	return el("div", { class: "ledger-section-head" }, el("h3", {}, title), ...controls);
 }
 
+export function namedTable(headers: TableHeader[], rows: HTMLElement[]): HTMLElement {
+	const wrap = table(headers, rows);
+	wrap.classList.add("named-table");
+	return wrap;
+}
+
 export function numeric(label: string): TableHeader {
 	return { label, class: "num" };
 }
@@ -693,7 +699,7 @@ export async function trialBalanceView(uuid: string): Promise<HTMLElement> {
 			body.replaceChildren(
 				result.accounts.length === 0
 					? emptyState(t("accounting.journal_empty"))
-					: table(
+					: namedTable(
 							[
 								t("accounting.account"),
 								numeric(t("accounting.opening_debit")),

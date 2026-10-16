@@ -407,7 +407,8 @@ export const sl: UiDictionary = {
 	"role.owner.hint": "Popoln nadzor nad projektom, vključno z brisanjem in upravljanjem članov",
 	"role.admin.hint": "Upravlja vse v projektu razen brisanja",
 	"role.manager.hint": "Upravlja plačila, račune, kupce in naročnine",
-	"role.accountant.hint": "Samo vpogled v finančne podatke z možnostjo izvoza",
+	"role.accountant.hint":
+		"Vodi knjige ter evidentira stroške in zaloge. Vidi in izvaža račune, plačila in poročila, ne more pa izdajati računov ali spreminjati nastavitev",
 	"role.developer.hint": "Upravlja API ključe in webhooke za integracije",
 	"role.viewer.hint": "Samo vpogled v podatke projekta",
 	"role.cashier.hint": "Lahko prodaja samo na blagajni in vidi svoje prodaje",

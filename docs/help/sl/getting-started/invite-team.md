@@ -35,17 +35,17 @@ Pri povabilu v čakanju lahko s **Kopiraj povezavo** povezavo znova kopirate, s 
 
 ## Izberite pravo vlogo
 
-| Vloga             | Kaj lahko počne                                                                  |
-| ----------------- | -------------------------------------------------------------------------------- |
-| **Lastnik**       | Vse, vključno z izbrisom projekta in upravljanjem ekipe                          |
-| **Skrbnik**       | Vse razen izbrisa projekta                                                       |
-| **Vodja**         | Plačila, računi, kupci in ponavljajoči računi                                    |
-| **Računovodja**   | Vidi finančne podatke in jih izvozi, ne more pa jih spreminjati                  |
-| **Razvijalec**    | Upravlja API ključe in webhooke za povezavo z drugo programsko opremo            |
-| **Pregledovalec** | Gleda, ne more pa ničesar spremeniti                                             |
-| **Blagajnik**     | Prodaja na blagajni in vidi svojo prodajo, nič drugega                           |
-| **Nadzornik**     | Upravlja delovni čas, odsotnosti in zahtevke vseh ter pripravlja poročila o urah |
-| **Zaposleni**     | Beleži svoj delovni čas in odsotnosti ter dela na zahtevkih                      |
+| Vloga             | Kaj lahko počne                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lastnik**       | Vse, vključno z izbrisom projekta in upravljanjem ekipe                                                                                   |
+| **Skrbnik**       | Vse razen izbrisa projekta                                                                                                                |
+| **Vodja**         | Plačila, računi, kupci in ponavljajoči računi                                                                                             |
+| **Računovodja**   | Vodi knjige ter evidentira stroške in zaloge. Vidi in izvaža račune, plačila in poročila, ne izdaja pa računov in ne spreminja nastavitev |
+| **Razvijalec**    | Upravlja API ključe in webhooke za povezavo z drugo programsko opremo                                                                     |
+| **Pregledovalec** | Gleda, ne more pa ničesar spremeniti                                                                                                      |
+| **Blagajnik**     | Prodaja na blagajni in vidi svojo prodajo, nič drugega                                                                                    |
+| **Nadzornik**     | Upravlja delovni čas, odsotnosti in zahtevke vseh ter pripravlja poročila o urah                                                          |
+| **Zaposleni**     | Beleži svoj delovni čas in odsotnosti ter dela na zahtevkih                                                                               |
 
 Vsakemu dajte najmanjšo vlogo, s katero lahko opravi svoje delo. Vlogi **Nadzornik** in **Zaposleni** sta namenjeni modulu za [delovni čas in zahtevke](workforce).
 

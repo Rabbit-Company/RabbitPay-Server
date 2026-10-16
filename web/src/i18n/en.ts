@@ -403,7 +403,8 @@ export const en = {
 	"role.owner.hint": "Full control over the project including deletion and member management",
 	"role.admin.hint": "Can manage all aspects of the project except deletion",
 	"role.manager.hint": "Can manage payments, invoices, customers, and subscriptions",
-	"role.accountant.hint": "View-only access to financial data with export capabilities",
+	"role.accountant.hint":
+		"Keeps the books and records expenses and stock. Sees and exports invoices, payments and reports, but cannot issue invoices or change settings",
 	"role.developer.hint": "Can manage API keys and webhooks for integration",
 	"role.viewer.hint": "Read-only access to view project data",
 	"role.cashier.hint": "Can only sell at the terminal and see their own sales",

@@ -206,6 +206,42 @@ import sloveniaVatPeriodsEn from "../docs/help/en/slovenia/vat-periods.md" with 
 import sloveniaVatPeriodsSl from "../docs/help/sl/slovenia/vat-periods.md" with { type: "text" };
 import sloveniaDdvEvidenceEn from "../docs/help/en/slovenia/ddv-evidence.md" with { type: "text" };
 import sloveniaDdvEvidenceSl from "../docs/help/sl/slovenia/ddv-evidence.md" with { type: "text" };
+import accountingEn from "../docs/help/en/accounting/index.md" with { type: "text" };
+import accountingSl from "../docs/help/sl/accounting/index.md" with { type: "text" };
+import accountingStartEn from "../docs/help/en/accounting/start.md" with { type: "text" };
+import accountingStartSl from "../docs/help/sl/accounting/start.md" with { type: "text" };
+import accountingJournalEn from "../docs/help/en/accounting/journal.md" with { type: "text" };
+import accountingJournalSl from "../docs/help/sl/accounting/journal.md" with { type: "text" };
+import accountingChartOfAccountsEn from "../docs/help/en/accounting/chart-of-accounts.md" with { type: "text" };
+import accountingChartOfAccountsSl from "../docs/help/sl/accounting/chart-of-accounts.md" with { type: "text" };
+import accountingIssuedElsewhereEn from "../docs/help/en/accounting/issued-elsewhere.md" with { type: "text" };
+import accountingIssuedElsewhereSl from "../docs/help/sl/accounting/issued-elsewhere.md" with { type: "text" };
+import accountingBankStatementsEn from "../docs/help/en/accounting/bank-statements.md" with { type: "text" };
+import accountingBankStatementsSl from "../docs/help/sl/accounting/bank-statements.md" with { type: "text" };
+import accountingOpenItemsEn from "../docs/help/en/accounting/open-items.md" with { type: "text" };
+import accountingOpenItemsSl from "../docs/help/sl/accounting/open-items.md" with { type: "text" };
+import accountingFixedAssetsEn from "../docs/help/en/accounting/fixed-assets.md" with { type: "text" };
+import accountingFixedAssetsSl from "../docs/help/sl/accounting/fixed-assets.md" with { type: "text" };
+import accountingTrialBalanceEn from "../docs/help/en/accounting/trial-balance.md" with { type: "text" };
+import accountingTrialBalanceSl from "../docs/help/sl/accounting/trial-balance.md" with { type: "text" };
+import accountingYearEndEn from "../docs/help/en/accounting/year-end.md" with { type: "text" };
+import accountingYearEndSl from "../docs/help/sl/accounting/year-end.md" with { type: "text" };
+import accountingFinancialStatementsEn from "../docs/help/en/accounting/financial-statements.md" with { type: "text" };
+import accountingFinancialStatementsSl from "../docs/help/sl/accounting/financial-statements.md" with { type: "text" };
+import accountingKpoEn from "../docs/help/en/accounting/kpo.md" with { type: "text" };
+import accountingKpoSl from "../docs/help/sl/accounting/kpo.md" with { type: "text" };
+import accountingAccountingFirmsEn from "../docs/help/en/accounting/accounting-firms.md" with { type: "text" };
+import accountingAccountingFirmsSl from "../docs/help/sl/accounting/accounting-firms.md" with { type: "text" };
+import settingsEn from "../docs/help/en/settings/index.md" with { type: "text" };
+import settingsSl from "../docs/help/sl/settings/index.md" with { type: "text" };
+import settingsDocumentsEn from "../docs/help/en/settings/documents.md" with { type: "text" };
+import settingsDocumentsSl from "../docs/help/sl/settings/documents.md" with { type: "text" };
+import settingsBrandColorEn from "../docs/help/en/settings/brand-color.md" with { type: "text" };
+import settingsBrandColorSl from "../docs/help/sl/settings/brand-color.md" with { type: "text" };
+import settingsApiKeysAndWebhooksEn from "../docs/help/en/settings/api-keys-and-webhooks.md" with { type: "text" };
+import settingsApiKeysAndWebhooksSl from "../docs/help/sl/settings/api-keys-and-webhooks.md" with { type: "text" };
+import settingsDeleteProjectEn from "../docs/help/en/settings/delete-project.md" with { type: "text" };
+import settingsDeleteProjectSl from "../docs/help/sl/settings/delete-project.md" with { type: "text" };
 
 export interface HelpPageSource {
 	slug: string;
@@ -280,6 +316,25 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "financial-report", en: expensesAndReportsFinancialReportEn, sl: expensesAndReportsFinancialReportSl },
 			{ slug: "vat-report", en: expensesAndReportsVatReportEn, sl: expensesAndReportsVatReportSl },
 			{ slug: "item-sales", en: expensesAndReportsItemSalesEn, sl: expensesAndReportsItemSalesSl },
+		],
+	},
+	{
+		slug: "accounting",
+		en: accountingEn,
+		sl: accountingSl,
+		pages: [
+			{ slug: "start", en: accountingStartEn, sl: accountingStartSl },
+			{ slug: "journal", en: accountingJournalEn, sl: accountingJournalSl },
+			{ slug: "chart-of-accounts", en: accountingChartOfAccountsEn, sl: accountingChartOfAccountsSl },
+			{ slug: "issued-elsewhere", en: accountingIssuedElsewhereEn, sl: accountingIssuedElsewhereSl },
+			{ slug: "bank-statements", en: accountingBankStatementsEn, sl: accountingBankStatementsSl },
+			{ slug: "open-items", en: accountingOpenItemsEn, sl: accountingOpenItemsSl },
+			{ slug: "fixed-assets", en: accountingFixedAssetsEn, sl: accountingFixedAssetsSl },
+			{ slug: "trial-balance", en: accountingTrialBalanceEn, sl: accountingTrialBalanceSl },
+			{ slug: "year-end", en: accountingYearEndEn, sl: accountingYearEndSl },
+			{ slug: "financial-statements", en: accountingFinancialStatementsEn, sl: accountingFinancialStatementsSl },
+			{ slug: "kpo", en: accountingKpoEn, sl: accountingKpoSl },
+			{ slug: "accounting-firms", en: accountingAccountingFirmsEn, sl: accountingAccountingFirmsSl },
 		],
 	},
 	{
@@ -398,6 +453,17 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "reverse-charge", en: sloveniaReverseChargeEn, sl: sloveniaReverseChargeSl },
 			{ slug: "vat-periods", en: sloveniaVatPeriodsEn, sl: sloveniaVatPeriodsSl },
 			{ slug: "ddv-evidence", en: sloveniaDdvEvidenceEn, sl: sloveniaDdvEvidenceSl },
+		],
+	},
+	{
+		slug: "settings",
+		en: settingsEn,
+		sl: settingsSl,
+		pages: [
+			{ slug: "documents", en: settingsDocumentsEn, sl: settingsDocumentsSl },
+			{ slug: "brand-color", en: settingsBrandColorEn, sl: settingsBrandColorSl },
+			{ slug: "api-keys-and-webhooks", en: settingsApiKeysAndWebhooksEn, sl: settingsApiKeysAndWebhooksSl },
+			{ slug: "delete-project", en: settingsDeleteProjectEn, sl: settingsDeleteProjectSl },
 		],
 	},
 ];

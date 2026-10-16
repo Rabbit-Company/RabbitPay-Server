@@ -6,7 +6,7 @@ import { can, Permission } from "../access";
 import { t, type UiKey } from "../i18n";
 import { reportError } from "../ui";
 import { loadProject } from "./project";
-import { baseCurrency, ledgerPage, moneyCell, numeric, showNotices, summaryCards } from "./accounting";
+import { baseCurrency, ledgerPage, moneyCell, namedTable, numeric, showNotices, summaryCards } from "./accounting";
 import type { DateFormat } from "../../../server/formats";
 import type { AgingBucket } from "../../../server/accounting/types";
 
@@ -121,7 +121,7 @@ export async function openItemsView(uuid: string): Promise<HTMLElement> {
 				),
 			partners.length === 0
 				? emptyState(t("open.empty"))
-				: table(
+				: namedTable(
 						[
 							t("open.partner"),
 							numeric(t("open.receivable")),
@@ -147,7 +147,7 @@ export async function openItemsView(uuid: string): Promise<HTMLElement> {
 					[
 						kind.value !== "payable" ? ([t("open.total_receivable"), formatMoney(total("receivable"), currency)] as [string, string]) : null,
 						kind.value !== "payable" ? ([t("open.total_overdue"), formatMoney(overdue, currency)] as [string, string]) : null,
-						kind.value !== "receivable" ? ([t("open.total_payable"), formatMoney(-total("payable"), currency)] as [string, string]) : null,
+						kind.value !== "receivable" ? ([t("open.total_payable"), formatMoney(0 - total("payable"), currency)] as [string, string]) : null,
 					].filter((card): card is [string, string] => card !== null)
 				)
 			);

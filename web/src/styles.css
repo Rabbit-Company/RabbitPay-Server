@@ -773,6 +773,18 @@ a:hover {
 	flex-direction: column;
 	align-items: flex-end;
 	gap: 0.4rem;
+	min-width: 16rem;
+}
+.named-table > table > thead > tr > th:first-child,
+.named-table > table > tbody > tr > td:first-child {
+	min-width: 13rem;
+}
+.named-table > table > tbody > tr > td.num {
+	white-space: nowrap;
+}
+.bank-actions .line-actions {
+	justify-content: flex-end;
+	flex-wrap: wrap;
 }
 .bank-actions .button {
 	white-space: normal;
@@ -3480,6 +3492,12 @@ select:not([multiple]) {
 	border-radius: 10px;
 	background: color-mix(in srgb, var(--text) 5%, var(--surface));
 	overflow-x: auto;
+}
+
+@media (min-width: 720px) {
+	.ledger-page > .store-bar .subtabs {
+		flex-wrap: wrap;
+	}
 }
 
 .subtab {

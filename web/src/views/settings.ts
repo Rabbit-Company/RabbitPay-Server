@@ -1005,7 +1005,7 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 				onClick: async () => {
 					const confirmed = await confirmDialog({
 						title: t("settings.delete_project"),
-						body: t("settings.delete_project_body", { project: project.name }),
+						body: t("settings.delete_project_body", { project: project.display_name ?? project.name }),
 						confirmLabel: t("settings.delete_project"),
 						destructive: true,
 					});

@@ -25,6 +25,8 @@ import { workforce } from "./guides/workforce";
 import { chat } from "./guides/chat";
 import { calendar } from "./guides/calendar";
 import { files } from "./guides/files";
+import { accounting } from "./guides/accounting";
+import { settings } from "./guides/settings";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
@@ -33,7 +35,23 @@ export interface Guide {
 	steps: [name: string, run: Step][];
 }
 
-const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses, slovenia, terminal, store, inventory, customerPortal, workforce, chat, calendar, files];
+const GUIDES: Guide[] = [
+	gettingStarted,
+	invoices,
+	payments,
+	expenses,
+	slovenia,
+	terminal,
+	store,
+	inventory,
+	customerPortal,
+	workforce,
+	chat,
+	calendar,
+	files,
+	accounting,
+	settings,
+];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
 
