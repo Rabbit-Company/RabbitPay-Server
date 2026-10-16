@@ -721,7 +721,7 @@ function posted(project: Project, overview: InventoryOverview, document: StockDo
 			),
 			detail(
 				t("stock.posted_by"),
-				document.posted_at ? `${document.posted_by ?? ""} ${formatDateTime(document.posted_at, dateFormat, timeFormat, project.timezone)}`.trim() : null
+				document.posted_at ? `${document.posted_by_name ?? ""} ${formatDateTime(document.posted_at, dateFormat, timeFormat, project.timezone)}`.trim() : null
 			),
 			detail(t("stock.notes"), document.notes)
 		),

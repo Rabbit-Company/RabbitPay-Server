@@ -4593,6 +4593,7 @@ export interface StockDocument {
 	notes: string | null;
 	created_by: string | null;
 	posted_by: string | null;
+	posted_by_name: string | null;
 	posted_at: number | null;
 	canceled_by: string | null;
 	canceled_at: number | null;

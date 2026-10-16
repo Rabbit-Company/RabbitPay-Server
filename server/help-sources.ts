@@ -118,6 +118,24 @@ import onlineStoreOrdersEn from "../docs/help/en/online-store/orders.md" with { 
 import onlineStoreOrdersSl from "../docs/help/sl/online-store/orders.md" with { type: "text" };
 import inventoryEn from "../docs/help/en/inventory/index.md" with { type: "text" };
 import inventorySl from "../docs/help/sl/inventory/index.md" with { type: "text" };
+import inventoryStartEn from "../docs/help/en/inventory/start.md" with { type: "text" };
+import inventoryStartSl from "../docs/help/sl/inventory/start.md" with { type: "text" };
+import inventoryReceiveGoodsEn from "../docs/help/en/inventory/receive-goods.md" with { type: "text" };
+import inventoryReceiveGoodsSl from "../docs/help/sl/inventory/receive-goods.md" with { type: "text" };
+import inventorySuppliersAndOrdersEn from "../docs/help/en/inventory/suppliers-and-orders.md" with { type: "text" };
+import inventorySuppliersAndOrdersSl from "../docs/help/sl/inventory/suppliers-and-orders.md" with { type: "text" };
+import inventorySalesEn from "../docs/help/en/inventory/sales.md" with { type: "text" };
+import inventorySalesSl from "../docs/help/sl/inventory/sales.md" with { type: "text" };
+import inventoryIssueStockEn from "../docs/help/en/inventory/issue-stock.md" with { type: "text" };
+import inventoryIssueStockSl from "../docs/help/sl/inventory/issue-stock.md" with { type: "text" };
+import inventoryWarehousesAndTransfersEn from "../docs/help/en/inventory/warehouses-and-transfers.md" with { type: "text" };
+import inventoryWarehousesAndTransfersSl from "../docs/help/sl/inventory/warehouses-and-transfers.md" with { type: "text" };
+import inventoryStocktakeEn from "../docs/help/en/inventory/stocktake.md" with { type: "text" };
+import inventoryStocktakeSl from "../docs/help/sl/inventory/stocktake.md" with { type: "text" };
+import inventoryStockReportsEn from "../docs/help/en/inventory/stock-reports.md" with { type: "text" };
+import inventoryStockReportsSl from "../docs/help/sl/inventory/stock-reports.md" with { type: "text" };
+import inventorySettingsEn from "../docs/help/en/inventory/settings.md" with { type: "text" };
+import inventorySettingsSl from "../docs/help/sl/inventory/settings.md" with { type: "text" };
 import customerPortalEn from "../docs/help/en/customer-portal/index.md" with { type: "text" };
 import customerPortalSl from "../docs/help/sl/customer-portal/index.md" with { type: "text" };
 import workforceEn from "../docs/help/en/workforce/index.md" with { type: "text" };
@@ -245,7 +263,22 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "orders", en: onlineStoreOrdersEn, sl: onlineStoreOrdersSl },
 		],
 	},
-	{ slug: "inventory", en: inventoryEn, sl: inventorySl, pages: [] },
+	{
+		slug: "inventory",
+		en: inventoryEn,
+		sl: inventorySl,
+		pages: [
+			{ slug: "start", en: inventoryStartEn, sl: inventoryStartSl },
+			{ slug: "receive-goods", en: inventoryReceiveGoodsEn, sl: inventoryReceiveGoodsSl },
+			{ slug: "suppliers-and-orders", en: inventorySuppliersAndOrdersEn, sl: inventorySuppliersAndOrdersSl },
+			{ slug: "sales", en: inventorySalesEn, sl: inventorySalesSl },
+			{ slug: "issue-stock", en: inventoryIssueStockEn, sl: inventoryIssueStockSl },
+			{ slug: "warehouses-and-transfers", en: inventoryWarehousesAndTransfersEn, sl: inventoryWarehousesAndTransfersSl },
+			{ slug: "stocktake", en: inventoryStocktakeEn, sl: inventoryStocktakeSl },
+			{ slug: "stock-reports", en: inventoryStockReportsEn, sl: inventoryStockReportsSl },
+			{ slug: "settings", en: inventorySettingsEn, sl: inventorySettingsSl },
+		],
+	},
 	{ slug: "customer-portal", en: customerPortalEn, sl: customerPortalSl, pages: [] },
 	{ slug: "workforce", en: workforceEn, sl: workforceSl, pages: [] },
 	{

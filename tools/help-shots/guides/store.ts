@@ -270,6 +270,10 @@ const DATA: Record<"en" | "sl", StoreDemo> = {
 	},
 };
 
+export function storeProductNames(language: string): string[] {
+	return DATA[language as "en" | "sl"].products.map((product) => product.name);
+}
+
 function data(studio: Studio): StoreDemo {
 	return DATA[studio.language as "en" | "sl"];
 }

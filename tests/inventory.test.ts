@@ -57,6 +57,7 @@ async function document(input: Record<string, unknown>, post = true): Promise<an
 	if (!post) return created.data;
 	const posted = await call("POST", `${base()}/inventory/documents/${created.data.uuid}/post`);
 	expect(posted.error).toBe(0);
+	expect(posted.data.posted_by_name).toBe("stock-owner@example.com");
 	return posted.data;
 }
 
@@ -134,6 +135,17 @@ describe("the inventory license", () => {
 		expect(redeemed.error).toBe(0);
 		expect((await call("GET", `${base()}/inventory/overview`)).data.licensed).toBe(true);
 	});
+
+	test("compares stock with the ledger only under an accounting license", async () => {
+		expect((await call("GET", `${base()}/inventory/overview`)).data.ledger).toEqual([]);
+		const code = generateLicenseCode();
+		const now = Date.now();
+		await Database`
+			INSERT INTO license_keys(uuid, code, type, duration_days, status, created, updated)
+			VALUES(${crypto.randomUUID()}, ${code}, 'accounting', 365, 'available', ${now}, ${now})
+		`;
+		expect((await call("POST", `${base()}/license/redeem`, { code })).error).toBe(0);
+	});
 });
 
 describe("stock keeping on items", () => {
@@ -206,6 +218,7 @@ describe("receipts and sales", () => {
 		expect(closing["7020"]).toBe(5_500);
 		expect(closing["7620"]).toBe(10_000);
 		const overview = await call("GET", `${base()}/inventory/overview`);
+		expect(overview.data.ledger.length).toBeGreaterThan(0);
 		expect(overview.data.ledger.every((row: any) => row.difference === 0)).toBe(true);
 		expect(overview.data.totals.goods).toBe(16_500);
 	});

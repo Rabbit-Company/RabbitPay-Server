@@ -147,6 +147,7 @@ function isStandalone(): boolean {
 		path === "/help" ||
 		path.startsWith("/help/") ||
 		path.endsWith("/print") ||
+		/^\/projects\/[^/]+\/inventory\/count-sheet$/.test(path) ||
 		/^\/projects\/[^/]+\/pos$/.test(path)
 	);
 }

@@ -9,7 +9,7 @@ import Utils from "../../utils";
 import Validate from "../../validate";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
-import { inventoryActive } from "../../licensing";
+import { accountingActive, inventoryActive } from "../../licensing";
 import { closedYear } from "../../accounting-periods";
 import { expenseCost } from "../../accounting/sources";
 import { syncLedger } from "../../accounting/journal";
@@ -103,6 +103,13 @@ async function presentDocument(project: ProjectRow, document: StockDocumentRow) 
 		SELECT document_line, value FROM stock_movements WHERE document = ${document.uuid} AND movement_kind <> 'transfer_in'
 	`) as Pick<StockMovementRow, "document_line" | "value">[];
 	const names = new Map(items.map((item) => [item.uuid, item]));
+	const [poster] = document.posted_by
+		? ((await Database`
+				SELECT pm.full_name, a.email FROM accounts a
+				LEFT JOIN project_members pm ON pm.account_username = a.username AND pm.project_id = ${project.uuid}
+				WHERE a.username = ${document.posted_by}
+			`) as { full_name: string | null; email: string | null }[])
+		: [];
 	const booked = new Map<string, number>();
 	for (const movement of movements) {
 		if (movement.document_line === null) continue;
@@ -110,6 +117,7 @@ async function presentDocument(project: ProjectRow, document: StockDocumentRow) 
 	}
 	return {
 		...document,
+		posted_by_name: poster ? poster.full_name || poster.email : null,
 		date: localDate(safeInteger(document.document_date), project.timezone),
 		charge_vat: Boolean(document.charge_vat),
 		extra_costs: safeInteger(document.extra_costs),
@@ -133,7 +141,8 @@ Server.app.get(`${base}/overview`, ...view, async (ctx) => {
 	const project = Permissions.project(ctx);
 	await syncSales(project);
 	const totals = await stockTotals(project.uuid);
-	const [ledger] = await Database`SELECT 1 AS used FROM ledger_accounts WHERE project = ${project.uuid} LIMIT 1`;
+	const [chart] = accountingActive(project) ? await Database`SELECT 1 AS used FROM ledger_accounts WHERE project = ${project.uuid} LIMIT 1` : [];
+	const ledger = chart !== undefined;
 	if (ledger) await syncLedger(project);
 	return Utils.ok(ctx, {
 		licensed: inventoryActive(project),
