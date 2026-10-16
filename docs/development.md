@@ -99,6 +99,10 @@ issues the invoices is made up and added to the throwaway copy of the company
 register, so the lookup finds it. Build the interface with `bun run build:web`
 first, because the throwaway server serves `web/dist`.
 
+Product photos, the logo and the banner of the demo stores are drawn by
+[`tools/help-shots/artwork.ts`](../tools/help-shots/artwork.ts) as SVG and
+turned into WebP with `rsvg-convert` and `cwebp`, so both need to be installed.
+
 The server sends a help page with the article already in it, along with its
 title, description and language alternates, so it reads before the interface
 loads and search engines index the text. The interface then takes over the page

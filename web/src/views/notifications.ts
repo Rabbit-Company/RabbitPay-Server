@@ -71,7 +71,7 @@ function devicesPanel(onCurrentRemoved: () => Promise<void>): { element: HTMLEle
 						"div",
 						{},
 						el("strong", {}, deviceLabel(device)),
-						here ? el("span", { class: "pill pill-active pill-sentence notify-here" }, t("notifications.device_here")) : null,
+						here ? el("span", { class: "pill pill-active notify-here" }, t("notifications.device_here")) : null,
 						el("div", { class: "muted" }, t("notifications.device_seen", { date: formatDate(device.seen) }))
 					),
 					remove

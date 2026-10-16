@@ -48,7 +48,7 @@ import { storeOrdersView, storeOrderView } from "./views/store-orders";
 import { storeCouponsView } from "./views/store-coupons";
 import { storeTranslationView, storeTranslationsView } from "./views/store-translations";
 import { categoryView, homeView, pageView, productView, searchView } from "./storefront/pages";
-import { accountView as shopAccountView, cartView, checkoutView, orderView } from "./storefront/checkout";
+import { accountView as shopAccountView, cartView, checkoutView, orderView, signInView } from "./storefront/checkout";
 import { domainStore, storeError, useRouteLanguage } from "./storefront/layout";
 import { isLanguageCode } from "../../server/store/language-code";
 import { absencesView, timesheetReportView, timesheetSettingsView, timesheetView } from "./views/timesheet";
@@ -207,6 +207,7 @@ const SHOP_VIEWS: [string, ShopView][] = [
 	["/order/:invoice", (slug, params) => orderView(slug, params.invoice)],
 	["/page/:page", (slug, params) => pageView(slug, params.page)],
 	["/account", (slug) => shopAccountView(slug)],
+	["/sign-in", (slug) => signInView(slug)],
 ];
 
 function storefrontRoutes(prefix: string, slugOf: (params: Record<string, string>) => string) {

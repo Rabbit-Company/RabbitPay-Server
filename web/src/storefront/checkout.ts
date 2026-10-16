@@ -1,6 +1,7 @@
 import { ApiError, PublicApi, type StoreOrder } from "../api";
-import { CustomerApi, clearCustomerSession, customerToken, type CustomerOrder, type CustomerProfile } from "../customer-api";
+import { CustomerApi, clearCustomerSession, customerToken, storeCustomerSession, type CustomerOrder, type CustomerProfile } from "../customer-api";
 import { customerForm, addressForm, type CustomerForm } from "../customer-forms";
+import { countryName } from "../countries";
 import { privacyActions, profileEditor } from "../views/customer-profile";
 import { el, field } from "../dom";
 import { processorLabel, statusLabel, t, tn, type UiKey } from "../i18n";
@@ -148,6 +149,59 @@ export async function cartView(slug: string): Promise<HTMLElement> {
 	await render();
 	const content = el("div", { class: "sf-container" }, breadcrumbs(ctx, [{ label: t("shop.cart") }]), el("h1", {}, t("shop.cart")), body);
 	return storeLayout(ctx, content, t("shop.cart"));
+}
+
+function safeReturn(value: unknown): string | null {
+	return typeof value === "string" && /^\/(?![/\\])[^\s\\]*$/.test(value) ? value : null;
+}
+
+export async function signInView(slug: string): Promise<HTMLElement> {
+	const fragment = new URLSearchParams(window.location.hash.slice(1));
+	const fragmentToken = fragment.get("token");
+	const token: string | null = fragmentToken ?? history.state?.storeLoginToken ?? null;
+	const linkedReturn = safeReturn(fragment.get("return")) ?? safeReturn(history.state?.storeReturn);
+	if (fragmentToken) history.replaceState({ storeLoginToken: fragmentToken, storeReturn: linkedReturn }, "", window.location.pathname);
+	const ctx = await storeContext(slug);
+	const returnTo = linkedReturn ?? ctx.link("/account");
+
+	const newLink = el("a", { class: "sf-button sf-button-ghost", href: ctx.link("/account") }, t("shop.signin_new_link"));
+	const card = el("div", { class: "sf-signin" });
+	if (!token) {
+		card.append(
+			el("div", { class: "sf-empty-icon" }, icon("mail", 30)),
+			el("h2", {}, t("shop.signin_finish_title")),
+			el("p", { class: "sf-muted" }, t("shop.signin_incomplete")),
+			newLink
+		);
+	} else {
+		const submit = el("button", { class: "sf-button sf-button-large sf-button-block", type: "submit" }, icon("lock", 18), t("shop.signin_finish"));
+		const form = el(
+			"form",
+			{
+				onSubmit: async (event) => {
+					event.preventDefault();
+					submit.disabled = true;
+					try {
+						const session = await CustomerApi.verify(token);
+						storeCustomerSession(session.token);
+						navigate(returnTo, true);
+					} catch (error) {
+						reportError(error);
+						submit.disabled = false;
+						if (!newLink.isConnected) card.append(newLink);
+					}
+				},
+			},
+			submit
+		);
+		card.append(
+			el("div", { class: "sf-empty-icon" }, icon("user", 30)),
+			el("h2", {}, t("shop.signin_finish_title")),
+			el("p", { class: "sf-muted" }, t("shop.signin_finish_body")),
+			form
+		);
+	}
+	return storeLayout(ctx, el("div", { class: "sf-container sf-narrow" }, card), t("shop.signin_finish_title"));
 }
 
 export function signInCard(ctx: StoreContext, returnPath: string, heading: string, body: string): HTMLElement {
@@ -536,7 +590,7 @@ function addressLines(address: StoreOrder["shipping_address"]): string[] {
 		address.address_line2,
 		[address.postal_code, address.city].filter(Boolean).join(" "),
 		address.state,
-		address.country,
+		address.country ? countryName(address.country) : null,
 	].filter((line): line is string => Boolean(line));
 }
 

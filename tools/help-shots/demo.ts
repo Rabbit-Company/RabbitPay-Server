@@ -77,6 +77,7 @@ export interface Session {
 	partial?: string;
 	marks?: Record<string, string>;
 	branch?: Branch;
+	storeItems?: string[];
 }
 
 export interface Branch {

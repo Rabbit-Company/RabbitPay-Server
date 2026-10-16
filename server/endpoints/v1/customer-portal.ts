@@ -17,7 +17,7 @@ import { displayNameOf } from "../../company";
 import { isUiLanguage } from "../../../web/src/i18n/dictionary";
 import { isSlug } from "../../store/config";
 import { portalAccess } from "../../workforce/tickets";
-import { storeBySlug } from "../../store/store";
+import { storeBySlug, storeUrl } from "../../store/store";
 import { paymentStatusOf } from "../../store/orders";
 import { readAddress, writeProfile, type ProfileFields } from "../../store/checkout";
 import { isCustomerType } from "../../tax";
@@ -58,9 +58,9 @@ Server.app.post("/api/v1/customer/auth/request", loginLimit, async (ctx) => {
 	if (!accepted) return Utils.fail(ctx, ErrorCode.RATE_LIMITED);
 	const store = isSlug(data.store, 100) ? await storeBySlug(data.store) : null;
 	const language = isUiLanguage(data.language) ? data.language : store && isUiLanguage(store.config.language) ? store.config.language : "en";
-	const origin = store?.settings.domain ? `https://${store.settings.domain}` : Utils.publicUrl();
 	const returnTo = isReturnPath(data.return) ? `&return=${encodeURIComponent(data.return)}` : "";
-	const url = `${origin}/customer/login#token=${token}&lang=${language}${returnTo}`;
+	const loginPage = store ? `${storeUrl(store.settings)}/sign-in` : `${Utils.publicUrl()}/customer/login`;
+	const url = `${loginPage}#token=${token}&lang=${language}${returnTo}`;
 	const sender = store ? store.config.name : "RabbitPay";
 	try {
 		await sendEmail({

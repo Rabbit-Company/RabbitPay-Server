@@ -436,7 +436,7 @@ describe("the online store module", () => {
 		customerToken = await customerLogin("ana@example.com");
 		const link = messages.at(-1)!;
 		expect(link.subject).toContain("Pixel Parts");
-		expect(link.text).toContain("https://shop.pixel.test/customer/login#token=");
+		expect(link.text).toContain("https://shop.pixel.test/sign-in#token=");
 		expect(link.text).toContain(`return=${encodeURIComponent(`/shop/${slug}/checkout`)}`);
 	});
 
@@ -666,6 +666,10 @@ describe("the online store module", () => {
 		expect(cart).toContain('content="noindex, nofollow"');
 		expect(cart).not.toContain("canonical");
 
+		const signIn = await page("/sign-in");
+		expect(signIn.status).toBe(200);
+		expect(await signIn.text()).toContain('content="noindex, nofollow"');
+
 		const domainHtml = await (await page("/")).text();
 		expect(domainHtml).toContain('data-domain="1"');
 		expect(domainHtml).toContain('<link rel="canonical" href="https://shop.pixel.test/" />');
@@ -740,6 +744,7 @@ describe("the online store module", () => {
 		const robots = await domainRobots.text();
 		expect(robots).toContain("Disallow: /checkout");
 		expect(robots).toContain("Disallow: /*/checkout");
+		expect(robots).toContain("Disallow: /sign-in");
 		expect(robots).toContain("Sitemap: https://shop.pixel.test/sitemap.xml");
 
 		const domainSitemap = await Server.app.handle(new Request("http://127.0.0.1/sitemap.xml", { headers: { host: "shop.pixel.test" } }));

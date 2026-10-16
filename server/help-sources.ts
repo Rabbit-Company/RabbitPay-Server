@@ -96,6 +96,26 @@ import terminalTerminalSettingsEn from "../docs/help/en/terminal/terminal-settin
 import terminalTerminalSettingsSl from "../docs/help/sl/terminal/terminal-settings.md" with { type: "text" };
 import onlineStoreEn from "../docs/help/en/online-store/index.md" with { type: "text" };
 import onlineStoreSl from "../docs/help/sl/online-store/index.md" with { type: "text" };
+import onlineStoreOpenStoreEn from "../docs/help/en/online-store/open-store.md" with { type: "text" };
+import onlineStoreOpenStoreSl from "../docs/help/sl/online-store/open-store.md" with { type: "text" };
+import onlineStoreLookAndFeelEn from "../docs/help/en/online-store/look-and-feel.md" with { type: "text" };
+import onlineStoreLookAndFeelSl from "../docs/help/sl/online-store/look-and-feel.md" with { type: "text" };
+import onlineStoreShippingAndCheckoutEn from "../docs/help/en/online-store/shipping-and-checkout.md" with { type: "text" };
+import onlineStoreShippingAndCheckoutSl from "../docs/help/sl/online-store/shipping-and-checkout.md" with { type: "text" };
+import onlineStoreCategoriesEn from "../docs/help/en/online-store/categories.md" with { type: "text" };
+import onlineStoreCategoriesSl from "../docs/help/sl/online-store/categories.md" with { type: "text" };
+import onlineStoreProductsEn from "../docs/help/en/online-store/products.md" with { type: "text" };
+import onlineStoreProductsSl from "../docs/help/sl/online-store/products.md" with { type: "text" };
+import onlineStoreCouponsEn from "../docs/help/en/online-store/coupons.md" with { type: "text" };
+import onlineStoreCouponsSl from "../docs/help/sl/online-store/coupons.md" with { type: "text" };
+import onlineStoreTranslationsEn from "../docs/help/en/online-store/translations.md" with { type: "text" };
+import onlineStoreTranslationsSl from "../docs/help/sl/online-store/translations.md" with { type: "text" };
+import onlineStoreWhatCustomersSeeEn from "../docs/help/en/online-store/what-customers-see.md" with { type: "text" };
+import onlineStoreWhatCustomersSeeSl from "../docs/help/sl/online-store/what-customers-see.md" with { type: "text" };
+import onlineStoreCheckoutEn from "../docs/help/en/online-store/checkout.md" with { type: "text" };
+import onlineStoreCheckoutSl from "../docs/help/sl/online-store/checkout.md" with { type: "text" };
+import onlineStoreOrdersEn from "../docs/help/en/online-store/orders.md" with { type: "text" };
+import onlineStoreOrdersSl from "../docs/help/sl/online-store/orders.md" with { type: "text" };
 import inventoryEn from "../docs/help/en/inventory/index.md" with { type: "text" };
 import inventorySl from "../docs/help/sl/inventory/index.md" with { type: "text" };
 import customerPortalEn from "../docs/help/en/customer-portal/index.md" with { type: "text" };
@@ -208,7 +228,23 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "terminal-settings", en: terminalTerminalSettingsEn, sl: terminalTerminalSettingsSl },
 		],
 	},
-	{ slug: "online-store", en: onlineStoreEn, sl: onlineStoreSl, pages: [] },
+	{
+		slug: "online-store",
+		en: onlineStoreEn,
+		sl: onlineStoreSl,
+		pages: [
+			{ slug: "open-store", en: onlineStoreOpenStoreEn, sl: onlineStoreOpenStoreSl },
+			{ slug: "look-and-feel", en: onlineStoreLookAndFeelEn, sl: onlineStoreLookAndFeelSl },
+			{ slug: "shipping-and-checkout", en: onlineStoreShippingAndCheckoutEn, sl: onlineStoreShippingAndCheckoutSl },
+			{ slug: "categories", en: onlineStoreCategoriesEn, sl: onlineStoreCategoriesSl },
+			{ slug: "products", en: onlineStoreProductsEn, sl: onlineStoreProductsSl },
+			{ slug: "coupons", en: onlineStoreCouponsEn, sl: onlineStoreCouponsSl },
+			{ slug: "translations", en: onlineStoreTranslationsEn, sl: onlineStoreTranslationsSl },
+			{ slug: "what-customers-see", en: onlineStoreWhatCustomersSeeEn, sl: onlineStoreWhatCustomersSeeSl },
+			{ slug: "checkout", en: onlineStoreCheckoutEn, sl: onlineStoreCheckoutSl },
+			{ slug: "orders", en: onlineStoreOrdersEn, sl: onlineStoreOrdersSl },
+		],
+	},
 	{ slug: "inventory", en: inventoryEn, sl: inventorySl, pages: [] },
 	{ slug: "customer-portal", en: customerPortalEn, sl: customerPortalSl, pages: [] },
 	{ slug: "workforce", en: workforceEn, sl: workforceSl, pages: [] },

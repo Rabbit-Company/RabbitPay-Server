@@ -14,7 +14,7 @@ import type { ProjectRow, StoreSettingsRow } from "../database/models";
 
 const SITEMAP_LIMIT = 50000;
 const STORE_ROUTE = /^\/(c|p|page)\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/;
-const STORE_PAGE = /^\/(?:(?:c|p|page)\/[a-z0-9]+(?:-[a-z0-9]+)*|search|cart|checkout|order\/[^/]+|account)\/?$/;
+const STORE_PAGE = /^\/(?:(?:c|p|page)\/[a-z0-9]+(?:-[a-z0-9]+)*|search|cart|checkout|order\/[^/]+|account|sign-in)\/?$/;
 
 const SCHEMA_AVAILABILITY: Record<Availability, string> = {
 	in_stock: "https://schema.org/InStock",
@@ -23,7 +23,7 @@ const SCHEMA_AVAILABILITY: Record<Availability, string> = {
 	out_of_stock: "https://schema.org/OutOfStock",
 };
 
-export const STORE_PRIVATE_PATHS = ["/cart", "/checkout", "/order/", "/account", "/search"];
+export const STORE_PRIVATE_PATHS = ["/cart", "/checkout", "/order/", "/account", "/search", "/sign-in"];
 
 export interface Alternate {
 	language: string;

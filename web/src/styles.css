@@ -1113,7 +1113,9 @@ td.member-fixed ~ td.actions > * {
 	background: var(--bg);
 	border: 1px solid var(--border);
 	color: var(--muted);
-	text-transform: capitalize;
+}
+.pill::first-letter {
+	text-transform: uppercase;
 }
 .pill-paid,
 .pill-active,
@@ -5377,9 +5379,6 @@ fieldset.stack-tight {
 	font: inherit;
 	font-size: 0.85rem;
 	color: var(--muted);
-}
-.pill.pill-sentence {
-	text-transform: none;
 }
 
 .open-items-details > td {

@@ -76,12 +76,8 @@ function languageRows(project: Project, state: StoreState, data: StoreLanguages,
 			const main = language.code === data.default;
 			const shown = main || language.enabled;
 			const status = main
-				? el("span", { class: "pill pill-paid pill-sentence" }, t("store.translations_default"))
-				: el(
-						"span",
-						{ class: `pill pill-${shown ? "active" : "draft"} pill-sentence` },
-						shown ? t("store.translations_shown") : t("store.translations_hidden")
-					);
+				? el("span", { class: "pill pill-paid" }, t("store.translations_default"))
+				: el("span", { class: `pill pill-${shown ? "active" : "draft"}` }, shown ? t("store.translations_shown") : t("store.translations_hidden"));
 			return el(
 				"tr",
 				{},
