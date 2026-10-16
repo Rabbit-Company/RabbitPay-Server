@@ -148,6 +148,48 @@ import customerPortalTicketsEn from "../docs/help/en/customer-portal/tickets.md"
 import customerPortalTicketsSl from "../docs/help/sl/customer-portal/tickets.md" with { type: "text" };
 import workforceEn from "../docs/help/en/workforce/index.md" with { type: "text" };
 import workforceSl from "../docs/help/sl/workforce/index.md" with { type: "text" };
+import workforceRolesEn from "../docs/help/en/workforce/roles.md" with { type: "text" };
+import workforceRolesSl from "../docs/help/sl/workforce/roles.md" with { type: "text" };
+import workforceEmployeesEn from "../docs/help/en/workforce/employees.md" with { type: "text" };
+import workforceEmployeesSl from "../docs/help/sl/workforce/employees.md" with { type: "text" };
+import workforceTimesheetEn from "../docs/help/en/workforce/timesheet.md" with { type: "text" };
+import workforceTimesheetSl from "../docs/help/sl/workforce/timesheet.md" with { type: "text" };
+import workforceAbsencesEn from "../docs/help/en/workforce/absences.md" with { type: "text" };
+import workforceAbsencesSl from "../docs/help/sl/workforce/absences.md" with { type: "text" };
+import workforceMonthlyReportEn from "../docs/help/en/workforce/monthly-report.md" with { type: "text" };
+import workforceMonthlyReportSl from "../docs/help/sl/workforce/monthly-report.md" with { type: "text" };
+import workforceTicketsEn from "../docs/help/en/workforce/tickets.md" with { type: "text" };
+import workforceTicketsSl from "../docs/help/sl/workforce/tickets.md" with { type: "text" };
+import workforcePayrollEn from "../docs/help/en/workforce/payroll.md" with { type: "text" };
+import workforcePayrollSl from "../docs/help/sl/workforce/payroll.md" with { type: "text" };
+import chatEn from "../docs/help/en/chat/index.md" with { type: "text" };
+import chatSl from "../docs/help/sl/chat/index.md" with { type: "text" };
+import calendarEn from "../docs/help/en/calendar/index.md" with { type: "text" };
+import calendarSl from "../docs/help/sl/calendar/index.md" with { type: "text" };
+import filesEn from "../docs/help/en/files/index.md" with { type: "text" };
+import filesSl from "../docs/help/sl/files/index.md" with { type: "text" };
+import chatConversationsEn from "../docs/help/en/chat/conversations.md" with { type: "text" };
+import chatConversationsSl from "../docs/help/sl/chat/conversations.md" with { type: "text" };
+import chatGroupsEn from "../docs/help/en/chat/groups.md" with { type: "text" };
+import chatGroupsSl from "../docs/help/sl/chat/groups.md" with { type: "text" };
+import chatFormattingAndFilesEn from "../docs/help/en/chat/formatting-and-files.md" with { type: "text" };
+import chatFormattingAndFilesSl from "../docs/help/sl/chat/formatting-and-files.md" with { type: "text" };
+import chatCallsEn from "../docs/help/en/chat/calls.md" with { type: "text" };
+import chatCallsSl from "../docs/help/sl/chat/calls.md" with { type: "text" };
+import chatMeetingsEn from "../docs/help/en/chat/meetings.md" with { type: "text" };
+import chatMeetingsSl from "../docs/help/sl/chat/meetings.md" with { type: "text" };
+import chatRecordingEn from "../docs/help/en/chat/recording.md" with { type: "text" };
+import chatRecordingSl from "../docs/help/sl/chat/recording.md" with { type: "text" };
+import calendarViewsEn from "../docs/help/en/calendar/views.md" with { type: "text" };
+import calendarViewsSl from "../docs/help/sl/calendar/views.md" with { type: "text" };
+import calendarEventsEn from "../docs/help/en/calendar/events.md" with { type: "text" };
+import calendarEventsSl from "../docs/help/sl/calendar/events.md" with { type: "text" };
+import filesKeepFilesEn from "../docs/help/en/files/keep-files.md" with { type: "text" };
+import filesKeepFilesSl from "../docs/help/sl/files/keep-files.md" with { type: "text" };
+import filesShareEn from "../docs/help/en/files/share.md" with { type: "text" };
+import filesShareSl from "../docs/help/sl/files/share.md" with { type: "text" };
+import filesStorageEn from "../docs/help/en/files/storage.md" with { type: "text" };
+import filesStorageSl from "../docs/help/sl/files/storage.md" with { type: "text" };
 import sloveniaEn from "../docs/help/en/slovenia/index.md" with { type: "text" };
 import sloveniaSl from "../docs/help/sl/slovenia/index.md" with { type: "text" };
 import sloveniaFiscalVerificationEn from "../docs/help/en/slovenia/fiscal-verification.md" with { type: "text" };
@@ -298,7 +340,52 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "tickets", en: customerPortalTicketsEn, sl: customerPortalTicketsSl },
 		],
 	},
-	{ slug: "workforce", en: workforceEn, sl: workforceSl, pages: [] },
+	{
+		slug: "workforce",
+		en: workforceEn,
+		sl: workforceSl,
+		pages: [
+			{ slug: "roles", en: workforceRolesEn, sl: workforceRolesSl },
+			{ slug: "employees", en: workforceEmployeesEn, sl: workforceEmployeesSl },
+			{ slug: "timesheet", en: workforceTimesheetEn, sl: workforceTimesheetSl },
+			{ slug: "absences", en: workforceAbsencesEn, sl: workforceAbsencesSl },
+			{ slug: "monthly-report", en: workforceMonthlyReportEn, sl: workforceMonthlyReportSl },
+			{ slug: "tickets", en: workforceTicketsEn, sl: workforceTicketsSl },
+			{ slug: "payroll", en: workforcePayrollEn, sl: workforcePayrollSl },
+		],
+	},
+	{
+		slug: "chat",
+		en: chatEn,
+		sl: chatSl,
+		pages: [
+			{ slug: "conversations", en: chatConversationsEn, sl: chatConversationsSl },
+			{ slug: "groups", en: chatGroupsEn, sl: chatGroupsSl },
+			{ slug: "formatting-and-files", en: chatFormattingAndFilesEn, sl: chatFormattingAndFilesSl },
+			{ slug: "calls", en: chatCallsEn, sl: chatCallsSl },
+			{ slug: "meetings", en: chatMeetingsEn, sl: chatMeetingsSl },
+			{ slug: "recording", en: chatRecordingEn, sl: chatRecordingSl },
+		],
+	},
+	{
+		slug: "calendar",
+		en: calendarEn,
+		sl: calendarSl,
+		pages: [
+			{ slug: "views", en: calendarViewsEn, sl: calendarViewsSl },
+			{ slug: "events", en: calendarEventsEn, sl: calendarEventsSl },
+		],
+	},
+	{
+		slug: "files",
+		en: filesEn,
+		sl: filesSl,
+		pages: [
+			{ slug: "keep-files", en: filesKeepFilesEn, sl: filesKeepFilesSl },
+			{ slug: "share", en: filesShareEn, sl: filesShareSl },
+			{ slug: "storage", en: filesStorageEn, sl: filesStorageSl },
+		],
+	},
 	{
 		slug: "slovenia",
 		en: sloveniaEn,

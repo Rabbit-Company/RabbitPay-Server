@@ -629,6 +629,7 @@ describe("the workforce module", () => {
 		expect(direct.data.status).toBe("approved");
 
 		const list = await call("GET", `${base()}/absences?from=2026-12-01&to=2026-12-31&member=all&status=approved`, tokens.supervisor);
+		expect(list.data.every((absence: { decided_by: string | null; decided_by_name: string | null }) => !absence.decided_by || Boolean(absence.decided_by_name))).toBe(true);
 		expect(list.data).toHaveLength(2);
 	});
 

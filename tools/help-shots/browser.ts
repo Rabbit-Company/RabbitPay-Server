@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -90,20 +90,25 @@ export class Browser {
 	private listeners = new Map<string, ((params: any) => void)[]>();
 	private process!: ReturnType<typeof Bun.spawn>;
 	private session = "";
+	private profile = "";
 	size = { width: 1280, height: 800, scale: 2 };
 
 	static async launch(port = 9333, locale = "en-US"): Promise<Browser> {
 		const browser = new Browser();
+		browser.profile = join(tmpdir(), `rabbitpay-help-shots-${Date.now()}`);
 		browser.process = Bun.spawn(
 			[
 				chromePath(),
 				`--remote-debugging-port=${port}`,
-				`--user-data-dir=${join(tmpdir(), `rabbitpay-help-shots-${Date.now()}`)}`,
+				`--user-data-dir=${browser.profile}`,
 				"--hide-scrollbars",
 				"--no-first-run",
 				"--disable-gpu",
 				"--font-render-hinting=none",
 				`--lang=${locale}`,
+				"--use-fake-ui-for-media-stream",
+				"--use-fake-device-for-media-stream",
+				"--autoplay-policy=no-user-gesture-required",
 				"about:blank",
 			],
 			{
@@ -319,5 +324,7 @@ export class Browser {
 	async close() {
 		await this.send("Browser.close", {}, false).catch(() => null);
 		this.process.kill();
+		await this.process.exited;
+		rmSync(this.profile, { recursive: true, force: true });
 	}
 }

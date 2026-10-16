@@ -770,7 +770,7 @@ Server.app.get(`${base}/absences`, Auth.required(), Permissions.require(Permissi
 	for (const row of rows) {
 		if (row.member && !employees.has(row.member)) employees.set(row.member, dailyMinutesOf(await employeeOf(row.member), config));
 	}
-	return Utils.ok(
+	return await okWithNames(
 		ctx,
 		rows.map((row) => presentAbsence(row, calendar, row.member ? (employees.get(row.member) ?? config.daily_minutes) : config.daily_minutes))
 	);

@@ -86,6 +86,9 @@ export async function startScratchServer(work: string, port: number, services: S
 		"xmr.enabled": true,
 		"stripe.enabled": true,
 		"paypal.enabled": true,
+		"calls.livekit_api_key": "help-shots-media-key",
+		"calls.livekit_api_secret": "help-shots-media-secret",
+		"calls.livekit_urls": "wss://media.example.com",
 	};
 	for (const [key, value] of Object.entries(values)) store.run(key, JSON.stringify(value), Date.now());
 	if (fresh) recallRegistry(settings);
