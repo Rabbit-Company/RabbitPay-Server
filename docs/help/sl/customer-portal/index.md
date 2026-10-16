@@ -1,36 +1,22 @@
 # Portal za kupce
 
-Portal za kupce je mesto, kjer osebe in podjetja, ki jim izdajate račune, najdejo svoje dokumente in jih plačajo. Ločen je od nadzorne plošče, v kateri delate vi, in vaši kupci ne potrebujejo gesla.
+Portal za kupce je mesto, kjer osebe in podjetja, ki jim izdajate račune, najdejo svoje dokumente in jih plačajo. Ločen je od nadzorne plošče, v kateri delate, kupci pa ne potrebujejo gesla.
 
-## Kako se kupci prijavijo
+## Strani
 
-Kupci odprejo `/customer/login` na vašem naslovu RabbitPay ali na domači strani izberejo **Portal za kupce**.
+| Želim                                               | Stran                                                    |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| Kupcu povedati, kako se prijavi                     | [Prijava v portal](customer-portal/sign-in)              |
+| Vedeti, kaj kupci vidijo in lahko plačajo           | [Računi v portalu](customer-portal/invoices)             |
+| Pojasniti naročila, shranjene podatke in zasebnost  | [Naročila in profil](customer-portal/orders-and-profile) |
+| Kupcem omogočiti spremljanje in odpiranje zahtevkov | [Zahtevki v portalu](customer-portal/tickets)            |
 
-1. Vnesejo svoj e-poštni naslov in pritisnejo **Pošlji povezavo za prijavo**.
-2. Odprejo povezavo v e-pošti in potrdijo. Povezava deluje enkrat in poteče po 15 minutah.
+## Kaj morate narediti
 
-Vidijo dokumente, ki so bili izdani na ta e-poštni naslov, zato poskrbite, da je pri kupcu vpisan naslov, ki ga kupec uporablja. E-pošta se shrani na račun ob izdaji. Poznejša sprememba kupčeve e-pošte ne prenese prejšnjih računov na novi naslov.
+Skoraj nič. Vsak izdan račun je v portalu na voljo za e-poštni naslov na njem.
 
-Portal pošilja e-pošto, zato mora biti e-pošta nastavljena na strežniku.
-
-## Kaj lahko kupci naredijo
-
-- Vidijo svoje račune vseh podjetij na istem strežniku RabbitPay, filtrirane po **Neplačani**, **Zapadli** in **Plačani**.
-- Odprejo račun, ga natisnejo, prenesejo PDF in vidijo povezane dobropise.
-- Odprt račun plačajo prek plačilne strani.
-- Vidijo in plačajo odprte predračune.
-- Prenesejo račun kot e-SLOG, kadar je na dokumentu njihov ID za DDV ali davčna številka.
+- Preverite, da je e-pošta pri kupcu tista, ki jo kupec uporablja. E-pošta se shrani na račun ob izdaji, zato poznejša sprememba e-pošte kupca prejšnjih računov ne premakne na nov naslov.
+- Na strežniku mora biti nastavljena e-pošta, ker se kupci prijavijo s povezavo po e-pošti.
+- Kupcem pošljite povezavo `https://rabbitpay.net/customer/login` ali jim povejte, naj na domači strani izberejo **Portal za kupce**. E-pošta z računi vsebuje tudi povezavo na plačilno stran.
 
 Osnutki niso nikoli prikazani.
-
-## Naročila in shranjeni podatki
-
-Kupci vaše spletne trgovine vidijo svoja naročila pod **Vaša naročila**. Pod **Profil** lahko shranijo privzete podatke za račun in dostavo, ki se izpolnijo pri naslednjem nakupu.
-
-## Zahtevki za podporo
-
-Kupci ne vidijo zahtevkov, dokler tega ne dovolite. Član ekipe, ki dela z zahtevki, stranki omogoči dostop do portala in označi zahtevke, ki jih stranka sme videti. Stranka lahko nato te zahtevke bere, nanje odgovarja in odpira nove. Glejte [Delovni čas, zahtevki in plače](workforce).
-
-## Njihovi podatki
-
-Pod **Profil** > **Zasebnost in vaši podatki** lahko kupec z **Prenesi moje podatke** prenese vse, kar je shranjeno o njem, in z **Izbriši moj račun** odstrani svoj račun na portalu. Izbris računa takoj odstrani profil in prijavo. Izdani računi ostanejo pri vas, ker davčna zakonodaja zahteva, da jih hranite.

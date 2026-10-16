@@ -84,6 +84,8 @@ export interface CustomerOrder {
 	outstanding: number;
 	tracking_url: string | null;
 	created: number;
+	date_format: string;
+	timezone: string;
 }
 
 export interface CustomerProforma {

@@ -20,6 +20,7 @@ import { slovenia } from "./guides/slovenia";
 import { terminal } from "./guides/terminal";
 import { store } from "./guides/store";
 import { inventory } from "./guides/inventory";
+import { customerPortal } from "./guides/customer-portal";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
@@ -28,7 +29,7 @@ export interface Guide {
 	steps: [name: string, run: Step][];
 }
 
-const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses, slovenia, terminal, store, inventory];
+const GUIDES: Guide[] = [gettingStarted, invoices, payments, expenses, slovenia, terminal, store, inventory, customerPortal];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
 

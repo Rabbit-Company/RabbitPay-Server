@@ -381,6 +381,8 @@ type CustomerOrderRow = StoreOrderRow &
 		store_config: string | null;
 		merchant: string | null;
 		project_name: string;
+		date_format: string;
+		timezone: string;
 	};
 
 function storeName(row: CustomerOrderRow): string {
@@ -396,7 +398,7 @@ function storeName(row: CustomerOrderRow): string {
 async function customerOrders(email: string, limit: number, offset: number) {
 	return (await Database`
 		SELECT o.*, i.reference, i.status, i.currency, i.total_amount, i.paid_amount, i.refunded_amount, i.credited_amount,
-			s.slug, s.domain, s.config AS store_config, p.display_name AS merchant, p.name AS project_name
+			s.slug, s.domain, s.config AS store_config, p.display_name AS merchant, p.name AS project_name, p.date_format, p.timezone
 		FROM store_orders o
 		JOIN invoices i ON i.uuid = o.invoice
 		JOIN projects p ON p.uuid = o.project
@@ -427,6 +429,8 @@ Server.app.get("/api/v1/customer/orders", CustomerAuth.required(), async (ctx) =
 			outstanding: outstandingOf(row),
 			tracking_url: row.tracking_url,
 			created: row.created,
+			date_format: row.date_format,
+			timezone: row.timezone,
 		})),
 		total: Number(total.count),
 		limit,

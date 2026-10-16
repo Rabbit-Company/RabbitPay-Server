@@ -138,6 +138,14 @@ import inventorySettingsEn from "../docs/help/en/inventory/settings.md" with { t
 import inventorySettingsSl from "../docs/help/sl/inventory/settings.md" with { type: "text" };
 import customerPortalEn from "../docs/help/en/customer-portal/index.md" with { type: "text" };
 import customerPortalSl from "../docs/help/sl/customer-portal/index.md" with { type: "text" };
+import customerPortalSignInEn from "../docs/help/en/customer-portal/sign-in.md" with { type: "text" };
+import customerPortalSignInSl from "../docs/help/sl/customer-portal/sign-in.md" with { type: "text" };
+import customerPortalInvoicesEn from "../docs/help/en/customer-portal/invoices.md" with { type: "text" };
+import customerPortalInvoicesSl from "../docs/help/sl/customer-portal/invoices.md" with { type: "text" };
+import customerPortalOrdersAndProfileEn from "../docs/help/en/customer-portal/orders-and-profile.md" with { type: "text" };
+import customerPortalOrdersAndProfileSl from "../docs/help/sl/customer-portal/orders-and-profile.md" with { type: "text" };
+import customerPortalTicketsEn from "../docs/help/en/customer-portal/tickets.md" with { type: "text" };
+import customerPortalTicketsSl from "../docs/help/sl/customer-portal/tickets.md" with { type: "text" };
 import workforceEn from "../docs/help/en/workforce/index.md" with { type: "text" };
 import workforceSl from "../docs/help/sl/workforce/index.md" with { type: "text" };
 import sloveniaEn from "../docs/help/en/slovenia/index.md" with { type: "text" };
@@ -279,7 +287,17 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "settings", en: inventorySettingsEn, sl: inventorySettingsSl },
 		],
 	},
-	{ slug: "customer-portal", en: customerPortalEn, sl: customerPortalSl, pages: [] },
+	{
+		slug: "customer-portal",
+		en: customerPortalEn,
+		sl: customerPortalSl,
+		pages: [
+			{ slug: "sign-in", en: customerPortalSignInEn, sl: customerPortalSignInSl },
+			{ slug: "invoices", en: customerPortalInvoicesEn, sl: customerPortalInvoicesSl },
+			{ slug: "orders-and-profile", en: customerPortalOrdersAndProfileEn, sl: customerPortalOrdersAndProfileSl },
+			{ slug: "tickets", en: customerPortalTicketsEn, sl: customerPortalTicketsSl },
+		],
+	},
 	{ slug: "workforce", en: workforceEn, sl: workforceSl, pages: [] },
 	{
 		slug: "slovenia",

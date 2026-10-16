@@ -1,10 +1,10 @@
 import { CustomerApi, clearCustomerSession, type CustomerOrder, type CustomerProfile } from "../customer-api";
 import { addressForm, customerForm } from "../customer-forms";
 import { el, emptyState, saveFile, statusPill, table } from "../dom";
-import { locale, t } from "../i18n";
+import { language, locale, t } from "../i18n";
 import { navigate } from "../router";
 import { confirmDialog, reportError, toast } from "../ui";
-import { formatMoneyIn } from "../../../server/formats";
+import { formatDateIn, formatMoneyIn, type DateFormat } from "../../../server/formats";
 import { customerHeader, customerRoute } from "./customer-portal";
 import { fulfillmentPill } from "./store-orders";
 
@@ -128,7 +128,7 @@ function orderRow(order: CustomerOrder): HTMLElement {
 		{},
 		el("td", {}, el("a", { class: "mono", href: `/customer/invoices/${order.invoice}` }, order.reference)),
 		el("td", {}, order.store_url ? el("a", { href: order.store_url }, order.store) : order.store),
-		el("td", {}, new Date(order.created).toLocaleDateString(locale())),
+		el("td", {}, formatDateIn(order.created, order.date_format as DateFormat, language(), order.timezone)),
 		el("td", {}, statusPill(order.payment_status)),
 		el(
 			"td",

@@ -551,6 +551,8 @@ describe("the online store module", () => {
 		const first = orders.data.orders.find((order: { invoice: string }) => order.invoice === firstOrder);
 		expect(first.store).toBe("Pixel Parts");
 		expect(first.fulfillment).toBe("pending");
+		expect(first.date_format).toEqual(expect.any(String));
+		expect(first.timezone).toEqual(expect.any(String));
 
 		const order = await call("GET", `/store/${slug}/orders/${firstOrder}`, customerToken);
 		expect(order.data.note).toBe("Please ring twice");
