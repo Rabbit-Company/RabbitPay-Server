@@ -101,6 +101,7 @@ function withoutSecrets(project: ProjectRow, role: ProjectRole) {
 		invoice_format: project.invoice_format,
 		order_format: storedFormatOf(project, "order"),
 		proforma_format: storedFormatOf(project, "proforma"),
+		dunning_format: storedFormatOf(project, "dunning"),
 		proforma_settlement: project.proforma_settlement,
 		invoice_issuer_details: Boolean(project.invoice_issuer_details),
 		status: project.status,

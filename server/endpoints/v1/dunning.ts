@@ -32,7 +32,6 @@ import {
 	letterContext,
 	letterDocument,
 	letterLines,
-	letterNumber,
 	linesWithState,
 	planLetter,
 	presentLetter,
@@ -41,6 +40,7 @@ import {
 	todayFor,
 	unpaidInvoices,
 	unpaidRecordedInvoices,
+	upcomingLetterNumber,
 	type DunningRequest,
 } from "../../dunning";
 import type { DunningLetterRow } from "../../database/models";
@@ -53,13 +53,6 @@ async function readBody<T>(ctx: { body<B>(): Promise<B> }): Promise<T | null> {
 	} catch {
 		return null;
 	}
-}
-
-async function nextNumber(project: string, year: number): Promise<string> {
-	const [last] = (await Database`SELECT MAX(sequence_number) AS last FROM dunning_letters WHERE project = ${project} AND year = ${year}`) as {
-		last: number | null;
-	}[];
-	return letterNumber(year, Number(last?.last ?? 0) + 1);
 }
 
 async function emailCounts(letters: string[]): Promise<Map<string, number>> {
@@ -203,7 +196,7 @@ Server.app.post("/api/v1/projects/:uuid/dunning/preview", Auth.required(), Permi
 	const plan = await planLetter(project, data);
 	if (typeof plan === "number") return Utils.fail(ctx, plan);
 
-	const number = await nextNumber(project.uuid, Number(plan.issue_date.slice(0, 4)));
+	const number = await upcomingLetterNumber(project);
 	const document = letterDocument(project, plan, number, await letterContext(project, account.username));
 	return pdfResponse(await renderLetter(project, document));
 });

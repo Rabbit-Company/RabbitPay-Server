@@ -3,6 +3,12 @@ import type { Dialect } from "./dialect";
 import { run } from "./schema";
 import { schemaTypes } from "./schema-types";
 
+export async function addDunningNumbering(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await sql.unsafe(`ALTER TABLE projects ADD COLUMN dunning_format ${types.text("dunning_format")}`);
+	await run(sql, dialect, [`CREATE UNIQUE INDEX IF NOT EXISTS idx_dunning_letters_number ON dunning_letters(project, number)`]);
+}
+
 export async function createDunningSchema(sql: SQL, dialect: Dialect) {
 	const types = schemaTypes(dialect);
 	await run(sql, dialect, [

@@ -7,10 +7,10 @@ import { confirmDialog, modal, reportError, secretReveal, toast } from "../ui";
 import { invalidateProject, loadProject, projectLayout } from "./project";
 import { processorsSection } from "./processors";
 import { currencyLabel, currencyOptions, currencyRates } from "../currencies";
-import { DATE_FORMATS, TIME_FORMATS, formatDate, formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
+import { DATE_FORMATS, TIME_FORMATS, formatDate, formatDateTime, localeFor, type DateFormat, type TimeFormat } from "../../../server/formats";
 import { LANGUAGES, t as documentWord, type Language } from "../../../server/i18n";
 import { DISCLOSURE_BLANK, disclosureGaps } from "../../../server/company-disclosure";
-import { statusLabel, t, type UiKey } from "../i18n";
+import { statusLabel, t, type UiKey, language } from "../i18n";
 import { vatStatusHint, vatStatusOptions } from "../options";
 import { ACCENT_PRESETS, BRAND_BLUE } from "../../../server/colors";
 import { applyAccent } from "../theme";
@@ -22,9 +22,10 @@ import {
 	DEFAULT_INVOICE_FORMAT,
 	DEFAULT_ORDER_FORMAT,
 	DEFAULT_PROFORMA_FORMAT,
-	describeInvoiceFormat,
+	DEFAULT_DUNNING_FORMAT,
 	parseInvoiceFormat,
 	renderInvoiceNumber,
+	type NumberingPeriod,
 } from "../../../server/invoice-format";
 import { creditorReference } from "../../../server/payments/reference";
 import { fiscalSection } from "./fiscal";
@@ -318,14 +319,35 @@ const SERIES_DEFAULTS: Record<NumberSeries, string> = {
 	invoice: DEFAULT_INVOICE_FORMAT,
 	proforma: DEFAULT_PROFORMA_FORMAT,
 	order: DEFAULT_ORDER_FORMAT,
+	dunning: DEFAULT_DUNNING_FORMAT,
 };
 
-const SERIES_DOCUMENTS: Record<NumberSeries, string> = { invoice: "invoices", proforma: "pro forma invoices", order: "orders" };
+const SERIES_DOCUMENTS: Record<NumberSeries, UiKey> = {
+	invoice: "settings.capacity_invoices",
+	proforma: "settings.capacity_proformas",
+	order: "settings.capacity_orders",
+	dunning: "settings.capacity_dunning",
+};
+
+const SERIES_NEXT_HINT: Record<NumberSeries, UiKey> = {
+	invoice: "settings.next_number_hint",
+	proforma: "settings.next_number_hint_proforma",
+	order: "settings.next_number_hint_order",
+	dunning: "settings.next_number_hint_dunning",
+};
+
+const CAPACITY_PERIODS: Record<NumberingPeriod, UiKey> = {
+	day: "settings.capacity_day",
+	month: "settings.capacity_month",
+	year: "settings.capacity_year",
+	never: "settings.capacity_never",
+};
 
 const SERIES_NEXT: Record<NumberSeries, UiKey> = {
 	invoice: "settings.next_invoice_will_be",
 	proforma: "settings.next_proforma_will_be",
 	order: "settings.next_order_will_be",
+	dunning: "settings.next_dunning_will_be",
 };
 
 function formatExamples(series: NumberSeries) {
@@ -334,6 +356,13 @@ function formatExamples(series: NumberSeries) {
 			{ format: DEFAULT_PROFORMA_FORMAT, note: t("settings.example_proforma_default") },
 			{ format: "PR-XXXXXX", note: t("settings.example_restarts_never") },
 			{ format: "PR/XXX/YY", note: t("settings.example_restarts_yearly") },
+		];
+	}
+	if (series === "dunning") {
+		return [
+			{ format: DEFAULT_DUNNING_FORMAT, note: t("settings.example_dunning_default") },
+			{ format: "OP/XXX/YY", note: t("settings.example_restarts_yearly") },
+			{ format: '"OPOMIN"-XXXXXX', note: t("settings.example_restarts_never") },
 		];
 	}
 	if (series === "order") {
@@ -402,7 +431,10 @@ async function numberingSection(uuid: string, project: Project, series: NumberSe
 		const sequence = Number(next.value);
 		const validNext = Number.isInteger(sequence) && sequence >= 1 && sequence <= parsed.format.capacity;
 		next.max = String(parsed.format.capacity);
-		capacity.textContent = describeInvoiceFormat(parsed.format, SERIES_DOCUMENTS[series]);
+		capacity.textContent = t(CAPACITY_PERIODS[parsed.format.period], {
+			count: parsed.format.capacity.toLocaleString(localeFor(language())),
+			documents: t(SERIES_DOCUMENTS[series]),
+		});
 		capacity.hidden = false;
 
 		if (!validNext) {
@@ -496,7 +528,7 @@ async function numberingSection(uuid: string, project: Project, series: NumberSe
 			"div",
 			{ class: "form-grid" },
 			field(t("settings.format"), format, t("settings.format_hint", { format: SERIES_DEFAULTS[series] })),
-			field(t("settings.next_number"), next, t("settings.next_number_hint"))
+			field(t("settings.next_number"), next, t(SERIES_NEXT_HINT[series]))
 		),
 		preview,
 		bankWarning,
@@ -1053,7 +1085,11 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 					el("div", { class: "divider" }),
 					el("h3", {}, t("settings.order_numbers")),
 					el("p", { class: "muted" }, t("settings.order_intro")),
-					await numberingSection(uuid, project, "order")
+					await numberingSection(uuid, project, "order"),
+					el("div", { class: "divider" }),
+					el("h3", {}, t("settings.dunning_numbers")),
+					el("p", { class: "muted" }, t("settings.dunning_intro")),
+					await numberingSection(uuid, project, "dunning")
 				),
 				el("div", { class: "card" }, el("h2", {}, t("settings.tax")), el("p", { class: "muted" }, t("settings.tax_intro")), tax?.element ?? null),
 				project.tax_country === "SI"

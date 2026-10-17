@@ -35,7 +35,7 @@ Spodaj so **Stranke z zapadlimi računi**, najstarejši dolg najprej, z zadnjim 
 
    ![Povzetek s skupnim zneskom za plačilo](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/summary.webp)
 
-7. Pritisnite **Predogled PDF**, da vidite opomin, nato **Izdaj opomin** in potrdite. Opomin dobi naslednjo številko, na primer OP-2026-0001.
+7. Pritisnite **Predogled PDF**, da vidite opomin, nato **Izdaj opomin** in potrdite. Opomin dobi naslednjo številko, na primer OP-2026-0001. Obliko številk lahko spremenite v [Številke računov](invoices/numbering).
 
 ## Pošljite opomin
 

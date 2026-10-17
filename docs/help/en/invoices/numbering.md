@@ -4,7 +4,7 @@ Invoice numbers must run in sequence without gaps. You decide how they look, and
 
 ## Open Document numbers
 
-Open **Settings** and find the card **Document numbers**. It has three parts: invoice numbers, pro forma invoice numbers and store order numbers. Each has its own format and its own counter.
+Open **Settings** and find the card **Document numbers**. It has four parts: invoice numbers, pro forma invoice numbers, store order numbers and dunning letter numbers. Each has its own format and its own counter.
 
 ![The Document numbers card](https://cdn.rabbitpay.net/help/en/dark/invoices/numbering/document-numbers.webp)
 
@@ -49,8 +49,9 @@ If you already issued invoices this year somewhere else, set **Next number** to 
 
 > **Note:** In a Slovenian project with fiscal verification switched on, invoices are numbered the way FURS requires: the business premise, the device and a running number, for example `PP1-SPLET1-1`. See [Slovenian compliance](slovenia).
 
-## Pro forma invoices, store orders and credit notes
+## Pro forma invoices, store orders, dunning letters and credit notes
 
 - **Pro forma invoice numbers** work the same way and start with `PR-YYYY-XXXXX`. The same part of the card sets what happens [when a pro forma invoice is paid](invoices/pro-forma#choose-what-happens-when-it-is-paid).
 - **Store order numbers** are given to every order in your [online store](online-store). The invoice gets its own number once the order is paid.
+- **Dunning letter numbers** are given to every [dunning letter](invoices/dunning) when it is issued, `OP-YYYY-XXXX` by default. Letters already issued keep their numbers.
 - Credit notes use the invoice format with `CN` in front and count separately.

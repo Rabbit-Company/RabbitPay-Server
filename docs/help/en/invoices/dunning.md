@@ -35,7 +35,7 @@ Below are **Customers with overdue invoices**, the oldest debt first, with the l
 
    ![The summary with the total to pay](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/summary.webp)
 
-7. Press **Preview PDF** to see the letter, then **Issue letter** and confirm. The letter gets the next number, for example OP-2026-0001.
+7. Press **Preview PDF** to see the letter, then **Issue letter** and confirm. The letter gets the next number, for example OP-2026-0001. You can change how the numbers look in [Invoice numbers](invoices/numbering).
 
 ## Email the letter
 

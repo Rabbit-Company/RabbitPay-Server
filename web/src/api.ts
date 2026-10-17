@@ -1530,6 +1530,7 @@ export interface Project {
 	invoice_format: string;
 	order_format: string;
 	proforma_format: string;
+	dunning_format: string;
 	proforma_settlement: ProformaSettlement;
 	invoice_issuer_details: boolean;
 	permissions?: string[];
@@ -2002,7 +2003,7 @@ export interface Invoice extends ReferenceDocumentColumns {
 
 export type DocumentKind = "invoice" | "advance" | "proforma" | "order";
 export type ProformaSettlement = "invoice" | "advance";
-export type NumberSeries = "invoice" | "proforma" | "order";
+export type NumberSeries = "invoice" | "proforma" | "order" | "dunning";
 
 export type RecurringStatus = "active" | "paused" | "completed" | "canceled";
 export type IntervalUnit = "week" | "month" | "year";

@@ -27,9 +27,9 @@ interface NumberingBody {
 	next_number?: unknown;
 }
 
-const DOCUMENTS: Record<NumberSeries, string> = { invoice: "invoices", order: "orders", proforma: "pro forma invoices" };
+const DOCUMENTS: Record<NumberSeries, string> = { invoice: "invoices", order: "orders", proforma: "pro forma invoices", dunning: "dunning letters" };
 
-const SERIES_NAMES: Record<NumberSeries, string> = { invoice: "invoices", order: "store orders", proforma: "pro forma invoices" };
+const SERIES_NAMES: Record<NumberSeries, string> = { invoice: "invoices", order: "store orders", proforma: "pro forma invoices", dunning: "dunning letters" };
 
 async function numberingState(project: ProjectRow, series: NumberSeries, format: InvoiceFormat, now = Date.now()) {
 	const next = await storedNextNumber(Database, project.uuid, sequenceKey(series, format, now, project.timezone));
@@ -113,6 +113,7 @@ Server.app.put("/api/v1/projects/:uuid/invoice-numbering", Auth.required(), Perm
 	await Database.begin(async (tx) => {
 		if (series === "order") await tx`UPDATE projects SET order_format = ${format.source}, updated = ${now} WHERE uuid = ${project.uuid}`;
 		else if (series === "proforma") await tx`UPDATE projects SET proforma_format = ${format.source}, updated = ${now} WHERE uuid = ${project.uuid}`;
+		else if (series === "dunning") await tx`UPDATE projects SET dunning_format = ${format.source}, updated = ${now} WHERE uuid = ${project.uuid}`;
 		else await tx`UPDATE projects SET invoice_format = ${format.source}, updated = ${now} WHERE uuid = ${project.uuid}`;
 		if (typeof next === "number") await setNextNumber(tx, project.uuid, sequenceKey(series, format, now, project.timezone), next);
 	});

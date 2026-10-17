@@ -265,6 +265,26 @@ describe("dunning letters", () => {
 		expect(byReference.get(null)).toBeNull();
 	});
 
+	test("follows the number format from settings and the preview does not use a number", async () => {
+		const year = localDate(Date.now(), "Europe/Ljubljana").slice(2, 4);
+		const state = await call("GET", `${base()}/invoice-numbering?series=dunning`, { token: ownerToken });
+		expect(state.data).toMatchObject({ series: "dunning", format: "OP-YYYY-XXXX" });
+		const saved = await call("PUT", `${base()}/invoice-numbering`, { token: ownerToken, body: { series: "dunning", format: "OP/XXX/YY", next_number: 5 } });
+		expect(saved.data).toMatchObject({ format: "OP/XXX/YY", next_reference: `OP/005/${year}` });
+		expect((await call("GET", base(), { token: ownerToken })).data.dunning_format).toBe("OP/XXX/YY");
+
+		await call("POST", `${base()}/dunning/preview`, { token: ownerToken, body: { customer: businessCustomer, invoices: [firstInvoice] } });
+		const issued = await call("POST", `${base()}/dunning`, { token: ownerToken, body: { customer: businessCustomer, invoices: [firstInvoice] } });
+		expect(issued.data.number).toBe(`OP/005/${year}`);
+
+		await call("PUT", `${base()}/invoice-numbering`, { token: ownerToken, body: { series: "dunning", format: "OP/XXX/YY", next_number: 5 } });
+		const skipped = await call("POST", `${base()}/dunning`, { token: ownerToken, body: { customer: businessCustomer, invoices: [firstInvoice] } });
+		expect(skipped.data.number).toBe(`OP/006/${year}`);
+		expect((await call("GET", `${base()}/invoice-numbering?series=dunning`, { token: ownerToken })).data.next_number).toBe(7);
+
+		for (const letter of [issued.data.uuid, skipped.data.uuid]) await call("DELETE", `${base()}/dunning/${letter}`, { token: ownerToken });
+	});
+
 	test("refuses options the law does not allow", async () => {
 		const personInvoice = (await Database`SELECT uuid FROM invoices WHERE customer = ${personCustomer}`) as { uuid: string }[];
 		const refused = await call("POST", `${base()}/dunning`, {

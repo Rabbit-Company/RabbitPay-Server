@@ -100,6 +100,7 @@ const TEXT_LENGTHS: Record<string, number> = {
 	store_name: 200,
 	order_format: 30,
 	proforma_format: 30,
+	dunning_format: 30,
 	proforma_settlement: 16,
 	settlement: 16,
 	document_type: 16,

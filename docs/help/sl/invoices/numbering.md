@@ -4,7 +4,7 @@
 
 ## Odprite Številčenje dokumentov
 
-Odprite **Nastavitve** in poiščite kartico **Številčenje dokumentov**. Ima tri dele: številke računov, številke predračunov in številke naročil v trgovini. Vsak ima svojo obliko in svoj števec.
+Odprite **Nastavitve** in poiščite kartico **Številčenje dokumentov**. Ima štiri dele: številke računov, številke predračunov, številke naročil v trgovini in številke opominov. Vsak ima svojo obliko in svoj števec.
 
 ![Kartica Številčenje dokumentov](https://cdn.rabbitpay.net/help/sl/dark/invoices/numbering/document-numbers.webp)
 
@@ -49,8 +49,9 @@ Besedilo, ki vsebuje črke Y, M, D ali X, postavite v dvojne narekovaje, na prim
 
 > **Opomba:** V slovenskem projektu z vklopljenim davčnim potrjevanjem so računi oštevilčeni tako, kot zahteva FURS: poslovni prostor, naprava in zaporedna številka, na primer `PP1-SPLET1-1`. Glejte [Slovenska zakonodaja](slovenia).
 
-## Predračuni, naročila v trgovini in dobropisi
+## Predračuni, naročila v trgovini, opomini in dobropisi
 
 - **Številčenje predračunov** deluje enako in se začne z obliko `PR-YYYY-XXXXX`. Isti del kartice določa, kaj se zgodi, [ko je predračun plačan](invoices/pro-forma#izberite-kaj-se-zgodi-ob-placilu).
 - **Številčenje naročil v trgovini** velja za vsako naročilo v vaši [spletni trgovini](online-store). Račun dobi svojo številko, ko je naročilo plačano.
+- **Številčenje opominov** določa številke [opominov](invoices/dunning) ob izdaji, privzeto `OP-YYYY-XXXX`. Že izdani opomini obdržijo svoje številke.
 - Dobropisi uporabljajo obliko računov s `CN` spredaj in se štejejo ločeno.

@@ -11,6 +11,7 @@ import { isLanguage, translator, type Language } from "./i18n";
 import { isLocalDate, localDate, shiftLocalDate } from "./timezone";
 import Validate from "./validate";
 import RenderPool from "./render-pool";
+import { nextSeriesNumber } from "./invoice-numbers";
 import {
 	compensationAvailable,
 	DEFAULT_DEADLINE_DAYS,
@@ -342,12 +343,8 @@ export function letterDocument(project: ProjectRow, plan: PlannedLetter, number:
 	};
 }
 
-export function letterNumber(year: number, sequence: number): string {
-	return `OP-${year}-${String(sequence).padStart(4, "0")}`;
-}
-
-export function previewNumber(plan: PlannedLetter): string {
-	return `OP-${plan.issue_date.slice(0, 4)}-XXXX`;
+export async function upcomingLetterNumber(project: ProjectRow, timestamp = Date.now()): Promise<string> {
+	return await nextSeriesNumber(Database, project.uuid, "dunning", timestamp, { reserve: false });
 }
 
 export async function issueLetter(project: ProjectRow, plan: PlannedLetter, createdBy: string | null): Promise<DunningLetterRow> {
@@ -362,7 +359,7 @@ export async function issueLetter(project: ProjectRow, plan: PlannedLetter, crea
 			last: number | null;
 		}[];
 		const sequence = Number(last?.last ?? 0) + 1;
-		const number = letterNumber(year, sequence);
+		const number = await nextSeriesNumber(sql, project.uuid, "dunning", timestamp);
 		const document = letterDocument(project, plan, number, context);
 
 		await sql`

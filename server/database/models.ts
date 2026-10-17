@@ -99,6 +99,7 @@ export interface ProjectRow {
 	invoice_format: string;
 	order_format: string | null;
 	proforma_format: string | null;
+	dunning_format: string | null;
 	proforma_settlement: ProformaSettlement;
 	invoice_issuer_details: number;
 	invoice_design: string | null;
