@@ -5240,4 +5240,5 @@ export const en = {
 	"invoices.dunning_letter": "Create dunning letter",
 	"dunning.phone_days": "days late",
 	"dunning.letter_documents": "Documents on the letter",
+	"dunning.email_message_placeholder": "Optional, shown above the letter in the email",
 } as const;

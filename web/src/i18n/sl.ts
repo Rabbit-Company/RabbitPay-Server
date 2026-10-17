@@ -5251,4 +5251,5 @@ export const sl: UiDictionary = {
 	"invoices.dunning_letter": "Ustvari opomin",
 	"dunning.phone_days": "dni zamude",
 	"dunning.letter_documents": "Dokumenti na opominu",
+	"dunning.email_message_placeholder": "Neobvezno, prikazano nad opominom v e-sporočilu",
 };

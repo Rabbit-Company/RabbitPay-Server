@@ -12,6 +12,7 @@ Create an invoice, send it, get paid and correct it when something changes. Ever
 | Print it or get the PDF                  | [Print and download](invoices/print-and-download)   |
 | Mark it as paid or return money          | [Record a payment](invoices/record-payment)         |
 | Fix a mistake or cancel it               | [Credit notes and canceling](invoices/credit-notes) |
+| Chase a customer who does not pay        | [Dunning letters](invoices/dunning)                 |
 
 ## Other kinds of invoices
 

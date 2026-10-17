@@ -750,7 +750,7 @@ export async function newDunningView(uuid: string): Promise<HTMLElement> {
 
 function emailLetterDialog(uuid: string, letter: DunningLetterDetail, onSent: () => void) {
 	const to = input("email", { value: letter.buyer.email ?? "", required: true, placeholder: "customer@example.com" });
-	const message = el("textarea", { rows: "4", maxlength: "2000", placeholder: t("invoices.email_message_placeholder") }) as HTMLTextAreaElement;
+	const message = el("textarea", { rows: "4", maxlength: "2000", placeholder: t("dunning.email_message_placeholder") }) as HTMLTextAreaElement;
 	const submit = el("button", { class: "button primary", type: "submit" }, icon("mail", 16), t("dunning.email_send"));
 	const form = el(
 		"form",

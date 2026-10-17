@@ -2,41 +2,71 @@
 
 A dunning letter ("opomin") is a formal payment reminder that lists what a customer still owes.
 
-It shows every overdue document of one customer, the open total and how to pay it. RabbitPay makes it as a PDF in your invoice design, with a UPN QR code or bank details, and can email it.
-
-Automatic reminder emails stay as they are. Use a dunning letter when a customer ignores them or owes money for months.
+It shows every overdue document of one customer, the open total and how to pay it. RabbitPay makes it as a PDF in your invoice design, with a UPN QR code or bank details, and can email it. Automatic reminder emails stay as they are. Use a dunning letter when a customer ignores them or owes money for months.
 
 ## See who is late
 
-Open **Dunning letters** in the menu under Sales. The page shows:
+Open **Dunning letters** in the menu under Sales. At the top you see the overdue total, how many customers owe you money and how many letters you sent this year.
 
-- the total overdue amount and how many customers owe you money
-- **Customers with overdue invoices**, the oldest debt first, with the last letter each one received
-- **Issued letters**, with the date, the deadline and whether the letter was emailed
+Below are **Customers with overdue invoices**, the oldest debt first, with the last letter each customer received, and **Issued letters**.
+
+![Dunning letters with the customers who are late](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/overview.webp)
 
 ## Write a letter
 
-1. Press **Send reminder** next to a customer, or **New dunning letter** and choose the customer. You can also start from a customer's page or from the **Send** menu of an overdue invoice.
-2. Under **Unpaid documents**, keep the documents the letter should list. All overdue invoices are selected. Invoices that are not due yet are left out.
-3. Choose the level:
+1. Press **Send reminder** next to the customer. You can also press **New dunning letter** and choose the customer, open the customer's page and press **Dunning letter**, or choose **Create dunning letter** in the **Send** menu of an overdue invoice.
+
+   ![Choosing the customer for a new letter](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/pick-customer.webp)
+
+2. Under **Unpaid documents**, keep the documents the letter should list. All overdue invoices are selected and you see how many days each one is late. Invoices that are not due yet are left out.
+
+   ![The overdue invoices of the customer](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/documents.webp)
+
+3. Under **Letter**, choose the level. RabbitPay suggests the next level after the customer's last letter.
    - **Reminder** is friendly and says the payment may have been missed.
    - **Second reminder** refers to the earlier reminder.
    - **Final reminder** warns that the claim goes to debt collection or enforcement.
+4. Set **Pay within (days)**. 8 days is common in Slovenia. Choose the **Language** of the letter.
+5. Switch on late interest or recovery costs if you want them. Both are explained below. A **Note** is printed under the documents, for example an offer to pay in instalments.
 
-   RabbitPay suggests the next level after the customer's last letter.
+   ![The level, the deadline, late interest and recovery costs](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/options.webp)
 
-4. Set **Pay within (days)**. 8 days is common.
-5. Add late interest or recovery costs if you want them, see below.
-6. Check the **Summary** and press **Preview PDF** to see the letter.
-7. Press **Issue letter**. It gets the next number, for example OP-2026-0001, and RabbitPay offers to email it right away.
+6. Check the **Summary**. It adds up the open amount, the interest and the recovery costs and shows the payment deadline.
+
+   ![The summary with the total to pay](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/summary.webp)
+
+7. Press **Preview PDF** to see the letter, then **Issue letter** and confirm. The letter gets the next number, for example OP-2026-0001.
+
+## Email the letter
+
+Right after you issue the letter, RabbitPay offers to email it to the customer's address. Add a message if you like and press **Send letter**. The customer gets the letter as a PDF, with the list of documents and the payment details in the email itself.
+
+![Emailing the letter](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/email.webp)
+
+You can send it again later with **Email** on the letter. To print it, choose **Documents** and then **Open PDF** or **Download PDF**.
+
+## What the customer gets
+
+The PDF uses the design of your invoices. It lists each document with its due date, the days it is late and the open amount, then the totals, a payment box with a UPN QR code for the whole amount and the legal notes.
+
+![A dunning letter as PDF](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/pdf.webp)
 
 ## Invoices from before RabbitPay
 
-Press **Add invoice issued outside RabbitPay** and enter the invoice number, the dates, the invoice total and what is still open. These invoices appear only on the letter. They do not change your books, VAT records or statistics.
+If the customer still owes money from invoices you wrote in your previous software or on paper, add them by hand.
 
-When you write the next letter for the same customer, **Add ... from the last letter again** copies them over, so you only remove the ones that were paid.
+1. Under **Unpaid documents**, press **Add invoice issued outside RabbitPay**.
+2. Enter the **Invoice number**, the dates, the **Invoice total** and what is **Still open**. Leave the total empty when nothing was paid.
 
-Invoices you recorded in Accounting under **Issued elsewhere** appear in the list automatically when the buyer's VAT number or name matches the customer.
+   ![Adding an invoice issued outside RabbitPay](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/manual.webp)
+
+3. Press **Add to letter**. The invoice joins the list, marked as added by hand.
+
+   ![The invoice from before RabbitPay on the letter](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/documents-manual.webp)
+
+These invoices appear only on the letter. They do not change your books, VAT records or statistics. When you write the next letter for the same customer, **Add ... from the last letter again** copies them over, so you only remove the ones that were paid.
+
+Invoices you recorded in Accounting under **Issued elsewhere** appear in the list by themselves when the buyer's VAT number or name matches the customer.
 
 ## Late interest
 
@@ -53,7 +83,7 @@ Without the switch the letter says that you keep the right to charge late intere
 
 ## Recovery costs
 
-Between businesses you can ask for 40 EUR for each late invoice (Article 14 of ZPreZP-1, in other EU countries Directive 2011/7/EU). Switch on **Add recovery costs**. It is available only for business customers, for letters in EUR and for invoices that became due less than 3 years ago.
+Between businesses you can ask for 40 EUR for each late invoice (Article 14 of ZPreZP-1, in other EU countries Directive 2011/7/EU). Switch on **Add recovery costs of 40 EUR per invoice**. It is available only for business customers, for letters in EUR and for invoices that became due less than 3 years ago.
 
 ## Old debts
 
@@ -61,4 +91,10 @@ Documents due more than 3 years ago get a warning. Claims between businesses usu
 
 ## After the letter
 
-Open a letter to see what is still open on each listed invoice. The status changes to **Partly paid** or **Paid** as payments come in. From **More** you can start the next reminder or delete the letter. Deleting does not remove emails that were already sent.
+Open the letter from **Issued letters** to see what is still open on each listed invoice. The status changes to **Partly paid** or **Paid** as payments come in, and **Deadline passed** when the customer misses the deadline. The emails you sent are listed at the bottom.
+
+![A letter with what is still open on each invoice](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/letter.webp)
+
+When the deadline passes, send the next level. On the **Dunning letters** page the button next to the customer now says **Send second reminder**, and on the letter you find it under **More**. There you can also delete a letter. Deleting does not remove emails that were already sent.
+
+![The next reminder for the same customer](https://cdn.rabbitpay.net/help/en/dark/invoices/dunning/next-level.webp)

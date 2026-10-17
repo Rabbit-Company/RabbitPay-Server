@@ -12,6 +12,7 @@ Ustvarite račun, ga pošljite, prejmite plačilo in ga popravite, ko se kaj spr
 | Ga natisniti ali dobiti PDF                   | [Tiskanje in prenos](invoices/print-and-download) |
 | Ga označiti kot plačanega ali vrniti denar    | [Zabeležite plačilo](invoices/record-payment)     |
 | Popraviti napako ali ga preklicati            | [Dobropisi in preklic](invoices/credit-notes)     |
+| Opomniti stranko, ki ne plača                 | [Opomini](invoices/dunning)                       |
 
 ## Druge vrste računov
 

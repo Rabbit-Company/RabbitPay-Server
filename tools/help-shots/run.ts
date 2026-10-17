@@ -27,11 +27,13 @@ import { calendar } from "./guides/calendar";
 import { files } from "./guides/files";
 import { accounting } from "./guides/accounting";
 import { settings } from "./guides/settings";
+import { dunning } from "./guides/dunning";
 
 export type Step = (studio: Studio, session: Session) => Promise<void>;
 
 export interface Guide {
 	module: string;
+	help?: string;
 	steps: [name: string, run: Step][];
 }
 
@@ -51,6 +53,7 @@ const GUIDES: Guide[] = [
 	files,
 	accounting,
 	settings,
+	dunning,
 ];
 const REPOSITORY = resolve(import.meta.dir, "../..");
 const MANIFEST = resolve(REPOSITORY, "server/help-shots.ts");
@@ -130,7 +133,7 @@ try {
 			await browser.send("Emulation.setTimezoneOverride", { timezoneId: DEMOS[language].timezone });
 			await browser.goto(`${server.base}/login`);
 			await browser.eval(`(() => { localStorage.clear(); localStorage.setItem("rabbitpay.language", "${language}"); })()`);
-			const studio = new Studio(browser, server.base, out, language, guide.module, mail.messages, server.database, furs);
+			const studio = new Studio(browser, server.base, out, language, guide.help ?? guide.module, mail.messages, server.database, furs);
 			if (session.project !== null) await signIn(studio, session);
 			for (const [name, run] of guide.steps) {
 				if (only.length > 0 && !only.includes(name) && !only.includes(`${guide.module}/${name}`)) continue;
