@@ -19,6 +19,7 @@ export interface QueuedEmail {
 	project: string;
 	invoice?: string | null;
 	creditNote?: string | null;
+	dunningLetter?: string | null;
 	ticket?: string | null;
 	member?: string | null;
 	kind: EmailKind;
@@ -64,9 +65,9 @@ export async function queueEmail(sql: SQL, email: QueuedEmail): Promise<string> 
 	const attachmentStorageKey = email.attachment?.storageKey ?? null;
 
 	await sql`
-		INSERT INTO email_messages(uuid, project, invoice, credit_note, ticket, member, kind, recipient, reply_to, sender_name, subject, body_text,
+		INSERT INTO email_messages(uuid, project, invoice, credit_note, dunning_letter, ticket, member, kind, recipient, reply_to, sender_name, subject, body_text,
 			body_html, attachment_name, attachment_data, attachment_storage_key, eslog_document, status, attempts, next_attempt_at, sent_by, created, updated)
-		VALUES(${uuid}, ${email.project}, ${email.invoice ?? null}, ${email.creditNote ?? null}, ${email.ticket ?? null}, ${email.member ?? null},
+		VALUES(${uuid}, ${email.project}, ${email.invoice ?? null}, ${email.creditNote ?? null}, ${email.dunningLetter ?? null}, ${email.ticket ?? null}, ${email.member ?? null},
 			${email.kind}, ${email.to}, ${email.replyTo}, ${email.senderName}, ${email.subject}, ${email.text}, ${email.html}, ${attachmentName},
 			${attachmentData}, ${attachmentStorageKey}, ${email.eslogDocument ?? null}, 'pending', 0, ${timestamp}, ${email.sentBy}, ${timestamp}, ${timestamp})
 	`;

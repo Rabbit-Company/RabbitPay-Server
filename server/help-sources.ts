@@ -32,6 +32,8 @@ import invoicesRecordPaymentEn from "../docs/help/en/invoices/record-payment.md"
 import invoicesRecordPaymentSl from "../docs/help/sl/invoices/record-payment.md" with { type: "text" };
 import invoicesCreditNotesEn from "../docs/help/en/invoices/credit-notes.md" with { type: "text" };
 import invoicesCreditNotesSl from "../docs/help/sl/invoices/credit-notes.md" with { type: "text" };
+import invoicesDunningEn from "../docs/help/en/invoices/dunning.md" with { type: "text" };
+import invoicesDunningSl from "../docs/help/sl/invoices/dunning.md" with { type: "text" };
 import invoicesProFormaEn from "../docs/help/en/invoices/pro-forma.md" with { type: "text" };
 import invoicesProFormaSl from "../docs/help/sl/invoices/pro-forma.md" with { type: "text" };
 import invoicesRecurringEn from "../docs/help/en/invoices/recurring.md" with { type: "text" };
@@ -281,6 +283,7 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "print-and-download", en: invoicesPrintAndDownloadEn, sl: invoicesPrintAndDownloadSl },
 			{ slug: "record-payment", en: invoicesRecordPaymentEn, sl: invoicesRecordPaymentSl },
 			{ slug: "credit-notes", en: invoicesCreditNotesEn, sl: invoicesCreditNotesSl },
+			{ slug: "dunning", en: invoicesDunningEn, sl: invoicesDunningSl },
 			{ slug: "pro-forma", en: invoicesProFormaEn, sl: invoicesProFormaSl },
 			{ slug: "recurring", en: invoicesRecurringEn, sl: invoicesRecurringSl },
 			{ slug: "customers", en: invoicesCustomersEn, sl: invoicesCustomersSl },

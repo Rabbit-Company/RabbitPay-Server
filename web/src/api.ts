@@ -2409,6 +2409,7 @@ export interface EmailMessage {
 	uuid: string;
 	invoice: string | null;
 	credit_note: string | null;
+	dunning_letter?: string | null;
 	ticket: string | null;
 	kind: EmailKind;
 	recipient: string;
@@ -4809,6 +4810,150 @@ export const PurchasingApi = {
 			throw new ApiError(-1, response.status, "The server returned an unreadable response.");
 		}
 		return { blob: await response.blob(), name: filenameOf(disposition, `placila-${data.execution_date}.xml`) };
+	},
+};
+
+export interface DunningLetter {
+	uuid: string;
+	customer: string | null;
+	customer_name: string | null;
+	level: 1 | 2 | 3;
+	number: string;
+	language: string;
+	currency: string;
+	issue_date: string;
+	deadline_date: string;
+	principal: number;
+	interest: number;
+	compensation: number;
+	total_amount: number;
+	interest_included: boolean;
+	compensation_included: boolean;
+	note: string | null;
+	created_by: string | null;
+	created: number;
+	emails: number;
+}
+
+export interface DunningLetterLine {
+	uuid: string;
+	invoice: string | null;
+	recorded_invoice: string | null;
+	reference: string;
+	issue_date: string | null;
+	due_on: string;
+	amount: number;
+	open: number;
+	days: number;
+	interest: number;
+	compensation: number;
+	open_now: number | null;
+}
+
+export interface DunningLetterDetail extends DunningLetter {
+	created_by_name: string | null;
+	buyer: {
+		name: string | null;
+		email: string | null;
+		address_line1: string | null;
+		address_line2: string | null;
+		postal_code: string | null;
+		city: string | null;
+		country: string | null;
+		vat_number: string | null;
+	};
+	deadline_passed: boolean;
+	rates: { from: string; to: string; rate: number }[];
+	lines: DunningLetterLine[];
+	email_history: EmailMessage[];
+}
+
+export interface Debtor {
+	customer: string;
+	name: string | null;
+	email: string | null;
+	currency: string;
+	invoices: number;
+	overdue_amount: number;
+	oldest_due: number;
+	last_letter: { uuid: string; number: string; level: 1 | 2 | 3; issue_date: string } | null;
+}
+
+export interface DunningDocumentCandidate {
+	uuid: string;
+	reference: string;
+	currency: string;
+	issue_date: string;
+	due_on: string;
+	amount: number;
+	open: number;
+	time_barred: boolean;
+}
+
+export interface DunningCandidates {
+	today: string;
+	customer: { uuid: string; name: string | null; email: string | null; business: boolean };
+	invoices: DunningDocumentCandidate[];
+	not_due: number;
+	recorded: DunningDocumentCandidate[];
+	last_letter: { uuid: string; number: string; level: 1 | 2 | 3; issue_date: string } | null;
+	previous_manual: { reference: string; issue_date: string | null; due_on: string; amount: number; open: number }[];
+	suggested_level: 1 | 2 | 3;
+	interest_available: boolean;
+	compensation_available: boolean;
+	rates: { from: string; rate: number }[];
+	rates_known_until: string;
+}
+
+export interface DunningInput {
+	customer: string;
+	level: 1 | 2 | 3;
+	currency: string;
+	language: string;
+	deadline_days: number;
+	interest: boolean;
+	compensation: boolean;
+	note: string | null;
+	invoices: string[];
+	recorded_invoices: string[];
+	manual: { reference: string; issue_date: string | null; due_date: string; amount: number; open: number }[];
+}
+
+export const DunningApi = {
+	letters(uuid: string, options: { customer?: string; limit?: number; offset?: number } = {}) {
+		return request<{ letters: DunningLetter[]; total: number }>("GET", `/projects/${uuid}/dunning${listQuery(options)}`);
+	},
+
+	debtors(uuid: string) {
+		return request<{ today: string; debtors: Debtor[] }>("GET", `/projects/${uuid}/dunning/debtors`);
+	},
+
+	candidates(uuid: string, customer: string) {
+		return request<DunningCandidates>("GET", `/projects/${uuid}/dunning/candidates${listQuery({ customer })}`);
+	},
+
+	preview(uuid: string, data: DunningInput) {
+		return requestPdf(`/projects/${uuid}/dunning/preview`, data);
+	},
+
+	create(uuid: string, data: DunningInput) {
+		return request<DunningLetterDetail>("POST", `/projects/${uuid}/dunning`, data);
+	},
+
+	letter(uuid: string, letter: string) {
+		return request<DunningLetterDetail>("GET", `/projects/${uuid}/dunning/${letter}`);
+	},
+
+	pdf(uuid: string, letter: string) {
+		return requestFile(`/projects/${uuid}/dunning/${letter}/pdf`, "opomin.pdf");
+	},
+
+	email(uuid: string, letter: string, data: { to: string; message: string | null }) {
+		return request<EmailMessage>("POST", `/projects/${uuid}/dunning/${letter}/email`, data);
+	},
+
+	remove(uuid: string, letter: string) {
+		return request<void>("DELETE", `/projects/${uuid}/dunning/${letter}`);
 	},
 };
 

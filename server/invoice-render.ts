@@ -34,8 +34,8 @@ interface QrSource {
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const MARGIN = 48;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+export const MARGIN = 48;
+export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const RIGHT_EDGE = PAGE_WIDTH - MARGIN;
 const LINE_FACTOR = 1.4;
 const QR_SIZE = 112;
@@ -44,7 +44,7 @@ const ISSUER_WIDTH = 260;
 const ISSUER_BESIDE_FISCAL_WIDTH = 180;
 
 const TEXT = "#1a1d21";
-const MUTED = "#59616e";
+export const MUTED = "#59616e";
 const BORDER = "#b8bec7";
 
 const REGULAR = "regular";
@@ -105,7 +105,7 @@ interface TextStyle {
 	align?: "left" | "right";
 }
 
-class Layout {
+export class Layout {
 	cursor = MARGIN;
 
 	constructor(
@@ -256,7 +256,7 @@ export interface Logo {
 	height: number;
 }
 
-function drawHeader(layout: Layout, title: string, reference: string, logo: Logo | null, dates: [string, string][]) {
+export function drawHeader(layout: Layout, title: string, reference: string, logo: Logo | null, dates: [string, string][]) {
 	const { pdf, theme } = layout;
 	const { design } = theme;
 	let left = layout.cursor;
@@ -319,7 +319,7 @@ function drawParty(layout: Layout, x: number, width: number, title: string, name
 	return cursor;
 }
 
-function drawParties(
+export function drawParties(
 	layout: Layout,
 	parties: { seller: InvoiceDocument["seller"]; buyer: InvoiceDocument["buyer"]; language: string },
 	t: Translate,
@@ -345,12 +345,12 @@ function drawParties(
 	layout.cursor = Math.max(sellerBottom, buyerBottom) + layout.gap(20);
 }
 
-interface LineColumn {
+export interface LineColumn {
 	heading: string;
 	offset: number;
 }
 
-function drawLines(layout: Layout, description: string, columns: LineColumn[], rows: { description: string; cells: string[] }[]) {
+export function drawLines(layout: Layout, description: string, columns: LineColumn[], rows: { description: string; cells: string[] }[]) {
 	const descriptionWidth = RIGHT_EDGE - Math.max(...columns.map((column) => column.offset)) - 50 - MARGIN;
 	const headingStyle = { bold: true, size: 9, color: MUTED };
 
@@ -382,13 +382,13 @@ function drawLines(layout: Layout, description: string, columns: LineColumn[], r
 	layout.cursor += layout.gap(10);
 }
 
-interface TotalRow {
+export interface TotalRow {
 	label: string;
 	value: string;
 	strong?: boolean;
 }
 
-function drawSummary(layout: Layout, t: Translate, groups: TaxGroups, totals: TotalRow[], format: (amount: number) => string, language: string) {
+export function drawSummary(layout: Layout, t: Translate, groups: TaxGroups, totals: TotalRow[], format: (amount: number) => string, language: string) {
 	const totalsLeft = RIGHT_EDGE - 220;
 	const rowHeight = layout.lineHeight(10) + 4;
 
@@ -426,7 +426,7 @@ function drawSummary(layout: Layout, t: Translate, groups: TaxGroups, totals: To
 	layout.cursor = Math.max(cursor, top + (groups.length + 1) * rowHeight) + layout.gap(16);
 }
 
-function drawSection(layout: Layout, heading: string | null, body: string) {
+export function drawSection(layout: Layout, heading: string | null, body: string) {
 	layout.ensure(layout.lineHeight(8) + layout.lineHeight(10) * 2);
 	if (heading) {
 		layout.text(heading.toUpperCase(), MARGIN, layout.cursor, { bold: true, size: 8, color: MUTED });
@@ -436,7 +436,13 @@ function drawSection(layout: Layout, heading: string | null, body: string) {
 	layout.cursor += layout.gap(12);
 }
 
-function drawPayment(layout: Layout, document: InvoiceDocument, t: Translate, format: (amount: number) => string, payLink: boolean) {
+export function drawPayment(
+	layout: Layout,
+	document: Pick<InvoiceDocument, "bank" | "pay_qr" | "online">,
+	t: Translate,
+	format: (amount: number) => string,
+	payLink: boolean
+) {
 	const { pdf } = layout;
 	const { bank } = document;
 	const codes: { matrix: boolean[][]; caption: string | null }[] = [];
@@ -522,7 +528,7 @@ interface FooterSource {
 	language: string;
 }
 
-function drawFooter(layout: Layout, source: FooterSource, t: Translate, currency: string, dateOf: (value: number) => string, sign = 1) {
+export function drawFooter(layout: Layout, source: FooterSource, t: Translate, currency: string, dateOf: (value: number) => string, sign = 1) {
 	const { tax, seller, language } = source;
 	const lines = [
 		tax.exemption_note,
@@ -548,12 +554,18 @@ function drawFooter(layout: Layout, source: FooterSource, t: Translate, currency
 	for (const line of lines) layout.paragraph(line, CONTENT_WIDTH, { size: 9, color: MUTED });
 }
 
-interface IssuerBlock {
+export interface IssuerBlock {
 	height: number;
 	draw(top: number): void;
 }
 
-async function prepareIssuer(layout: Layout, document: InvoiceDocument, t: Translate, width: number): Promise<IssuerBlock | null> {
+export async function prepareIssuer(
+	layout: Layout,
+	document: Pick<InvoiceDocument, "issuer" | "seller">,
+	t: Translate,
+	width: number,
+	label: TranslationKey = "invoice.issued_by"
+): Promise<IssuerBlock | null> {
 	if (!document.issuer) return null;
 	let signature: { bytes: Buffer; width: number; height: number } | null = null;
 	if (document.issuer.signature) {
@@ -572,7 +584,7 @@ async function prepareIssuer(layout: Layout, document: InvoiceDocument, t: Trans
 	const sellerName = legalNameParts(document.seller.legal_name || document.seller.name);
 	const legalName = layout.wrap(sellerName.name, width, { bold: true });
 	const activity = sellerName.activity ? layout.wrap(sellerName.activity, width) : [];
-	const issuedBy = layout.wrap(`${t("invoice.issued_by")} ${document.issuer.name}`, width);
+	const issuedBy = layout.wrap(`${t(label)} ${document.issuer.name}`, width);
 	const line = layout.lineHeight(10);
 	const signatureHeight = signature ? 55 : 0;
 
@@ -593,7 +605,7 @@ async function prepareIssuer(layout: Layout, document: InvoiceDocument, t: Trans
 	};
 }
 
-function drawClosing(layout: Layout, fiscal: InvoiceDocument["fiscal"], issuer: IssuerBlock | null, t: Translate) {
+export function drawClosing(layout: Layout, fiscal: InvoiceDocument["fiscal"], issuer: IssuerBlock | null, t: Translate) {
 	if (!fiscal && !issuer) return;
 	const size = 64;
 	const gap = 16;
@@ -658,7 +670,7 @@ interface PdfSource {
 	design: InvoiceDesign;
 }
 
-function drawPageFooters(layout: Layout, source: PdfSource, t: Translate, reference: string) {
+export function drawPageFooters(layout: Layout, source: PdfSource, t: Translate, reference: string) {
 	const { pdf } = layout;
 	const top = PAGE_HEIGHT - MARGIN + 18;
 	const style = { size: 8, color: MUTED };
@@ -678,7 +690,7 @@ function drawPageFooters(layout: Layout, source: PdfSource, t: Translate, refere
 	}
 }
 
-async function startPdf(source: PdfSource, title: string): Promise<{ pdf: Pdf; layout: Layout; output: Promise<Uint8Array> }> {
+export async function startPdf(source: PdfSource, title: string): Promise<{ pdf: Pdf; layout: Layout; output: Promise<Uint8Array> }> {
 	const [regular, bold] = await loadFonts(source.design.font);
 	const brand = source.branding.white_label ? source.seller.name : "RabbitPay";
 
@@ -702,7 +714,7 @@ async function startPdf(source: PdfSource, title: string): Promise<{ pdf: Pdf; l
 	return { pdf, layout: new Layout(pdf, themeOf(source.design)), output: collect(pdf) };
 }
 
-function sellerExtrasOf(seller: InvoiceDocument["seller"], vatStatus: string | null, t: Translate, show: InvoiceDesign["show"]): string[] {
+export function sellerExtrasOf(seller: InvoiceDocument["seller"], vatStatus: string | null, t: Translate, show: InvoiceDesign["show"]): string[] {
 	return [
 		...partyTaxIds(seller, vatStatus).map((id) => `${t(id.key)}: ${id.value}`),
 		seller.registration_number ? `${t("invoice.registration_number")}: ${seller.registration_number}` : null,

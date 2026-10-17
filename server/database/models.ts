@@ -530,7 +530,8 @@ export type EmailKind =
 	| "event_reminder"
 	| "store_order"
 	| "invoice_paid"
-	| "invoice_overdue";
+	| "invoice_overdue"
+	| "dunning_letter";
 export type EmailStatus = "pending" | "sent" | "failed";
 export type EmailRoute = "server" | "project";
 
@@ -561,6 +562,7 @@ export interface EmailMessageRow {
 	sent_via: EmailRoute | null;
 	license_billing: LicenseBilling | null;
 	has_body: number;
+	dunning_letter: string | null;
 	created: number;
 	updated: number;
 }
@@ -1692,5 +1694,47 @@ export interface PurchaseOrderLineRow {
 	quantity: number;
 	value: number;
 	note: string | null;
+	sort_order: number;
+}
+
+export interface DunningLetterRow {
+	uuid: string;
+	project: string;
+	customer: string | null;
+	level: number;
+	year: number;
+	sequence_number: number;
+	number: string;
+	language: string;
+	currency: string;
+	issue_date: string;
+	deadline_date: string;
+	principal: number;
+	interest: number;
+	compensation: number;
+	total_amount: number;
+	interest_included: number;
+	compensation_included: number;
+	note: string | null;
+	buyer_details: string;
+	document: string;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface DunningLetterLineRow {
+	uuid: string;
+	dunning_letter: string;
+	invoice: string | null;
+	recorded_invoice: string | null;
+	reference: string;
+	issue_date: string | null;
+	due_on: string;
+	amount: number;
+	open_amount: number;
+	days_overdue: number;
+	interest: number;
+	compensation: number;
 	sort_order: number;
 }

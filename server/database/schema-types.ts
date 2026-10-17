@@ -42,6 +42,7 @@ const ID_COLUMNS = new Set([
 	"supplier_id",
 	"purchase_order",
 	"order_line",
+	"dunning_letter",
 ]);
 
 const TEXT_LENGTHS: Record<string, number> = {
@@ -125,6 +126,8 @@ const TEXT_LENGTHS: Record<string, number> = {
 	ended_on: 10,
 	holiday_date: 10,
 	due_on: 10,
+	issue_date: 10,
+	deadline_date: 10,
 	operation: 32,
 	priority: 16,
 	employment_type: 32,

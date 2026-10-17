@@ -30,6 +30,7 @@ const KINDS: Record<EmailKind, true> = {
 	store_order: true,
 	invoice_paid: true,
 	invoice_overdue: true,
+	dunning_letter: true,
 };
 
 export const EMAIL_KINDS = Object.keys(KINDS) as EmailKind[];

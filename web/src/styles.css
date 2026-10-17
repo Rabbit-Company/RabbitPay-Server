@@ -8830,3 +8830,328 @@ td a.warn {
 .stock-page .ledger-controls > .switch {
 	margin-bottom: 0.9rem;
 }
+
+.dunning th.numeric,
+.dunning td.numeric {
+	text-align: right;
+}
+.dunning .card-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	margin-bottom: 0.75rem;
+}
+.dunning .card-head h3 {
+	margin: 0;
+}
+.dunning .small-print {
+	font-size: 0.82rem;
+	margin: 0.5rem 0 0;
+}
+.dunning .inline-icon {
+	vertical-align: -2px;
+}
+.dunning-level {
+	white-space: nowrap;
+}
+.dunning-level-2 {
+	color: var(--warning);
+	border-color: currentColor;
+}
+.dunning-level-3 {
+	color: var(--danger);
+	border-color: currentColor;
+}
+.dunning-stat-danger .stat-value {
+	color: var(--danger);
+}
+.dunning-last {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	color: var(--text);
+}
+.dunning-last:hover {
+	text-decoration: none;
+}
+.dunning-last:hover .pill {
+	border-color: var(--accent);
+}
+.dunning-sent {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	color: var(--success);
+	font-weight: 600;
+}
+.dunning-clear {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 1rem;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--success) 8%, var(--surface));
+	color: var(--success);
+}
+.dunning-clear p {
+	margin: 0;
+	font-weight: 550;
+}
+.dunning-editor {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 300px;
+	gap: 1rem;
+	align-items: start;
+}
+.dunning-summary {
+	position: sticky;
+	top: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
+}
+.dunning-summary h3 {
+	margin: 0;
+}
+.dunning-summary-rows {
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+}
+.dunning-summary-rows .totals-row.grand {
+	font-size: 1.2rem;
+	padding-top: 0.6rem;
+	margin-top: 0.2rem;
+}
+.dunning-deadline {
+	margin: 0;
+	font-size: 0.88rem;
+}
+.dunning-summary-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.dunning-customer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+.dunning-customer-main {
+	display: flex;
+	align-items: center;
+	gap: 0.85rem;
+	min-width: 0;
+}
+.dunning-avatar {
+	display: grid;
+	place-items: center;
+	width: 2.6rem;
+	height: 2.6rem;
+	flex: none;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+	color: var(--accent);
+}
+.dunning-check {
+	width: 2.2rem;
+	padding-right: 0;
+}
+.dunning-check input {
+	width: 1.05rem;
+	height: 1.05rem;
+	accent-color: var(--accent);
+}
+.dunning-days {
+	font-variant-numeric: tabular-nums;
+}
+.dunning-days-long {
+	color: var(--danger);
+	font-weight: 650;
+}
+.dunning-select-all {
+	display: none;
+}
+.dunning-documents-foot {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	margin-top: 0.85rem;
+}
+.dunning-empty {
+	padding: 1.25rem;
+	border: 1px dashed var(--border);
+	border-radius: 8px;
+	text-align: center;
+}
+.dunning-empty p {
+	margin: 0.2rem 0;
+}
+.dunning-inline-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+.dunning-levels {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.6rem;
+}
+.dunning-level-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.65rem;
+	padding: 0.8rem 0.9rem;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.dunning-level-option:hover {
+	border-color: var(--hover-border);
+}
+.dunning-level-option.active {
+	border-color: var(--accent);
+	background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+	box-shadow: 0 0 0 1px var(--accent);
+}
+.dunning-level-step {
+	display: grid;
+	place-items: center;
+	width: 1.6rem;
+	height: 1.6rem;
+	flex: none;
+	border-radius: 50%;
+	border: 1px solid var(--border);
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: var(--muted);
+}
+.dunning-level-option.active .dunning-level-step {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-text);
+}
+.dunning-level-text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	font-size: 0.85rem;
+	line-height: 1.35;
+}
+.dunning-option .field-hint {
+	margin: 0.35rem 0 0 calc(38px + 0.6rem);
+}
+.dunning-detail-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 1rem;
+}
+.dunning-detail-grid .card h3 {
+	margin-top: 0;
+}
+.dunning-amount-card {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 0.3rem;
+}
+@media (max-width: 1100px) {
+	.dunning-editor {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.dunning-summary {
+		position: static;
+	}
+	.dunning-summary-actions {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+}
+@media (max-width: 720px) {
+	.dunning-levels,
+	.dunning-detail-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.dunning-select-all {
+		display: flex;
+	}
+	.dunning .page-head .line-actions {
+		width: 100%;
+	}
+}
+.dunning td.dunning-date,
+.dunning-summary-rows .totals-row.grand span:first-child {
+	white-space: nowrap;
+}
+.dunning-phone-label {
+	display: none;
+}
+@media (max-width: 720px) {
+	.dunning-documents {
+		overflow: visible;
+	}
+	.dunning-documents thead {
+		display: none;
+	}
+	.dunning-documents tr {
+		display: grid;
+		grid-template-columns: 2rem minmax(0, 1fr) auto;
+		grid-template-areas:
+			"check document open"
+			"check due late"
+			"check interest remove";
+		gap: 0.2rem 0.6rem;
+		padding: 0.75rem 0.5rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.dunning-documents tbody tr:last-child {
+		border-bottom: none;
+	}
+	.dunning-documents td {
+		padding: 0;
+		border: none;
+	}
+	.dunning-documents td.dunning-check {
+		grid-area: check;
+		width: auto;
+	}
+	.dunning-documents td.dunning-document {
+		grid-area: document;
+	}
+	.dunning-documents td.dunning-open {
+		grid-area: open;
+		font-weight: 650;
+	}
+	.dunning-documents td.dunning-due {
+		grid-area: due;
+		color: var(--muted);
+		font-size: 0.85rem;
+	}
+	.dunning-documents td.dunning-late {
+		grid-area: late;
+		font-size: 0.85rem;
+	}
+	.dunning-documents td.dunning-interest {
+		grid-area: interest;
+		font-size: 0.85rem;
+		text-align: left;
+	}
+	.dunning-documents td.dunning-remove {
+		grid-area: remove;
+	}
+	.dunning-documents td.dunning-issued {
+		display: none;
+	}
+	.dunning-documents .dunning-phone-label {
+		display: inline;
+	}
+}

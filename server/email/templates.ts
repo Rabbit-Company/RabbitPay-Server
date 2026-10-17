@@ -538,6 +538,65 @@ export function invoiceEmail(
 	});
 }
 
+export interface DunningFacts {
+	title: string;
+	reference: string;
+	currency: string;
+	total: number;
+	issueDate: string;
+	deadlineDate: string;
+}
+
+export function dunningEmail(
+	brand: EmailBrand,
+	letter: DunningFacts,
+	lines: EmailLine[],
+	message: string | null,
+	extras: { bank?: BankInstruction | null; attached?: boolean } = {}
+): EmailContent {
+	const t = translator(brand.language);
+	const dateOf = (value: string) => formatDateIn(Date.parse(`${value}T12:00:00Z`), brand.dateFormat, brand.language, "UTC");
+	const params = {
+		merchant: brand.merchant,
+		title: letter.title,
+		reference: letter.reference,
+		amount: money(letter.total, letter.currency, brand.language),
+		date: dateOf(letter.issueDate),
+		deadline: dateOf(letter.deadlineDate),
+	};
+	const bank = extras.bank ?? null;
+
+	return render(brand, t("email.dunning.subject", params), {
+		heading: letter.title,
+		preheader: `${params.amount} | ${t("email.dunning.pay_by")}: ${params.deadline}`,
+		paragraphs: [t("email.dunning.intro", params), ...(extras.attached ? [t("email.dunning.attached")] : [])],
+		summary: {
+			label: t("dunning.total"),
+			amount: params.amount,
+			status: { label: t("email.status.overdue"), tone: "danger" },
+			facts: [
+				{ label: letter.title, value: letter.reference },
+				{ label: t("email.dunning.pay_by"), value: params.deadline },
+			],
+		},
+		note: message ? { title: t("email.message_from", params), body: message } : null,
+		lines: { rows: lines, currency: letter.currency, tax: 0, total: letter.total },
+		details: bank
+			? {
+					title: t("bank.heading"),
+					rows: [
+						{ label: t("bank.account_holder"), value: bank.account.holder },
+						{ label: t("bank.iban"), value: formatIban(bank.account.iban), mono: true },
+						...(bank.account.bic ? [{ label: t("bank.bic"), value: bank.account.bic, mono: true }] : []),
+						{ label: t("bank.reference"), value: formatReference(bank.reference), mono: true },
+						{ label: t("bank.amount"), value: money(bank.amount, bank.currency, brand.language) },
+					],
+				}
+			: null,
+		closing: [t("dunning.paid_already")],
+	});
+}
+
 export function receiptEmail(
 	brand: EmailBrand,
 	receipt: ReceiptFacts,

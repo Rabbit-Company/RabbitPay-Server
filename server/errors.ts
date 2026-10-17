@@ -181,6 +181,10 @@ export enum Error {
 	PASSWORD_UNCHANGED = 1361,
 	PASSWORD_LINK_EXPIRED = 1362,
 	PASSWORD_RESET_UNAVAILABLE = 1363,
+	INVALID_DUNNING_LETTER = 1364,
+	DUNNING_LETTER_NOT_FOUND = 1365,
+	NOTHING_TO_DUN = 1366,
+	DUNNING_OPTION_UNAVAILABLE = 1367,
 	INVALID_PAYMENT_DATE = 1302,
 	FILE_STORAGE_LIMIT_REACHED = 1303,
 	INVALID_FILE = 1304,
@@ -759,6 +763,17 @@ namespace Errors {
 		1361: { message: "The new password is the same as the current one.", httpCode: 400 },
 		1362: { message: "This password link is wrong or has expired. Request a new one.", httpCode: 400 },
 		1363: { message: "This server cannot send email, so it cannot send a password link. Contact its administrator.", httpCode: 409 },
+		1364: {
+			message:
+				"The dunning letter is not valid. Check the level, the currency, the payment deadline (1 to 60 days) and that every added document has a number, a past due date and an open amount.",
+			httpCode: 400,
+		},
+		1365: { message: "This dunning letter does not exist.", httpCode: 404 },
+		1366: { message: "Choose at least one overdue, unpaid document of this customer in the letter currency.", httpCode: 400 },
+		1367: {
+			message: "Late interest needs a Slovenian project. Recovery costs need an EU project, a business customer and a letter in EUR.",
+			httpCode: 400,
+		},
 		1302: { message: "The payment date must be a timestamp in milliseconds that is not in the future.", httpCode: 400 },
 		1303: { message: "This project has no file storage left. Remove files or redeem a file storage license to add more capacity.", httpCode: 402 },
 		1304: { message: "The file is not valid. It needs a name of at most 250 characters and a size in bytes of at least 1.", httpCode: 400 },

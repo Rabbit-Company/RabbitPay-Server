@@ -22,6 +22,7 @@ import { emailDesignOf, logoPath } from "../branding";
 import { DEFAULT_EMAIL_DESIGN, type EmailDesign } from "../email-design";
 import {
 	creditNoteEmail,
+	dunningEmail,
 	invitationEmail,
 	invoiceEmail,
 	keysEmail,
@@ -32,8 +33,9 @@ import {
 	type KeyGroup,
 } from "./templates";
 import { DAY, MAX_DAYS_BEFORE, reminderDue } from "./reminders";
-import type { DateFormat } from "../formats";
-import type { CreditNoteRow, EmailKind, EmailMessageRow, InvoiceItemRow, InvoiceRow, ProjectMemberRow, ProjectRow } from "../database/models";
+import { formatDateIn, type DateFormat } from "../formats";
+import { translator } from "../i18n";
+import type { CreditNoteRow, DunningLetterRow, EmailKind, EmailMessageRow, InvoiceItemRow, InvoiceRow, ProjectMemberRow, ProjectRow } from "../database/models";
 
 const REMINDER_BATCH = 500;
 
@@ -47,6 +49,7 @@ export function presentEmail(row: EmailSummaryRow) {
 		uuid: row.uuid,
 		invoice: row.invoice,
 		credit_note: row.credit_note,
+		dunning_letter: row.dunning_letter ?? null,
 		ticket: row.ticket,
 		kind: row.kind,
 		recipient: row.recipient,
@@ -317,6 +320,66 @@ export async function queueCreditNoteEmail(
 	});
 	deliverSoon();
 	return uuid;
+}
+
+export async function queueDunningEmail(
+	project: ProjectRow,
+	letter: DunningLetterRow,
+	options: { to: string; message: string | null; sentBy: string }
+): Promise<string> {
+	const { letterTitle, renderLetter, storedDocument } = await import("../dunning");
+	const document = storedDocument(letter);
+	const brand = { ...(await brandFor(project)), language: document.language };
+	const t = translator(document.language);
+	const dateOf = (value: string) => formatDateIn(Date.parse(`${value}T12:00:00Z`), brand.dateFormat, brand.language, "UTC");
+	const attachment = await renderLetter(project, document);
+	const lines: EmailLine[] = [
+		...document.lines.map((line) => ({
+			description: `${line.reference} | ${t("dunning.column_due")} ${dateOf(line.due_on)}`,
+			quantity: null,
+			gross: line.open,
+		})),
+		...(document.totals.interest > 0
+			? [{ description: t("dunning.interest", { date: dateOf(document.issue_date) }), quantity: null, gross: document.totals.interest }]
+			: []),
+		...(document.totals.compensation > 0 ? [{ description: t("dunning.compensation"), quantity: null, gross: document.totals.compensation }] : []),
+	];
+	const content = dunningEmail(
+		brand,
+		{
+			title: letterTitle(document.level, document.language),
+			reference: document.number,
+			currency: document.currency,
+			total: document.totals.total,
+			issueDate: document.issue_date,
+			deadlineDate: document.deadline_date,
+		},
+		lines,
+		options.message,
+		{ bank: document.bank, attached: true }
+	);
+
+	const uuid = await queueEmail(Database, {
+		project: project.uuid,
+		dunningLetter: letter.uuid,
+		kind: "dunning_letter",
+		to: options.to,
+		senderName: brand.merchant,
+		replyTo: brand.replyTo,
+		...content,
+		attachment: { name: attachment.name, data: attachment.data },
+		sentBy: options.sentBy,
+	});
+	deliverSoon();
+	return uuid;
+}
+
+export async function dunningEmails(letter: string): Promise<EmailSummaryRow[]> {
+	return (await Database`
+		SELECT uuid, project, invoice, credit_note, dunning_letter, ticket, member, kind, recipient, subject, attachment_name, eslog_document, status, attempts,
+			last_error, sent_by, sent_at, sent_via, license_billing, has_body, created
+		FROM email_messages WHERE dunning_letter = ${letter} ORDER BY created DESC
+	`) as EmailSummaryRow[];
 }
 
 export async function queueInvitationEmail(project: ProjectRow, member: ProjectMemberRow, inviter: string): Promise<string | null> {

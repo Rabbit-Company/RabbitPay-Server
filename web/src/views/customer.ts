@@ -201,6 +201,9 @@ export async function customerView(uuid: string, customerId: string): Promise<HT
 						? el("button", { class: "button ghost", type: "button", onClick: () => customerForm(uuid, customer, () => void render()) }, t("ui.edit"))
 						: null,
 					el("a", { class: "button ghost", href: `/projects/${uuid}/invoices?customer=${customer.uuid}` }, t("customer.open_in_invoices")),
+					stats.overdue > 0 && can(project, Permission.INVOICE_CREATE)
+						? el("a", { class: "button ghost", href: `/projects/${uuid}/dunning/new?customer=${customer.uuid}` }, t("customer.dunning"))
+						: null,
 					can(project, Permission.INVOICE_CREATE) ? el("a", { class: "button primary", href: newInvoiceHref }, t("invoices.new")) : null
 				)
 			),

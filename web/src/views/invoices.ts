@@ -1252,6 +1252,9 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 				sendLinks.push({ label: t("invoices.send_reminder"), onSelect: () => emailDialog(uuid, project, invoice, customer, true, () => void render()) });
 			}
 		}
+		if (payable && !unissued && invoice.due_date < Date.now() && invoice.customer && can(project, Permission.INVOICE_CREATE)) {
+			sendLinks.push({ label: t("invoices.dunning_letter"), href: `/projects/${uuid}/dunning/new?customer=${invoice.customer}&currency=${invoice.currency}` });
+		}
 		const payLinks: MenuLink[] = payable
 			? [
 					{

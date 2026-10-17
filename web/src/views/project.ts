@@ -40,6 +40,7 @@ interface ProjectTab {
 const TABS: ProjectTab[] = [
 	{ id: "overview", label: "nav.overview", suffix: "", permissions: [Permission.PROJECT_VIEW] },
 	{ id: "invoices", label: "nav.invoices", suffix: "/invoices", permissions: [Permission.INVOICE_VIEW], group: "sales" },
+	{ id: "dunning", label: "nav.dunning", suffix: "/dunning", permissions: [Permission.INVOICE_VIEW], group: "sales" },
 	{ id: "recurring", label: "nav.recurring", suffix: "/recurring", permissions: [Permission.SUBSCRIPTION_VIEW], group: "sales" },
 	{ id: "transactions", label: "nav.payments", suffix: "/transactions", permissions: [Permission.PAYMENT_VIEW], group: "sales" },
 	{ id: "emails", label: "nav.emails", suffix: "/emails", permissions: [Permission.EMAIL_VIEW], group: "sales" },

@@ -124,6 +124,7 @@ export function bankInstruction(options: {
 	totalMinorUnits: number;
 	currency: string;
 	language: string;
+	purpose?: string;
 }): BankInstruction | null {
 	const { config, company, merchant, reference, totalMinorUnits, currency, language } = options;
 
@@ -138,7 +139,7 @@ export function bankInstruction(options: {
 	};
 
 	const amount = majorUnits(totalMinorUnits, currency);
-	const purpose = t(language, "bank.purpose", { reference });
+	const purpose = options.purpose ?? t(language, "bank.purpose", { reference });
 	const paymentReference = creditorReference(reference) ?? reference;
 	const preference = (config.qr_format as QrFormat) || "auto";
 	const format = chooseFormat(preference, iban, currency);

@@ -499,6 +499,47 @@ const en = {
 	"email.notify.invoices_overdue_list": "Still outstanding",
 	"email.notify.invoices_overdue_more": "and {count} more",
 	"email.notify.open_invoices": "Open overdue invoices",
+	"dunning.title_1": "Payment reminder",
+	"dunning.title_2": "Second reminder",
+	"dunning.title_3": "Final reminder",
+	"dunning.date": "Date",
+	"dunning.pay_by": "Pay by",
+	"dunning.greeting": "Dear customer,",
+	"dunning.intro_1":
+		"According to our records, the documents listed below were still unpaid on {date}. This may have been an oversight, so we kindly ask you to pay the total of {amount} by {deadline}.",
+	"dunning.intro_2": "Despite our previous reminder, the documents listed below were still unpaid on {date}. Please pay the total of {amount} by {deadline}.",
+	"dunning.intro_3":
+		"Despite our previous reminders, the documents listed below were still unpaid on {date}. This is our final reminder. Please pay the total of {amount} by {deadline}.",
+	"dunning.warning_3":
+		"If we do not receive the payment by this date, we will pass the claim to debt collection or apply for enforcement without further notice. The costs of the procedure and statutory late interest until the day of payment will be charged to you.",
+	"dunning.paid_already":
+		"If you have paid in the meantime, thank you, and please disregard this reminder. Contact us with any questions or to agree on payment in instalments.",
+	"dunning.column_document": "Document",
+	"dunning.column_issued": "Issued",
+	"dunning.column_due": "Due",
+	"dunning.column_days": "Days late",
+	"dunning.column_open": "Open",
+	"dunning.column_interest": "Interest",
+	"dunning.document_amount": "Document total {amount}",
+	"dunning.principal": "Open amount",
+	"dunning.interest": "Late interest to {date}",
+	"dunning.compensation": "Recovery costs",
+	"dunning.total": "Total to pay",
+	"dunning.interest_note":
+		"Statutory late interest is calculated from the day after the due date until {date} with the simple method at the statutory default interest rate (Obligations Code, Article 378, and ZPOMZO-1). Interest keeps accruing until the day of payment. Late interest is not subject to VAT.",
+	"dunning.interest_rates": "Annual rates used: {rates}.",
+	"dunning.rate_period": "{rate} ({from} - {to})",
+	"dunning.interest_reserved": "We reserve the right to charge statutory late interest from the due date until the day of payment.",
+	"dunning.compensation_note_si":
+		"Recovery costs of 40 EUR for each late claim are charged under Article 14 of the Prevention of Late Payments Act (ZPreZP-1).",
+	"dunning.compensation_note_eu": "Recovery costs of 40 EUR for each late claim are charged under Article 6 of Directive 2011/7/EU on combating late payment.",
+	"dunning.purpose": "Reminder {reference}",
+	"dunning.prepared_by": "Prepared by:",
+	"email.dunning.subject": "{title} {reference} from {merchant}",
+	"email.dunning.intro": "{merchant} would like to let you know that {amount} was still unpaid on {date}. Please pay by {deadline}.",
+	"email.dunning.attached": "The reminder with the list of open documents and the payment details is attached as a PDF.",
+	"email.dunning.pay_by": "Pay by",
+	"email.dunning.documents": "Open documents",
 };
 
 export type TranslationKey = keyof typeof en;
@@ -993,6 +1034,49 @@ const sl: Record<TranslationKey, string> = {
 	"email.notify.invoices_overdue_list": "Neplačani zneski",
 	"email.notify.invoices_overdue_more": "in še {count}",
 	"email.notify.open_invoices": "Odpri zapadle račune",
+	"dunning.title_1": "Opomin",
+	"dunning.title_2": "Drugi opomin",
+	"dunning.title_3": "Zadnji opomin",
+	"dunning.date": "Datum",
+	"dunning.pay_by": "Rok plačila",
+	"dunning.greeting": "Spoštovani,",
+	"dunning.intro_1":
+		"pri pregledu evidence smo ugotovili, da na dan {date} spodaj navedene obveznosti še niso poravnane. Morda ste plačilo spregledali, zato vas prijazno prosimo, da skupni znesek {amount} poravnate najkasneje do {deadline}.",
+	"dunning.intro_2":
+		"kljub našemu predhodnemu opominu spodaj navedene obveznosti na dan {date} še niso poravnane. Prosimo vas, da skupni znesek {amount} poravnate najkasneje do {deadline}.",
+	"dunning.intro_3":
+		"kljub predhodnim opominom spodaj navedene obveznosti na dan {date} še niso poravnane. To je zadnji opomin. Skupni znesek {amount} poravnajte najkasneje do {deadline}.",
+	"dunning.warning_3":
+		"Če plačila do navedenega roka ne prejmemo, bomo terjatev brez nadaljnjega obvestila predali v izterjavo oziroma vložili predlog za izvršbo na podlagi verodostojne listine. Stroški postopka in zakonske zamudne obresti do dneva plačila bodo bremenili vas.",
+	"dunning.paid_already":
+		"Če ste dolg medtem že poravnali, se vam zahvaljujemo in vas prosimo, da opomin štejete za brezpredmeten. Za vprašanja ali dogovor o obročnem plačilu smo vam na voljo.",
+	"dunning.column_document": "Dokument",
+	"dunning.column_issued": "Izdan",
+	"dunning.column_due": "Zapadel",
+	"dunning.column_days": "Dni zamude",
+	"dunning.column_open": "Odprto",
+	"dunning.column_interest": "Obresti",
+	"dunning.document_amount": "Znesek dokumenta {amount}",
+	"dunning.principal": "Odprti znesek",
+	"dunning.interest": "Zamudne obresti do {date}",
+	"dunning.compensation": "Nadomestilo izterjatvenih stroškov",
+	"dunning.total": "Skupaj za plačilo",
+	"dunning.interest_note":
+		"Zakonske zamudne obresti so obračunane od prvega dne po zapadlosti do {date} po linearni metodi in predpisani obrestni meri zamudnih obresti (378. člen Obligacijskega zakonika in ZPOMZO-1). Obresti tečejo do dneva plačila. Zamudne obresti niso predmet DDV.",
+	"dunning.interest_rates": "Uporabljene letne obrestne mere: {rates}.",
+	"dunning.rate_period": "{rate} ({from} - {to})",
+	"dunning.interest_reserved": "Pridržujemo si pravico do obračuna zakonskih zamudnih obresti od dneva zapadlosti do dneva plačila.",
+	"dunning.compensation_note_si":
+		"Nadomestilo izterjatvenih stroškov v višini 40 EUR za vsako zamujeno terjatev obračunavamo na podlagi 14. člena Zakona o preprečevanju zamud pri plačilih (ZPreZP-1).",
+	"dunning.compensation_note_eu":
+		"Nadomestilo izterjatvenih stroškov v višini 40 EUR za vsako zamujeno terjatev obračunavamo na podlagi 6. člena Direktive 2011/7/EU o boju proti zamudam pri plačilih.",
+	"dunning.purpose": "Opomin {reference}",
+	"dunning.prepared_by": "Pripravil:",
+	"email.dunning.subject": "{title} {reference} od {merchant}",
+	"email.dunning.intro": "{merchant} vas obvešča, da na dan {date} še ni poravnan znesek {amount}. Prosimo, da ga poravnate najkasneje do {deadline}.",
+	"email.dunning.attached": "Opomin s seznamom odprtih dokumentov in podatki za plačilo je priložen kot PDF.",
+	"email.dunning.pay_by": "Rok plačila",
+	"email.dunning.documents": "Odprti dokumenti",
 };
 
 const STRINGS: Record<Language, Record<TranslationKey, string>> = { en, sl };
