@@ -1,0 +1,790 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- edited with XMLSpy v2007 sp1 (http://www.altova.com) by Andrej Gogala (CIF VSRS) -->
+<xs:schema xmlns:vl="http://www.sodisce.si/2007/eVLPredlog" xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+	<xs:element name="Druzba">
+		<xs:annotation>
+			<xs:documentation>Opis družbe, kjer ima dolžnik delež</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:sequence>
+				<xs:element ref="VLNaslov"/>
+			</xs:sequence>
+			<xs:attribute name="matStevilkaDruzbe" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Matična številka družbe.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="sifSodisce" type="xs:token" use="required"/>
+			<xs:attribute name="nazivSodisce" type="xs:string" use="optional"/>
+			<xs:attribute name="naziv" type="xs:token" use="required"/>
+			<xs:attribute name="drzava" type="xs:token" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="DeleziDruzbenika">
+		<xs:annotation>
+			<xs:documentation>Delež družbenika v družbi - zaznamba sklepa o izvršbi v sodnem registru, ugotovitev vrednosti, prodaja in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="Druzba" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="DenarnaSredstvaOPP">
+		<xs:annotation>
+			<xs:documentation>Denarna sredstva pri organizaciji za plačilni promet - rubež in prenos</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VLTransakcijskiRacun" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLDolznik">
+		<xs:complexType mixed="false">
+			<xs:sequence>
+				<xs:element ref="PredlaganaIzvrsba"/>
+			</xs:sequence>
+			<xs:attribute ref="refUdelezenec" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Dolzniki">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VLDolznik" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+                                                     <xs:attribute name="solidarnost" type="xs:boolean" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLDolznikovDolznik">
+		<xs:complexType mixed="false">
+			<xs:attribute ref="refUdelezenec" use="required">
+				<xs:annotation>
+					<xs:documentation>Interna referenca na Udelezenca, kjer dobimo vse podatke o Dolznikovem dozniku</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="DrugeDenarneTerjatve">
+		<xs:annotation>
+			<xs:documentation>Druge denarne terjatve - rubež</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="ZastavnaPravicaZK" minOccurs="0"/>
+				<xs:element ref="VLDolznikovDolznik" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute name="prenosIzterjava" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Prenos zarubljene terjatve v izterjavo</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="prenosPlacilo" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Prenos zarubljene terjatve namesto plačila</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="pozivPo111" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Poziv dolžnikovem dolžniku, da poda izjavo po 111. členu ZIZ</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="vrstaTerjatve" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Vrsta terjatve</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="visinaTerjatve" type="xs:decimal" use="required">
+				<xs:annotation>
+					<xs:documentation>Višina terjatve - decimalna številka</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="vrstaValute" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Valuta terjatve</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="DrugeDenarneTerjatveSeq">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="DrugeDenarneTerjatve" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="DrugePremMatPravice">
+		<xs:annotation>
+			<xs:documentation>Druge premoženjske oziroma materialne pravice - rubež, cenitev, prodaja  in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute name="opis" type="xs:string" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLIzvrsitelj">
+		<xs:complexType mixed="false">
+			<xs:attribute ref="refUdelezenec" use="required">
+				<xs:annotation>
+					<xs:documentation>Interna referenca na udelezenca, kjer se nahajao dodatni podatki o izvršitelju (ime priimek, naslov itd,)</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLNaslov">
+		<xs:annotation>
+			<xs:documentation>Splošni naslov za vse.</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:attribute name="ulica" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Naziv ulice brez številke. Polje je bilo razbito zaradi lažje integracije z registrom prostorskih enot (RPE)</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="hisnaStevilka" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Hišna številka, ki mora biti posebej zaradi RPE. Je "optional", ker lahko imamo tudi samo ulico?</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="sifPosta" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Standardna šifra pošte. Le-ta naj se na uporagbnikovi strani kopira iz šifranta pošt.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="nazivPosta" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Naziv pošte, naj se kopira na uporabnikovi strani iz šifranta.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="drzava" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Tu pride šifra države iz šifranta</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Nepremicnina">
+		<xs:annotation>
+			<xs:documentation>Nepremičnina, ki ni vpisana v ZK</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:sequence>
+				<xs:element ref="VLNaslov"/>
+			</xs:sequence>
+			<xs:attribute name="stanovanje" type="xs:boolean" use="optional"/>
+			<xs:attribute name="poslovniProstor" type="xs:boolean" use="optional"/>
+			<xs:attribute name="drugo" type="xs:boolean" use="optional"/>
+			<xs:attribute name="oznaka" type="xs:string" use="required"/>
+			<xs:attribute name="nadstropje" type="xs:string" use="optional"/>
+			<xs:attribute name="povrsina" type="xs:decimal" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="NepremicnineNiZK">
+		<xs:annotation>
+			<xs:documentation>Nepremičnina, ki ni vpisana v zemljiško knjigo - rubež, ugotovitev vrednosti, prodaja in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="Nepremicnina" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="NovaNepremicninaZK">
+		<xs:annotation>
+			<xs:documentation>Nepremičnina, stavbna pravica, ... vpisana v ZK pod pogoji eZK</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:attribute name="tipNepremicnineId" type="xs:short" use="required">
+				<xs:annotation>
+					<xs:documentation>Id tipa nepremičnine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="tipNepremicnineNaziv" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Naziv tipa nepremičnine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="katObcinaId" type="xs:integer" use="optional">
+				<xs:annotation>
+					<xs:documentation>interni Id katastrske občine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="katObcinaCode" type="xs:integer" use="required">
+				<xs:annotation>
+					<xs:documentation>koda katastrske občine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="katObcinaName" type="xs:string" use="optional">
+				<xs:annotation>
+					<xs:documentation>Naziv katastrske občine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stParcele" type="xs:string" use="optional">
+				<xs:annotation>
+					<xs:documentation>Številka parcele</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stStavbe" type="xs:unsignedInt" use="optional">
+				<xs:annotation>
+					<xs:documentation>Številka stavbe</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stVS" type="xs:string" use="optional">
+				<xs:annotation>
+					<xs:documentation>Številka (VS)</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stPosameznegaDela" type="xs:unsignedInt" use="optional">
+				<xs:annotation>
+					<xs:documentation>Številka posameznega dela oz. poddelilka</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="dodatniAtribut" use="optional">
+				<xs:annotation>
+					<xs:documentation>Dodatni atribut v primeru zemljiške parcele</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:integer">
+						<xs:minInclusive value="0"/>
+						<xs:maxInclusive value="1"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="delezStevec" use="optional">
+				<xs:annotation>
+					<xs:documentation>Predlagani delez imetnikovega deleza za izvrsbo</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="100"/>
+						<xs:pattern value="[0-9]+"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="delezImenovalec" use="optional">
+				<xs:annotation>
+					<xs:documentation>Predlagani delez imetnikovega deleza za izvrsbo</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string">
+						<xs:maxLength value="100"/>
+						<xs:pattern value="[0-9]+"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="NepremicnineZK">
+		<xs:annotation>
+			<xs:documentation>Nepremičnine - zaznamba sklepa o izvršbi v zemljiški knjigi, ugotovitev vrednosti, prodaja in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="NovaNepremicninaZK" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="ZamudneObresti">
+		<xs:complexType>
+			<xs:choice>
+				<xs:element ref="ObrestZakonska"/>
+				<xs:element ref="ObrestPogodbena"/>
+			</xs:choice>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="ObrestPogodbena">
+		<xs:complexType>
+			<xs:attribute name="vrstaObresti" use="required">
+				<xs:simpleType>
+					<xs:restriction base="xs:token">
+						<xs:enumeration value="Letne"/>
+						<xs:enumeration value="Mesecne"/>
+						<xs:enumeration value="Dnevne"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="obrestnaMera" type="xs:decimal" use="required"/>
+			<xs:attribute name="odDatuma" type="xs:date" use="required"/>
+			<xs:attribute name="doDatuma" type="xs:date" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="ObrestZakonska">
+		<xs:complexType>
+			<xs:attribute name="odDatuma" type="xs:date" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="OkrajnoSodisce">
+		<xs:annotation>
+			<xs:documentation>Po pravnomočnosti sklepa o izvršbi opravlja izvršbo:</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute ref="sifSodisce" use="optional"/>
+			<xs:attribute name="nazivSodisce" type="xs:string" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="OznakaZahtevka">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VerodostojneListine"/>
+				<xs:element ref="StroskiUpnika" minOccurs="0"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="PogojnaVzajemnaObveznost">
+		<xs:annotation>
+			<xs:documentation>Pogojna in vzajemna obveznost</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute name="vzajemnaObveznost" type="xs:string" use="optional"/>
+			<xs:attribute name="pogojnaObveznost" type="xs:string" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLPooblascenec">
+		<xs:annotation>
+			<xs:documentation>Interna referenca na Udelezenca, kjer dobimo vse podatke o Pooblascencu.</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:attribute ref="refUdelezenec" use="required"/>
+			<xs:attribute ref="datumPooblastila" use="optional">
+				<xs:annotation>
+					<xs:documentation>Datum pooblastila. Prisoten mora biti ali datumPooblastila ali stGeneralnegaPooblastila.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stGeneralnegaPooblastila" use="optional">
+				<xs:annotation>
+					<xs:documentation>Številka generalnega pooblastila oblike SU 99999/YYYY. Prisoten mora bit ali datumPooblastila ali stGeneralnegaPooblastila.</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:string"/>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute ref="sifSodisce" use="optional"/>
+			<xs:attribute name="nazivSodisce" type="xs:token" use="optional"/>
+			<xs:attribute name="odvetnik" type="xs:boolean" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="PravdnoSodisce">
+		<xs:annotation>
+			<xs:documentation>Dogovorjena krajevna pristojnost pravdnega sodišča v primeru dolžnikovega ugovora</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute ref="sifSodisce" use="optional"/>
+			<xs:attribute name="nazivSodisce" type="xs:string" use="optional"/>
+			<xs:attribute name="oznakaListine" type="xs:string" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="PredlaganaIzvrsba">
+		<xs:annotation>
+			<xs:documentation>Predlagana izvršba</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="Premicnina" minOccurs="0"/>
+				<xs:element ref="StalniDenarniPrejemki" minOccurs="0"/>
+				<xs:element ref="DenarnaSredstvaOPP" minOccurs="0"/>
+				<xs:choice>
+					<xs:element ref="DrugeDenarneTerjatve" minOccurs="0"/>
+					<xs:element ref="DrugeDenarneTerjatveSeq" minOccurs="0"/>
+				</xs:choice>
+				<xs:element ref="NepremicnineZK" minOccurs="0"/>
+				<xs:element ref="NepremicnineNiZK" minOccurs="0"/>
+				<xs:element ref="StavbnePravice" minOccurs="0"/>
+				<xs:element ref="DeleziDruzbenika" minOccurs="0"/>
+				<xs:element ref="VrednostniPapirji" minOccurs="0"/>
+				<xs:element ref="DrugePremMatPravice" minOccurs="0"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Predlog">
+		<xs:annotation>
+			<xs:documentation>Vsebina VL predloga za izvrsbo</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VsiUdelezenci"/>
+				<xs:element ref="Vlagatelj" minOccurs="0"/>
+				<xs:element ref="Upniki"/>
+				<xs:element ref="Dolzniki"/>
+				<xs:element ref="OznakaZahtevka"/>
+				<xs:element ref="VLIzvrsitelj" minOccurs="0"/>
+				<xs:element ref="OkrajnoSodisce" minOccurs="0"/>
+				<xs:element ref="PravdnoSodisce" minOccurs="0"/>
+			</xs:sequence>
+			<xs:attribute name="gospodarskaZadeva" type="xs:boolean" use="required">
+				<xs:annotation>
+					<xs:documentation>Oznaka gospodarske zadeve</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="verzijaSheme" type="xs:string" use="optional" default="1.6"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Premicnina">
+		<xs:annotation>
+			<xs:documentation>Premičnina - rubež in cenitev</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VLNaslov" minOccurs="0" maxOccurs="1"/>
+			</xs:sequence>
+			<xs:attribute name="veckratniRubez" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Večkratni rubež gotovine</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="prodajaPoplacilo" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Prodaja in poplačilo upnika</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="zlasti" type="xs:string" use="optional"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StalniDenarniPrejemki">
+		<xs:annotation>
+			<xs:documentation>Plača in drugi stalni denarni prejemki - rubež in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:annotation>
+					<xs:documentation>Če je prisoten StalniDenarniPrejemki, mora biti prisoten vsaj en element Ostalo ali Placa</xs:documentation>
+				</xs:annotation>
+				<xs:element ref="VLDolznikovDolznik" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute name="placa" type="xs:boolean" use="optional"/>
+			<xs:attribute name="ostalo" type="xs:boolean" use="optional"/>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StavbnePravice">
+		<xs:annotation>
+			<xs:documentation>Stavbna pravica - zaznamba sklepa o izvršbi v zemljiški knjigi , ugotovitev vrednosti, prodaja in poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="NovaNepremicninaZK" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StrosekDrugo" type="StrosekType">
+		<xs:annotation>
+			<xs:documentation>Drugi stroški</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+	<xs:element name="StrosekObrazec" type="StrosekType"/>
+	<xs:element name="StrosekOdvetnik">
+		<xs:complexType>
+			<xs:attribute name="zahtevani" type="xs:boolean" use="required">
+				<xs:annotation>
+					<xs:documentation>Ali so stroški zahtevani?</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="zavezanecZaDDV" type="xs:boolean" use="required">
+				<xs:annotation>
+					<xs:documentation>Ali je odvetnik zavezanec za DDV?</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StrosekPostnina" type="StrosekType"/>
+	<xs:element name="StrosekTaksa">
+		<xs:annotation>
+			<xs:documentation>Taksa za predlog in sklep</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute name="zahtevani" type="xs:boolean" use="required">
+				<xs:annotation>
+					<xs:documentation>Ali so stroški takes zahtevani?</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="StroskiUpnika">
+		<xs:annotation>
+			<xs:documentation>Stroški upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="StrosekObrazec" minOccurs="0"/>
+				<xs:element ref="StrosekPostnina" minOccurs="0"/>
+				<xs:element ref="StrosekOdvetnik" minOccurs="0"/>
+				<xs:element ref="StrosekTaksa" minOccurs="0"/>
+				<xs:element ref="StrosekDrugo" minOccurs="0"/>
+			</xs:sequence>
+			<xs:attribute name="zakonskeZamudneObresti" type="xs:boolean" use="optional">
+				<xs:annotation>
+					<xs:documentation>Aii so zahtevane zakonske zamudne obresti od stroškov?</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLTransakcijskiRacun">
+		<xs:annotation>
+			<xs:documentation>Organizacija za plačilni promet</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:attribute ref="stevilkaRacuna" use="optional">
+				<xs:annotation>
+					<xs:documentation>Celotna številka transakcijskega računa. Tu lahko postavimo kotrolo po modulu 11.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute ref="nazivOPP" use="optional"/>
+			<xs:attribute name="vrstaRacuna" use="optional">
+				<xs:simpleType>
+					<xs:restriction base="xs:token">
+						<xs:enumeration value="SI_IBAN"/>
+						<xs:enumeration value="Ostalo"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="ime" type="xs:string" use="optional"/>
+			<xs:attribute name="priimek" type="xs:string" use="optional"/>
+			<xs:attribute name="naziv" type="xs:string" use="optional"/>
+			<xs:attribute name="sklic" type="xs:string" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLUdelezenec">
+		<xs:annotation>
+			<xs:documentation>Podatki udelezenca (Fizicna in pravna oseba)</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:sequence>
+				<xs:element ref="VLNaslov" minOccurs="0"/>
+				<xs:element ref="VLTransakcijskiRacun" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute name="idUdelezenec" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Interni identifikator Udelezenca znotraj predloga. </xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="ime-naziv" type="xs:string" use="optional">
+				<xs:annotation>
+					<xs:documentation>Ime fizične osebe. Zahtevano polje v primeru fizične osebe.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="priimek-naziv" type="xs:string" use="required">
+				<xs:annotation>
+					<xs:documentation>Pri fizični osebi je to priimek, pri pravnih osebah pa kratek naziv podjetja.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="idStecajniUpr" type="xs:string" use="optional">
+				<xs:annotation>
+					<xs:documentation>Šifra stečajnega upravitelja</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="vrsta" use="required">
+				<xs:annotation>
+					<xs:documentation>001 Fizična oseba,  002 Pravna oseba, 003 Samostojni podjetnik - s.p.</xs:documentation>
+				</xs:annotation>
+				<xs:simpleType>
+					<xs:restriction base="xs:token">
+						<xs:enumeration value="001"/>
+						<xs:enumeration value="002"/>
+						<xs:enumeration value="003"/>
+					</xs:restriction>
+				</xs:simpleType>
+			</xs:attribute>
+			<xs:attribute name="drzavljanstvo" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>3 mestna ISO koda države.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="maticnaSt" type="xs:token" use="optional">
+				<xs:annotation>
+					<xs:documentation>Pri fizični osebi je to EMŠO pri pravni pa matična št. družbe.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="davcnaStevilka" type="xs:token" use="optional"/>
+			<xs:attribute name="datumRojstva" type="xs:date" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLUpnik">
+		<xs:complexType mixed="false">
+			<xs:sequence>
+				<xs:element ref="VLPooblascenec" minOccurs="0"/>
+				<xs:element ref="VLZastopnik" minOccurs="0"/>
+			</xs:sequence>
+			<xs:attribute name="refUdelezenec" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Referenca na interni identifikator v seznamu udeležencev</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Upniki">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VLUpnik" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+                                                     <xs:attribute name="solidarnost" type="xs:boolean" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VerodostojnaListina">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="ZamudneObresti" minOccurs="0"/>
+				<xs:element ref="ObrestPogodbena" minOccurs="0"/>
+			</xs:sequence>
+			<xs:attribute name="sifListina" type="xs:token" use="required">
+				<xs:annotation>
+					<xs:documentation>Šifra kataloške številke VL</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="oznaka" type="xs:string" use="required"/>
+			<xs:attribute name="datum" type="xs:date" use="required"/>
+			<xs:attribute name="datumZapadlosti" type="xs:date" use="required"/>
+			<xs:attribute name="znesek" type="xs:decimal" use="required"/>
+			<xs:attribute name="valuta" type="xs:token" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VerodostojneListine">
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VerodostojnaListina" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="Vlagatelj">
+		<xs:annotation>
+			<xs:documentation>Podatki o vlagatelju - samo za papirni obrazec</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:attribute name="ime" type="xs:string" use="optional"/>
+			<xs:attribute name="priimek" type="xs:string" use="optional"/>
+			<xs:attribute name="podpis" type="xs:boolean" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VrednostniPapir">
+		<xs:annotation>
+			<xs:documentation>Nematerializirani vrednostni papirji</xs:documentation>
+		</xs:annotation>
+		<xs:complexType mixed="false">
+			<xs:attribute name="kddOznaka" type="xs:token" use="optional">
+				<xs:annotation>
+					<xs:documentation>Šifra vpisa v KDD-ju.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute name="stevilo" type="xs:decimal" use="optional">
+				<xs:annotation>
+					<xs:documentation>Število vrednostnih papirjev v KDD.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VrednostniPapirji">
+		<xs:annotation>
+			<xs:documentation>Nematerializirani vrednostni papirji – vpis sklepa o izvršbi v register klirinško depotne družbe, prodaja in prenos papirjev na račun kupca ter poplačilo upnika</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VrednostniPapir" minOccurs="0" maxOccurs="unbounded"/>
+			</xs:sequence>
+			<xs:attribute ref="vec" use="required"/>
+			<xs:attribute ref="izbrano" use="required"/>
+			<xs:attribute name="refUdelezenec" type="xs:token" use="optional">
+                            <xs:annotation>
+				<xs:documentation>interna referenca na Udelezenca, ki predstavlja pooblaščenega udeleženca trga vrednostnih papirjev</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VsiUdelezenci">
+		<xs:annotation>
+			<xs:documentation>Vsi udelezenci predloga (Upniki, dolzniki, pooblasscenci,...)</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="VLUdelezenec" maxOccurs="unbounded"/>
+			</xs:sequence>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="ZastavnaPravicaZK">
+		<xs:annotation>
+			<xs:documentation>Dolžnikova terjatev je zavarovana z zastavno pravico v zemljiški knjigi</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:sequence>
+				<xs:element ref="NovaNepremicninaZK"/>
+			</xs:sequence>
+			<xs:attribute ref="izbrano" use="optional"/>
+		</xs:complexType>
+	</xs:element>
+	<xs:element name="VLZastopnik">
+		<xs:complexType mixed="false">
+			<xs:attribute ref="refUdelezenec" use="required">
+				<xs:annotation>
+					<xs:documentation>interna referenca na Udelezenca, kejr dobimo vse podatke o Zastopniku.</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+			<xs:attribute ref="polozaj" use="required">
+				<xs:annotation>
+					<xs:documentation>Direktor, mati, ...</xs:documentation>
+				</xs:annotation>
+			</xs:attribute>
+		</xs:complexType>
+	</xs:element>
+	<xs:complexType name="StrosekType">
+		<xs:attribute name="znesek" type="xs:decimal" use="optional"/>
+		<xs:attribute name="valuta" type="xs:token" use="optional" default="EUR"/>
+		<xs:attribute name="opis" type="xs:string" use="optional"/>
+	</xs:complexType>
+	<xs:attribute name="refUdelezenec" type="xs:token"/>
+	<xs:attribute name="dtVpisa" type="xs:date"/>
+	<xs:attribute name="sifSodisce" type="xs:token">
+		<xs:annotation>
+			<xs:documentation>Standarda šifra sodišča</xs:documentation>
+		</xs:annotation>
+	</xs:attribute>
+	<xs:attribute name="nazSodisce" type="xs:string">
+		<xs:annotation>
+			<xs:documentation>Naziv sodišča</xs:documentation>
+		</xs:annotation>
+	</xs:attribute>
+	<xs:attribute name="polozaj" type="xs:string">
+		<xs:annotation>
+			<xs:documentation>Direktor, mati, ...</xs:documentation>
+		</xs:annotation>
+	</xs:attribute>
+	<xs:attribute name="datumPooblastila" type="xs:date"/>
+	<xs:attribute name="stevilkaRacuna">
+		<xs:annotation>
+			<xs:documentation>Celotna številka transakcijskega računa. Tu lahko postavimo kotrolo po modulu 11, če gre za SI56 račun.</xs:documentation>
+		</xs:annotation>
+		<xs:simpleType>
+			<xs:restriction base="xs:string">
+				<xs:maxLength value="34"/>
+			</xs:restriction>
+		</xs:simpleType>
+	</xs:attribute>
+	<xs:attribute name="nazivOPP" type="xs:string"/>
+	<xs:attribute name="opomba" type="xs:string"/>
+	<xs:attribute name="dtIzbrisa" type="xs:date"/>
+	<xs:attribute name="vec" type="xs:boolean">
+		<xs:annotation>
+			<xs:documentation>Označuje dejstvo, da obstaja več podrejenih elementov - na papirnem obrazcu je bilo odkljukano več upnikov ipd.</xs:documentation>
+		</xs:annotation>
+	</xs:attribute>
+	<xs:attribute name="izbrano" type="xs:boolean">
+		<xs:annotation>
+			<xs:documentation>Izvršilno sredstvo je bilo izbrano.</xs:documentation>
+		</xs:annotation>
+	</xs:attribute>
+</xs:schema>

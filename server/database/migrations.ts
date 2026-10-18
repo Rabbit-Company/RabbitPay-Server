@@ -28,7 +28,7 @@ import { createChatSchema } from "./chat-schema";
 import { createCalendarSchema } from "./calendar-schema";
 import { createInventorySchema } from "./inventory-schema";
 import { createPurchasingSchema } from "./purchasing-schema";
-import { addDunningNumbering, createDunningSchema } from "./dunning-schema";
+import { addDunningNumbering, createDunningSchema, createEnforcementSchema } from "./dunning-schema";
 import { DEFAULT_EMAIL_DESIGN } from "../email-design";
 
 async function dropIndex(sql: SQL, dialect: Dialect, table: string, name: string) {
@@ -716,6 +716,7 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 60, name: "purchasing", up: createPurchasingSchema },
 	{ version: 61, name: "dunning letters", up: createDunningSchema },
 	{ version: 62, name: "dunning letter numbering", up: addDunningNumbering },
+	{ version: 63, name: "enforcement proposals", up: createEnforcementSchema },
 ];
 
 export class SchemaTooNew extends Error {

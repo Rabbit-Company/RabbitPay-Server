@@ -185,6 +185,9 @@ export enum Error {
 	DUNNING_LETTER_NOT_FOUND = 1365,
 	NOTHING_TO_DUN = 1366,
 	DUNNING_OPTION_UNAVAILABLE = 1367,
+	INVALID_ENFORCEMENT_PROPOSAL = 1368,
+	ENFORCEMENT_PROPOSAL_NOT_FOUND = 1369,
+	ENFORCEMENT_NOT_READY = 1370,
 	INVALID_PAYMENT_DATE = 1302,
 	FILE_STORAGE_LIMIT_REACHED = 1303,
 	INVALID_FILE = 1304,
@@ -773,6 +776,16 @@ namespace Errors {
 		1367: {
 			message: "Late interest needs a Slovenian project. Recovery costs need an EU project, a business customer and a letter in EUR.",
 			httpCode: 400,
+		},
+		1368: {
+			message:
+				"The enforcement proposal is not valid. Choose at least one way of enforcement, use dates in the format YYYY-MM-DD and a court case number of at most 40 characters.",
+			httpCode: 400,
+		},
+		1369: { message: "This enforcement proposal does not exist.", httpCode: 404 },
+		1370: {
+			message: "This final dunning letter cannot be turned into an enforcement proposal yet. Open the letter to see what is missing.",
+			httpCode: 409,
 		},
 		1302: { message: "The payment date must be a timestamp in milliseconds that is not in the future.", httpCode: 400 },
 		1303: { message: "This project has no file storage left. Remove files or redeem a file storage license to add more capacity.", httpCode: 402 },

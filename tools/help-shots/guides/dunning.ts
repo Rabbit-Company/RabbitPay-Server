@@ -127,6 +127,56 @@ async function next(studio: Studio, session: Session) {
 	});
 }
 
+function passDeadline(studio: Studio, letter: string) {
+	const database = new Database(studio.database);
+	database.run("PRAGMA busy_timeout = 10000");
+	database.query("UPDATE dunning_letters SET issue_date = ?, deadline_date = ? WHERE uuid = ?").run(localDate(12), localDate(4), letter);
+	database.close();
+}
+
+async function enforcement(studio: Studio, session: Session) {
+	const { browser } = studio;
+	const scoped = local(session);
+	const candidates = await projectApi<{ invoices: { uuid: string }[] }>(studio, scoped, "GET", `/dunning/candidates?customer=${customer(session)}`);
+	const final = await projectApi<{ uuid: string }>(studio, scoped, "POST", "/dunning", {
+		customer: customer(session),
+		level: 3,
+		invoices: candidates.invoices.map((invoice) => invoice.uuid),
+		interest: true,
+		compensation: true,
+	});
+	passDeadline(studio, final.uuid);
+
+	await studio.open(projectPath(scoped, `/dunning/${final.uuid}`), 1500);
+	await studio.shot(PAGE, "enforcement-next", {
+		target: `card:${studio.t("enforcement.next_step")}`,
+		mark: `button:${studio.t("enforcement.prepare")}`,
+	});
+
+	await browser.click(`button:${studio.t("enforcement.prepare")}`, 1500);
+	await browser.waitFor(`card:${studio.t("enforcement.claims_title")}`);
+	await studio.shot(PAGE, "enforcement-claims", { target: `card:${studio.t("enforcement.claims_title")}` });
+	await studio.shot(PAGE, "enforcement-options", { target: `card:${studio.t("enforcement.options_title")}` });
+	await studio.shot(PAGE, "enforcement-summary", {
+		target: `card:${studio.t("enforcement.summary_title")}`,
+		mark: `button:${studio.t("enforcement.create")}`,
+	});
+
+	await browser.click(`button:${studio.t("enforcement.create")}`, 500);
+	await browser.click(`.overlay >> button:${studio.t("enforcement.create")}`, 2000);
+	await browser.waitFor(`card:${studio.t("enforcement.steps_title")}`);
+	await studio.shot(PAGE, "enforcement-proposal", { target: CONTENT, mark: `button:${studio.t("enforcement.download_xml")}` });
+
+	await browser.click(`button:${studio.t("enforcement.filing_mark")}`, 500);
+	await browser.fill(`field:${studio.t("enforcement.court_case")}`, "VL 48211/2026");
+	await browser.blur();
+	await studio.shot(PAGE, "enforcement-filing", { target: ".overlay .dialog" });
+	await browser.click(`.overlay >> button:${studio.t("enforcement.filing_save")}`, 1500);
+
+	await studio.open(projectPath(scoped, "/dunning"), 1200);
+	await studio.shot(PAGE, "enforcement-list", { target: `card:${studio.t("enforcement.list_title")}` });
+}
+
 export const dunning: Guide = {
 	module: "dunning",
 	help: "invoices",
@@ -136,5 +186,6 @@ export const dunning: Guide = {
 		["documents", documents],
 		["letter", letter],
 		["next", next],
+		["enforcement", enforcement],
 	],
 };

@@ -9,6 +9,35 @@ export async function addDunningNumbering(sql: SQL, dialect: Dialect) {
 	await run(sql, dialect, [`CREATE UNIQUE INDEX IF NOT EXISTS idx_dunning_letters_number ON dunning_letters(project, number)`]);
 }
 
+export async function createEnforcementSchema(sql: SQL, dialect: Dialect) {
+	const types = schemaTypes(dialect);
+	await run(sql, dialect, [
+		`CREATE TABLE IF NOT EXISTS enforcement_proposals(
+			uuid ${types.text("uuid")} PRIMARY KEY,
+			project ${types.text("project")} NOT NULL,
+			customer ${types.text("customer")},
+			dunning_letter ${types.text("dunning_letter")},
+			status ${types.text("status")} NOT NULL,
+			court_case ${types.text("court_case")},
+			filed_date ${types.text("filed_date")},
+			principal ${types.int64} NOT NULL,
+			compensation ${types.int64} NOT NULL,
+			court_fee ${types.int64} NOT NULL,
+			document ${types.text("document_snapshot")} NOT NULL,
+			created_by ${types.text("created_by")},
+			created ${types.int64} NOT NULL,
+			updated ${types.int64} NOT NULL,
+			FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+			FOREIGN KEY (customer) REFERENCES customers(uuid) ON DELETE SET NULL,
+			FOREIGN KEY (dunning_letter) REFERENCES dunning_letters(uuid) ON DELETE SET NULL,
+			FOREIGN KEY (created_by) REFERENCES accounts(username) ON DELETE SET NULL,
+			CHECK (status IN ('prepared', 'filed'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_enforcement_proposals_project ON enforcement_proposals(project, created)`,
+		`CREATE INDEX IF NOT EXISTS idx_enforcement_proposals_letter ON enforcement_proposals(dunning_letter)`,
+	]);
+}
+
 export async function createDunningSchema(sql: SQL, dialect: Dialect) {
 	const types = schemaTypes(dialect);
 	await run(sql, dialect, [

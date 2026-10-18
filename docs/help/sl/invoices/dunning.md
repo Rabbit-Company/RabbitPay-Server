@@ -98,3 +98,40 @@ Opomin odprite v seznamu **Izdani opomini** in preverite, koliko je še odprto n
 Ko rok poteče, pošljite naslednjo stopnjo. Na strani **Opomini** gumb pri stranki zdaj pravi **Pošlji drugi opomin**, na opominu pa ga najdete pod **Več**. Tam lahko opomin tudi izbrišete. Brisanje ne odstrani že poslanih e-sporočil.
 
 ![Naslednji opomin za isto stranko](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/next-level.webp)
+
+## Izvršba po zadnjem opominu
+
+Če stranka do roka na **zadnjem opominu** ne plača, opomin pokaže **Naslednji korak: izvršba**. Neplačan račun je verodostojna listina (23. člen ZIZ), zato lahko sodišče izvršbo dovoli brez tožbe. RabbitPay pripravi predlog, vi pa ga vložite na portalu e-Sodstvo.
+
+![Zadnji opomin ponudi naslednji korak, izvršbo](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-next.webp)
+
+1. Odprite zadnji opomin in pritisnite **Pripravi predlog za izvršbo**. Najdete ga tudi pod **Več**.
+2. Preverite, kaj se terja. Vsak račun, ki je še odprt, je naveden z odprtim zneskom, datumom zapadlosti in zakonskimi zamudnimi obrestmi od naslednjega dne. Če je zadnji opomin obračunal 40 EUR stroškov izterjave, se ti terjajo za vsak račun kot samostojen znesek, ker jih zakon ne šteje med izvršilne stroške. Plačani računi so izpuščeni.
+
+   ![Odprti računi in stroški izterjave v predlogu](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-claims.webp)
+
+3. Izberite sredstva izvršbe. **Denarna sredstva na računih** so na voljo za vse, račune pa sodišče poišče samo. **Plača in drugi stalni prejemki** so na voljo za fizične osebe in samostojne podjetnike.
+
+   ![Obresti, stroški izterjave in sredstva izvršbe](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-options.webp)
+
+4. Če kaj manjka, na primer hišna številka, matična številka ali vaš IBAN, stran to navede s povezavo, kjer podatek uredite.
+5. Pritisnite **Ustvari predlog** in nato **Prenesi datoteko za e-Sodstvo**.
+
+   ![Povzetek s sodno takso](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-summary.webp)
+
+   ![Predlog z datoteko in koraki za vložitev](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-proposal.webp)
+
+Vložitev:
+
+1. Prijavite se na [esodisce.si](https://esodisce.si) s SI-PASS in odprite eIzvršba. Ob prvi prijavi se vključite v varnostno shemo sodstva kot samostojni uporabnik.
+2. Začnite predlog za izvršbo na podlagi verodostojne listine in uvozite datoteko. Pred oddajo preverite vsa polja. Portal sprejme največ 10 predlogov na uro.
+3. V 8 dneh plačajte sodno takso s sklicem, ki ga prikaže portal. Taksa znaša 55 EUR, za elektronski predlog je znižana za 20 % na 44 EUR (tarifna številka 4011 in 33.a člen ZST-1). Predlog je vložen šele, ko je taksa plačana. Predlog tudi zahteva, da sodišče dolžniku naloži povrnitev takse z zamudnimi obrestmi.
+4. V RabbitPay pritisnite **Označi kot vloženo** in vpišite opravilno številko, na primer VL 12345/2026.
+
+   ![Vpis opravilne številke](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-filing.webp)
+
+Sodišče izda sklep o izvršbi brez zaslišanja dolžnika, ta pa ima nato 8 dni za ugovor. Če portal datoteke ne sprejme, podatke s strani predloga vpišite v njegov spletni obrazec. Vsi predlogi so navedeni na strani **Opomini**.
+
+![Predlogi za izvršbo na strani Opomini](https://cdn.rabbitpay.net/help/sl/dark/invoices/dunning/enforcement-list.webp)
+
+Izvršba prek portala zahteva slovenski projekt, opomin v EUR in stranko z naslovom v Sloveniji.

@@ -1,6 +1,7 @@
 import {
 	Api,
 	DunningApi,
+	EnforcementApi,
 	type Debtor,
 	type DunningCandidates,
 	type DunningDocumentCandidate,
@@ -25,11 +26,12 @@ import { emailKindLabel } from "./invoices";
 import { LANGUAGES } from "../../../server/i18n";
 import { DEFAULT_DEADLINE_DAYS, dunningTotals, lineFigures, MAX_DEADLINE_DAYS, possiblyTimeBarred, type DunningLevel } from "../../../server/dunning-rules";
 import type { DateFormat } from "../../../server/formats";
+import { enforcementLetterCard, enforcementProposalsCard } from "./enforcement";
 
 const LEVEL_TITLES: Record<DunningLevel, UiKey> = { 1: "dunning.level_1", 2: "dunning.level_2", 3: "dunning.level_3" };
 const LEVEL_HINTS: Record<DunningLevel, UiKey> = { 1: "dunning.level_1_hint", 2: "dunning.level_2_hint", 3: "dunning.level_3_hint" };
 
-function dunningPath(uuid: string, suffix = ""): string {
+export function dunningPath(uuid: string, suffix = ""): string {
 	return `/projects/${uuid}/dunning${suffix}`;
 }
 
@@ -37,11 +39,11 @@ function localStamp(date: string): number {
 	return Date.parse(`${date}T12:00:00Z`);
 }
 
-function dateText(project: Project, date: string | null): string {
+export function dateText(project: Project, date: string | null): string {
 	return date ? formatDate(localStamp(date), project.date_format as DateFormat, "UTC") : "-";
 }
 
-function levelPill(level: DunningLevel): HTMLElement {
+export function levelPill(level: DunningLevel): HTMLElement {
 	return el("span", { class: `pill dunning-level dunning-level-${level}` }, t(LEVEL_TITLES[level]));
 }
 
@@ -49,7 +51,7 @@ function daysLate(today: string, due: string): number {
 	return Math.max(0, Math.round((localStamp(today) - localStamp(due)) / 86400000));
 }
 
-function pageHead(title: string | HTMLElement, intro: string | null, actions: (HTMLElement | null)[] = []): HTMLElement {
+export function pageHead(title: string | HTMLElement, intro: string | null, actions: (HTMLElement | null)[] = []): HTMLElement {
 	return el(
 		"div",
 		{ class: "page-head" },
@@ -169,7 +171,11 @@ function letterRow(uuid: string, project: Project, letter: DunningLetter): HTMLE
 export async function dunningView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const creates = can(project, Permission.INVOICE_CREATE);
-	const [overview, letters] = await Promise.all([DunningApi.debtors(uuid), DunningApi.letters(uuid, { limit: 50 })]);
+	const [overview, letters, proposals] = await Promise.all([
+		DunningApi.debtors(uuid),
+		DunningApi.letters(uuid, { limit: 50 }),
+		EnforcementApi.list(uuid, { limit: 50 }),
+	]);
 
 	const totals = new Map<string, number>();
 	for (const debtor of overview.debtors) totals.set(debtor.currency, (totals.get(debtor.currency) ?? 0) + debtor.overdue_amount);
@@ -241,6 +247,7 @@ export async function dunningView(uuid: string): Promise<HTMLElement> {
 				statCard(t("dunning.stat_letters", { year }), String(thisYear))
 			),
 			debtorsCard,
+			enforcementProposalsCard(uuid, project, proposals.proposals, proposals.total),
 			lettersCard
 		)
 	);
@@ -830,6 +837,7 @@ export async function dunningLetterView(uuid: string, letterId: string): Promise
 
 	const render = async () => {
 		const letter = await DunningApi.letter(uuid, letterId);
+		const enforcement = await enforcementLetterCard(uuid, project, letter);
 		const state = paymentState(letter);
 		const download = async () => {
 			try {
@@ -853,6 +861,9 @@ export async function dunningLetterView(uuid: string, letterId: string): Promise
 			{ label: t("invoices.download_pdf"), onSelect: () => void download() },
 		];
 		const workflowLinks: MenuLink[] = [];
+		if (letter.customer && letter.level === 3 && letter.deadline_passed && can(project, Permission.INVOICE_CREATE)) {
+			workflowLinks.push({ label: t("enforcement.prepare"), href: dunningPath(uuid, `/${letter.uuid}/enforcement`) });
+		}
 		if (letter.customer && can(project, Permission.INVOICE_CREATE)) {
 			const next = Math.min(letter.level + 1, 3);
 			workflowLinks.push({
@@ -975,6 +986,7 @@ export async function dunningLetterView(uuid: string, letterId: string): Promise
 					)
 				)
 			),
+			enforcement,
 			el(
 				"div",
 				{ class: "card" },

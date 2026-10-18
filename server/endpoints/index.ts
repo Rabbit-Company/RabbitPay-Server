@@ -51,6 +51,7 @@ import "./v1/fixed-assets";
 import "./v1/inventory";
 import "./v1/purchasing";
 import "./v1/dunning";
+import "./v1/enforcement";
 import "./v1/expense-payments";
 import "./v1/realtime";
 import "./v1/chat";

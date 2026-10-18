@@ -68,6 +68,7 @@ import { inventoryCountSheetView, inventoryDocumentPrintView, inventoryOrderPrin
 import { inventoryOrdersView, inventoryOrderView, inventorySuppliersView } from "./views/inventory-purchasing";
 import { recordedInvoicesView } from "./views/recorded-invoices";
 import { dunningLetterView, dunningView, newDunningView } from "./views/dunning";
+import { enforcementProposalView, newEnforcementView } from "./views/enforcement";
 import { bankView } from "./views/bank";
 import { yearsView } from "./views/years";
 import { statementsView } from "./views/statements";
@@ -410,6 +411,14 @@ define(
 define(
 	"/projects/:uuid/dunning/:letter",
 	projectRoute([Permission.INVOICE_VIEW], (params) => dunningLetterView(params.uuid, params.letter))
+);
+define(
+	"/projects/:uuid/dunning/:letter/enforcement",
+	projectRoute([Permission.INVOICE_VIEW], (params) => newEnforcementView(params.uuid, params.letter))
+);
+define(
+	"/projects/:uuid/dunning/enforcement/:proposal",
+	projectRoute([Permission.INVOICE_VIEW], (params) => enforcementProposalView(params.uuid, params.proposal))
 );
 define(
 	"/projects/:uuid/recurring",

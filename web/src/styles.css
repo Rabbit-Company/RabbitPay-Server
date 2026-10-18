@@ -9155,3 +9155,143 @@ td a.warn {
 		display: inline;
 	}
 }
+.enforcement-next {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+.enforcement-next p {
+	margin: 0;
+}
+.enforcement-ready {
+	border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+	background: color-mix(in srgb, var(--danger) 4%, var(--surface));
+}
+.enforcement-link {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+	color: var(--text);
+	text-decoration: none;
+}
+.enforcement-issues {
+	border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+	background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+.enforcement-issues h3 {
+	margin-top: 0;
+}
+.enforcement-issues ul {
+	margin: 0;
+	padding-left: 1.2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+.enforcement-subhead {
+	margin: 0.4rem 0 0;
+	font-size: 0.95rem;
+}
+.enforcement-fee {
+	color: var(--muted);
+	padding-top: 0.45rem;
+	border-top: 1px dashed var(--border);
+}
+.enforcement-steps {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.85rem;
+}
+.enforcement-step {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+}
+.enforcement-step p {
+	margin: 0.2rem 0 0;
+}
+.enforcement-filed {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.75rem;
+	color: var(--success);
+	border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+	background: color-mix(in srgb, var(--success) 6%, var(--surface));
+}
+.enforcement-filed strong {
+	color: var(--text);
+}
+.enforcement-filed p {
+	margin: 0.2rem 0 0;
+}
+.enforcement-party p {
+	margin: 0 0 0.2rem;
+}
+.enforcement-means {
+	margin: 0 0 0.6rem;
+	padding-left: 1.2rem;
+}
+.enforcement-claims td.enforcement-claim {
+	min-width: 10rem;
+}
+.enforcement-phone-label {
+	display: none;
+}
+@media (max-width: 720px) {
+	.enforcement-claims {
+		overflow: visible;
+	}
+	.enforcement-claims thead {
+		display: none;
+	}
+	.enforcement-claims tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			"claim amount"
+			"issued issued"
+			"due due"
+			"interest interest";
+		gap: 0.2rem 0.75rem;
+		padding: 0.75rem 0.5rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.enforcement-claims tbody tr:last-child {
+		border-bottom: none;
+	}
+	.enforcement-claims td {
+		padding: 0;
+		border: none;
+		min-width: 0;
+	}
+	.enforcement-claims td.enforcement-claim {
+		grid-area: claim;
+		min-width: 0;
+	}
+	.enforcement-claims td.enforcement-amount {
+		grid-area: amount;
+		font-weight: 650;
+	}
+	.enforcement-claims td.enforcement-issued {
+		grid-area: issued;
+	}
+	.enforcement-claims td.enforcement-due {
+		grid-area: due;
+	}
+	.enforcement-claims td.enforcement-interest {
+		grid-area: interest;
+	}
+	.enforcement-claims td.enforcement-issued,
+	.enforcement-claims td.enforcement-due,
+	.enforcement-claims td.enforcement-interest {
+		font-size: 0.85rem;
+		color: var(--muted);
+	}
+	.enforcement-claims .enforcement-phone-label {
+		display: inline;
+	}
+}

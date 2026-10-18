@@ -129,6 +129,8 @@ const TEXT_LENGTHS: Record<string, number> = {
 	due_on: 10,
 	issue_date: 10,
 	deadline_date: 10,
+	filed_date: 10,
+	court_case: 40,
 	operation: 32,
 	priority: 16,
 	employment_type: 32,

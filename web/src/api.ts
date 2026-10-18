@@ -4958,6 +4958,145 @@ export const DunningApi = {
 	},
 };
 
+export type EnforcementIssue =
+	| "not_final_letter"
+	| "deadline_not_passed"
+	| "currency_not_eur"
+	| "project_not_slovenian"
+	| "creditor_name"
+	| "creditor_address"
+	| "creditor_postal_code"
+	| "creditor_city"
+	| "creditor_identifier"
+	| "creditor_iban"
+	| "debtor_missing"
+	| "debtor_name"
+	| "debtor_person_name"
+	| "debtor_address"
+	| "debtor_postal_code"
+	| "debtor_city"
+	| "debtor_country"
+	| "debtor_identifier"
+	| "nothing_open"
+	| "issue_date_missing";
+
+export type EnforcementPartyKind = "person" | "company" | "sole_trader";
+
+export interface EnforcementClaim {
+	kind: "invoice" | "compensation";
+	reference: string;
+	label: string;
+	issue_date: string;
+	due_date: string;
+	amount: number;
+	interest_from: string | null;
+}
+
+export interface EnforcementPlannedClaim extends EnforcementClaim {
+	line: string;
+	invoice: string | null;
+	original_amount: number;
+	needs_issue_date: boolean;
+}
+
+export interface EnforcementParty {
+	kind: EnforcementPartyKind;
+	first_name: string | null;
+	name: string;
+	registration_number: string | null;
+	tax_number: string | null;
+	street: string;
+	house_number: string;
+	postal_code: string;
+	city: string;
+	iban: string | null;
+}
+
+export interface EnforcementInput {
+	interest: boolean;
+	compensation: boolean;
+	bank_accounts: boolean;
+	salary: boolean;
+	issue_dates: Record<string, string>;
+}
+
+export interface EnforcementPlan {
+	today: string;
+	ready: boolean;
+	issues: EnforcementIssue[];
+	debtor_kind: EnforcementPartyKind | null;
+	commercial: boolean;
+	interest_available: boolean;
+	compensation_available: boolean;
+	claims: EnforcementPlannedClaim[];
+	paid_lines: number;
+	proposals: { uuid: string; status: "prepared" | "filed"; court_case: string | null; created: number }[];
+	letter: { uuid: string; number: string; level: 1 | 2 | 3; deadline_date: string };
+	court_fee: number;
+	court_fee_paper: number;
+	fee_payment_days: number;
+	proposals_per_hour: number;
+}
+
+export interface EnforcementProposal {
+	uuid: string;
+	customer: string | null;
+	customer_name: string | null;
+	dunning_letter: string | null;
+	letter_number: string | null;
+	status: "prepared" | "filed";
+	court_case: string | null;
+	filed_date: string | null;
+	principal: number;
+	compensation: number;
+	claims_total: number;
+	court_fee: number;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
+export interface EnforcementProposalDetail extends EnforcementProposal {
+	created_by_name: string | null;
+	creditor: EnforcementParty;
+	debtor: EnforcementParty;
+	claims: EnforcementClaim[];
+	means: { bank_accounts: boolean; salary: boolean };
+	commercial: boolean;
+	fee_payment_days: number;
+	objection_days: number;
+}
+
+export const EnforcementApi = {
+	plan(uuid: string, letter: string, data: Partial<EnforcementInput> = {}) {
+		return request<EnforcementPlan>("POST", `/projects/${uuid}/dunning/${letter}/enforcement/plan`, data);
+	},
+
+	create(uuid: string, letter: string, data: EnforcementInput) {
+		return request<EnforcementProposalDetail>("POST", `/projects/${uuid}/dunning/${letter}/enforcement`, data);
+	},
+
+	list(uuid: string, options: { limit?: number; offset?: number } = {}) {
+		return request<{ proposals: EnforcementProposal[]; total: number }>("GET", `/projects/${uuid}/enforcement${listQuery(options)}`);
+	},
+
+	proposal(uuid: string, proposal: string) {
+		return request<EnforcementProposalDetail>("GET", `/projects/${uuid}/enforcement/${proposal}`);
+	},
+
+	xml(uuid: string, proposal: string) {
+		return requestDownload(`/projects/${uuid}/enforcement/${proposal}/xml`, "predlog-za-izvrsbo.xml");
+	},
+
+	update(uuid: string, proposal: string, data: { status: "prepared" | "filed"; court_case?: string | null; filed_date?: string | null }) {
+		return request<EnforcementProposalDetail>("PATCH", `/projects/${uuid}/enforcement/${proposal}`, data);
+	},
+
+	remove(uuid: string, proposal: string) {
+		return request<void>("DELETE", `/projects/${uuid}/enforcement/${proposal}`);
+	},
+};
+
 export const InventoryApi = {
 	overview(uuid: string) {
 		return request<InventoryOverview>("GET", `/projects/${uuid}/inventory/overview`);

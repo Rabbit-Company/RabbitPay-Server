@@ -1060,7 +1060,7 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 	const projectCards = editable
 		? [
 				el("div", { class: "card" }, el("h2", {}, t("customer.details")), detailsForm),
-				el("div", { class: "card" }, el("h2", {}, t("settings.company")), el("p", { class: "muted" }, t("settings.company_intro")), companyBox),
+				el("div", { class: "card", id: "company" }, el("h2", {}, t("settings.company")), el("p", { class: "muted" }, t("settings.company_intro")), companyBox),
 				el(
 					"div",
 					{ class: "card" },
@@ -1105,7 +1105,7 @@ export async function settingsView(uuid: string): Promise<HTMLElement> {
 				),
 				el("div", { class: "card" }, el("h2", {}, t("settings.email")), emailSection(uuid, project)),
 				el("div", { class: "card" }, el("h2", {}, t("nav.terminal")), terminalSection(uuid, project)),
-				el("div", { class: "card" }, el("h2", {}, t("overview.methods_title")), processorsSection(uuid)),
+				el("div", { class: "card", id: "payment-methods" }, el("h2", {}, t("overview.methods_title")), processorsSection(uuid)),
 			]
 		: [];
 

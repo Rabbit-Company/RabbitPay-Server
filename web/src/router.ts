@@ -87,7 +87,9 @@ export async function render() {
 		}
 
 		afterRender();
-		window.scrollTo(0, 0);
+		const anchor = window.location.hash ? document.getElementById(decodeURIComponent(window.location.hash.slice(1))) : null;
+		if (anchor) anchor.scrollIntoView();
+		else window.scrollTo(0, 0);
 		return;
 	}
 

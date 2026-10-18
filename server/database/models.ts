@@ -1724,6 +1724,23 @@ export interface DunningLetterRow {
 	updated: number;
 }
 
+export interface EnforcementProposalRow {
+	uuid: string;
+	project: string;
+	customer: string | null;
+	dunning_letter: string | null;
+	status: string;
+	court_case: string | null;
+	filed_date: string | null;
+	principal: number;
+	compensation: number;
+	court_fee: number;
+	document: string;
+	created_by: string | null;
+	created: number;
+	updated: number;
+}
+
 export interface DunningLetterLineRow {
 	uuid: string;
 	dunning_letter: string;
