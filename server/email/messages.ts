@@ -156,7 +156,7 @@ export async function queueInvoiceEmail(project: ProjectRow, invoice: InvoiceRow
 	const eslogDocument = await eslogAttachment(
 		{ kind: "invoice", project, invoice },
 		options.attachEslog,
-		options.kind === "invoice" && Boolean(project.email_attach_eslog)
+		["invoice", "reminder_before", "reminder_after"].includes(options.kind) && Boolean(project.email_attach_eslog)
 	);
 	const attachment = !attachInvoice
 		? null

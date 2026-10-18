@@ -58,6 +58,8 @@ Opomnik kupcu pove, koliko je še odprtega, in vsebuje povezavo do plačilne str
 
 Opomnjeni so samo računi z e-poštnim naslovom kupca. Prodaje na blagajni niso nikoli opomnjene.
 
+Opomnikom so priložene iste priloge kot računom: PDF, ko je **Priloži dokumente kot PDF** vklopljeno, in e-račun, ko je vklopljeno stikalo za e-SLOG.
+
 Ista kartica določa, kaj vsebuje vsaka e-pošta, če tega pri posameznem sporočilu ne spremenite: PDF, e-račun, povezavo do plačilne strani in povezavo do [portala za kupce](customer-portal).
 
 ## Sami pošljite povezavo za plačilo

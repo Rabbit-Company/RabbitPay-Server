@@ -1750,7 +1750,7 @@ export const sl: UiDictionary = {
 	"settings.license_link": "Licenca in lastna znamka",
 	"settings.reminders_switch": "Opominjaj kupce na neplačane račune",
 	"settings.attach_invoice_switch": "Priloži dokumente kot PDF",
-	"settings.attach_eslog_switch": "E-račun (e-SLOG XML) priloži e-poštnim sporočilom z računi in dobropisi",
+	"settings.attach_eslog_switch": "E-račun (e-SLOG XML) priloži e-poštnim sporočilom z računi, opomniki in dobropisi",
 	"settings.attach_eslog_hint":
 		"Poslovni kupci ga lahko neposredno uvozijo v svoj računovodski program. Če računa ni mogoče pretvoriti v e-račun, na primer pri prodaji potrošniku brez davčne številke, se sporočilo vseeno pošlje brez njega.",
 	"settings.pay_link_switch": "Dodaj povezavo do plačilne strani",

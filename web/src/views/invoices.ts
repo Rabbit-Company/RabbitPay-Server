@@ -446,7 +446,7 @@ function emailDialog(uuid: string, project: Project, invoice: Invoice, customer:
 	const attach = input("checkbox");
 	attach.checked = proforma || project.email_attach_invoice;
 	const attachEslog = input("checkbox");
-	attachEslog.checked = !reminder && !proforma && project.email_attach_eslog;
+	attachEslog.checked = !proforma && project.email_attach_eslog;
 	const payLink = input("checkbox");
 	payLink.checked = proforma || project.email_pay_link;
 	const submit = el(

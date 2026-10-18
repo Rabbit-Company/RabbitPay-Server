@@ -1748,7 +1748,7 @@ export const en = {
 	"settings.license_link": "License and white label",
 	"settings.reminders_switch": "Remind customers about unpaid invoices",
 	"settings.attach_invoice_switch": "Attach documents as a PDF",
-	"settings.attach_eslog_switch": "Attach the e-invoice (e-SLOG XML) to invoice and credit note emails",
+	"settings.attach_eslog_switch": "Attach the e-invoice (e-SLOG XML) to invoice, reminder and credit note emails",
 	"settings.attach_eslog_hint":
 		"Business customers can import it straight into their accounting software. Emails still go out without it when an invoice cannot be turned into an e-invoice, for example a sale to a consumer without a tax number.",
 	"settings.pay_link_switch": "Include a link to the payment page",

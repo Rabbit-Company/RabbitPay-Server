@@ -23,7 +23,7 @@ Ko račun pošiljate po e-pošti, vklopite **Priloži e-račun (e-SLOG XML)**.
 
 ![e-Račun, priložen e-pošti z računom](https://cdn.rabbitpay.net/help/sl/dark/slovenia/e-invoices/attach.webp)
 
-Da ga priložite vsaki e-pošti z računom ali dobropisom, odprite **Nastavitve** > **E-pošta** in vklopite **E-račun (e-SLOG XML) priloži e-poštnim sporočilom z računi in dobropisi**.
+Da ga priložite vsaki e-pošti z računom, opomnikom ali dobropisom, odprite **Nastavitve** > **E-pošta** in vklopite **E-račun (e-SLOG XML) priloži e-poštnim sporočilom z računi, opomniki in dobropisi**.
 
 ## Računi za javni sektor
 

@@ -23,7 +23,7 @@ When you send an invoice by email, switch on **Attach the e-invoice (e-SLOG XML)
 
 ![The e-invoice attached to the invoice email](https://cdn.rabbitpay.net/help/en/dark/slovenia/e-invoices/attach.webp)
 
-To attach it to every invoice and credit note email, open **Settings** > **Email** and switch on **Attach the e-invoice (e-SLOG XML) to invoice and credit note emails**.
+To attach it to every invoice, reminder and credit note email, open **Settings** > **Email** and switch on **Attach the e-invoice (e-SLOG XML) to invoice, reminder and credit note emails**.
 
 ## Invoices to the public sector
 

@@ -985,10 +985,47 @@ describe("e-invoice attachments", () => {
 		expect(toPerson.to).toBe("person@example.com");
 		expect(xmlOf(toPerson)).toBeUndefined();
 		expect(toPerson.text).not.toContain("e-SLOG");
-		expect(xmlOf(reminder)).toBeUndefined();
+		expect(xmlOf(reminder)).toBeDefined();
 
 		await call("PATCH", einvoiceBase(), { token: ownerToken, body: { email_attach_eslog: false } });
 	});
+
+	const reminderCases: [boolean, boolean, string[] | undefined][] = [
+		[true, true, ["application/pdf", "application/xml"]],
+		[true, false, ["application/pdf"]],
+		[false, true, ["application/xml"]],
+		[false, false, undefined],
+	];
+	for (const [attachInvoice, attachEslog, expected] of reminderCases) {
+		test(`automatic reminders follow the settings with PDF ${attachInvoice ? "on" : "off"} and e-SLOG ${attachEslog ? "on" : "off"}`, async () => {
+			await call("PATCH", einvoiceBase(), {
+				token: ownerToken,
+				body: {
+					email_attach_invoice: attachInvoice,
+					email_attach_eslog: attachEslog,
+					email_reminders: true,
+					reminder_days_before: 0,
+					reminder_days_after: 3,
+				},
+			});
+			try {
+				const invoice = await issueFor(businessCustomer);
+				await Database`UPDATE invoices SET due_date = ${Date.now() - 4 * DAY}, issued_at = ${Date.now() - 20 * DAY} WHERE uuid = ${invoice.uuid}`;
+				await sendDueReminders();
+				await flush();
+
+				const reminder = outbox.find((mail) => mail.subject.includes(invoice.reference));
+				expect(reminder?.subject).toStartWith("Overdue");
+				expect(reminder?.attachments?.map((attachment) => attachment.contentType)).toEqual(expected);
+				expect(reminder?.text.includes("e-SLOG")).toBe(attachEslog);
+			} finally {
+				await call("PATCH", einvoiceBase(), {
+					token: ownerToken,
+					body: { email_attach_invoice: false, email_attach_eslog: false, email_reminders: false },
+				});
+			}
+		});
+	}
 
 	test("attaches the e-SLOG file to credit note emails", async () => {
 		const invoice = await issueFor(businessCustomer);

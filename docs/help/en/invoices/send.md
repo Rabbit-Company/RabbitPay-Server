@@ -58,6 +58,8 @@ The reminder tells the customer how much is still open and links to the payment 
 
 Only invoices with a customer email address are reminded. Sales at the terminal are never reminded.
 
+Reminders carry the same attachments as invoices: the PDF when **Attach documents as a PDF** is on and the e-invoice when the e-SLOG switch is on.
+
 The same card sets what every email carries unless you change it for a single email: the PDF, the e-invoice, the link to the payment page and the link to the [customer portal](customer-portal).
 
 ## Send the payment link yourself
