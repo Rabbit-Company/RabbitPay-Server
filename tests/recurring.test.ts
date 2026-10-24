@@ -190,7 +190,14 @@ describe("schedule", () => {
 describe("creating", () => {
 	test("sets the first run to the start date and totals the lines", async () => {
 		const created = await createTemplate({ start_date: today() + 3 * DAY });
-		expect(created).toMatchObject({ status: "active", occurrences: 0, next_run_at: today() + 3 * DAY, total_amount: 2440, auto_issue: true, auto_send: true });
+		expect(created).toMatchObject({
+			status: "active",
+			occurrences: 0,
+			next_run_at: schedule.startOfDay(today() + 3 * DAY, TIMEZONE),
+			total_amount: 2440,
+			auto_issue: true,
+			auto_send: true,
+		});
 		expect(created.upcoming).toHaveLength(5);
 		expect(created.customer_detail.email).toBe("retainer@example.com");
 		expect(created.invoices).toEqual([]);
