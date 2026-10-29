@@ -36,7 +36,7 @@ docker compose up -d --build
 
 The compose file mounts the local `data` folder at `/app/data`. SQLite files are stored directly in `data` and invoice PDFs are stored in `data/invoices`. Back up the complete `data` folder together with the master key.
 
-`GET /api/health` answers `200` while the database responds and `503` during shutdown, and the image uses it as its Docker health check. On `SIGTERM` the server stops accepting requests and new background work, waits up to 25 seconds for running tasks such as email and webhook deliveries to finish, then closes the database. The compose file allows 30 seconds before Docker kills the container.
+`GET /api/health` answers `200` while the database responds and `503` during shutdown, and the image uses it as its Docker health check. For an external uptime monitor, `GET /api/health/server` checks only the server process and `GET /api/health/database` checks only the database, so an outage shows which part failed. Docker marks an unhealthy container but does not restart it, so watch these from outside and get alerted. On `SIGTERM` the server stops accepting requests and new background work, waits up to 25 seconds for running tasks such as email and webhook deliveries to finish, then closes the database. The compose file allows 30 seconds before Docker kills the container.
 
 Run exactly one instance against a database. Background tasks such as email, webhooks, chain polling and FURS submissions guard against overlapping runs inside one process only, so a second instance would send emails and webhooks twice. Several instances behind a load balancer are not supported yet.
 
@@ -221,8 +221,8 @@ These settings are easy to get wrong:
   reverse proxy, also set Trusted proxies to its address or CIDR range so
   clients that reach the server directly cannot forge their IP. With BurrowGate,
   setting the origin signing secret makes RabbitPay verify every request's
-  BurrowGate signature and reject requests that bypassed it. `/api/health` is
-  exempt so health checks keep working. With the secret set, every signed-in
+  BurrowGate signature and reject requests that bypassed it. The `/api/health`
+  endpoints are exempt so health checks keep working. With the secret set, every signed-in
   response also reports the RabbitPay username back to BurrowGate in signed
   `X-BurrowGate-Origin-User` headers, so BurrowGate's traffic log shows who made
   each request. BurrowGate removes those headers before the response reaches

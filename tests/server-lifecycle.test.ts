@@ -108,12 +108,23 @@ describe("health and shutdown", () => {
 		expect(await response.json()).toEqual({ status: "ok" });
 	});
 
+	test("reports the server and the database separately", async () => {
+		for (const path of ["/api/health/server", "/api/health/database"]) {
+			const response = await Server.app.handle(new Request(`http://127.0.0.1${path}`));
+			expect(response.status).toBe(200);
+			expect(response.headers.get("cache-control")).toBe("no-store");
+			expect(await response.json()).toEqual({ status: "ok" });
+		}
+	});
+
 	test("stops accepting work and reports it to the health check", async () => {
 		const { default: Scheduler } = await import("../server/scheduler");
 		expect(await Scheduler.stop(1000)).toBe(true);
 		await Server.stop();
-		const response = await Server.app.handle(new Request("http://127.0.0.1/api/health"));
-		expect(response.status).toBe(503);
-		expect(await response.json()).toEqual({ status: "stopping" });
+		for (const path of ["/api/health", "/api/health/server"]) {
+			const response = await Server.app.handle(new Request(`http://127.0.0.1${path}`));
+			expect(response.status).toBe(503);
+			expect(await response.json()).toEqual({ status: "stopping" });
+		}
 	});
 });

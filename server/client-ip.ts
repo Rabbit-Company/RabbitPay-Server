@@ -5,7 +5,7 @@ import { Settings } from "./settings";
 import { Logger } from "./logger";
 import type { AppState } from "./database/models";
 
-export const UNGUARDED_PATHS = new Set(["/api/health"]);
+export const UNGUARDED_PATHS = new Set(["/api/health", "/api/health/server", "/api/health/database"]);
 
 export function trustedProxies(): string[] {
 	return (Settings.server?.trusted_proxies ?? "")
