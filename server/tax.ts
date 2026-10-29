@@ -142,15 +142,7 @@ export function taxIdentityKeys(...numbers: (string | null | undefined)[]): stri
 export type SupplyType = "goods" | "services" | "digital";
 export type TaxCategory = "standard" | "reduced" | "exempt" | "domestic_reverse";
 export type TaxTreatment =
-	| "domestic"
-	| "small_business"
-	| "reverse_charge"
-	| "domestic_reverse_charge"
-	| "intra_eu_goods"
-	| "export"
-	| "outside_scope"
-	| "oss"
-	| "exempt";
+	"domestic" | "small_business" | "reverse_charge" | "domestic_reverse_charge" | "intra_eu_goods" | "export" | "outside_scope" | "oss" | "exempt";
 
 export const SUPPLY_TYPES: { value: SupplyType; label: string; hint: string }[] = [
 	{ value: "services", label: "Service", hint: "Work, consulting, support" },

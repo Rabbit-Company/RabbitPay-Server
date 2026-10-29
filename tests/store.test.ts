@@ -21,7 +21,7 @@ const { generateLicenseCode, storageFor } = await import("../server/licensing");
 const { expireUnpaidOrders, issuePaidDrafts, UNPAID_ORDER_GRACE_DAYS } = await import("../server/paid-drafts");
 const { forgetDomains } = await import("../server/store/store");
 
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "", status_page_url: "" };
 
 interface Result {
 	status: number;

@@ -192,7 +192,8 @@ function applicationHtml(html: string, pathname: string): string {
 	if (Settings.web?.landing_page === false) return html;
 	const licensing = licensingEnforced();
 	const store = licensing && isWebUrl(Settings.web?.license_store_url ?? "") ? Settings.web.license_store_url : "";
-	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" data-license-store="${escapeHtml(store)}" />`;
+	const status = isWebUrl(Settings.web?.status_page_url ?? "") ? Settings.web.status_page_url : "";
+	const flag = `<meta name="rabbitpay-landing" content="1" data-free-payments="${licensing ? includedPayments() : ""}" data-free-storage="${licensing ? includedStorageGb() : ""}" data-license-store="${escapeHtml(store)}" data-status-page="${escapeHtml(status)}" />`;
 	const home = homePage(pathname);
 	if (home === null) {
 		const flagged = html.replace("</head>", `${flag}</head>`);

@@ -15,7 +15,7 @@ writeFileSync(
 );
 
 const { Settings } = await import("../server/settings");
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "", status_page_url: "" };
 
 const { Server } = await import("../server/server");
 await Server.configure();

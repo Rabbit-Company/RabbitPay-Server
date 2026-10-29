@@ -67,13 +67,11 @@ export async function journal(project: string, from: number, to: number, limit: 
 	const lines = await linesOf(entries.map((entry) => entry.uuid));
 	const invoices = await invoicesOf(entries);
 	return {
-		entries: entries.map(
-			(entry): JournalEntryView => ({
-				...entry,
-				lines: lines.get(entry.uuid) ?? [],
-				invoice: entry.source_type === "invoice" ? entry.source_id : (invoices.get(entry.source_id) ?? null),
-			})
-		),
+		entries: entries.map((entry): JournalEntryView => ({
+			...entry,
+			lines: lines.get(entry.uuid) ?? [],
+			invoice: entry.source_type === "invoice" ? entry.source_id : (invoices.get(entry.source_id) ?? null),
+		})),
 		total: Number(count.total),
 		limit,
 		offset,

@@ -111,7 +111,7 @@ function nameDialog(title: string, label: string, initial: string, save: (name: 
 
 function insideOf(choices: FolderChoice[], folder: string): Set<string> {
 	const inside = new Set([folder]);
-	for (let grew = true; grew; ) {
+	for (let grew = true; grew;) {
 		grew = false;
 		for (const choice of choices) {
 			if (choice.parent !== null && inside.has(choice.parent) && !inside.has(choice.uuid)) {

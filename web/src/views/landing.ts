@@ -59,8 +59,8 @@ export function landingEnabled(): boolean {
 	return landingFlag() !== null;
 }
 
-function licenseStore(): string | null {
-	const value = landingFlag()?.dataset.licenseStore;
+function flaggedUrl(key: "licenseStore" | "statusPage"): string | null {
+	const value = landingFlag()?.dataset[key];
 	if (!value) return null;
 	try {
 		const url = new URL(value);
@@ -310,7 +310,7 @@ function pricing(signUp: HTMLElement | null): HTMLElement | null {
 		"landing.license_accounting",
 		"landing.license_white_label",
 	];
-	const store = licenseStore();
+	const store = flaggedUrl("licenseStore");
 	const buy = store
 		? el("a", { class: "button secondary wide", href: store, target: "_blank", rel: "noopener" }, el("span", {}, t("landing.buy_licenses")), glyph("arrow", 18))
 		: null;
@@ -401,6 +401,7 @@ export async function landingView(): Promise<HTMLElement> {
 	);
 
 	const legalNav = legal ? legalLinks(legal) : [];
+	const statusPage = flaggedUrl("statusPage");
 	const footer = el(
 		"footer",
 		{ class: "landing-footer" },
@@ -414,6 +415,7 @@ export async function landingView(): Promise<HTMLElement> {
 				el("a", { href: "/login" }, t("login.sign_in")),
 				el("a", { href: "/customer/login" }, t("portal.title")),
 				el("a", { href: "/help" }, t("help.title")),
+				statusPage ? el("a", { href: statusPage, target: "_blank", rel: "noopener" }, t("landing.status")) : null,
 				el("a", { href: REPOSITORY, target: "_blank", rel: "noopener" }, "GitHub")
 			)
 		),

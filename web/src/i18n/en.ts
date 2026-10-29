@@ -4027,6 +4027,7 @@ export const en = {
 	"landing.license_storage": "More document storage",
 	"landing.license_files": "More file storage",
 	"landing.license_store": "Online store",
+	"landing.status": "Status",
 	"landing.license_workforce": "Team: timesheets, payroll, tickets and chat",
 	"landing.license_accounting": "Accounting",
 	"landing.license_white_label": "White label with your own brand",

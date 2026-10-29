@@ -1525,27 +1525,9 @@ export type StockPurchase = "goods" | "material" | "goods_costs" | "material_cos
 export type StockDocumentType = "receipt" | "issue" | "transfer" | "stocktake" | "opening";
 export type StockDocumentStatus = "draft" | "posted" | "canceled";
 export type StockMovementKind =
-	| "receipt"
-	| "opening"
-	| "customer_return"
-	| "sale"
-	| "sale_return"
-	| "issue"
-	| "transfer_out"
-	| "transfer_in"
-	| "surplus"
-	| "shortage";
+	"receipt" | "opening" | "customer_return" | "sale" | "sale_return" | "issue" | "transfer_out" | "transfer_in" | "surplus" | "shortage";
 export type StockIssueReason =
-	| "consumption"
-	| "own_use"
-	| "gift"
-	| "damage"
-	| "expiry"
-	| "shortage"
-	| "natural_loss"
-	| "theft"
-	| "force_majeure"
-	| "supplier_return";
+	"consumption" | "own_use" | "gift" | "damage" | "expiry" | "shortage" | "natural_loss" | "theft" | "force_majeure" | "supplier_return";
 export type StockReceiptReason = "purchase" | "customer_return" | "other";
 export type OpeningOffset = "none" | "expense";
 

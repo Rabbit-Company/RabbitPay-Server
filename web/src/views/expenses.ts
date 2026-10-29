@@ -584,14 +584,12 @@ async function editor(
 			vat_lines: recurring
 				? []
 				: vatLineControls
-						.map(
-							(line): ExpenseVatLineInput => ({
-								rate: line.rate,
-								tax_base: minorValue(line.base),
-								tax_amount: minorValue(line.tax),
-								deductible_tax_amount: minorValue(line.deductible),
-							})
-						)
+						.map((line): ExpenseVatLineInput => ({
+							rate: line.rate,
+							tax_base: minorValue(line.base),
+							tax_amount: minorValue(line.tax),
+							deductible_tax_amount: minorValue(line.deductible),
+						}))
 						.filter((line) => line.tax_base > 0 || line.tax_amount > 0 || line.deductible_tax_amount > 0),
 			paid_at: paid.checked && !recurring ? dayStartFromDateInput(paidDate.value, project.timezone) : null,
 			notes: notes.value || null,

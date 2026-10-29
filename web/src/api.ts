@@ -4445,16 +4445,7 @@ export type StockDocumentType = "receipt" | "issue" | "transfer" | "stocktake" |
 export type StockDocumentStatus = "draft" | "posted" | "canceled";
 export type StockFilter = "all" | "in_stock" | "low" | "negative" | "empty";
 export type StockMovementKind =
-	| "receipt"
-	| "opening"
-	| "customer_return"
-	| "sale"
-	| "sale_return"
-	| "issue"
-	| "transfer_out"
-	| "transfer_in"
-	| "surplus"
-	| "shortage";
+	"receipt" | "opening" | "customer_return" | "sale" | "sale_return" | "issue" | "transfer_out" | "transfer_in" | "surplus" | "shortage";
 
 export interface Warehouse {
 	uuid: string;

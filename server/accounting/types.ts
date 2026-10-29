@@ -155,15 +155,7 @@ export interface FinancialStatements {
 }
 
 export type KpoColumn =
-	| "revenue_sales"
-	| "revenue_other"
-	| "material"
-	| "services"
-	| "labor"
-	| "depreciation"
-	| "interest"
-	| "taxes_contributions"
-	| "other_costs";
+	"revenue_sales" | "revenue_other" | "material" | "services" | "labor" | "depreciation" | "interest" | "taxes_contributions" | "other_costs";
 
 export interface KpoRow {
 	entry: string;

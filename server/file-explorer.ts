@@ -192,7 +192,7 @@ export function depthBelow(folders: FileFolderRow[], uuid: string): number {
 export function pathNames(folders: FileFolderRow[], uuid: string | null): string[] {
 	const byId = new Map(folders.map((folder) => [folder.uuid, folder]));
 	const names: string[] = [];
-	for (let current = uuid ? byId.get(uuid) : undefined; current && names.length <= MAX_FOLDER_DEPTH + 1; ) {
+	for (let current = uuid ? byId.get(uuid) : undefined; current && names.length <= MAX_FOLDER_DEPTH + 1;) {
 		names.unshift(current.name);
 		current = current.parent ? byId.get(current.parent) : undefined;
 	}

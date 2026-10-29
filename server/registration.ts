@@ -13,10 +13,7 @@ const CODE_GROUP_LENGTH = 5;
 const CODE_PREFIX = "JOIN";
 
 export type RegistrationGrant =
-	| { kind: "first" }
-	| { kind: "open" }
-	| { kind: "invite"; invite: RegistrationInviteRow }
-	| { kind: "project_invitation"; member: string };
+	{ kind: "first" } | { kind: "open" } | { kind: "invite"; invite: RegistrationInviteRow } | { kind: "project_invitation"; member: string };
 
 export class RegistrationRefused extends Error {
 	constructor(readonly code: ErrorCode) {

@@ -16,7 +16,7 @@ writeFileSync(`${FIXTURE}/plain.js`, "console.log(2)");
 
 const { Settings } = await import("../server/settings");
 const { SETTING_FIELDS, coerceSetting } = await import("../server/settings-schema");
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "", status_page_url: "" };
 
 const { Server } = await import("../server/server");
 await Server.configure();
@@ -77,7 +77,9 @@ describe("web interface", () => {
 	test("lets search engines index the home page and describes it", async () => {
 		const html = await (await get("/")).text();
 		expect(html).toContain('<meta name="robots" content="index, follow" />');
-		expect(html).toContain('<meta name="rabbitpay-landing" content="1" data-free-payments="50" data-free-storage="1" data-license-store="" />');
+		expect(html).toContain(
+			'<meta name="rabbitpay-landing" content="1" data-free-payments="50" data-free-storage="1" data-license-store="" data-status-page="" />'
+		);
 		expect(html).toContain('<meta property="og:url" content="http://127.0.0.1:8099/" />');
 		expect(html).toContain("<title>RabbitPay | Invoices, payments, stock and accounting</title>");
 	});
@@ -97,6 +99,22 @@ describe("web interface", () => {
 			expect(await (await get("/")).text()).toContain('data-license-store=""');
 		} finally {
 			Settings.web.license_store_url = "";
+		}
+	});
+
+	test("links the status page only when it is a web address", async () => {
+		const field = SETTING_FIELDS.find((entry) => entry.key === "web.status_page_url")!;
+		expect(coerceSetting(field, " https://status.rabbitpay.net ")).toBe("https://status.rabbitpay.net");
+		expect(coerceSetting(field, "")).toBe("");
+		expect(coerceSetting(field, "javascript:alert(1)")).toBeUndefined();
+
+		Settings.web.status_page_url = "https://status.rabbitpay.net";
+		try {
+			expect(await (await get("/")).text()).toContain('data-status-page="https://status.rabbitpay.net"');
+			Settings.web.status_page_url = "javascript:alert(1)";
+			expect(await (await get("/")).text()).toContain('data-status-page=""');
+		} finally {
+			Settings.web.status_page_url = "";
 		}
 	});
 

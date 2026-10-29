@@ -71,7 +71,7 @@ export function reserveDuration(bytes: Uint8Array): ReservedDuration | null {
 		}
 		if (child.id !== INFO) return null;
 		let scale = MILLISECOND_SCALE;
-		for (let inner = child.start; inner < end; ) {
+		for (let inner = child.start; inner < end;) {
 			const field = element(bytes, inner);
 			if (!field || field.unknown || field.id === DURATION) return null;
 			if (field.id === TIMECODE_SCALE) scale = bytes.subarray(field.start, field.start + field.size).reduce((sum, byte) => sum * 256 + byte, 0);

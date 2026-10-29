@@ -4030,6 +4030,7 @@ export const sl: UiDictionary = {
 	"landing.license_storage": "Več prostora za dokumente",
 	"landing.license_files": "Več prostora za datoteke",
 	"landing.license_store": "Spletna trgovina",
+	"landing.status": "Stanje storitev",
 	"landing.license_workforce": "Ekipa: delovni čas, plače, zahtevki in klepet",
 	"landing.license_accounting": "Knjigovodstvo",
 	"landing.license_white_label": "Lastna blagovna znamka",

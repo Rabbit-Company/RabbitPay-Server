@@ -35,6 +35,7 @@ export interface ServerSettings {
 		path: string;
 		landing_page: boolean;
 		license_store_url: string;
+		status_page_url: string;
 	};
 	domains: {
 		provider: DomainProvider;
@@ -221,7 +222,7 @@ export interface ServerSettings {
 
 export const DEFAULT_SETTINGS: ServerSettings = {
 	server: { hostname: "0.0.0.0", port: 8085, proxy: "direct", trusted_proxies: "", burrowgate_secret: "", public_url: "http://localhost:8085" },
-	web: { enabled: true, path: "./web/dist", landing_page: true, license_store_url: "" },
+	web: { enabled: true, path: "./web/dist", landing_page: true, license_store_url: "", status_page_url: "" },
 	domains: {
 		provider: "manual",
 		target: "",
@@ -464,6 +465,13 @@ export const SETTING_GROUPS: SettingGroup[] = [
 				key: "web.license_store_url",
 				label: "License store link",
 				hint: "Where the Buy license keys button on the home page leads, for example https://rabbitpay.net/shop/rabbitpay. It opens in a new tab. Leave empty to hide the button.",
+				kind: "text",
+				url: true,
+			},
+			{
+				key: "web.status_page_url",
+				label: "Status page link",
+				hint: "Where the Status link in the home page footer leads, for example https://status.rabbitpay.net. It opens in a new tab. Leave empty to hide the link.",
 				kind: "text",
 				url: true,
 			},

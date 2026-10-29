@@ -31,7 +31,7 @@ const { Settings } = await import("../server/settings");
 const { default: Auth } = await import("../server/auth");
 const { checkWaitingDomains, domainsAvailable, normalizeHostname } = await import("../server/store/domains");
 
-Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "" };
+Settings.web = { enabled: true, path: FIXTURE, landing_page: true, license_store_url: "", status_page_url: "" };
 
 interface Result {
 	status: number;
