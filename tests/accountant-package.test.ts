@@ -382,3 +382,38 @@ describe("DDV-O summary", () => {
 		expect(summary.corrections).toBe(1);
 	});
 });
+
+describe("customer tax numbers", () => {
+	test("a customer outside the VAT system shows the plain tax number", async () => {
+		const { collectAccountantPackage } = await import("../server/accountant-package");
+		const customer = (
+			await call("POST", `${base()}/customers`, {
+				email: "stranka@example.com",
+				name: "Mizarstvo Hrast s.p.",
+				customer_type: "business",
+				country: "SI",
+				address_line1: "Gozdna ulica 4",
+				postal_code: "1000",
+				city: "Ljubljana",
+				tax_number: "SI59157909",
+			})
+		).data;
+		expect(customer.tax_number).toBeTruthy();
+		const invoice = (
+			await call("POST", `${base()}/invoices`, {
+				customer: customer.uuid,
+				currency: "EUR",
+				due_date: Date.UTC(2026, 10, 15),
+				items: [{ description: "Lakiranje", quantity: 1, unit_price: 5000, tax_rate: 22, tax_treatment: "domestic" }],
+			})
+		).data;
+		const opened = await call("POST", `${base()}/invoices/${invoice.uuid}/open`);
+		expect(opened.error).toBe(0);
+		await Database`UPDATE invoices SET issued_at = ${Date.UTC(2026, 9, 10)} WHERE uuid = ${invoice.uuid}`;
+		const [project_] = (await Database`SELECT * FROM projects WHERE uuid = ${project}`) as any[];
+		const data = await collectAccountantPackage(project_, { from: "2026-10-01", to: "2026-10-31" });
+		const row = data.issued.find((entry) => entry.id === invoice.uuid)!;
+		expect(row.customer).toBe("Mizarstvo Hrast s.p.");
+		expect(row.tax_number).toBe("59157909");
+	});
+});

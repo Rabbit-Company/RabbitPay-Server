@@ -70,6 +70,18 @@ function buyerName(invoice: Pick<InvoiceRow, "buyer_details" | "buyer_email">): 
 	return invoice.buyer_email ?? "";
 }
 
+function buyerTaxNumber(invoice: Pick<InvoiceRow, "buyer_details" | "buyer_vat_number">): string | null {
+	if (invoice.buyer_vat_number?.trim()) return invoice.buyer_vat_number.trim();
+	if (!invoice.buyer_details) return null;
+	try {
+		const buyer = JSON.parse(invoice.buyer_details) as InvoiceRecipient;
+		const number = buyer.tax_number?.replace(/\s+/g, "") ?? "";
+		return number.replace(/^SI(?=\d{8}$)/i, "") || null;
+	} catch {
+		return null;
+	}
+}
+
 function inBase(amount: number, currency: string, base: string, taxCurrency: string | null, rate: number | null): number | null {
 	if (currency === base) return amount;
 	if (rate === null || (taxCurrency !== null && taxCurrency !== base)) return null;
@@ -274,7 +286,7 @@ export async function collectAccountantPackage(project: ProjectRow, period: Pack
 			reference: invoice.reference,
 			document_type: invoice.document_type,
 			customer: buyerName(invoice),
-			tax_number: invoice.buyer_vat_number,
+			tax_number: buyerTaxNumber(invoice),
 			country: invoice.buyer_country,
 			issued_at: invoice.issued_at!,
 			due_date: invoice.due_date,
@@ -341,7 +353,7 @@ export async function collectAccountantPackage(project: ProjectRow, period: Pack
 			reference: note.reference,
 			invoice_reference: note.invoice_reference,
 			customer: buyerName(note),
-			tax_number: note.buyer_vat_number,
+			tax_number: buyerTaxNumber(note),
 			issued_at: note.issued_at,
 			currency: note.currency,
 			total_original: note.total_amount,

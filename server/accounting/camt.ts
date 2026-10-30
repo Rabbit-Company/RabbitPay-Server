@@ -76,21 +76,50 @@ function party(details: XmlElement | undefined, role: "Dbtr" | "Cdtr"): { name: 
 	return { name, iban: iban ? iban.replace(/\s+/g, "").toUpperCase() : null };
 }
 
+function luhn(digits: string): boolean {
+	let sum = 0;
+	for (let index = 0; index < digits.length; index++) {
+		let digit = Number(digits[digits.length - 1 - index]);
+		if (index % 2 === 1) {
+			digit *= 2;
+			if (digit > 9) digit -= 9;
+		}
+		sum += digit;
+	}
+	return sum % 10 === 0;
+}
+
+export function maskCardNumbers(text: string): string {
+	return text.replace(/\d{13,19}/g, (digits) => (luhn(digits) ? `**** ${digits.slice(-4)}` : digits));
+}
+
+const CARD_PURPOSE = /^(.*?[^\d\s])\s*[A-Z]{3}\s*(?:\d{13,19}|\*{4} \d{4})$/;
+
+export function cardMerchant(purpose: string | null): string | null {
+	const match = purpose ? CARD_PURPOSE.exec(purpose.trim()) : null;
+	return match ? realName(match[1]) : null;
+}
+
 function joined(lines: (string | null)[]): string | null {
 	const present = lines.map((line) => line?.trim() ?? "").filter(Boolean);
 	return present.length ? [...new Set(present)].join(" ").slice(0, 1000) : null;
 }
 
-function remittanceOf(details: XmlElement | undefined, entry: XmlElement): { reference: string | null; text: string | null; legacy: string | null } {
+function remittanceOf(
+	details: XmlElement | undefined,
+	entry: XmlElement
+): { reference: string | null; text: string | null; legacy: string | null; merchant: string | null } {
 	const info = child(details, "RmtInf");
 	const reference = textOf(info, "Strd", "CdtrRefInf", "Ref");
 	const unstructured = children(info, "Ustrd").map((line) => line.text);
 	const purpose = children(info, "Strd").flatMap((block) => children(block, "AddtlRmtInf").map((line) => line.text));
 	const extra = [textOf(details, "AddtlTxInf"), textOf(entry, "AddtlNtryInf")];
+	const text = joined([...unstructured, ...purpose, ...extra]);
 	return {
 		reference: reference ? reference.replace(/\s+/g, "").toUpperCase() : null,
-		text: joined([...unstructured, ...purpose, ...extra]),
+		text: text ? maskCardNumbers(text) : null,
 		legacy: joined([...unstructured, ...extra]),
+		merchant: purpose.length === 1 ? cardMerchant(purpose[0]) : null,
 	};
 }
 
@@ -140,7 +169,7 @@ export function parseCamt053(source: string, timezone: string): CamtStatement[] 
 					value_date: valued,
 					amount,
 					currency: value.currency,
-					counterparty_name: counterparty.name?.slice(0, 250) ?? null,
+					counterparty_name: (counterparty.name ?? (amount < 0 ? remittance.merchant : null))?.slice(0, 250) ?? null,
 					counterparty_iban: counterparty.iban?.slice(0, 34) ?? null,
 					reference: remittance.reference?.slice(0, 64) ?? null,
 					remittance: remittance.text,

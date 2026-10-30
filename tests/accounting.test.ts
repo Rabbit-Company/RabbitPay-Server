@@ -11,6 +11,7 @@ const { generateLicenseCode } = await import("../server/licensing");
 const { issuePaidDrafts } = await import("../server/paid-drafts");
 const { creditorReference } = await import("../server/payments/reference");
 const { fillPaymentValues } = await import("../server/accounting/payment-values");
+const { maskCardNumbers } = await import("../server/accounting/camt");
 
 await Server.configure();
 
@@ -696,6 +697,19 @@ describe("card payments and payment purpose", () => {
 				remittance: string | null;
 			}[]
 		)[0];
+
+	test("a card payment takes the shop from the purpose and hides the card number", async () => {
+		const xml = camt([card("-", "")])
+			.replace("<AcctSvcrRef>C-1</AcctSvcrRef>", "<AcctSvcrRef>C-2</AcctSvcrRef>")
+			.replace("<Ref>SI00</Ref></CdtrRefInf>", "<Ref>SI00</Ref></CdtrRefInf><AddtlRmtInf>TRGOVINA BREZA KAMNIKSVN4111111111111111</AddtlRmtInf>");
+		await upload(xml);
+		const [line] = (await Database`SELECT counterparty_name, remittance FROM bank_transactions WHERE bank_reference = 'C-2'`) as {
+			counterparty_name: string;
+			remittance: string;
+		}[];
+		expect(line).toEqual({ counterparty_name: "TRGOVINA BREZA KAMNIK", remittance: "TRGOVINA BREZA KAMNIKSVN**** 1111" });
+		expect(maskCardNumbers("Racun 1234567890123 in 4111111111111111")).toBe("Racun 1234567890123 in **** 1111");
+	});
 
 	test("a dash is not a partner and a re-import fills in the name and purpose without duplicating the line", async () => {
 		expect((await upload(camt([card("-", "")]))).data).toMatchObject({ imported: 1 });
