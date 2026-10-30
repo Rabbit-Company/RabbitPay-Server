@@ -194,6 +194,7 @@ export enum Error {
 	PACKAGE_NO_RECIPIENTS = 1374,
 	PACKAGE_NOTHING_CHANGED = 1375,
 	PACKAGE_LINK_EXPIRED = 1376,
+	PAYMENT_NOT_REMOVABLE = 1377,
 	INVALID_PAYMENT_DATE = 1302,
 	FILE_STORAGE_LIMIT_REACHED = 1303,
 	INVALID_FILE = 1304,
@@ -799,6 +800,11 @@ namespace Errors {
 		1374: { message: "Add your accountant's email address before sending the package.", httpCode: 409 },
 		1375: { message: "Nothing changed since the package for this period was sent.", httpCode: 409 },
 		1376: { message: "This download link has expired. Ask the company to send the package again.", httpCode: 404 },
+		1377: {
+			message:
+				"Only a payment you entered by hand can be removed. Undo a bank statement match on the bank line, and refund payments that came through a payment provider, were refunded or were fiscalised.",
+			httpCode: 409,
+		},
 		1302: { message: "The payment date must be a timestamp in milliseconds that is not in the future.", httpCode: 400 },
 		1303: { message: "This project has no file storage left. Remove files or redeem a file storage license to add more capacity.", httpCode: 402 },
 		1304: { message: "The file is not valid. It needs a name of at most 250 characters and a size in bytes of at least 1.", httpCode: 400 },

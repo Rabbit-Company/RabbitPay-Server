@@ -47,3 +47,9 @@ Enter the amount that arrived. The invoice becomes **partially paid** and shows 
 > **Important:** RabbitPay records the refund. It does not move the money. Send a bank transfer back from your bank, and a card or PayPal refund from the Stripe or PayPal dashboard.
 
 For an invoice that was verified by FURS, a credit note is always issued with the refund, so FURS receives the correction.
+
+## Remove a payment entered by mistake
+
+If you recorded a payment that never came in, for example because a bank payment turned out to be for older invoices, press **Remove** next to it under **Payments**. Write a short reason and confirm. The payment stays in the list marked as failed, with the reason, so you can always see what was corrected. The invoice counts as unpaid again and can get reminders. The customer is not notified.
+
+**Remove** is only offered for payments you entered by hand. A payment created by matching a bank line is undone with **Reopen** on that line, see [Bank statements](accounting/bank-statements). Payments from Stripe, PayPal or crypto, payments that were refunded, and cash or card payments confirmed by FURS are corrected with **Refund**.

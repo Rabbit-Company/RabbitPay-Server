@@ -5,6 +5,7 @@ import { creditorReference } from "../payments/reference";
 import { acceptsPayment, recordPayment } from "../payments/recorded";
 import { ProcessorType } from "../payments/types";
 import { applyBalance } from "../payments/ledger";
+import { BANK_PAYMENT_NOTE } from "../payments/removal";
 import type { CamtStatement, CamtTransaction } from "./camt";
 import { bankAccountFor } from "./chart";
 import type { BankCandidate, BankMatchInput, BankSuggestion, PaidInvoiceSuggestion } from "./types";
@@ -27,8 +28,6 @@ export interface StatementImport {
 	skipped: number;
 	refreshed: number;
 }
-
-const BANK_PAYMENT_NOTE = "Bank statement";
 
 export class BankMatchRefused extends Error {}
 

@@ -6,7 +6,8 @@ import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
 import Validate from "../../validate";
-import { ErrorCode } from "../../errors";
+import Errors, { ErrorCode } from "../../errors";
+import { removalRefusal, removePayment } from "../../payments/removal";
 import { Logger } from "../../logger";
 import { Permission } from "../../roles";
 import { ProcessorType } from "../../payments/types";
@@ -135,7 +136,36 @@ Server.app.get("/api/v1/projects/:uuid/transactions/:transaction", Auth.required
 		...present(transaction),
 		refunds: refunds.map(present),
 		refundable: transaction.type === "payment" ? await refundableAmount(Database, transactionId) : 0,
+		removable: (await removalRefusal(transaction)) === null,
 	});
+});
+
+Server.app.post("/api/v1/projects/:uuid/transactions/:transaction/remove", Auth.required(), Permissions.require(Permission.PAYMENT_REFUND), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const transactionId = ctx.params["transaction"];
+	if (!Validate.uuid(transactionId)) return Utils.fail(ctx, ErrorCode.INVALID_TRANSACTION_ID);
+	const payment = await loadTransaction(project.uuid, transactionId);
+	if (!payment) return Utils.fail(ctx, ErrorCode.TRANSACTION_NOT_FOUND);
+	let data: { reason?: string | null } = {};
+	try {
+		data = (await ctx.body<{ reason?: string | null }>()) ?? {};
+	} catch {
+		data = {};
+	}
+	if (!Validate.optionalText(data.reason, 500)) return Utils.fail(ctx, ErrorCode.REQUIRED_DATA_MISSING);
+	const refusal = await removalRefusal(payment);
+	if (refusal) return Utils.failWithReason(ctx, ErrorCode.PAYMENT_NOT_REMOVABLE, Errors.get(ErrorCode.PAYMENT_NOT_REMOVABLE).message, { reason: refusal });
+	const balance = await removePayment(payment, Auth.account(ctx).username, data.reason?.trim() || null);
+	await Audit.record(ctx, {
+		project: project.uuid,
+		action: "transaction.removed",
+		entityType: "transaction",
+		entityId: payment.uuid,
+		oldValue: present(payment),
+		newValue: { reason: data.reason?.trim() || null, invoice_status: balance.status },
+	});
+	const [updated] = (await Database`SELECT * FROM transactions WHERE uuid = ${payment.uuid}`) as TransactionRow[];
+	return Utils.ok(ctx, present(updated));
 });
 
 Server.app.post("/api/v1/projects/:uuid/transactions", Auth.required(), Permissions.require(Permission.PAYMENT_CREATE), async (ctx) => {

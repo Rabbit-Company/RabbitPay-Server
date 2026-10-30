@@ -1164,6 +1164,37 @@ function creditNotesCard(
 	);
 }
 
+function enteredByHand(transaction: Transaction): boolean {
+	const details = transaction.payment_details ?? {};
+	return transaction.type === "payment" && Boolean(details.recorded_by) && details.notes !== "Bank statement" && transaction.payment_method !== "terminal";
+}
+
+function removePaymentDialog(project: string, transaction: Transaction, onRemoved: () => void) {
+	const reason = input("text", { maxlength: "500", placeholder: t("payments.remove_reason_placeholder") });
+	const submit = el("button", { class: "button danger", type: "submit" }, t("payments.remove"));
+	const form = el(
+		"form",
+		{ class: "stack" },
+		el("p", {}, t("payments.remove_body", { amount: formatMoney(transaction.amount, transaction.currency) })),
+		field(t("payments.remove_reason"), reason),
+		el("div", { class: "dialog-actions" }, submit)
+	);
+	const dialog = modal(t("payments.remove_title"), form);
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		submit.disabled = true;
+		try {
+			await Api.removeTransaction(project, transaction.uuid, reason.value.trim() || null);
+			dialog.close();
+			toast(t("payments.removed"), "success");
+			onRemoved();
+		} catch (error) {
+			reportError(error);
+			submit.disabled = false;
+		}
+	});
+}
+
 export async function invoiceView(uuid: string, invoiceId: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const container = el("div", { class: "stack" });
@@ -1192,7 +1223,14 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 				el("td", {}, transactionTypeLabel(transaction.type)),
 				el("td", { class: "mono" }, `${transaction.type === "payment" ? "" : "-"}${formatMoney(transaction.amount, transaction.currency)}`),
 				el("td", {}, processorLabel(transaction.processor)),
-				el("td", {}, el("span", { class: `pill pill-${transaction.status}` }, statusLabel(transaction.status))),
+				el(
+					"td",
+					{},
+					el("span", { class: `pill pill-${transaction.status}` }, statusLabel(transaction.status)),
+					transaction.payment_details?.removed_reason
+						? el("div", { class: "field-hint" }, t("payments.removed_note", { reason: String(transaction.payment_details.removed_reason) }))
+						: null
+				),
 				el("td", {}, formatDate(settledAt(transaction), project.date_format as DateFormat, project.timezone)),
 				el(
 					"td",
@@ -1218,7 +1256,14 @@ export async function invoiceView(uuid: string, invoiceId: string): Promise<HTML
 								},
 								t("payments.refund")
 							)
-						: el("span", { class: "muted" }, "-")
+						: el("span", { class: "muted" }, "-"),
+					enteredByHand(transaction) && ["completed", "confirmed"].includes(transaction.status) && can(project, Permission.PAYMENT_REFUND)
+						? el(
+								"button",
+								{ class: "button ghost small", type: "button", onClick: () => removePaymentDialog(uuid, transaction, () => void render()) },
+								t("payments.remove")
+							)
+						: null
 				)
 			);
 

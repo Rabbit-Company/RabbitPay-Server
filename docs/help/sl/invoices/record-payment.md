@@ -47,3 +47,9 @@ Vpišite znesek, ki je prispel. Račun postane **delno plačan** in pokaže, kol
 > **Pomembno:** RabbitPay vračilo zabeleži. Denarja ne premakne. Bančno nakazilo vrnite iz svoje banke, vračilo s kartice ali prek PayPala pa iz nadzorne plošče Stripe ali PayPal.
 
 Pri računu, ki je bil potrjen pri FURS, se z vračilom vedno izda dobropis, da FURS prejme popravek.
+
+## Odstranite pomotoma vneseno plačilo
+
+Če ste zabeležili plačilo, ki ni nikoli prispelo, na primer ker je bilo bančno plačilo za starejše račune, pod **Plačila** ob njem pritisnite **Odstrani**. Vpišite kratek razlog in potrdite. Plačilo ostane na seznamu, označeno kot neuspešno, z razlogom, da je vedno vidno, kaj je bilo popravljeno. Račun spet velja za neplačan in lahko dobi opomnike. Kupec ne prejme obvestila.
+
+**Odstrani** je na voljo le pri plačilih, ki ste jih vnesli sami. Plačilo, ustvarjeno s povezavo bančne postavke, razveljavite s **Ponovno odpri** na tej postavki, glejte [Bančni izpiski](accounting/bank-statements). Plačila prek Stripe, PayPala ali kriptovalut, vrnjena plačila ter gotovinska in kartična plačila, potrjena pri FURS, popravite z **Vrni**.

@@ -2352,6 +2352,7 @@ export interface Transaction {
 	customer_email?: string | null;
 	refunds?: Transaction[];
 	refundable?: number;
+	removable?: boolean;
 }
 
 export interface TransactionTotal {
@@ -3667,6 +3668,10 @@ export const Api = {
 		options: { invoice?: string; status?: string; type?: string; processor?: string; customer?: string; search?: string; limit?: number; offset?: number } = {}
 	) {
 		return request<{ transactions: Transaction[]; total: number; totals: TransactionTotal[] }>("GET", `/projects/${uuid}/transactions${listQuery(options)}`);
+	},
+
+	removeTransaction(uuid: string, transaction: string, reason: string | null) {
+		return request<Transaction>("POST", `/projects/${uuid}/transactions/${transaction}/remove`, { reason });
 	},
 
 	transaction(uuid: string, transaction: string) {

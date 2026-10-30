@@ -859,6 +859,32 @@ describe("payment reference without the year", () => {
 	});
 });
 
+describe("removing a payment entered by mistake", () => {
+	test("a hand entered payment is removed with a reason and the invoice is unpaid again, other payments are refused", async () => {
+		const invoice = await issueInvoice(8197, 23);
+		const [row] = (await Database`SELECT total_amount FROM invoices WHERE uuid = ${invoice}`) as { total_amount: number }[];
+		const recorded = await call("POST", `${base()}/transactions`, { invoice, processor: "bank_transfer", amount: Number(row.total_amount) });
+		const payment = recorded.data.transaction?.uuid ?? recorded.data.uuid;
+		expect((await call("GET", `${base()}/transactions/${payment}`)).data.removable).toBe(true);
+
+		const removed = await call("POST", `${base()}/transactions/${payment}/remove`, { reason: "Placilo je bilo za stare racune" });
+		expect(removed.data.status).toBe("failed");
+		expect(removed.data.payment_details).toMatchObject({ removed_reason: "Placilo je bilo za stare racune" });
+		const [after] = (await Database`SELECT status, paid_amount FROM invoices WHERE uuid = ${invoice}`) as { status: string; paid_amount: number }[];
+		expect(after.status).not.toBe("paid");
+		expect(Number(after.paid_amount)).toBe(0);
+		const again = await call("POST", `${base()}/transactions/${payment}/remove`, {});
+		expect(again.error).toBe(1377);
+
+		const [bankPayment] = (await Database`SELECT uuid FROM transactions WHERE payment_details LIKE ${"%Bank statement%"} AND status = 'completed' LIMIT 1`) as {
+			uuid: string;
+		}[];
+		const refused = await call("POST", `${base()}/transactions/${bankPayment.uuid}/remove`, {});
+		expect(refused.error).toBe(1377);
+		expect(refused.data.reason).toBe("not_manual");
+	});
+});
+
 describe("several bank accounts", () => {
 	test("a statement from another IBAN gets the next free account in group 110 and its lines post there", async () => {
 		const xml = camt([entry("12.00", "DBIT", "2026-03-20", "S-1", "SKB", "Nadomestilo za vodenje")])
