@@ -27,7 +27,7 @@ function importDialog(project: Project, onImported: () => void) {
 	let name = "";
 
 	const show = (preview: StatementPreview) => {
-		submit.disabled = preview.new_lines === 0;
+		submit.disabled = preview.new_lines === 0 && preview.refreshable_lines === 0;
 		summary.replaceChildren(
 			table(
 				[t("bank.account"), t("bank.statement"), t("bank.period"), t("bank.opening"), t("bank.closing"), t("bank.lines")],
@@ -50,7 +50,8 @@ function importDialog(project: Project, onImported: () => void) {
 					)
 				)
 			),
-			el("p", {}, t("bank.import_counts", { new: preview.new_lines, known: preview.known_lines }))
+			el("p", {}, t("bank.import_counts", { new: preview.new_lines, known: preview.known_lines })),
+			...(preview.refreshable_lines > 0 ? [el("p", { class: "muted" }, t("bank.import_refreshable", { count: preview.refreshable_lines }))] : [])
 		);
 	};
 

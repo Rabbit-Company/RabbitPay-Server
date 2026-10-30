@@ -18,6 +18,7 @@ import {
 	candidatesFor,
 	matchesOf,
 	existingFingerprints,
+	refreshableLines,
 	ignoreTransaction,
 	importStatements,
 	matchTransaction,
@@ -86,6 +87,7 @@ Server.app.post(`${base}/bank-statements/preview`, importBody, Auth.required(), 
 		statements: upload.statements.map(({ transactions, ...statement }) => ({ ...statement, transactions: transactions.length })),
 		new_lines: lines.filter((line) => !known.has(line.fingerprint)).length,
 		known_lines: lines.filter((line) => known.has(line.fingerprint)).length,
+		refreshable_lines: await refreshableLines(project.uuid, lines),
 	});
 });
 

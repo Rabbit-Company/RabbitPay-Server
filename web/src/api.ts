@@ -1396,6 +1396,7 @@ export interface StatementPreview {
 	statements: (Omit<BankStatementRow, "uuid" | "project" | "file_name" | "created_by" | "created"> & { transactions: number })[];
 	new_lines: number;
 	known_lines: number;
+	refreshable_lines: number;
 }
 
 export type { AccountLedgerRow, JournalEntryView, LedgerIssue, TrialBalanceRow };

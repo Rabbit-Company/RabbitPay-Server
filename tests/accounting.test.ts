@@ -716,9 +716,13 @@ describe("card payments and payment purpose", () => {
 		expect(await stored()).toEqual({ counterparty_name: null, remittance: null });
 
 		const richer = camt([card("-", "<UltmtCdtr><Nm>TRGOVINA BREZA D.O.O.</Nm></UltmtCdtr>")]);
+		const file = Buffer.from(richer.replace("<Id>2026-03-001</Id>", "<Id>CARD-03</Id>")).toString("base64");
+		const preview = await call("POST", `${base()}/accounting/bank-statements/preview`, { name: "kartica.xml", data: file });
+		expect(preview.data).toMatchObject({ new_lines: 0, refreshable_lines: 1 });
 		expect((await upload(richer)).data).toMatchObject({ imported: 0, skipped: 1, refreshed: 1 });
 		expect(await stored()).toEqual({ counterparty_name: "TRGOVINA BREZA D.O.O.", remittance: "Nakup s kartico, Trgovina Breza" });
 		expect((await upload(richer)).data).toMatchObject({ imported: 0, skipped: 1, refreshed: 0 });
+		expect((await call("POST", `${base()}/accounting/bank-statements/preview`, { name: "kartica.xml", data: file })).data.refreshable_lines).toBe(0);
 	});
 });
 

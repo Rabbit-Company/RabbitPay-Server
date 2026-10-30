@@ -3,7 +3,7 @@ import { outstandingOf } from "../invoicing";
 import { creditorReference } from "../payments/reference";
 import { acceptsPayment, recordPayment } from "../payments/recorded";
 import { ProcessorType } from "../payments/types";
-import type { CamtStatement } from "./camt";
+import type { CamtStatement, CamtTransaction } from "./camt";
 import { bankAccountFor } from "./chart";
 import type { BankCandidate, BankMatchInput, BankSuggestion } from "./types";
 
@@ -71,6 +71,31 @@ export async function existingFingerprints(project: string, fingerprints: string
 	return new Set(rows.map((row) => row.fingerprint));
 }
 
+function refreshed(
+	line: Pick<CamtTransaction, "counterparty_name" | "remittance">,
+	stored: Pick<BankTransactionRow, "counterparty_name" | "remittance">
+): { counterparty_name: string | null; remittance: string | null } | null {
+	const name = line.counterparty_name ?? stored.counterparty_name ?? null;
+	const remittance = line.remittance ?? stored.remittance ?? null;
+	return name !== stored.counterparty_name || remittance !== stored.remittance ? { counterparty_name: name, remittance } : null;
+}
+
+export async function refreshableLines(project: string, lines: CamtTransaction[]): Promise<number> {
+	if (lines.length === 0) return 0;
+	const stored = new Map(
+		(
+			(await Database`
+				SELECT fingerprint, counterparty_name, remittance FROM bank_transactions
+				WHERE project = ${project} AND fingerprint IN ${Database(lines.map((line) => line.fingerprint))}
+			`) as Pick<BankTransactionRow, "fingerprint" | "counterparty_name" | "remittance">[]
+		).map((row) => [row.fingerprint, row])
+	);
+	return lines.filter((line) => {
+		const row = stored.get(line.fingerprint);
+		return row !== undefined && refreshed(line, row) !== null;
+	}).length;
+}
+
 export async function importStatements(project: string, statements: CamtStatement[], fileName: string | null, author: string): Promise<StatementImport> {
 	const known = await existingFingerprints(
 		project,
@@ -78,7 +103,7 @@ export async function importStatements(project: string, statements: CamtStatemen
 	);
 	let imported = 0;
 	let skipped = 0;
-	let refreshed = 0;
+	let refreshedCount = 0;
 	await Database.begin(async (tx) => {
 		const now = Date.now();
 		for (const statement of statements) {
@@ -101,11 +126,10 @@ export async function importStatements(project: string, statements: CamtStatemen
 					const [stored] = (await tx`
 						SELECT uuid, counterparty_name, remittance FROM bank_transactions WHERE project = ${project} AND fingerprint = ${line.fingerprint}
 					`) as Pick<BankTransactionRow, "uuid" | "counterparty_name" | "remittance">[];
-					const name = line.counterparty_name ?? stored?.counterparty_name ?? null;
-					const remittance = line.remittance ?? stored?.remittance ?? null;
-					if (stored && (name !== stored.counterparty_name || remittance !== stored.remittance)) {
-						await tx`UPDATE bank_transactions SET counterparty_name = ${name}, remittance = ${remittance} WHERE uuid = ${stored.uuid}`;
-						refreshed++;
+					const update = stored ? refreshed(line, stored) : null;
+					if (stored && update) {
+						await tx`UPDATE bank_transactions SET counterparty_name = ${update.counterparty_name}, remittance = ${update.remittance} WHERE uuid = ${stored.uuid}`;
+						refreshedCount++;
 					}
 					continue;
 				}
@@ -121,7 +145,7 @@ export async function importStatements(project: string, statements: CamtStatemen
 			}
 		}
 	});
-	return { statements: statements.length, imported, skipped, refreshed };
+	return { statements: statements.length, imported, skipped, refreshed: refreshedCount };
 }
 
 interface Candidates {

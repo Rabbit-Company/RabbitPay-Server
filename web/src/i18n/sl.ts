@@ -3026,6 +3026,7 @@ export const sl: UiDictionary = {
 	"bank.import_hint": "Izpisek prenesite iz spletne banke v obliki ISO 20022 camt.053 XML. Že uvožene postavke se preskočijo.",
 	"bank.import_submit": "Uvozi",
 	"bank.import_counts": "Nove postavke: {new} | Že uvožene: {known}",
+	"bank.import_refreshable": "Pri {count} že uvoženih postavkah bosta dopolnjena partner ali namen.",
 	"bank.imported": "Uvoženih bančnih postavk: {count}",
 	"bank.imported_refreshed": "Uvoženih bančnih postavk: {count}. Dopolnjen partner ali namen pri prejšnjih postavkah: {refreshed}",
 	"bank.file": "Datoteka camt.053",
