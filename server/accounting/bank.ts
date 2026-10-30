@@ -44,6 +44,23 @@ function mentions(transaction: BankTransactionRow, reference: string | null): bo
 	return compact(transaction.remittance).includes(wanted);
 }
 
+export function sequenceOf(reference: string | null): string | null {
+	let groups: string[] = (reference ?? "").match(/\d+/g) ?? [];
+	if (groups.length > 1) groups = groups.filter((group) => !/^(19|20)\d{2}$/.test(group));
+	if (groups.length > 1 && groups[groups.length - 1].length === 2) groups = groups.slice(0, -1);
+	const number = (groups[0] ?? "").replace(/^0+/, "");
+	return number.length > 0 ? number : null;
+}
+
+export function mentionsNumber(transaction: Pick<BankTransactionRow, "reference" | "remittance">, reference: string | null): boolean {
+	const number = sequenceOf(reference);
+	if (!number) return false;
+	const structured = (transaction.reference ?? "").toUpperCase().replace(/\s+/g, "");
+	const body = structured.replace(/^(SI\d{2}|RF\d{2})/, "").replace(/^0+/, "");
+	if (body === number) return true;
+	return (transaction.remittance ?? "").split(/[^0-9]+/).some((token) => token.replace(/^0+/, "") === number);
+}
+
 function words(value: string | null): Set<string> {
 	return new Set(
 		(value ?? "")
@@ -230,7 +247,7 @@ function suggestFor(transaction: BankTransactionRow, pool: Candidates, base: str
 		const referenced = mentions(transaction, candidate.reference);
 		const sameAmount = sameCurrency && candidate.amount === Math.abs(transaction.amount);
 		if (!referenced && !sameAmount) continue;
-		const named = similarName(candidate.name, transaction.counterparty_name);
+		const named = similarName(candidate.name, transaction.counterparty_name) || (sameAmount && mentionsNumber(transaction, candidate.reference));
 		found.push({
 			...candidate,
 			exact: referenced && sameAmount,
@@ -271,7 +288,12 @@ export async function paidSuggestionsFor(project: ProjectRow, transactions: Bank
 	const result = new Map<string, PaidInvoiceSuggestion[]>();
 	for (const transaction of incoming) {
 		const found = rows
-			.filter((row) => row.currency === transaction.currency && Number(row.amount) === transaction.amount && mentions(transaction, row.reference))
+			.filter(
+				(row) =>
+					row.currency === transaction.currency &&
+					Number(row.amount) === transaction.amount &&
+					(mentions(transaction, row.reference) || mentionsNumber(transaction, row.reference))
+			)
 			.slice(0, 3)
 			.map((row) => ({
 				invoice: row.invoice,
@@ -285,6 +307,45 @@ export async function paidSuggestionsFor(project: ProjectRow, transactions: Bank
 		if (found.length) result.set(transaction.uuid, found);
 	}
 	return result;
+}
+
+export async function unlinkedPayments(project: ProjectRow, transaction: BankTransactionRow, search: string): Promise<PaidInvoiceSuggestion[]> {
+	if (transaction.amount <= 0) return [];
+	const wanted = search.trim().toLowerCase();
+	const rows = (await Database`
+		SELECT t.uuid AS payment, t.amount, t.currency, t.completed_at, i.uuid AS invoice, i.reference, i.buyer_details, i.buyer_email
+		FROM transactions t JOIN invoices i ON i.uuid = t.invoice
+		WHERE t.project = ${project.uuid} AND t.type = 'payment' AND t.processor = 'bank_transfer' AND t.status = 'completed'
+			AND t.currency = ${transaction.currency} AND ${UNLINKED(Database)}
+		ORDER BY t.completed_at DESC LIMIT 2000
+	`) as {
+		payment: string;
+		amount: number;
+		currency: string;
+		completed_at: number | null;
+		invoice: string;
+		reference: string;
+		buyer_details: string | null;
+		buyer_email: string | null;
+	}[];
+	return rows
+		.map((row) => ({
+			invoice: row.invoice,
+			payment: row.payment,
+			reference: row.reference,
+			name: buyerName(row as unknown as InvoiceRow),
+			amount: Number(row.amount),
+			currency: row.currency,
+			paid_at: row.completed_at === null ? null : Number(row.completed_at),
+		}))
+		.filter((row) => !wanted || `${row.reference} ${row.name ?? ""} ${(row.amount / 100).toFixed(2)}`.toLowerCase().includes(wanted))
+		.sort(
+			(a, b) =>
+				Number(b.amount === transaction.amount) - Number(a.amount === transaction.amount) ||
+				Number(mentionsNumber(transaction, b.reference)) - Number(mentionsNumber(transaction, a.reference)) ||
+				Math.abs((a.paid_at ?? 0) - transaction.booking_date) - Math.abs((b.paid_at ?? 0) - transaction.booking_date)
+		)
+		.slice(0, 50);
 }
 
 export async function linkPayment(project: ProjectRow, transaction: BankTransactionRow, paymentId: string, author: string) {

@@ -26,6 +26,8 @@ Povezava z računom kupca zabeleži plačilo na računu, zato je račun povsod v
 
 Če ste račun že sami označili kot plačan z nakazilom, postavka namesto tega ponudi **Že plačano: poveži**. Postavko poveže s plačilom, ki ste ga vnesli, brez drugega plačila. Predlog, najden samo po znesku in pri drugem kupcu, nikoli ni glavni gumb. Najdete ga pod **Več**, kjer lahko z **Odpri** predlagani dokument tudi najprej preverite.
 
+Če kupec ni navedel celotne številke računa, na primer je napisal 373 namesto 373/26, za predlog zadošča enak znesek. Za vse, česar predlogi ne najdejo, pod **Več** odprite **Poveži z več dokumenti** in vklopite **Prikaži že plačane račune**. Seznam pokaže plačane račune, katerih plačilo z nakazilom še ni povezano z bančno postavko. Iščite po številki, kupcu ali znesku, izberite plačilo in pritisnite **Poveži**.
+
 ![Po povezovanju ostane samo bančni strošek](https://cdn.rabbitpay.net/help/sl/dark/accounting/bank-statements/matched.webp)
 
 ## Eno plačilo za več listin

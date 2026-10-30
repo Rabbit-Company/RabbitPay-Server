@@ -23,6 +23,7 @@ import {
 	ignoreTransaction,
 	importStatements,
 	linkPayment,
+	unlinkedPayments,
 	paidSuggestionsFor,
 	matchTransaction,
 	PermanentMatch,
@@ -294,6 +295,13 @@ Server.app.post(
 		return Utils.ok(ctx, row, 201);
 	}
 );
+
+Server.app.get(`${base}/bank-transactions/:line/paid-payments`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
+	const project = Permissions.project(ctx);
+	const transaction = await findTransaction(project.uuid, ctx.params.line);
+	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
+	return Utils.ok(ctx, { payments: await unlinkedPayments(project, transaction, (ctx.query().get("search") ?? "").slice(0, 100)) });
+});
 
 Server.app.post(`${base}/bank-transactions/:line/link-payment`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	const refused = editable(ctx);

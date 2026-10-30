@@ -26,6 +26,8 @@ Matching a customer invoice records the payment on the invoice, so it shows as p
 
 If you already marked the invoice as paid by bank transfer yourself, the line offers **Already paid: link** instead. It links the line to the payment you entered, without recording a second one. A suggestion found only by the amount, from a different customer, is never the main button. You find it under **More**, where **Open** also lets you check any suggested document first.
 
+When the customer left out part of the invoice number, for example wrote 373 instead of 373/26, the same amount is enough to suggest it. For anything the suggestions miss, open **Match several** under **More** and switch on **Show invoices that are already paid**. It lists paid invoices whose bank transfer payment is not linked to a bank line yet. Search by number, customer or amount, pick the payment and press **Match**.
+
 ![After matching, only the bank charge is left](https://cdn.rabbitpay.net/help/en/dark/accounting/bank-statements/matched.webp)
 
 ## One payment for several documents

@@ -161,7 +161,7 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 					difference: formatMoney(difference, line.currency),
 				});
 		totals.className = difference === 0 || foreign ? "mono" : "mono warn";
-		submit.disabled = picked.length === 0 || (foreign ? picked.length !== 1 : difference !== 0);
+		submit.disabled = showPaid.checked ? paidChoice === null : picked.length === 0 || (foreign ? picked.length !== 1 : difference !== 0);
 	};
 
 	for (const candidate of candidates) {
@@ -183,7 +183,72 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 		);
 		rows.push({ candidate, pick, amount, row });
 	}
+	const showPaid = input("checkbox");
+	const paidBody = el("div", { class: "stack" });
+	const regular = el("div", { class: "stack" });
+	let paidChoice: PaidInvoiceSuggestion | null = null;
+	let paidRound = 0;
+	let paidTimer: ReturnType<typeof setTimeout>;
+	const loadPaid = async () => {
+		const round = ++paidRound;
+		paidChoice = null;
+		refresh();
+		try {
+			const { payments } = await Api.bankPaidPayments(project.uuid, line.uuid, search.value.trim());
+			if (round !== paidRound) return;
+			if (payments.length === 0) {
+				paidBody.replaceChildren(emptyState(t("bank.paid_none")));
+				return;
+			}
+			paidBody.replaceChildren(
+				table(
+					["", t("bank.match_document"), t("bank.counterparty"), t("bank.paid_on"), numeric(t("bank.match_amount"))],
+					payments.map((payment) => {
+						const pick = input("radio");
+						pick.name = "paid-payment";
+						pick.disabled = payment.amount !== line.amount;
+						pick.addEventListener("change", () => {
+							paidChoice = payment;
+							refresh();
+						});
+						return el(
+							"tr",
+							{ class: pick.disabled ? "muted" : "" },
+							el("td", {}, pick),
+							el("td", {}, `${t("bank.match_invoice")} ${payment.reference}`),
+							el("td", {}, payment.name ?? ""),
+							el("td", { class: "date" }, payment.paid_at ? formatDate(payment.paid_at, dateFormat, project.timezone) : ""),
+							moneyCell(payment.amount, payment.currency, { zero: true })
+						);
+					})
+				),
+				el("p", { class: "field-hint" }, t("bank.paid_hint"))
+			);
+		} catch (error) {
+			reportError(error);
+		}
+	};
+	showPaid.addEventListener("change", () => {
+		regular.hidden = showPaid.checked;
+		paidBody.hidden = !showPaid.checked;
+		totals.hidden = showPaid.checked;
+		foreignNote.hidden = showPaid.checked;
+		search.value = "";
+		for (const entry of rows) entry.row.hidden = false;
+		if (showPaid.checked) void loadPaid();
+		else {
+			paidChoice = null;
+			refresh();
+		}
+	});
+	paidBody.hidden = true;
+
 	search.addEventListener("input", () => {
+		if (showPaid.checked) {
+			clearTimeout(paidTimer);
+			paidTimer = setTimeout(() => void loadPaid(), 250);
+			return;
+		}
 		const wanted = search.value.trim().toLowerCase();
 		for (const entry of rows) {
 			const text = [entry.candidate.reference, entry.candidate.name, String(toMajorUnits(entry.candidate.amount, entry.candidate.currency))]
@@ -194,6 +259,15 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 	});
 	refresh();
 
+	regular.append(
+		candidates.length === 0
+			? emptyState(t("bank.match_none"))
+			: table(
+					["", t("bank.match_document"), t("bank.counterparty"), t("bank.date"), numeric(t("bank.match_open")), numeric(t("bank.match_amount"))],
+					rows.map((entry) => entry.row)
+				)
+	);
+
 	const form = el(
 		"form",
 		{
@@ -202,6 +276,13 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 				event.preventDefault();
 				submit.disabled = true;
 				try {
+					if (showPaid.checked) {
+						if (!paidChoice) return;
+						await Api.linkBankPayment(project.uuid, line.uuid, paidChoice.payment);
+						dialog.close();
+						onMatched();
+						return;
+					}
 					await Api.matchBankTransactionTo(
 						project.uuid,
 						line.uuid,
@@ -224,17 +305,10 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 		},
 		el("p", {}, `${line.counterparty_name ?? ""} ${formatMoney(line.amount, line.currency)}`),
 		el("p", { class: "muted" }, t("bank.match_several_hint")),
-		candidates.length === 0
-			? emptyState(t("bank.match_none"))
-			: el(
-					"div",
-					{ class: "stack" },
-					search,
-					table(
-						["", t("bank.match_document"), t("bank.counterparty"), t("bank.date"), numeric(t("bank.match_open")), numeric(t("bank.match_amount"))],
-						rows.map((entry) => entry.row)
-					)
-				),
+		line.amount > 0 ? el("label", { class: "switch" }, showPaid, el("span", {}, t("bank.show_paid"))) : null,
+		search,
+		regular,
+		paidBody,
 		foreignNote,
 		el("div", { class: "line-actions" }, totals, submit)
 	);

@@ -830,6 +830,35 @@ describe("invoice already paid by hand", () => {
 	});
 });
 
+describe("payment reference without the year", () => {
+	test("finds an invoice paid by hand from its number and the amount, and lists unlinked payments to pick from", async () => {
+		const { sequenceOf } = await import("../server/accounting/bank");
+		const invoice = await issueInvoice(16393, 22);
+		const [row] = (await Database`SELECT reference, total_amount FROM invoices WHERE uuid = ${invoice}`) as { reference: string; total_amount: number }[];
+		const total = Number(row.total_amount);
+		expect((await call("POST", `${base()}/transactions`, { invoice, processor: "bank_transfer", amount: total })).error).toBe(0);
+		const number = sequenceOf(row.reference)!;
+		const xml = camt([entry((total / 100).toFixed(2), "CRDT", "2026-03-26", "Y-1", "Lamity d.o.o.", `RACUN ${number}`)])
+			.replace("<Id>2026-03-001</Id>", "<Id>YEAR-03</Id>")
+			.replace("</Ustrd>", `</Ustrd><Strd><CdtrRefInf><Ref>SI00${number}</Ref></CdtrRefInf></Strd>`);
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "year.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(1);
+		const line = ((await call("GET", `${base()}/accounting/bank-transactions?status=open`)).data.transactions as any[]).find(
+			(entry) => entry.bank_reference === "Y-1"
+		);
+		expect(line.paid_suggestions.map((entry: any) => entry.invoice)).toEqual([invoice]);
+
+		const listed = await call("GET", `${base()}/accounting/bank-transactions/${line.uuid}/paid-payments`);
+		expect(listed.data.payments[0]).toMatchObject({ invoice, amount: total });
+		const searched = await call("GET", `${base()}/accounting/bank-transactions/${line.uuid}/paid-payments?search=${encodeURIComponent(row.reference)}`);
+		expect(searched.data.payments.map((entry: any) => entry.invoice)).toEqual([invoice]);
+		expect(
+			(await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/link-payment`, { payment: listed.data.payments[0].payment })).data.status
+		).toBe("matched");
+		const after = await call("GET", `${base()}/accounting/bank-transactions/${line.uuid}/paid-payments`);
+		expect(after.data.payments.some((entry: any) => entry.invoice === invoice)).toBe(false);
+	});
+});
+
 describe("several bank accounts", () => {
 	test("a statement from another IBAN gets the next free account in group 110 and its lines post there", async () => {
 		const xml = camt([entry("12.00", "DBIT", "2026-03-20", "S-1", "SKB", "Nadomestilo za vodenje")])

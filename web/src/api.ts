@@ -2721,6 +2721,13 @@ export const Api = {
 		return request<Expense>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/expense`, data);
 	},
 
+	bankPaidPayments(uuid: string, line: string, search = "") {
+		return request<{ payments: PaidInvoiceSuggestion[] }>(
+			"GET",
+			`/projects/${uuid}/accounting/bank-transactions/${line}/paid-payments?${new URLSearchParams({ search })}`
+		);
+	},
+
 	linkBankPayment(uuid: string, line: string, payment: string) {
 		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/link-payment`, { payment });
 	},
