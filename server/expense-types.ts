@@ -4,6 +4,8 @@ export const EXPENSE_VAT_TREATMENTS = ["not_reported", "domestic", "domestic_rev
 export type ExpenseVatTreatment = (typeof EXPENSE_VAT_TREATMENTS)[number];
 export const EXPENSE_ASSET_TYPES = ["expense", "real_estate", "fixed_asset"] as const;
 export type ExpenseAssetType = (typeof EXPENSE_ASSET_TYPES)[number];
+export const EXPENSE_PAYMENT_METHODS = ["transfer", "card", "cash"] as const;
+export type ExpensePaymentMethod = (typeof EXPENSE_PAYMENT_METHODS)[number];
 export const EXPENSE_STOCK_PURCHASES = ["goods", "material", "goods_costs", "material_costs"] as const;
 export type ExpenseVatHandling = "1" | "2" | "3";
 
@@ -51,8 +53,9 @@ export type ExpenseInput = Pick<
 	stock_purchase?: StockPurchase | null;
 	payee_iban?: string | null;
 	payee_reference?: string | null;
+	payment_method?: ExpensePaymentMethod;
 };
-export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at" | "due_date"> & {
+export type ExpenseScheduleInput = Omit<ExpenseInput, "expense_date" | "paid_at" | "due_date" | "payment_method"> & {
 	interval_unit: string;
 	interval_count: number;
 	start_date: number;

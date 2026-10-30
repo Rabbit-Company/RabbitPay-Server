@@ -41,7 +41,7 @@ The file is kept with the expense, so you have the original when your accountant
 1. **Expense date** is the day the cost belongs to. Your reports use this date.
 2. **Due date** is when the supplier expects to be paid. Leave it empty for something you already paid.
 3. If you will pay by bank transfer, enter **Pay to IBAN** and the **Payment reference**. Without an IBAN, the supplier's account is used. See [Pay suppliers](expenses-and-reports/pay-suppliers).
-4. Switch on **Paid** if the expense is already paid, and set the **Payment date**.
+4. Switch on **Paid** if the expense is already paid, set the **Payment date** and choose **Paid with**: **Bank transfer**, **Card** or **Cash**. Card and cash receipts get their own list in the [Accountant package](expenses-and-reports/accountant-package).
 5. Press **Add expense**.
 
    ![A finished expense, ready to add](https://cdn.rabbitpay.net/help/en/dark/expenses-and-reports/record-expense/filled.webp)

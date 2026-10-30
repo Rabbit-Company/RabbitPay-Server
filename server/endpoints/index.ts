@@ -35,6 +35,7 @@ import "./v1/expenses";
 import "./v1/fiscal";
 import "./v1/financial-reports";
 import "./v1/ddv-evidence";
+import "./v1/accountant-package";
 import "./v1/store-admin";
 import "./v1/storefront";
 import "./v1/workforce";

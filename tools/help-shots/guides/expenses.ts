@@ -301,6 +301,41 @@ async function reports(studio: Studio, session: Session) {
 	await studio.shot("item-sales", "report", { target: items });
 }
 
+async function accountantPackage(studio: Studio, session: Session) {
+	const { browser } = studio;
+	const page = "accountant-package";
+	const section = `section:${studio.t("package.title")}`;
+	const accountant = studio.language === "sl" ? "racunovodstvo@example.com" : "accounts@example.com";
+
+	await studio.open(projectPath(session, "/statistics"), 1500);
+	await browser.choose(`${section} >> select`, "this_month");
+	await browser.wait(2500);
+	await studio.shot(page, "summary", { target: section });
+
+	await browser.click(`${section} >> button:${studio.t("package.settings")}`, 600);
+	await browser.fill(`.dialog >> field:${studio.t("package.recipients")}`, accountant);
+	await browser.choose(`.dialog >> field:${studio.t("package.send_day")}`, "5");
+	await studio.shot(page, "settings", { target: ".dialog", padding: 24, mark: ".dialog >> button[type=submit]" });
+	await browser.click(".dialog >> button[type=submit]", 1200);
+
+	await browser.click(`${section} >> button:${studio.t("package.send")}`, 600);
+	await studio.shot(page, "confirm", { target: ".overlay .dialog", padding: 24 });
+	await browser.click(`.overlay >> button:${studio.t("package.send")}`, 4000);
+
+	const { expenses } = await projectApi<{ expenses: { uuid: string; total_amount: number; tax_amount: number }[] }>(
+		studio,
+		session,
+		"GET",
+		"/expenses?limit=50"
+	);
+	const edited = expenses[expenses.length - 1];
+	await projectApi(studio, session, "PATCH", `/expenses/${edited.uuid}`, { total_amount: edited.total_amount + 1000 });
+	await studio.open(projectPath(session, "/statistics"), 1500);
+	await browser.choose(`${section} >> select`, "this_month");
+	await browser.wait(3000);
+	await studio.shot(page, "changes", { target: section, mark: `${section} >> button:${studio.t("package.send_changes")}` });
+}
+
 export const expenses: Guide = {
 	module: "expenses-and-reports",
 	steps: [
@@ -311,5 +346,6 @@ export const expenses: Guide = {
 		["recurring-expenses", recurring],
 		["pay-suppliers", paymentFile],
 		["reports", reports],
+		["accountant-package", accountantPackage],
 	],
 };

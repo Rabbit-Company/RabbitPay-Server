@@ -80,6 +80,8 @@ import expensesAndReportsVatReportEn from "../docs/help/en/expenses-and-reports/
 import expensesAndReportsVatReportSl from "../docs/help/sl/expenses-and-reports/vat-report.md" with { type: "text" };
 import expensesAndReportsItemSalesEn from "../docs/help/en/expenses-and-reports/item-sales.md" with { type: "text" };
 import expensesAndReportsItemSalesSl from "../docs/help/sl/expenses-and-reports/item-sales.md" with { type: "text" };
+import expensesAndReportsAccountantPackageEn from "../docs/help/en/expenses-and-reports/accountant-package.md" with { type: "text" };
+import expensesAndReportsAccountantPackageSl from "../docs/help/sl/expenses-and-reports/accountant-package.md" with { type: "text" };
 import terminalEn from "../docs/help/en/terminal/index.md" with { type: "text" };
 import terminalSl from "../docs/help/sl/terminal/index.md" with { type: "text" };
 import terminalOpenTerminalEn from "../docs/help/en/terminal/open-terminal.md" with { type: "text" };
@@ -319,6 +321,7 @@ export const HELP_SOURCES: HelpModuleSource[] = [
 			{ slug: "financial-report", en: expensesAndReportsFinancialReportEn, sl: expensesAndReportsFinancialReportSl },
 			{ slug: "vat-report", en: expensesAndReportsVatReportEn, sl: expensesAndReportsVatReportSl },
 			{ slug: "item-sales", en: expensesAndReportsItemSalesEn, sl: expensesAndReportsItemSalesSl },
+			{ slug: "accountant-package", en: expensesAndReportsAccountantPackageEn, sl: expensesAndReportsAccountantPackageSl },
 		],
 	},
 	{

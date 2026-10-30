@@ -60,22 +60,37 @@ function balance(statement: XmlElement, code: string): { amount: number; date: n
 	return null;
 }
 
+function realName(value: string | null): string | null {
+	const name = value?.trim() ?? "";
+	return /[\p{L}\p{N}]/u.test(name) ? name : null;
+}
+
 function party(details: XmlElement | undefined, role: "Dbtr" | "Cdtr"): { name: string | null; iban: string | null } {
 	const related = child(details, "RltdPties");
-	const name = textOf(related, role, "Nm") ?? textOf(related, role, "Pty", "Nm");
+	const name =
+		realName(textOf(related, role, "Nm")) ??
+		realName(textOf(related, role, "Pty", "Nm")) ??
+		realName(textOf(related, `Ultmt${role}`, "Nm")) ??
+		realName(textOf(related, `Ultmt${role}`, "Pty", "Nm"));
 	const iban = textOf(related, `${role}Acct`, "Id", "IBAN");
 	return { name, iban: iban ? iban.replace(/\s+/g, "").toUpperCase() : null };
 }
 
-function remittanceOf(details: XmlElement | undefined, entry: XmlElement): { reference: string | null; text: string | null } {
+function joined(lines: (string | null)[]): string | null {
+	const present = lines.map((line) => line?.trim() ?? "").filter(Boolean);
+	return present.length ? [...new Set(present)].join(" ").slice(0, 1000) : null;
+}
+
+function remittanceOf(details: XmlElement | undefined, entry: XmlElement): { reference: string | null; text: string | null; legacy: string | null } {
 	const info = child(details, "RmtInf");
 	const reference = textOf(info, "Strd", "CdtrRefInf", "Ref");
-	const lines = [...children(info, "Ustrd").map((line) => line.text.trim()), textOf(details, "AddtlTxInf"), textOf(entry, "AddtlNtryInf")].filter(
-		(line): line is string => Boolean(line)
-	);
+	const unstructured = children(info, "Ustrd").map((line) => line.text);
+	const purpose = children(info, "Strd").flatMap((block) => children(block, "AddtlRmtInf").map((line) => line.text));
+	const extra = [textOf(details, "AddtlTxInf"), textOf(entry, "AddtlNtryInf")];
 	return {
 		reference: reference ? reference.replace(/\s+/g, "").toUpperCase() : null,
-		text: lines.length ? [...new Set(lines)].join(" ").slice(0, 1000) : null,
+		text: joined([...unstructured, ...purpose, ...extra]),
+		legacy: joined([...unstructured, ...extra]),
 	};
 }
 
@@ -118,7 +133,7 @@ export function parseCamt053(source: string, timezone: string): CamtStatement[] 
 				const remittance = remittanceOf(detail, entry);
 				const endToEnd = textOf(detail, "Refs", "EndToEndId");
 				const fingerprint = createHash("sha256")
-					.update([iban, booked, amount, value.currency, bankReference, endToEnd, remittance.reference, remittance.text, counterparty.iban, index].join("|"))
+					.update([iban, booked, amount, value.currency, bankReference, endToEnd, remittance.reference, remittance.legacy, counterparty.iban, index].join("|"))
 					.digest("hex");
 				transactions.push({
 					booking_date: booked,

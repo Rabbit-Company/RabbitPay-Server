@@ -31,6 +31,7 @@ const KINDS: Record<EmailKind, true> = {
 	invoice_paid: true,
 	invoice_overdue: true,
 	dunning_letter: true,
+	accountant_package: true,
 };
 
 export const EMAIL_KINDS = Object.keys(KINDS) as EmailKind[];
@@ -49,6 +50,7 @@ const TEAM_EMAIL_KINDS: EmailKind[] = [
 	"meeting_scheduled",
 	"meeting_reminder",
 	"event_reminder",
+	"accountant_package",
 ];
 
 export function countsTowardAllowance(kind: EmailKind): boolean {

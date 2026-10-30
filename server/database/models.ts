@@ -1,4 +1,5 @@
 import type { ProjectRole } from "../roles";
+import type { ExpensePaymentMethod } from "../expense-types";
 
 export interface AccountRow {
 	username: string;
@@ -532,7 +533,8 @@ export type EmailKind =
 	| "store_order"
 	| "invoice_paid"
 	| "invoice_overdue"
-	| "dunning_letter";
+	| "dunning_letter"
+	| "accountant_package";
 export type EmailStatus = "pending" | "sent" | "failed";
 export type EmailRoute = "server" | "project";
 
@@ -707,6 +709,7 @@ export interface ExpenseRow {
 	payee_iban: string | null;
 	payee_reference: string | null;
 	payment_ordered_at: number | null;
+	payment_method: ExpensePaymentMethod;
 	vat_handling: string;
 	provisional_share: number;
 	self_assessment_period: string | null;

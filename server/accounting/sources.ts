@@ -762,7 +762,7 @@ export class LedgerPlanner {
 			const paid = this.paidInBase(key, document, total);
 			const payment = new EntryBuilder();
 			payment.debit(payable, total, supplier);
-			payment.credit(this.moneyFor(key, "bank"), paid);
+			payment.credit(this.moneyFor(key, expense.payment_method === "cash" ? "cash" : "bank"), paid);
 			this.exchangeDifference(payment, total - paid);
 			this.expose(document, ref, payable, expense.paid_at, expense.total_amount, total);
 			this.entries.push({

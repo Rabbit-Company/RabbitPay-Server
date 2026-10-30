@@ -20,6 +20,13 @@ Beležite, kaj vaše podjetje porabi, uvozite račune dobaviteljev brez prepisov
 | Videti DDV, ki ga dolgujem od prodaje           | [Obračun DDV](expenses-and-reports/vat-report)               |
 | Videti, kateri izdelki in storitve se prodajajo | [Prodaja artiklov](expenses-and-reports/item-sales)          |
 
+## Delo z računovodjo
+
+| Želim                                         | Stran                                                                                                |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Računovodji poslati vse za en mesec           | [Paket za računovodstvo](expenses-and-reports/accountant-package)                                    |
+| Pošiljati samodejno in poslati samo spremembe | [Paket za računovodstvo](expenses-and-reports/accountant-package#posiljajte-ga-samodejno-vsak-mesec) |
+
 ## Kdo lahko kaj
 
 Lastniki, skrbniki, vodje in računovodje lahko beležijo in urejajo stroške. Brisati jih lahko le lastniki in skrbniki. **Statistiko** lahko odprejo vsi, ki lahko vidijo poročila.

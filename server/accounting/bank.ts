@@ -23,6 +23,7 @@ export interface StatementImport {
 	statements: number;
 	imported: number;
 	skipped: number;
+	refreshed: number;
 }
 
 export class BankMatchRefused extends Error {}
@@ -77,6 +78,7 @@ export async function importStatements(project: string, statements: CamtStatemen
 	);
 	let imported = 0;
 	let skipped = 0;
+	let refreshed = 0;
 	await Database.begin(async (tx) => {
 		const now = Date.now();
 		for (const statement of statements) {
@@ -96,6 +98,15 @@ export async function importStatements(project: string, statements: CamtStatemen
 			for (const line of statement.transactions) {
 				if (known.has(line.fingerprint)) {
 					skipped++;
+					const [stored] = (await tx`
+						SELECT uuid, counterparty_name, remittance FROM bank_transactions WHERE project = ${project} AND fingerprint = ${line.fingerprint}
+					`) as Pick<BankTransactionRow, "uuid" | "counterparty_name" | "remittance">[];
+					const name = line.counterparty_name ?? stored?.counterparty_name ?? null;
+					const remittance = line.remittance ?? stored?.remittance ?? null;
+					if (stored && (name !== stored.counterparty_name || remittance !== stored.remittance)) {
+						await tx`UPDATE bank_transactions SET counterparty_name = ${name}, remittance = ${remittance} WHERE uuid = ${stored.uuid}`;
+						refreshed++;
+					}
 					continue;
 				}
 				known.add(line.fingerprint);
@@ -110,7 +121,7 @@ export async function importStatements(project: string, statements: CamtStatemen
 			}
 		}
 	});
-	return { statements: statements.length, imported, skipped };
+	return { statements: statements.length, imported, skipped, refreshed };
 }
 
 interface Candidates {

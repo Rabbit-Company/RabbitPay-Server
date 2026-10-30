@@ -8574,6 +8574,10 @@ button.toast-notice:hover {
 	font-size: 1.45rem;
 	overflow-wrap: anywhere;
 }
+.package-section .stat-value {
+	font-size: 1.3rem;
+	overflow-wrap: anywhere;
+}
 .stock-page td.warn {
 	color: var(--danger);
 	font-weight: 600;

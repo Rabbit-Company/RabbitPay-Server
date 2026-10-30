@@ -23,7 +23,7 @@ import { confirmDialog, modal, reportError, toast } from "../ui";
 import { statusLabel, t, type UiKey } from "../i18n";
 import { loadProject, projectLayout } from "./project";
 import type { DateFormat } from "../../../server/formats";
-import { includedTaxAtRate } from "../../../server/expense-types";
+import { EXPENSE_PAYMENT_METHODS, includedTaxAtRate, type ExpensePaymentMethod } from "../../../server/expense-types";
 import { STANDARD_RATES } from "../../../server/tax";
 import { countryOptions } from "../countries";
 import { paymentFileDialog } from "./expense-payments";
@@ -488,7 +488,16 @@ async function editor(
 	const paid = input("checkbox");
 	paid.checked = recurring ? (schedule?.auto_paid ?? false) : expense?.paid_at != null;
 	const paidDate = input("date", { value: toDateInput(expense?.paid_at ?? expense?.expense_date ?? Date.now(), project.timezone), required: paid.checked });
-	const paymentField = field(t("expenses.paid_date"), paidDate);
+	const paymentMethod = select(
+		EXPENSE_PAYMENT_METHODS.map((value) => ({ value, label: t(`expenses.payment_${value}` as UiKey) })),
+		expense?.payment_method ?? "transfer"
+	);
+	const paymentField = el(
+		"div",
+		{ class: "grid" },
+		field(t("expenses.paid_date"), paidDate),
+		field(t("expenses.payment_method"), paymentMethod, t("expenses.payment_method_hint"))
+	);
 	paymentField.hidden = !paid.checked;
 	paid.addEventListener("change", () => {
 		paymentField.hidden = !paid.checked;
@@ -592,6 +601,7 @@ async function editor(
 						}))
 						.filter((line) => line.tax_base > 0 || line.tax_amount > 0 || line.deductible_tax_amount > 0),
 			paid_at: paid.checked && !recurring ? dayStartFromDateInput(paidDate.value, project.timezone) : null,
+			...(recurring ? {} : { payment_method: paymentMethod.value as ExpensePaymentMethod }),
 			notes: notes.value || null,
 		};
 		if (
@@ -656,6 +666,7 @@ const CSV_COLUMNS = [
 	"vat_amount",
 	"deductible_vat",
 	"paid_date",
+	"payment_method",
 	"notes",
 ];
 
@@ -684,6 +695,7 @@ function importCsv(project: Project, onImported: () => void) {
 				"22,00",
 				"22,00",
 				"4.3.2026",
+				"kartica",
 				"",
 			],
 			en: [
@@ -703,6 +715,7 @@ function importCsv(project: Project, onImported: () => void) {
 				"22.00",
 				"22.00",
 				"2026-03-04",
+				"card",
 				"",
 			],
 		},

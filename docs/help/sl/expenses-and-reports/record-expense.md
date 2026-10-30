@@ -52,7 +52,7 @@ Datoteka se hrani ob strošku, zato imate izvirnik pri roki, ko ga zahteva raču
 1. **Datum stroška** je dan, ki mu strošek pripada. Poročila uporabljajo ta datum.
 2. **Datum zapadlosti** je dan, do katerega dobavitelj pričakuje plačilo. Pri že plačanem pustite prazno.
 3. Če boste plačali z nakazilom, vpišite **IBAN za plačilo** in **Sklic za plačilo**. Brez IBAN-a se uporabi račun dobavitelja. Glejte [Plačajte dobaviteljem](expenses-and-reports/pay-suppliers).
-4. Vklopite **Plačano**, če je strošek že plačan, in nastavite **Datum plačila**.
+4. Vklopite **Plačano**, če je strošek že plačan, nastavite **Datum plačila** in izberite **Način plačila**: **Bančno nakazilo**, **Kartica** ali **Gotovina**. Računi, plačani s kartico ali gotovino, imajo v [Paketu za računovodstvo](expenses-and-reports/accountant-package) svoj seznam.
 5. Pritisnite **Dodaj strošek**.
 
    ![Dokončan strošek, pripravljen za dodajanje](https://cdn.rabbitpay.net/help/sl/dark/expenses-and-reports/record-expense/filled.webp)

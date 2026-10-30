@@ -5,7 +5,7 @@ import { isCountryCode } from "./countries";
 import { MAX_IMPORT_CHARACTERS, MAX_IMPORT_ROWS, parseImportAmount, parseImportDate } from "./accounting/recorded-import";
 import { validExpense } from "./expense-service";
 import { accountingPeriodLocked } from "./accounting-periods";
-import { EXPENSE_VAT_TREATMENTS, type ExpenseInput, type ExpenseVatTreatment } from "./expense-types";
+import { EXPENSE_VAT_TREATMENTS, type ExpenseInput, type ExpensePaymentMethod, type ExpenseVatTreatment } from "./expense-types";
 import type { ProjectRow } from "./database/models";
 
 export type ExpenseImportColumn =
@@ -27,6 +27,7 @@ export type ExpenseImportColumn =
 	| "vat_amount"
 	| "deductible_vat"
 	| "paid_date"
+	| "payment_method"
 	| "notes";
 
 export interface ExpenseImportError {
@@ -72,6 +73,7 @@ const ALIASES: Record<ExpenseImportColumn, string[]> = {
 	vat_amount: ["vat_amount", "vat", "tax", "ddv", "znesek_ddv"],
 	deductible_vat: ["deductible_vat", "deductible", "odbitni_ddv"],
 	paid_date: ["paid_date", "paid", "paid_at", "placano", "datum_placila"],
+	payment_method: ["payment_method", "paid_with", "nacin_placila", "placilo"],
 	notes: ["notes", "note", "opombe"],
 };
 
@@ -89,8 +91,19 @@ const DOCUMENT_COLUMNS: ExpenseImportColumn[] = [
 	"exchange_rate",
 	"vat_treatment",
 	"paid_date",
+	"payment_method",
 	"notes",
 ];
+const PAYMENT_METHODS: Record<string, ExpensePaymentMethod> = {
+	transfer: "transfer",
+	bank: "transfer",
+	nakazilo: "transfer",
+	trr: "transfer",
+	card: "card",
+	kartica: "card",
+	cash: "cash",
+	gotovina: "cash",
+};
 const SELF_ASSESSED: ExpenseVatTreatment[] = ["domestic_reverse_charge", "eu_goods", "eu_services"];
 
 export async function parseExpenseImport(content: string, project: ProjectRow): Promise<ExpenseImportResult> {
@@ -157,6 +170,8 @@ export async function parseExpenseImport(content: string, project: ProjectRow): 
 			if (countryText && !isCountryCode(countryText)) fail("invalid_value", row, "supplier_country", reference);
 			const treatmentText = csvHeader(cell(cells, "vat_treatment"));
 			if (treatmentText && !EXPENSE_VAT_TREATMENTS.includes(treatmentText as ExpenseVatTreatment)) fail("invalid_value", row, "vat_treatment", reference);
+			const methodText = csvHeader(cell(cells, "payment_method"));
+			if (methodText && !PAYMENT_METHODS[methodText]) fail("invalid_value", row, "payment_method", reference);
 			const rateText = cell(cells, "exchange_rate").replace(",", ".");
 			const exchangeRate = rateText ? Number(rateText) : null;
 			if (rateText && !(Number.isFinite(exchangeRate) && exchangeRate! > 0)) fail("invalid_value", row, "exchange_rate", reference);
@@ -188,6 +203,7 @@ export async function parseExpenseImport(content: string, project: ProjectRow): 
 					tax_exchange_rate: exchangeRate,
 					tax_rate_date: currency !== base ? issued : null,
 					paid_at: date("paid_date"),
+					payment_method: PAYMENT_METHODS[methodText] ?? "transfer",
 					notes: cell(cells, "notes") || null,
 					vat_lines: [],
 				},

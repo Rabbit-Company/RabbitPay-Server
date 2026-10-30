@@ -1,6 +1,7 @@
 import type { NotificationChannel, NotificationGroup, NotificationKind } from "../../server/notifications/kinds";
 import type { EmailKind, EmailRoute, EmailStatus, ExpenseRow, RecurringExpenseRow } from "../../server/database/models";
 import type { ExpenseInput, ExpenseScheduleInput, ExpenseVatLineInput } from "../../server/expense-types";
+import type { PackageChanges, PackageCheck, VatReturnSummary } from "../../server/accountant-package-types";
 import type { FinancialReport } from "../../server/expense-types";
 import type { DdvEvidenceResult, DdvExportOptions } from "../../server/ddv-evidence";
 import type { GeneratedReport, ReportState } from "../../server/report-types";
@@ -2262,6 +2263,51 @@ function invoiceExportQuery(selection: InvoiceExportSelection): string {
 	return new URLSearchParams(values).toString();
 }
 
+export interface PackageSection {
+	count: number;
+	net: number;
+	vat: number;
+	total: number;
+}
+
+export interface AccountantPackageSummary {
+	period: { from: string; to: string };
+	currency: string;
+	issued: PackageSection;
+	credit_notes: PackageSection;
+	received_domestic: PackageSection;
+	received_foreign: PackageSection;
+	received_on_spot: PackageSection;
+	vat_return: VatReturnSummary | null;
+	bank: { accounts: number; lines: number; unmatched: number; used: boolean };
+	open_items: { receivable: number; payable: number; receivable_count: number; payable_count: number };
+	checks: PackageCheck[];
+	limit: number;
+}
+
+export interface PackageSettings {
+	recipients: string[];
+	send_day: number | null;
+	next_run: string | null;
+	updated: number | null;
+}
+
+export interface PackageSend {
+	uuid: string;
+	kind: "full" | "changes";
+	recipients: string[];
+	automatic: boolean;
+	sent_by: string | null;
+	created: number;
+	expires_at: number;
+	changes: PackageChanges | null;
+}
+
+export interface PackageStatus {
+	sends: PackageSend[];
+	changes: PackageChanges | null;
+}
+
 export interface CurrencyTotal {
 	currency: string;
 	count: number;
@@ -2646,7 +2692,10 @@ export const Api = {
 	},
 
 	importBankStatement(uuid: string, name: string, data: string) {
-		return request<{ statements: number; imported: number; skipped: number }>("POST", `/projects/${uuid}/accounting/bank-statements`, { name, data });
+		return request<{ statements: number; imported: number; skipped: number; refreshed: number }>("POST", `/projects/${uuid}/accounting/bank-statements`, {
+			name,
+			data,
+		});
 	},
 
 	bankStatements(uuid: string) {
@@ -3450,6 +3499,34 @@ export const Api = {
 
 	invoiceExportZip(uuid: string, selection: InvoiceExportSelection) {
 		return requestFile(`/projects/${uuid}/invoice-export/zip?${invoiceExportQuery(selection)}`, "invoices.zip");
+	},
+
+	accountantPackage(uuid: string, period: { from: string; to: string }) {
+		return request<AccountantPackageSummary>("GET", `/projects/${uuid}/accountant-package?${new URLSearchParams(period)}`);
+	},
+
+	accountantPackageOverview(uuid: string, period: { from: string; to: string }) {
+		return requestFile(`/projects/${uuid}/accountant-package/overview?${new URLSearchParams(period)}`, "overview.pdf");
+	},
+
+	accountantPackageZip(uuid: string, period: { from: string; to: string }) {
+		return requestFile(`/projects/${uuid}/accountant-package/zip?${new URLSearchParams(period)}`, "package.zip");
+	},
+
+	accountantPackageSettings(uuid: string) {
+		return request<PackageSettings>("GET", `/projects/${uuid}/accountant-package/settings`);
+	},
+
+	saveAccountantPackageSettings(uuid: string, settings: { recipients: string[]; send_day: number | null }) {
+		return request<PackageSettings>("PUT", `/projects/${uuid}/accountant-package/settings`, settings);
+	},
+
+	accountantPackageStatus(uuid: string, period: { from: string; to: string }) {
+		return request<PackageStatus>("GET", `/projects/${uuid}/accountant-package/status?${new URLSearchParams(period)}`);
+	},
+
+	sendAccountantPackage(uuid: string, body: { from: string; to: string; kind: "full" | "changes" }) {
+		return request<PackageSend>("POST", `/projects/${uuid}/accountant-package/send`, body);
 	},
 
 	recurringList(uuid: string, options: { status?: RecurringStatus; customer?: string; search?: string } = {}) {

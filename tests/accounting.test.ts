@@ -679,6 +679,35 @@ describe("bank statements", () => {
 	});
 });
 
+describe("card payments and payment purpose", () => {
+	const card = (party: string, extra: string) => `<Ntry><Amt Ccy="EUR">22.50</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts>BOOK</Sts>
+		<BookgDt><Dt>2026-03-06</Dt></BookgDt><AcctSvcrRef>C-1</AcctSvcrRef>
+		<NtryDtls><TxDtls><RltdPties><Cdtr><Nm>${party}</Nm></Cdtr>${extra}</RltdPties>
+		<RmtInf><Strd><CdtrRefInf><Ref>SI00</Ref></CdtrRefInf>${extra ? "<AddtlRmtInf>Nakup s kartico, Trgovina Breza</AddtlRmtInf>" : ""}</Strd></RmtInf></TxDtls></NtryDtls></Ntry>`;
+	const upload = (xml: string) =>
+		call("POST", `${base()}/accounting/bank-statements`, {
+			name: "kartica.xml",
+			data: Buffer.from(xml.replace("<Id>2026-03-001</Id>", "<Id>CARD-03</Id>")).toString("base64"),
+		});
+	const stored = async () =>
+		(
+			(await Database`SELECT counterparty_name, remittance FROM bank_transactions WHERE bank_reference = 'C-1'`) as {
+				counterparty_name: string | null;
+				remittance: string | null;
+			}[]
+		)[0];
+
+	test("a dash is not a partner and a re-import fills in the name and purpose without duplicating the line", async () => {
+		expect((await upload(camt([card("-", "")]))).data).toMatchObject({ imported: 1 });
+		expect(await stored()).toEqual({ counterparty_name: null, remittance: null });
+
+		const richer = camt([card("-", "<UltmtCdtr><Nm>TRGOVINA BREZA D.O.O.</Nm></UltmtCdtr>")]);
+		expect((await upload(richer)).data).toMatchObject({ imported: 0, skipped: 1, refreshed: 1 });
+		expect(await stored()).toEqual({ counterparty_name: "TRGOVINA BREZA D.O.O.", remittance: "Nakup s kartico, Trgovina Breza" });
+		expect((await upload(richer)).data).toMatchObject({ imported: 0, skipped: 1, refreshed: 0 });
+	});
+});
+
 describe("several bank accounts", () => {
 	test("a statement from another IBAN gets the next free account in group 110 and its lines post there", async () => {
 		const xml = camt([entry("12.00", "DBIT", "2026-03-20", "S-1", "SKB", "Nadomestilo za vodenje")])

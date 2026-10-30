@@ -597,6 +597,28 @@ export function dunningEmail(
 	});
 }
 
+export interface AccountantPackageFacts {
+	company: string;
+	period: string;
+	url: string;
+	expires: string;
+	changes: { added: number; changed: number; removed: number } | null;
+	rows: { label: string; value: string }[];
+}
+
+export function accountantPackageEmail(brand: EmailBrand, facts: AccountantPackageFacts): EmailContent {
+	const t = translator(brand.language);
+	const params = { company: facts.company, period: facts.period, expires: facts.expires, ...(facts.changes ?? {}) };
+	return render(brand, t(facts.changes ? "email.package.subject_changes" : "email.package.subject", params), {
+		heading: t(facts.changes ? "email.package.heading_changes" : "email.package.heading", params),
+		preheader: t(facts.changes ? "email.package.preheader_changes" : "email.package.preheader", params),
+		paragraphs: [t(facts.changes ? "email.package.intro_changes" : "email.package.intro", params), t("email.package.attached")],
+		details: { title: t("email.package.summary"), rows: facts.rows },
+		button: { label: t("email.package.download"), url: facts.url },
+		closing: [t("email.package.expires", params)],
+	});
+}
+
 export function receiptEmail(
 	brand: EmailBrand,
 	receipt: ReceiptFacts,

@@ -717,6 +717,57 @@ export const MIGRATIONS: Migration[] = [
 	{ version: 61, name: "dunning letters", up: createDunningSchema },
 	{ version: 62, name: "dunning letter numbering", up: addDunningNumbering },
 	{ version: 63, name: "enforcement proposals", up: createEnforcementSchema },
+	{
+		version: 64,
+		name: "expense payment method",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await sql.unsafe(
+				`ALTER TABLE expenses ADD COLUMN payment_method ${types.text("payment_account")} NOT NULL DEFAULT 'transfer' CHECK (payment_method IN ('transfer', 'card', 'cash'))`
+			);
+		},
+	},
+	{
+		version: 65,
+		name: "accountant package sending",
+		up: async (sql, dialect) => {
+			const types = schemaTypes(dialect);
+			await run(sql, dialect, [
+				`CREATE TABLE IF NOT EXISTS accountant_package_settings(
+					project ${types.text("project")} PRIMARY KEY,
+					recipients ${types.text("recipients")} NOT NULL,
+					send_day ${types.int64},
+					last_run ${types.text("period_from")},
+					updated_by ${types.text("updated_by")},
+					updated ${types.int64} NOT NULL,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (updated_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					CHECK (send_day IS NULL OR (send_day >= 1 AND send_day <= 28))
+				)`,
+				`CREATE TABLE IF NOT EXISTS accountant_package_sends(
+					uuid ${types.text("uuid")} PRIMARY KEY,
+					project ${types.text("project")} NOT NULL,
+					period_from ${types.text("period_from")} NOT NULL,
+					period_to ${types.text("period_to")} NOT NULL,
+					kind ${types.text("kind")} NOT NULL,
+					recipients ${types.text("recipients")} NOT NULL,
+					snapshot ${types.text("snapshot")} NOT NULL,
+					included ${types.text("included")},
+					changes ${types.text("changes")},
+					token_hash ${types.text("token_hash")} NOT NULL UNIQUE,
+					expires_at ${types.int64} NOT NULL,
+					automatic ${types.flag} NOT NULL DEFAULT 0,
+					sent_by ${types.text("sent_by")},
+					created ${types.int64} NOT NULL,
+					FOREIGN KEY (project) REFERENCES projects(uuid) ON DELETE CASCADE,
+					FOREIGN KEY (sent_by) REFERENCES accounts(username) ON DELETE SET NULL,
+					CHECK (kind IN ('full', 'changes')),
+					CHECK (automatic IN (0, 1))
+				)`,
+				`CREATE INDEX IF NOT EXISTS idx_accountant_package_sends_period ON accountant_package_sends(project, period_from, period_to, created)`,
+			]);
+		},
+	},
 ];
 
 export class SchemaTooNew extends Error {

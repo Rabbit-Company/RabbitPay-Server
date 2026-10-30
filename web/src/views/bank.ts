@@ -78,7 +78,11 @@ function importDialog(project: Project, onImported: () => void) {
 				try {
 					const result = await Api.importBankStatement(project.uuid, name, data);
 					dialog.close();
-					toast(t("bank.imported", { count: result.imported }));
+					toast(
+						result.refreshed > 0
+							? t("bank.imported_refreshed", { count: result.imported, refreshed: result.refreshed })
+							: t("bank.imported", { count: result.imported })
+					);
 					onImported();
 				} catch (error) {
 					reportError(error);

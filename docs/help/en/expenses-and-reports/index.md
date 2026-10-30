@@ -20,6 +20,13 @@ Record what your business spends, bring in supplier invoices without retyping th
 | See the VAT I owe on sales           | [VAT report](expenses-and-reports/vat-report)                |
 | See which products and services sell | [Item sales](expenses-and-reports/item-sales)                |
 
+## Work with your accountant
+
+| I want to                                       | Page                                                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Send my accountant everything for a month       | [Accountant package](expenses-and-reports/accountant-package)                                   |
+| Send it automatically and only send the changes | [Accountant package](expenses-and-reports/accountant-package#send-it-automatically-every-month) |
+
 ## Who can do what
 
 Owners, administrators, managers and accountants can record and edit expenses. Only owners and administrators can delete them. Everyone who can see reports can open **Statistics**.

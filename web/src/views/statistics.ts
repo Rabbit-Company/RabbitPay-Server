@@ -1,5 +1,6 @@
 import { pagedTable } from "../pagination";
 import { financialSection } from "./financial";
+import { accountantPackageSection } from "./accountant-package";
 import {
 	Api,
 	type AccountingPeriodLock,
@@ -558,6 +559,8 @@ export async function statisticsView(uuid: string): Promise<HTMLElement> {
 	const content = el(
 		"div",
 		{ class: "stack" },
+		can(project, Permission.REPORT_EXPORT) && can(project, Permission.EXPENSE_VIEW) ? accountantPackageSection(uuid, project) : null,
+		can(project, Permission.REPORT_EXPORT) && can(project, Permission.EXPENSE_VIEW) ? el("hr", { class: "divider" }) : null,
 		financialSection(uuid, project),
 		el("hr", { class: "divider" }),
 		vatSection(uuid, project),
