@@ -15,6 +15,7 @@ import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
+import { legalNameParts } from "../../../server/legal-name";
 import { newExpenseFrom } from "./expenses";
 import { can, Permission } from "../access";
 import { floatingMenu, type MenuLink } from "../menu";
@@ -293,9 +294,38 @@ function moreButton(sections: MenuLink[][]): HTMLElement | null {
 	return trigger;
 }
 
+function comparable(name: string | null | undefined): string {
+	return (name ?? "")
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function shortName(name: string | null): string | null {
+	return name ? legalNameParts(name).name : null;
+}
+
 function suggestionLabel(suggestion: BankSuggestion): string {
 	const kind = t(`bank.match_${suggestion.type}` as UiKey);
-	return [kind, suggestion.reference, suggestion.name, formatMoney(suggestion.amount, suggestion.currency)].filter(Boolean).join(" | ");
+	return [`${kind} ${suggestion.reference ?? ""}`.trim(), shortName(suggestion.name), formatMoney(suggestion.amount, suggestion.currency)]
+		.filter(Boolean)
+		.join(" | ");
+}
+
+function suggestionButtonLabel(suggestion: BankSuggestion, line: BankTransaction): string {
+	const kind = t(`bank.match_${suggestion.type}` as UiKey);
+	const name = shortName(suggestion.name);
+	const lineName = comparable(line.counterparty_name);
+	const samePartner = !name || !lineName || lineName.includes(comparable(name).split(" ")[0]) || comparable(suggestion.name).includes(lineName.split(" ")[0]);
+	return [
+		`${kind} ${suggestion.reference ?? ""}`.trim(),
+		samePartner ? null : name,
+		Math.abs(line.amount) === suggestion.amount ? null : formatMoney(suggestion.amount, suggestion.currency),
+	]
+		.filter(Boolean)
+		.join(" | ");
 }
 
 function statementsTable(project: Project, statements: BankStatement[]): HTMLElement {
@@ -373,7 +403,11 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 		const createExpense = line.amount < 0 && can(project, Permission.EXPENSE_CREATE) ? () => expenseFromLine(project, line, render) : null;
 		const [best, ...others] = line.suggestions;
 		const main = best
-			? el("button", { class: `button ${best.exact ? "primary" : "ghost"} small`, type: "button", onClick: match(best) }, suggestionLabel(best))
+			? el(
+					"button",
+					{ class: `button ${best.exact ? "primary" : "ghost"} small`, type: "button", title: suggestionLabel(best), onClick: match(best) },
+					suggestionButtonLabel(best, line)
+				)
 			: createExpense && cardPayment(line)
 				? el("button", { class: "button primary small", type: "button", onClick: createExpense }, t("bank.create_expense"))
 				: null;
