@@ -3026,6 +3026,11 @@ export const sl: UiDictionary = {
 	"bank.import_hint": "Izpisek prenesite iz spletne banke v obliki ISO 20022 camt.053 XML. Že uvožene postavke se preskočijo.",
 	"bank.import_submit": "Uvozi",
 	"bank.import_counts": "Nove postavke: {new} | Že uvožene: {known}",
+	"bank.create_expense": "Ustvari strošek",
+	"bank.private": "Zasebno",
+	"bank.card_purchase": "Nakup s kartico, {merchant}",
+	"bank.expense_notice":
+		"Strošek bo povezan s postavko izpiska z dne {date} in označen kot plačan. Skupni znesek naj ostane {amount}. Izberite kategorijo in DDV ter priložite račun.",
 	"bank.import_refreshable": "Pri {count} že uvoženih postavkah bosta dopolnjena partner ali namen.",
 	"bank.imported": "Uvoženih bančnih postavk: {count}",
 	"bank.imported_refreshed": "Uvoženih bančnih postavk: {count}. Dopolnjen partner ali namen pri prejšnjih postavkah: {refreshed}",

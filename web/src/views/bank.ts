@@ -15,6 +15,9 @@ import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
 import { modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
+import { newExpenseFrom } from "./expenses";
+import { can, Permission } from "../access";
+import { floatingMenu, type MenuLink } from "../menu";
 import { accountPicker, editable, ledgerPage, licenseNotice, moneyCell, numeric, section, sectionHead } from "./accounting";
 import type { DateFormat } from "../../../server/formats";
 
@@ -237,6 +240,59 @@ async function matchDialog(project: Project, line: BankTransaction, onMatched: (
 	search.focus();
 }
 
+function cardPayment(line: BankTransaction): boolean {
+	return /\*{4} \d{4}/.test(line.remittance ?? "");
+}
+
+function expenseFromLine(project: Project, line: BankTransaction, onCreated: () => Promise<void>) {
+	const card = cardPayment(line);
+	const purchased = line.value_date ?? line.booking_date;
+	const merchant = line.counterparty_name ?? "";
+	const description = (card ? t("bank.card_purchase", { merchant }) : (line.remittance ?? merchant)).slice(0, 240);
+	void newExpenseFrom(
+		project,
+		{
+			prefill: {
+				description,
+				supplier: line.counterparty_name,
+				total_amount: -line.amount,
+				currency: line.currency,
+				expense_date: purchased,
+				issue_date: purchased,
+				receipt_date: purchased,
+				paid_at: line.booking_date,
+				payment_method: card ? "card" : "transfer",
+			},
+			create: (data) => Api.createExpenseFromBankLine(project.uuid, line.uuid, data),
+			notice: el(
+				"p",
+				{ class: "muted" },
+				t("bank.expense_notice", {
+					date: formatDate(line.booking_date, project.date_format as DateFormat, project.timezone),
+					amount: formatMoney(-line.amount, line.currency),
+				})
+			),
+		},
+		onCreated
+	).catch(reportError);
+}
+
+function moreButton(sections: MenuLink[][]): HTMLElement | null {
+	if (sections.every((section) => section.length === 0)) return null;
+	const trigger = el(
+		"button",
+		{ class: "button ghost small menu-button", type: "button" },
+		el("span", {}, t("invoices.menu_more")),
+		el("span", { class: "menu-chevron" })
+	);
+	trigger.setAttribute("aria-haspopup", "menu");
+	trigger.addEventListener("click", () => {
+		const box = trigger.getBoundingClientRect();
+		floatingMenu({ x: box.right - 240, y: box.bottom + 4 }, sections, trigger);
+	});
+	return trigger;
+}
+
 function suggestionLabel(suggestion: BankSuggestion): string {
 	const kind = t(`bank.match_${suggestion.type}` as UiKey);
 	return [kind, suggestion.reference, suggestion.name, formatMoney(suggestion.amount, suggestion.currency)].filter(Boolean).join(" | ");
@@ -266,11 +322,13 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 	const project = await loadProject(uuid);
 	const dateFormat = project.date_format as DateFormat;
 	const accounts = (await Api.ledgerAccounts(uuid)).accounts;
+	const soleTrader = (project.bookkeeping ?? "company").startsWith("sole_");
+	const householdAccount = soleTrader ? (accounts.find((account) => account.system_key === "household_flows" && account.active) ?? null) : null;
 	const status = select(
 		["open", "matched", "booked", "ignored", "all"].map((value) => ({ value, label: t(`bank.status_${value}` as UiKey) })),
 		"open"
 	);
-	const lines = el("div", {});
+	const lines = el("div", { class: "bank-lines" });
 	const statements = el("div", {});
 	const canEdit = editable(project);
 
@@ -311,40 +369,25 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 				)
 			);
 		}
-		return el(
-			"td",
-			{ class: "actions" },
-			el(
-				"div",
-				{ class: "bank-actions" },
-				...line.suggestions.map((suggestion) =>
-					el(
-						"button",
-						{
-							class: `button ${suggestion.exact ? "primary" : "ghost"} small`,
-							type: "button",
-							onClick: () => act(() => Api.matchBankTransaction(uuid, line.uuid, suggestion.type, suggestion.id)),
-						},
-						suggestionLabel(suggestion)
-					)
-				),
-				el(
-					"div",
-					{ class: "line-actions" },
-					el(
-						"button",
-						{ class: "button ghost small", type: "button", onClick: () => void matchDialog(project, line, () => void render()).catch(reportError) },
-						t("bank.match_several")
-					),
-					el(
-						"button",
-						{ class: "button ghost small", type: "button", onClick: () => bookDialog(project, line, accounts, () => void render()) },
-						t("bank.book")
-					),
-					el("button", { class: "button ghost small", type: "button", onClick: () => act(() => Api.ignoreBankTransaction(uuid, line.uuid)) }, t("bank.ignore"))
-				)
-			)
-		);
+		const match = (suggestion: BankSuggestion) => () => act(() => Api.matchBankTransaction(uuid, line.uuid, suggestion.type, suggestion.id));
+		const createExpense = line.amount < 0 && can(project, Permission.EXPENSE_CREATE) ? () => expenseFromLine(project, line, render) : null;
+		const [best, ...others] = line.suggestions;
+		const main = best
+			? el("button", { class: `button ${best.exact ? "primary" : "ghost"} small`, type: "button", onClick: match(best) }, suggestionLabel(best))
+			: createExpense && cardPayment(line)
+				? el("button", { class: "button primary small", type: "button", onClick: createExpense }, t("bank.create_expense"))
+				: null;
+		const more = moreButton([
+			others.map((suggestion) => ({ label: suggestionLabel(suggestion), onSelect: match(suggestion) })),
+			[
+				...(createExpense && (best || !cardPayment(line)) ? [{ label: t("bank.create_expense"), onSelect: createExpense }] : []),
+				...(householdAccount ? [{ label: t("bank.private"), onSelect: () => act(() => Api.bookBankTransaction(uuid, line.uuid, householdAccount.uuid)) }] : []),
+				{ label: t("bank.match_several"), onSelect: () => void matchDialog(project, line, () => void render()).catch(reportError) },
+				{ label: t("bank.book"), onSelect: () => bookDialog(project, line, accounts, () => void render()) },
+			],
+			[{ label: t("bank.ignore"), onSelect: () => act(() => Api.ignoreBankTransaction(uuid, line.uuid)) }],
+		]);
+		return el("td", { class: "actions" }, el("div", { class: "bank-line-actions" }, main, more));
 	};
 
 	const render = async () => {

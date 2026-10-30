@@ -3020,6 +3020,11 @@ export const en = {
 	"bank.import_hint": "Download the statement from online banking in the ISO 20022 camt.053 XML format. Lines that were already imported are skipped.",
 	"bank.import_submit": "Import",
 	"bank.import_counts": "New lines: {new} | Already imported: {known}",
+	"bank.create_expense": "Create expense",
+	"bank.private": "Private",
+	"bank.card_purchase": "Card purchase, {merchant}",
+	"bank.expense_notice":
+		"The expense is linked to the bank line of {date} and marked as paid. Keep the total at {amount}, choose the category and VAT, and attach the receipt.",
 	"bank.import_refreshable": "Partner or purpose will be filled in on {count} already imported lines.",
 	"bank.imported": "Bank lines imported: {count}",
 	"bank.imported_refreshed": "Bank lines imported: {count}. Partner or purpose filled in on earlier lines: {refreshed}",

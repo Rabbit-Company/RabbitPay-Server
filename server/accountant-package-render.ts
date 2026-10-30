@@ -616,6 +616,7 @@ const BANK_STATUS: Record<string, TranslationKey> = {
 	matched: "package.bank_matched",
 	booked: "package.bank_booked",
 	ignored: "package.bank_ignored",
+	private: "package.bank_private",
 };
 
 function money(writer: Writer, amount: number, currency: string): string {

@@ -703,6 +703,7 @@ const en = {
 	"email.package.added": "New documents",
 	"email.package.changed": "Changed documents",
 	"email.package.removed": "Removed documents",
+	"package.bank_private": "Private",
 };
 
 export type TranslationKey = keyof typeof en;
@@ -1403,6 +1404,7 @@ const sl: Record<TranslationKey, string> = {
 	"email.package.added": "Novi dokumenti",
 	"email.package.changed": "Spremenjeni dokumenti",
 	"email.package.removed": "Odstranjeni dokumenti",
+	"package.bank_private": "Zasebno",
 };
 
 const STRINGS: Record<Language, Record<TranslationKey, string>> = { en, sl };

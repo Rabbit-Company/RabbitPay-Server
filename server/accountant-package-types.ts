@@ -82,7 +82,7 @@ export interface PackageBankLine {
 	counterparty_iban: string | null;
 	description: string;
 	amount: number;
-	status: "open" | "matched" | "booked" | "ignored";
+	status: "open" | "matched" | "booked" | "ignored" | "private";
 	settles: string;
 }
 

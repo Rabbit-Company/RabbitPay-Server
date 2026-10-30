@@ -9299,3 +9299,58 @@ td a.warn {
 		display: inline;
 	}
 }
+
+.bank-line-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	justify-content: flex-end;
+	align-items: center;
+}
+@media (max-width: 720px) {
+	.bank-lines table,
+	.bank-lines tbody,
+	.bank-lines tr,
+	.bank-lines td {
+		display: block;
+		width: 100%;
+	}
+	.bank-lines thead {
+		display: none;
+	}
+	.bank-lines tr {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.25rem 0.75rem;
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid var(--border);
+	}
+	.bank-lines td {
+		padding: 0;
+		border: none;
+	}
+	.bank-lines td:nth-child(2),
+	.bank-lines td:nth-child(3) {
+		grid-column: 1 / -1;
+	}
+	.bank-lines td:nth-child(1) {
+		grid-row: 1;
+		grid-column: 1;
+	}
+	.bank-lines td:nth-child(4) {
+		grid-row: 1;
+		grid-column: 2;
+	}
+	.bank-lines td.actions {
+		grid-column: 1 / -1;
+		width: auto;
+		margin-top: 0.25rem;
+		text-align: left;
+	}
+	.bank-lines .bank-line-actions,
+	.bank-lines .bank-actions {
+		justify-content: flex-start;
+		align-items: flex-start;
+		min-width: 0;
+	}
+}

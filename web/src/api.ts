@@ -2711,6 +2711,10 @@ export const Api = {
 		return request<{ matched: number }>("POST", `/projects/${uuid}/accounting/bank-transactions/match-exact`);
 	},
 
+	createExpenseFromBankLine(uuid: string, line: string, data: ExpenseInput) {
+		return request<Expense>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/expense`, data);
+	},
+
 	matchBankTransaction(uuid: string, line: string, type: BankSuggestion["type"], id: string) {
 		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/match`, { type, id });
 	},

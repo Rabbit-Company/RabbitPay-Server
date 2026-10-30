@@ -203,8 +203,13 @@ async function bankAccounts(project: string, from: number, to: number): Promise<
 	const ledger = new Map(
 		accountIds.length
 			? (
-					(await Database`SELECT uuid, code, name FROM ledger_accounts WHERE uuid IN ${Database(accountIds)}`) as { uuid: string; code: string; name: string }[]
-				).map((row) => [row.uuid, `${row.code} ${row.name}`])
+					(await Database`SELECT uuid, code, name, system_key FROM ledger_accounts WHERE uuid IN ${Database(accountIds)}`) as {
+						uuid: string;
+						code: string;
+						name: string;
+						system_key: string | null;
+					}[]
+				).map((row) => [row.uuid, { label: `${row.code} ${row.name}`, household: row.system_key === "household_flows" }])
 			: []
 	);
 	const matchesByLine = new Map<string, BankTransactionMatchRow[]>();
@@ -240,15 +245,16 @@ async function bankAccounts(project: string, from: number, to: number): Promise<
 						.filter(Boolean)
 						.join(", ")
 				: line.status === "booked"
-					? (ledger.get(line.ledger_account ?? "") ?? "")
+					? (ledger.get(line.ledger_account ?? "")?.label ?? "")
 					: "";
+		const household = line.status === "booked" && ledger.get(line.ledger_account ?? "")?.household === true;
 		account.lines.push({
 			booking_date: line.booking_date,
 			counterparty: line.counterparty_name ?? "",
 			counterparty_iban: line.counterparty_iban,
 			description: [line.reference, line.remittance].filter(Boolean).join(" | "),
 			amount: line.amount,
-			status: line.status,
+			status: household ? "private" : line.status,
 			settles,
 		});
 		accounts.set(line.iban, account);

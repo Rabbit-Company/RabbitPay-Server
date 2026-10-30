@@ -27,7 +27,8 @@ import {
 	suggestionsFor,
 } from "../../accounting/bank";
 import { importBody } from "./recorded-invoices";
-import { closedYear } from "../../accounting-periods";
+import { accountingPeriodLocked, closedYear } from "../../accounting-periods";
+import { expenseInput, insertExpense, validExpense } from "../../expense-service";
 import type { BankMatchInput } from "../../accounting/types";
 import type { AppState, BankMatchType, BankStatementRow, BankTransactionRow, ProjectRow } from "../../database/models";
 
@@ -212,6 +213,47 @@ Server.app.get(`${base}/bank-transactions/:line/candidates`, Auth.required(), Pe
 	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
 	return Utils.ok(ctx, { candidates: await candidatesFor(project, transaction) });
 });
+
+Server.app.post(
+	`${base}/bank-transactions/:line/expense`,
+	Auth.required(),
+	Permissions.require(Permission.LEDGER_EDIT),
+	Permissions.require(Permission.EXPENSE_CREATE),
+	async (ctx) => {
+		const refused = editable(ctx);
+		if (refused) return refused;
+		const project = Permissions.project(ctx);
+		const transaction = await findTransaction(project.uuid, ctx.params.line);
+		if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
+		if (transaction.status !== "open" || transaction.amount >= 0) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+		if (await closedYear(project.uuid, transaction.booking_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+		const raw = await body(ctx);
+		if (!raw) return Utils.fail(ctx, ErrorCode.INVALID_EXPENSE);
+		const data = { ...expenseInput(raw, transaction.currency), paid_at: null };
+		if (!validExpense(data)) return Utils.fail(ctx, ErrorCode.INVALID_EXPENSE);
+		if (data.currency !== transaction.currency || data.total_amount !== -transaction.amount) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+		if (await accountingPeriodLocked(project.uuid, data.expense_date)) return Utils.fail(ctx, ErrorCode.ACCOUNTING_PERIOD_LOCKED);
+		const expense = await Database.begin(async (tx) => insertExpense(tx, project.uuid, data, Auth.account(ctx).username));
+		try {
+			await matchTransaction(project, transaction, [{ type: "expense", id: expense, amount: null }], Auth.account(ctx).username);
+		} catch (error) {
+			await Database`DELETE FROM expenses WHERE uuid = ${expense}`;
+			if (error instanceof BankMatchRefused) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+			throw error;
+		}
+		await Audit.record(ctx, {
+			project: project.uuid,
+			action: "expense.created",
+			entityType: "expense",
+			entityId: expense,
+			newValue: { ...data, bank_transaction: transaction.uuid },
+		});
+		await audit(ctx, "bank_transaction.matched", transaction.uuid, { matches: [{ type: "expense", id: expense }] });
+		await syncLedger(project);
+		const [row] = await Database`SELECT * FROM expenses WHERE uuid = ${expense}`;
+		return Utils.ok(ctx, row, 201);
+	}
+);
 
 Server.app.post(`${base}/bank-transactions/:line/match`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	const refused = editable(ctx);

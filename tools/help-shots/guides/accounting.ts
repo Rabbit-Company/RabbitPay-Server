@@ -426,7 +426,8 @@ async function bank(studio: Studio, session: Session) {
 	await studio.shot(page, "lines", { target: CONTENT, mark: `button:${studio.t("bank.match_exact")}` });
 	await browser.click(`button:${studio.t("bank.match_exact")}`, 2500);
 	await studio.shot(page, "matched", { target: CONTENT });
-	await browser.click(`${CONTENT} >> button:${studio.t("bank.book")}`, 1000);
+	await browser.click(`${CONTENT} >> button:${studio.t("invoices.menu_more")}`, 400);
+	await browser.click(`menu:${studio.t("bank.book")}`, 1000);
 	if (await browser.exists(".dialog")) {
 		await chooseAccount(studio, ".dialog .account-select input", "4150");
 		await browser.blur();

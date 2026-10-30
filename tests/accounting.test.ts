@@ -726,6 +726,51 @@ describe("card payments and payment purpose", () => {
 	});
 });
 
+describe("expense from a bank line", () => {
+	test("creates the expense, links it to the card payment and refuses another amount", async () => {
+		const [line] = (await Database`SELECT uuid, booking_date FROM bank_transactions WHERE bank_reference = 'C-2'`) as { uuid: string; booking_date: number }[];
+		const expense = (total: number) => ({
+			description: "Nakup s kartico, TRGOVINA BREZA KAMNIK",
+			supplier: "TRGOVINA BREZA KAMNIK",
+			category: "Office",
+			currency: "EUR",
+			total_amount: total,
+			tax_amount: 0,
+			deductible_tax_amount: 0,
+			expense_date: Date.UTC(2026, 2, 6),
+			payment_method: "card",
+			paid_at: Date.UTC(2026, 2, 6),
+		});
+		const before = ((await Database`SELECT COUNT(*) AS count FROM expenses`) as { count: number }[])[0].count;
+		const wrong = await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/expense`, expense(2000));
+		expect(wrong.error).toBe(1270);
+		expect(((await Database`SELECT COUNT(*) AS count FROM expenses`) as { count: number }[])[0].count).toBe(before);
+
+		const created = await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/expense`, expense(2250));
+		expect(created.status).toBe(201);
+		expect(created.data).toMatchObject({ supplier: "TRGOVINA BREZA KAMNIK", payment_method: "card", paid_at: line.booking_date, total_amount: 2250 });
+		const [matched] = (await Database`SELECT status FROM bank_transactions WHERE uuid = ${line.uuid}`) as { status: string }[];
+		expect(matched.status).toBe("matched");
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/expense`, expense(2250))).error).toBe(1270);
+
+		const [incoming] = (await Database`SELECT uuid FROM bank_transactions WHERE amount > 0 AND status = 'open' LIMIT 1`) as { uuid: string }[];
+		if (incoming) expect((await call("POST", `${base()}/accounting/bank-transactions/${incoming.uuid}/expense`, expense(2250))).error).toBe(1270);
+	});
+});
+
+describe("private spending on a sole trader account", () => {
+	test("a line booked to 9190 counts as private in the accountant package", async () => {
+		const { collectAccountantPackage } = await import("../server/accountant-package");
+		const [line] = (await Database`SELECT uuid FROM bank_transactions WHERE bank_reference = 'C-1'`) as { uuid: string }[];
+		const booked = await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/book`, { account: await accountId("9190") });
+		expect(booked.error).toBe(0);
+		const [row] = (await Database`SELECT * FROM projects WHERE uuid = ${project}`) as any[];
+		const data = await collectAccountantPackage(row, { from: "2026-03-01", to: "2026-03-31" });
+		const privateLine = data.bank.flatMap((account) => account.lines).find((entry) => entry.amount === -2250 && entry.status === "private");
+		expect(privateLine?.settles).toContain("9190");
+	});
+});
+
 describe("several bank accounts", () => {
 	test("a statement from another IBAN gets the next free account in group 110 and its lines post there", async () => {
 		const xml = camt([entry("12.00", "DBIT", "2026-03-20", "S-1", "SKB", "Nadomestilo za vodenje")])

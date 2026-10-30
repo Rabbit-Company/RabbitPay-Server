@@ -4,7 +4,7 @@ import Validate from "./validate";
 import { isPlausibleIban, normalizeIban } from "./payments/bank";
 import { Logger } from "./logger";
 import { isIntervalCount, isIntervalUnit, MAX_CATCH_UP, MAX_OCCURRENCES, nextRunAfter } from "./recurring-schedule";
-import type { ProjectRow, RecurringExpenseRow } from "./database/models";
+import type { ExpenseRow, ExpenseVatLineRow, ProjectRow, RecurringExpenseRow } from "./database/models";
 import { assertAccountingPeriodUnlocked } from "./accounting-periods";
 
 import {
@@ -24,6 +24,34 @@ export function validExpenseDate(value: unknown): value is number {
 function validDueDate(data: Pick<ExpenseInput, "expense_date" | "issue_date"> & { due_date?: number | null }): boolean {
 	if (data.due_date === undefined || data.due_date === null) return true;
 	return validExpenseDate(data.due_date) && data.due_date >= (data.issue_date ?? data.expense_date);
+}
+
+export function expenseInput(data: Record<string, unknown>, currency: string, previous?: ExpenseRow, vatLines: ExpenseVatLineRow[] = []): ExpenseInput {
+	return {
+		supplier: null,
+		supplier_tax_number: null,
+		supplier_country: null,
+		invoice_number: null,
+		issue_date: null,
+		receipt_date: null,
+		supply_date: null,
+		due_date: null,
+		vat_treatment: "not_reported",
+		asset_type: "expense",
+		vat_handling: "1",
+		self_assessment_period: null,
+		self_assessment_tax: null,
+		tax_exchange_rate: null,
+		tax_rate_date: null,
+		vat_lines: vatLines.map(({ rate, tax_base, tax_amount, deductible_tax_amount }) => ({ rate, tax_base, tax_amount, deductible_tax_amount })),
+		notes: null,
+		tax_amount: 0,
+		deductible_tax_amount: 0,
+		paid_at: null,
+		currency,
+		...previous,
+		...data,
+	} as ExpenseInput;
 }
 
 export function validExpense(data: ExpenseInput): boolean {

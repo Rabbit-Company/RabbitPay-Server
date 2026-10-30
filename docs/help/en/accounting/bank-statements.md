@@ -28,17 +28,23 @@ Matching a customer invoice records the payment on the invoice, so it shows as p
 
 ## One payment for several documents
 
-When a customer pays several invoices at once, or pays an invoice less a credit note, press **Match several** on the line. Select every document the payment settles. The difference must be zero before you can match.
+When a customer pays several invoices at once, or pays an invoice less a credit note, open **More** on the line and choose **Match several**. Select every document the payment settles. The difference must be zero before you can match.
 
 Customer invoices can be paid in part, other documents only in full. A document in another currency is matched on its own, and the difference to its booked value is posted as an exchange difference.
 
+## Card payments without an expense
+
+Card payments often have no expense yet, because the receipt is still in a wallet. RabbitPay reads the shop from the bank line and hides the card number. Press **Create expense** on the line, or choose it under **More**: the expense form opens with the shop, amount, purchase date and **Card** as the payment method already filled in. Choose the category and VAT, attach the receipt and save. The expense is linked to the bank line and marked as paid in one step.
+
 ## Book the rest to an account
 
-Bank charges, loan payments, taxes and transfers have no document. Press **Book to account** and choose the account, for example **4150** for bank charges.
+Bank charges, loan payments, taxes and transfers have no document. Under **More**, choose **Book to account** and pick the account, for example **4150** for bank charges.
 
 ![Booking a bank charge](https://cdn.rabbitpay.net/help/en/dark/accounting/bank-statements/book.webp)
 
-Press **Ignore** for a line that should not be posted at all.
+For a sole trader, money spent on private things from the business account is not an expense. Under **More**, choose **Private**: the line is booked to **9190 Pritoki in odtoki med podjetjem in gospodinjstvom** and listed as private in the [Accountant package](expenses-and-reports/accountant-package). Use it as well for money you move from the business to your personal account and back.
+
+Choose **Ignore** under **More** for a line that should not be posted at all.
 
 ## Check the balance
 

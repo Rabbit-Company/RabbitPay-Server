@@ -114,14 +114,22 @@ async function importEinvoice(project: Project, reload: () => Promise<void>) {
 	picker.click();
 }
 
+export interface ExpenseEditorOptions {
+	prefill?: Partial<Expense>;
+	create?: (data: ExpenseInput) => Promise<Expense>;
+	notice?: HTMLElement;
+}
+
 async function editor(
 	project: Project,
 	recurring: boolean,
 	row: Expense | ExpenseSchedule | null,
 	reload: () => Promise<void>,
-	imported: ImportedEinvoice | null = null
+	imported: ImportedEinvoice | null = null,
+	options: ExpenseEditorOptions = {}
 ) {
-	const initial: Expense | ExpenseSchedule | null = row ?? (imported ? importedExpense(imported) : null);
+	const prefilled = options.prefill ? ({ vat_lines: [], attachment: null, ...options.prefill } as unknown as Expense) : null;
+	const initial: Expense | ExpenseSchedule | null = row ?? (imported ? importedExpense(imported) : prefilled);
 	const [known, suppliers] = await Promise.all([currencyRates(), allSupplierOptions(project.uuid)]);
 	const startCurrency = initial?.currency ?? project.currency;
 	const description = input("text", { value: initial?.description ?? "", required: true, maxlength: "240" });
@@ -515,7 +523,7 @@ async function editor(
 	const form = el(
 		"form",
 		{ class: "stack" },
-		imported ? importNotice(imported) : null,
+		imported ? importNotice(imported) : (options.notice ?? null),
 		field(t("expenses.description"), description),
 		el("div", { class: "grid" }, field(t("expenses.supplier"), supplier.element), field(t("expenses.category"), category.element, t("expenses.category_hint"))),
 		categoryNote,
@@ -633,7 +641,11 @@ async function editor(
 					});
 				} else await Api.createExpenseSchedule(project.uuid, recurringData);
 			} else {
-				const saved = row ? await Api.updateExpense(project.uuid, row.uuid, data) : await Api.createExpense(project.uuid, data);
+				const saved = row
+					? await Api.updateExpense(project.uuid, row.uuid, data)
+					: options.create
+						? await options.create(data)
+						: await Api.createExpense(project.uuid, data);
 				const file = attachment.files?.[0];
 				if (file) await Api.uploadExpenseAttachment(project.uuid, saved.uuid, { name: file.name, type: file.type, data: await fileBase64(file) });
 				else if (imported && !row) await Api.uploadExpenseAttachment(project.uuid, saved.uuid, imported.file);
@@ -730,6 +742,10 @@ function importCsv(project: Project, onImported: () => void) {
 		commit: (content) => Api.importExpenseCsv(project.uuid, content),
 		onImported,
 	});
+}
+
+export async function newExpenseFrom(project: Project, options: ExpenseEditorOptions, onSaved: () => Promise<void>) {
+	await editor(project, false, null, onSaved, null, options);
 }
 
 export async function expensesView(uuid: string): Promise<HTMLElement> {

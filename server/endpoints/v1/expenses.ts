@@ -10,7 +10,7 @@ import Utils from "../../utils";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { firstRunFrom, nextRunAfter, startOfDay } from "../../recurring-schedule";
-import { insertExpense, validExpense, validExpenseSchedule, type ExpenseInput, type ExpenseScheduleInput } from "../../expense-service";
+import { expenseInput, insertExpense, validExpense, validExpenseSchedule, type ExpenseInput, type ExpenseScheduleInput } from "../../expense-service";
 import type { AppState, ExpenseAttachmentRow, ExpenseRow, ExpenseVatLineRow, RecurringExpenseRow } from "../../database/models";
 import { documentStorage } from "../../document-storage";
 import { normalizeIban } from "../../payments/bank";
@@ -38,34 +38,6 @@ async function body(ctx: Context<AppState>): Promise<Record<string, unknown> | n
 	} catch {
 		return null;
 	}
-}
-
-function expenseInput(data: Record<string, unknown>, currency: string, previous?: ExpenseRow, vatLines: ExpenseVatLineRow[] = []): ExpenseInput {
-	return {
-		supplier: null,
-		supplier_tax_number: null,
-		supplier_country: null,
-		invoice_number: null,
-		issue_date: null,
-		receipt_date: null,
-		supply_date: null,
-		due_date: null,
-		vat_treatment: "not_reported",
-		asset_type: "expense",
-		vat_handling: "1",
-		self_assessment_period: null,
-		self_assessment_tax: null,
-		tax_exchange_rate: null,
-		tax_rate_date: null,
-		vat_lines: vatLines.map(({ rate, tax_base, tax_amount, deductible_tax_amount }) => ({ rate, tax_base, tax_amount, deductible_tax_amount })),
-		notes: null,
-		tax_amount: 0,
-		deductible_tax_amount: 0,
-		paid_at: null,
-		currency,
-		...previous,
-		...data,
-	} as ExpenseInput;
 }
 
 async function expenseDetails(row: ExpenseRow) {

@@ -28,17 +28,23 @@ Povezava z računom kupca zabeleži plačilo na računu, zato je račun povsod v
 
 ## Eno plačilo za več listin
 
-Ko kupec plača več računov hkrati ali račun, zmanjšan za dobropis, pri postavki pritisnite **Poveži z več dokumenti**. Izberite vse listine, ki jih plačilo poravna. Razlika mora biti nič, preden lahko povežete.
+Ko kupec plača več računov hkrati ali račun, zmanjšan za dobropis, pri postavki odprite **Več** in izberite **Poveži z več dokumenti**. Izberite vse listine, ki jih plačilo poravna. Razlika mora biti nič, preden lahko povežete.
 
 Račune kupcev je mogoče plačati delno, druge listine samo v celoti. Listina v tuji valuti se poveže sama, razlika do njene knjižene vrednosti pa se knjiži kot tečajna razlika.
 
+## Plačila s kartico brez stroška
+
+Plačila s kartico pogosto še nimajo stroška, ker je račun še v denarnici. RabbitPay iz bančne postavke prebere trgovino in skrije številko kartice. Na postavki pritisnite **Ustvari strošek** ali ga izberite pod **Več**: obrazec stroška se odpre z že vpisano trgovino, zneskom, datumom nakupa in načinom plačila **Kartica**. Izberite kategorijo in DDV, priložite račun in shranite. Strošek se v enem koraku poveže z bančno postavko in označi kot plačan.
+
 ## Knjiženje ostalega na konto
 
-Bančni stroški, obroki posojil, davki in prenosi nimajo listine. Pritisnite **Knjiži na konto** in izberite konto, na primer **4150** za bančne stroške.
+Bančni stroški, obroki posojil, davki in prenosi nimajo listine. Pod **Več** izberite **Knjiži na konto** in konto, na primer **4150** za bančne stroške.
 
 ![Knjiženje bančnega stroška](https://cdn.rabbitpay.net/help/sl/dark/accounting/bank-statements/book.webp)
 
-Za postavko, ki se sploh ne sme knjižiti, pritisnite **Prezri**.
+Pri samostojnem podjetniku denar, porabljen za zasebne stvari s poslovnega računa, ni strošek. Pod **Več** izberite **Zasebno**: postavka se knjiži na **9190 Pritoki in odtoki med podjetjem in gospodinjstvom** in je v [Paketu za računovodstvo](expenses-and-reports/accountant-package) navedena kot zasebna. Uporabite ga tudi za denar, ki ga prenesete s poslovnega na osebni račun in nazaj.
+
+Za postavko, ki se sploh ne sme knjižiti, pod **Več** izberite **Prezri**.
 
 ## Preverjanje stanja
 

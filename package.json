@@ -14,6 +14,8 @@
 		"license:keygen": "bun run server/license-cli.ts keygen",
 		"help:shots": "bun run tools/help-shots/run.ts",
 		"typecheck": "tsc --noEmit && tsc --noEmit -p web",
+		"format": "bun fmt",
+		"format:check": "bun fmt --check",
 		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && bun build web/src/push-worker.ts --outfile web/dist/push-worker.js --minify && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
 		"watch:web": "bun build web/src/push-worker.ts --outfile web/dist/push-worker.js && bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
 		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
