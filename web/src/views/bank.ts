@@ -11,7 +11,7 @@ import {
 } from "../api";
 import { el, emptyState, field, input, select, table } from "../dom";
 import { formatDate, formatMoney, toMajorUnits, toMinorUnits } from "../money";
-import { remoteTable } from "../pagination";
+import { pagedList, remoteTable } from "../pagination";
 import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
 import { confirmDialog, modal, reportError, toast } from "../ui";
@@ -22,6 +22,8 @@ import { can, Permission } from "../access";
 import { floatingMenu, type MenuLink } from "../menu";
 import { accountPicker, editable, ledgerPage, licenseNotice, moneyCell, numeric, section, sectionHead } from "./accounting";
 import { formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
+
+const STATEMENTS_PAGE = 10;
 
 function importDialog(project: Project, onImported: () => void) {
 	const file = input("file", { required: true });
@@ -411,22 +413,28 @@ function suggestionButtonLabel(suggestion: BankSuggestion, line: BankTransaction
 
 function statementsTable(project: Project, statements: BankStatement[]): HTMLElement {
 	if (statements.length === 0) return emptyState(t("bank.statements_empty"));
-	return table(
-		[t("bank.account"), t("bank.statement"), t("bank.period"), numeric(t("bank.closing")), numeric(t("bank.ledger_balance")), numeric(t("bank.open_lines"))],
-		statements.map((statement) => {
-			const difference = statement.closing_balance !== null && statement.ledger_balance !== null && statement.closing_balance !== statement.ledger_balance;
-			return el(
-				"tr",
-				{},
-				el("td", { class: "mono" }, statement.iban),
-				el("td", {}, statement.statement_id),
-				el("td", { class: "date" }, statement.period_to === null ? "" : formatDate(statement.period_to, project.date_format as DateFormat, project.timezone)),
-				moneyCell(statement.closing_balance, statement.currency, { zero: true }),
-				moneyCell(statement.ledger_balance, statement.currency, { zero: true, warn: difference }),
-				el("td", { class: "num" }, String(statement.lines.open ?? 0))
-			);
-		})
-	);
+	const headers = [
+		t("bank.account"),
+		t("bank.statement"),
+		t("bank.period"),
+		numeric(t("bank.closing")),
+		numeric(t("bank.ledger_balance")),
+		numeric(t("bank.open_lines")),
+	];
+	const rows = statements.map((statement) => {
+		const difference = statement.closing_balance !== null && statement.ledger_balance !== null && statement.closing_balance !== statement.ledger_balance;
+		return el(
+			"tr",
+			{},
+			el("td", { class: "mono" }, statement.iban),
+			el("td", {}, statement.statement_id),
+			el("td", { class: "date" }, statement.period_to === null ? "" : formatDate(statement.period_to, project.date_format as DateFormat, project.timezone)),
+			moneyCell(statement.closing_balance, statement.currency, { zero: true }),
+			moneyCell(statement.ledger_balance, statement.currency, { zero: true, warn: difference }),
+			el("td", { class: "num" }, String(statement.lines.open ?? 0))
+		);
+	});
+	return pagedList(rows, (page) => table(headers, page), STATEMENTS_PAGE);
 }
 
 export async function bankView(uuid: string): Promise<HTMLElement> {

@@ -885,6 +885,21 @@ describe("removing a payment entered by mistake", () => {
 	});
 });
 
+describe("importing the same statement again", () => {
+	test("keeps one statement, adds no lines and takes the newer closing balance", async () => {
+		const base64 = (xml: string) => Buffer.from(xml.replace("<Id>2026-03-001</Id>", "<Id>AGAIN-03</Id>")).toString("base64");
+		const first = camt([entry("10.00", "CRDT", "2026-03-27", "A-1", "Kupec", "Racun A")]);
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "a.xml", data: base64(first) })).data.imported).toBe(1);
+		const corrected = first.replace(">1245.50<", ">1255.50<");
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "a.xml", data: base64(corrected) })).data).toMatchObject({
+			imported: 0,
+			skipped: 1,
+		});
+		const rows = (await Database`SELECT closing_balance FROM bank_statements WHERE statement_id = 'AGAIN-03'`) as { closing_balance: number }[];
+		expect(rows.map((row) => Number(row.closing_balance))).toEqual([125550]);
+	});
+});
+
 describe("several bank accounts", () => {
 	test("a statement from another IBAN gets the next free account in group 110 and its lines post there", async () => {
 		const xml = camt([entry("12.00", "DBIT", "2026-03-20", "S-1", "SKB", "Nadomestilo za vodenje")])

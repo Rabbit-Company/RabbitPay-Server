@@ -132,7 +132,13 @@ export async function importStatements(project: string, statements: CamtStatemen
 				SELECT uuid FROM bank_statements WHERE project = ${project} AND iban = ${statement.iban} AND statement_id = ${statement.statement_id}
 			`) as { uuid: string }[];
 			const uuid = existing?.uuid ?? crypto.randomUUID();
-			if (!existing) {
+			if (existing) {
+				await tx`
+					UPDATE bank_statements SET period_from = COALESCE(${statement.period_from}, period_from), period_to = COALESCE(${statement.period_to}, period_to),
+						opening_balance = COALESCE(${statement.opening_balance}, opening_balance), closing_balance = COALESCE(${statement.closing_balance}, closing_balance)
+					WHERE uuid = ${existing.uuid}
+				`;
+			} else {
 				await tx`
 					INSERT INTO bank_statements(uuid, project, iban, statement_id, currency, period_from, period_to, opening_balance, closing_balance,
 						file_name, created_by, created)
