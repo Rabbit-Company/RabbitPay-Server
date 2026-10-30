@@ -272,6 +272,8 @@ const UNLINKED = (sql: typeof Database) => sql`
 	AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payment_transaction = t.uuid)
 `;
 
+const NAME_MATCH_WINDOW = 45 * 24 * 60 * 60 * 1000;
+
 export async function paidSuggestionsFor(project: ProjectRow, transactions: BankTransactionRow[]): Promise<Map<string, PaidInvoiceSuggestion[]>> {
 	const incoming = transactions.filter((transaction) => transaction.status === "open" && transaction.amount > 0);
 	if (incoming.length === 0) return new Map();
@@ -293,12 +295,13 @@ export async function paidSuggestionsFor(project: ProjectRow, transactions: Bank
 	const result = new Map<string, PaidInvoiceSuggestion[]>();
 	for (const transaction of incoming) {
 		const found = rows
-			.filter(
-				(row) =>
-					row.currency === transaction.currency &&
-					Number(row.amount) === transaction.amount &&
-					(mentions(transaction, row.reference) || mentionsNumber(transaction, row.reference))
-			)
+			.filter((row) => {
+				if (row.currency !== transaction.currency || Number(row.amount) !== transaction.amount) return false;
+				if (mentions(transaction, row.reference) || mentionsNumber(transaction, row.reference)) return true;
+				const close = row.completed_at !== null && Math.abs(Number(row.completed_at) - transaction.booking_date) <= NAME_MATCH_WINDOW;
+				return close && similarName(buyerName(row as unknown as InvoiceRow), transaction.counterparty_name);
+			})
+			.sort((a, b) => Math.abs(Number(a.completed_at ?? 0) - transaction.booking_date) - Math.abs(Number(b.completed_at ?? 0) - transaction.booking_date))
 			.slice(0, 3)
 			.map((row) => ({
 				invoice: row.invoice,

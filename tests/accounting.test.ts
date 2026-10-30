@@ -798,10 +798,9 @@ describe("invoice already paid by hand", () => {
 		const total = Number(paidRow.total_amount);
 		const manual = await call("POST", `${base()}/transactions`, { invoice: paid, processor: "bank_transfer", amount: total, notes: "Placano po izpisku" });
 		expect(manual.error).toBe(0);
-		const xml = camt([entry((total / 100).toFixed(2), "CRDT", "2026-03-25", "P-1", "Plaza d.o.o.", "DRUGO", creditorReference(paidRow.reference)!)]).replace(
-			"<Id>2026-03-001</Id>",
-			"<Id>PAID-03</Id>"
-		);
+		const xml = camt([
+			entry((total / 100).toFixed(2), "CRDT", "2026-03-25", "P-1", "Obala Tisa d.o.o.", "DRUGO", creditorReference(paidRow.reference)!),
+		]).replace("<Id>2026-03-001</Id>", "<Id>PAID-03</Id>");
 		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "paid.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(1);
 
 		const open = (await call("GET", `${base()}/accounting/bank-transactions?status=open`)).data.transactions as any[];
@@ -838,7 +837,7 @@ describe("payment reference without the year", () => {
 		const total = Number(row.total_amount);
 		expect((await call("POST", `${base()}/transactions`, { invoice, processor: "bank_transfer", amount: total })).error).toBe(0);
 		const number = sequenceOf(row.reference)!;
-		const xml = camt([entry((total / 100).toFixed(2), "CRDT", "2026-03-26", "Y-1", "Lamity d.o.o.", `RACUN ${number}`)])
+		const xml = camt([entry((total / 100).toFixed(2), "CRDT", "2026-03-26", "Y-1", "Kamnolom Breg d.o.o.", `RACUN ${number}`)])
 			.replace("<Id>2026-03-001</Id>", "<Id>YEAR-03</Id>")
 			.replace("</Ustrd>", `</Ustrd><Strd><CdtrRefInf><Ref>SI00${number}</Ref></CdtrRefInf></Strd>`);
 		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "year.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(1);
@@ -897,6 +896,44 @@ describe("importing the same statement again", () => {
 		});
 		const rows = (await Database`SELECT closing_balance FROM bank_statements WHERE statement_id = 'AGAIN-03'`) as { closing_balance: number }[];
 		expect(rows.map((row) => Number(row.closing_balance))).toEqual([125550]);
+	});
+});
+
+describe("paid invoice found by customer name", () => {
+	test("a payment without any number is linked to the hand paid invoice of the same customer and amount", async () => {
+		const customer = (
+			await call("POST", `${base()}/customers`, {
+				email: "bistra-voda@example.com",
+				name: "BISTRA VODA, CISCENJE PROSTOROV, MARKO VRBAN S.P.",
+				customer_type: "business",
+				country: "SI",
+				address_line1: "Glavna cesta 1",
+				postal_code: "1000",
+				city: "Ljubljana",
+			})
+		).data;
+		const created = (
+			await call("POST", `${base()}/invoices`, {
+				customer: customer.uuid,
+				currency: "EUR",
+				due_date: Date.UTC(2026, 2, 31),
+				items: [{ description: "Ciscenje", quantity: 1, unit_price: 4836, tax_rate: 22, tax_treatment: "domestic" }],
+			})
+		).data;
+		expect((await call("POST", `${base()}/invoices/${created.uuid}/open`)).error).toBe(0);
+		const [row] = (await Database`SELECT total_amount FROM invoices WHERE uuid = ${created.uuid}`) as { total_amount: number }[];
+		const total = Number(row.total_amount);
+		expect((await call("POST", `${base()}/transactions`, { invoice: created.uuid, processor: "bank_transfer", amount: total })).error).toBe(0);
+		const today = new Date().toISOString().slice(0, 10);
+		const xml = camt([entry((total / 100).toFixed(2), "CRDT", today, "N-1", "BISTRA VODA, MARKO VRBAN S.P.", "MESECNO KNJIZENJE")]).replace(
+			"<Id>2026-03-001</Id>",
+			"<Id>NAME-01</Id>"
+		);
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "name.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(1);
+		const line = ((await call("GET", `${base()}/accounting/bank-transactions?status=open`)).data.transactions as any[]).find(
+			(entry) => entry.bank_reference === "N-1"
+		);
+		expect(line.paid_suggestions.map((entry: any) => entry.invoice)).toEqual([created.uuid]);
 	});
 });
 
