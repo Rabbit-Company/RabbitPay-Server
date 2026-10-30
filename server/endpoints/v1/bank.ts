@@ -5,6 +5,7 @@ import Auth from "../../auth";
 import Audit from "../../audit";
 import Permissions from "../../permissions";
 import Utils from "../../utils";
+import { accountNames } from "../../accounts";
 import { ErrorCode } from "../../errors";
 import { Permission } from "../../roles";
 import { accountingActive } from "../../licensing";
@@ -21,6 +22,8 @@ import {
 	refreshableLines,
 	ignoreTransaction,
 	importStatements,
+	linkPayment,
+	paidSuggestionsFor,
 	matchTransaction,
 	PermanentMatch,
 	reopenTransaction,
@@ -137,6 +140,31 @@ Server.app.get(`${base}/bank-statements`, Auth.required(), Permissions.require(P
 	});
 });
 
+async function matchReferences(matches: { match_type: string; match_id: string }[]): Promise<Map<string, string>> {
+	const ids = (type: string) => [...new Set(matches.filter((match) => match.match_type === type).map((match) => match.match_id))];
+	const references = new Map<string, string>();
+	const invoices = ids("invoice");
+	const recorded = ids("recorded_invoice");
+	const expenses = ids("expense");
+	if (invoices.length)
+		for (const row of (await Database`SELECT uuid, reference FROM invoices WHERE uuid IN ${Database(invoices)}`) as { uuid: string; reference: string }[])
+			references.set(row.uuid, row.reference);
+	if (recorded.length)
+		for (const row of (await Database`SELECT uuid, reference FROM recorded_invoices WHERE uuid IN ${Database(recorded)}`) as {
+			uuid: string;
+			reference: string;
+		}[])
+			references.set(row.uuid, row.reference);
+	if (expenses.length)
+		for (const row of (await Database`SELECT uuid, invoice_number, description FROM expenses WHERE uuid IN ${Database(expenses)}`) as {
+			uuid: string;
+			invoice_number: string | null;
+			description: string;
+		}[])
+			references.set(row.uuid, row.invoice_number ?? row.description);
+	return references;
+}
+
 Server.app.get(`${base}/bank-transactions`, Auth.required(), Permissions.require(Permission.REPORT_VIEW), async (ctx) => {
 	const project = Permissions.project(ctx);
 	const query = ctx.query();
@@ -158,9 +186,21 @@ Server.app.get(`${base}/bank-transactions`, Auth.required(), Permissions.require
 	`) as BankTransactionRow[];
 	const [count] = (await Database`SELECT COUNT(*) AS total FROM bank_transactions WHERE project = ${project.uuid} ${filter}`) as { total: number }[];
 	const suggestions = await suggestionsFor(project, rows);
+	const paid = await paidSuggestionsFor(project, rows);
 	const matches = await matchesOf(rows.map((row) => row.uuid));
+	const references = await matchReferences([...matches.values()].flat());
+	const people = await accountNames(
+		rows.map((row) => row.matched_by),
+		project.uuid
+	);
 	return Utils.ok(ctx, {
-		transactions: rows.map((row) => ({ ...row, suggestions: suggestions.get(row.uuid) ?? [], matches: matches.get(row.uuid) ?? [] })),
+		transactions: rows.map((row) => ({
+			...row,
+			matched_by_name: row.matched_by ? (people.get(row.matched_by) ?? null) : null,
+			suggestions: suggestions.get(row.uuid) ?? [],
+			paid_suggestions: paid.get(row.uuid) ?? [],
+			matches: (matches.get(row.uuid) ?? []).map((match) => ({ ...match, reference: references.get(match.match_id) ?? null })),
+		})),
 		total: Number(count.total),
 		limit,
 		offset,
@@ -255,6 +295,26 @@ Server.app.post(
 	}
 );
 
+Server.app.post(`${base}/bank-transactions/:line/link-payment`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
+	const refused = editable(ctx);
+	if (refused) return refused;
+	const project = Permissions.project(ctx);
+	const transaction = await findTransaction(project.uuid, ctx.params.line);
+	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
+	if (await closedYear(project.uuid, transaction.booking_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
+	const data = await body(ctx);
+	if (typeof data?.payment !== "string") return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+	try {
+		await linkPayment(project, transaction, data.payment, Auth.account(ctx).username);
+	} catch (error) {
+		if (error instanceof BankMatchRefused) return Utils.fail(ctx, ErrorCode.INVALID_BANK_MATCH);
+		throw error;
+	}
+	await audit(ctx, "bank_transaction.payment_linked", transaction.uuid, { payment: data.payment });
+	await syncLedger(project);
+	return Utils.ok(ctx, await findTransaction(project.uuid, transaction.uuid));
+});
+
 Server.app.post(`${base}/bank-transactions/:line/match`, Auth.required(), Permissions.require(Permission.LEDGER_EDIT), async (ctx) => {
 	const refused = editable(ctx);
 	if (refused) return refused;
@@ -320,7 +380,7 @@ Server.app.post(`${base}/bank-transactions/:line/reopen`, Auth.required(), Permi
 	if (!transaction) return Utils.fail(ctx, ErrorCode.BANK_TRANSACTION_NOT_FOUND);
 	if (await closedYear(project.uuid, transaction.booking_date)) return Utils.fail(ctx, ErrorCode.YEAR_CLOSED);
 	try {
-		await reopenTransaction(transaction);
+		await reopenTransaction(transaction, Auth.account(ctx).username);
 	} catch (error) {
 		if (error instanceof PermanentMatch) return Utils.fail(ctx, ErrorCode.BANK_MATCH_PERMANENT);
 		throw error;

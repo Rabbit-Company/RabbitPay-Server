@@ -3,6 +3,7 @@ import {
 	type BankCandidate,
 	type BankStatement,
 	type BankSuggestion,
+	type PaidInvoiceSuggestion,
 	type BankTransaction,
 	type LedgerAccount,
 	type Project,
@@ -13,14 +14,14 @@ import { formatDate, formatMoney, toMajorUnits, toMinorUnits } from "../money";
 import { remoteTable } from "../pagination";
 import { toBase64 } from "../image";
 import { t, type UiKey } from "../i18n";
-import { modal, reportError, toast } from "../ui";
+import { confirmDialog, modal, reportError, toast } from "../ui";
 import { loadProject } from "./project";
 import { legalNameParts } from "../../../server/legal-name";
 import { newExpenseFrom } from "./expenses";
 import { can, Permission } from "../access";
 import { floatingMenu, type MenuLink } from "../menu";
 import { accountPicker, editable, ledgerPage, licenseNotice, moneyCell, numeric, section, sectionHead } from "./accounting";
-import type { DateFormat } from "../../../server/formats";
+import { formatDateTime, type DateFormat, type TimeFormat } from "../../../server/formats";
 
 function importDialog(project: Project, onImported: () => void) {
 	const file = input("file", { required: true });
@@ -307,6 +308,12 @@ function shortName(name: string | null): string | null {
 	return name ? legalNameParts(name).name : null;
 }
 
+function documentPath(project: string, suggestion: Pick<BankSuggestion, "type" | "id">): string {
+	if (suggestion.type === "invoice") return `/projects/${project}/invoices/${suggestion.id}`;
+	if (suggestion.type === "expense") return `/projects/${project}/expenses?open=${suggestion.id}`;
+	return `/projects/${project}/accounting/recorded-invoices?open=${suggestion.id}`;
+}
+
 function suggestionLabel(suggestion: BankSuggestion): string {
 	const kind = t(`bank.match_${suggestion.type}` as UiKey);
 	return [`${kind} ${suggestion.reference ?? ""}`.trim(), shortName(suggestion.name), formatMoney(suggestion.amount, suggestion.currency)]
@@ -380,41 +387,90 @@ export async function bankView(uuid: string): Promise<HTMLElement> {
 				el(
 					"div",
 					{ class: "bank-actions" },
-					el(
-						"span",
-						{ class: "muted" },
-						line.matches.length > 1
-							? t("bank.match_documents", { count: line.matches.length })
-							: line.match_type
-								? t(`bank.match_${line.match_type}` as UiKey)
-								: t(`bank.status_${line.status}` as UiKey)
-					),
-					line.match_type === "invoice" || line.matches.some((match) => match.match_type === "invoice")
-						? null
-						: el(
-								"button",
-								{ class: "button ghost small", type: "button", onClick: () => act(() => Api.reopenBankTransaction(uuid, line.uuid)) },
-								t("bank.reopen")
+					line.matches.length > 0
+						? el(
+								"div",
+								{ class: "bank-matched" },
+								...line.matches.map((entry) =>
+									el(
+										"a",
+										{ href: documentPath(uuid, { type: entry.match_type, id: entry.match_id }), target: "_blank", rel: "noopener" },
+										`${t(`bank.match_${entry.match_type}` as UiKey)} ${entry.reference ?? ""}`.trim()
+									)
+								)
 							)
+						: el("span", { class: "muted" }, t(`bank.status_${line.status}` as UiKey)),
+					line.matched_at
+						? el(
+								"span",
+								{ class: "field-hint" },
+								[line.matched_by_name, formatDateTime(line.matched_at, dateFormat, project.time_format as TimeFormat, project.timezone)]
+									.filter(Boolean)
+									.join(" | ")
+							)
+						: null,
+					el(
+						"button",
+						{
+							class: "button ghost small",
+							type: "button",
+							onClick: async () => {
+								const invoicePayment = line.match_type === "invoice" || line.matches.some((match) => match.match_type === "invoice");
+								if (
+									invoicePayment &&
+									!(await confirmDialog({
+										title: t("bank.reopen_invoice_title"),
+										body: t("bank.reopen_invoice_body"),
+										confirmLabel: t("bank.reopen"),
+										destructive: true,
+									}))
+								)
+									return;
+								act(() => Api.reopenBankTransaction(uuid, line.uuid));
+							},
+						},
+						t("bank.reopen")
+					)
 				)
 			);
 		}
 		const match = (suggestion: BankSuggestion) => () => act(() => Api.matchBankTransaction(uuid, line.uuid, suggestion.type, suggestion.id));
 		const createExpense = line.amount < 0 && can(project, Permission.EXPENSE_CREATE) ? () => expenseFromLine(project, line, render) : null;
-		const [best, ...others] = line.suggestions;
-		const main = best
-			? el(
-					"button",
-					{ class: `button ${best.exact ? "primary" : "ghost"} small`, type: "button", title: suggestionLabel(best), onClick: match(best) },
-					suggestionButtonLabel(best, line)
-				)
-			: createExpense && cardPayment(line)
-				? el("button", { class: "button primary small", type: "button", onClick: createExpense }, t("bank.create_expense"))
-				: null;
+		const paid = line.paid_suggestions[0] ?? null;
+		const trusted = !paid ? line.suggestions.find((suggestion) => suggestion.referenced || suggestion.named) : undefined;
+		const others = line.suggestions.filter((suggestion) => suggestion !== trusted);
+		const link = (suggestion: PaidInvoiceSuggestion) => () => act(() => Api.linkBankPayment(uuid, line.uuid, suggestion.payment));
+		const paidLabel = (suggestion: PaidInvoiceSuggestion) => t("bank.link_payment", { document: `${t("bank.match_invoice")} ${suggestion.reference}` });
+		const main = paid
+			? el("button", { class: "button primary small", type: "button", title: t("bank.link_payment_hint"), onClick: link(paid) }, paidLabel(paid))
+			: trusted
+				? el(
+						"button",
+						{ class: `button ${trusted.exact ? "primary" : "ghost"} small`, type: "button", title: suggestionLabel(trusted), onClick: match(trusted) },
+						suggestionButtonLabel(trusted, line)
+					)
+				: createExpense && cardPayment(line)
+					? el("button", { class: "button primary small", type: "button", onClick: createExpense }, t("bank.create_expense"))
+					: null;
 		const more = moreButton([
-			others.map((suggestion) => ({ label: suggestionLabel(suggestion), onSelect: match(suggestion) })),
 			[
-				...(createExpense && (best || !cardPayment(line)) ? [{ label: t("bank.create_expense"), onSelect: createExpense }] : []),
+				...line.paid_suggestions.map((suggestion) => ({
+					label: t("bank.open_document", { document: `${t("bank.match_invoice")} ${suggestion.reference}` }),
+					href: documentPath(uuid, { type: "invoice", id: suggestion.invoice }),
+					newTab: true,
+				})),
+				...line.suggestions.map((suggestion) => ({
+					label: t("bank.open_document", { document: `${t(`bank.match_${suggestion.type}` as UiKey)} ${suggestion.reference ?? ""}`.trim() }),
+					href: documentPath(uuid, suggestion),
+					newTab: true,
+				})),
+			],
+			[
+				...line.paid_suggestions.slice(1).map((suggestion) => ({ label: paidLabel(suggestion), onSelect: link(suggestion) })),
+				...others.map((suggestion) => ({ label: suggestionLabel(suggestion), onSelect: match(suggestion) })),
+			],
+			[
+				...(createExpense && (trusted || paid || !cardPayment(line)) ? [{ label: t("bank.create_expense"), onSelect: createExpense }] : []),
 				...(householdAccount ? [{ label: t("bank.private"), onSelect: () => act(() => Api.bookBankTransaction(uuid, line.uuid, householdAccount.uuid)) }] : []),
 				{ label: t("bank.match_several"), onSelect: () => void matchDialog(project, line, () => void render()).catch(reportError) },
 				{ label: t("bank.book"), onSelect: () => bookDialog(project, line, accounts, () => void render()) },

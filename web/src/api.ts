@@ -1346,6 +1346,7 @@ import type {
 	BankCandidate,
 	BankMatchInput,
 	BankSuggestion,
+	PaidInvoiceSuggestion,
 	OpenItem,
 	OpenItemsKind,
 	OpenItemsReport,
@@ -1357,10 +1358,15 @@ import type { CompanyLookup } from "../../server/registry/lookup";
 export type { CompanyLookup };
 import type { BankStatementRow, BankTransactionMatchRow, BankTransactionRow } from "../../server/database/models";
 
-export type BankTransaction = BankTransactionRow & { suggestions: BankSuggestion[]; matches: BankTransactionMatchRow[] };
+export type BankTransaction = BankTransactionRow & {
+	matched_by_name: string | null;
+	suggestions: BankSuggestion[];
+	paid_suggestions: PaidInvoiceSuggestion[];
+	matches: (BankTransactionMatchRow & { reference: string | null })[];
+};
 export type { BankCandidate, BankMatchInput, RevaluationPreview };
 export type BankStatement = BankStatementRow & { ledger_balance: number | null; lines: Partial<Record<BankTransactionRow["status"], number>> };
-export type { BankSuggestion };
+export type { BankSuggestion, PaidInvoiceSuggestion };
 export type { AccountingYear, YearCloseRefusal } from "../../server/accounting/types";
 import type { AccountingYear, AjpesReport, FinancialStatements, KpoBook } from "../../server/accounting/types";
 export type { AjpesReport };
@@ -2713,6 +2719,10 @@ export const Api = {
 
 	createExpenseFromBankLine(uuid: string, line: string, data: ExpenseInput) {
 		return request<Expense>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/expense`, data);
+	},
+
+	linkBankPayment(uuid: string, line: string, payment: string) {
+		return request<BankTransactionRow>("POST", `/projects/${uuid}/accounting/bank-transactions/${line}/link-payment`, { payment });
 	},
 
 	matchBankTransaction(uuid: string, line: string, type: BankSuggestion["type"], id: string) {

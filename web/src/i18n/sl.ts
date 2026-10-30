@@ -2676,7 +2676,7 @@ export const sl: UiDictionary = {
 	"error.1268": "Naložite bančni izpisek camt.053 v obliki XML z vsaj eno knjiženo postavko.",
 	"error.1269": "Ta postavka bančnega izpiska ne obstaja.",
 	"error.1270": "Te listine ni mogoče povezati s postavko. Znesek, valuta in smer se morajo ujemati, listina pa mora biti še neplačana.",
-	"error.1271": "Plačila, zabeleženega na računu, ni mogoče razveljaviti iz bančnega izpiska. Vračilo ali popravek naredite na računu.",
+	"error.1271": "To plačilo računa je bilo vrnjeno ali ni bilo zabeleženo iz bančnega izpiska, zato ga tu ni mogoče razveljaviti. Popravite ga na računu.",
 	"error.1272": "Priložite datoteko PDF, PNG, JPEG, WEBP, TIFF ali XML velikosti do 3 MB.",
 	"error.1273": "Ta evidentirani račun nima priložene listine.",
 	"error.1276":
@@ -3027,6 +3027,12 @@ export const sl: UiDictionary = {
 	"bank.import_submit": "Uvozi",
 	"bank.import_counts": "Nove postavke: {new} | Že uvožene: {known}",
 	"bank.create_expense": "Ustvari strošek",
+	"bank.link_payment": "Že plačano: poveži {document}",
+	"bank.link_payment_hint": "Račun je že označen kot plačan z nakazilom. Bančna postavka se poveže s tem plačilom, drugo plačilo se ne zabeleži.",
+	"bank.open_document": "Odpri: {document}",
+	"bank.reopen_invoice_title": "Odstranim plačilo z računa?",
+	"bank.reopen_invoice_body":
+		"Plačilo, ki je bilo iz te bančne postavke zabeleženo na računu, se odstrani, račun je spet neplačan, postavka pa je odprta za novo povezavo. Kupec ne prejme obvestila.",
 	"bank.private": "Zasebno",
 	"bank.card_purchase": "Nakup s kartico, {merchant}",
 	"bank.expense_notice":

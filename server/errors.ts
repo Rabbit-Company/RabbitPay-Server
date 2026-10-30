@@ -897,7 +897,10 @@ namespace Errors {
 			message: "This document cannot be matched to the bank line. The amount, currency and direction must agree and the document must still be unpaid.",
 			httpCode: 409,
 		},
-		1271: { message: "A payment recorded on an invoice cannot be undone from the bank statement. Refund or correct it on the invoice.", httpCode: 409 },
+		1271: {
+			message: "This invoice payment was refunded or not recorded from the bank statement, so it cannot be undone here. Correct it on the invoice.",
+			httpCode: 409,
+		},
 		1267: { message: "An invoice or credit note with this number is already recorded.", httpCode: 409 },
 		1264: { message: "Your role can only redeem accounting license keys. Ask an owner or admin of the project to redeem this key.", httpCode: 403 },
 		1250: { message: "Confirm that you understand RabbitPay is designed for businesses in Slovenia and Slovenian law.", httpCode: 400 },

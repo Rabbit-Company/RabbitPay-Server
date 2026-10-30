@@ -1,11 +1,13 @@
+import type { SQL } from "bun";
 import Database from "../database/database";
 import { outstandingOf } from "../invoicing";
 import { creditorReference } from "../payments/reference";
 import { acceptsPayment, recordPayment } from "../payments/recorded";
 import { ProcessorType } from "../payments/types";
+import { applyBalance } from "../payments/ledger";
 import type { CamtStatement, CamtTransaction } from "./camt";
 import { bankAccountFor } from "./chart";
-import type { BankCandidate, BankMatchInput, BankSuggestion } from "./types";
+import type { BankCandidate, BankMatchInput, BankSuggestion, PaidInvoiceSuggestion } from "./types";
 
 export type { BankCandidate, BankMatchInput, BankSuggestion };
 import type {
@@ -25,6 +27,8 @@ export interface StatementImport {
 	skipped: number;
 	refreshed: number;
 }
+
+const BANK_PAYMENT_NOTE = "Bank statement";
 
 export class BankMatchRefused extends Error {}
 
@@ -227,12 +231,83 @@ function suggestFor(transaction: BankTransactionRow, pool: Candidates, base: str
 		const sameAmount = sameCurrency && candidate.amount === Math.abs(transaction.amount);
 		if (!referenced && !sameAmount) continue;
 		const named = similarName(candidate.name, transaction.counterparty_name);
-		found.push({ ...candidate, exact: referenced && sameAmount, score: (referenced ? 4 : 0) + (sameAmount ? 2 : 0) + (named ? 1 : 0) });
+		found.push({
+			...candidate,
+			exact: referenced && sameAmount,
+			referenced,
+			named,
+			score: (referenced ? 4 : 0) + (sameAmount ? 2 : 0) + (named ? 1 : 0),
+		});
 	}
 	return found
 		.sort((a, b) => b.score - a.score)
 		.slice(0, 5)
 		.map(({ score: _score, ...suggestion }) => suggestion);
+}
+
+const UNLINKED = (sql: typeof Database) => sql`
+	NOT EXISTS (SELECT 1 FROM bank_transaction_matches m WHERE m.payment_transaction = t.uuid)
+	AND NOT EXISTS (SELECT 1 FROM bank_transactions b WHERE b.payment_transaction = t.uuid)
+`;
+
+export async function paidSuggestionsFor(project: ProjectRow, transactions: BankTransactionRow[]): Promise<Map<string, PaidInvoiceSuggestion[]>> {
+	const incoming = transactions.filter((transaction) => transaction.status === "open" && transaction.amount > 0);
+	if (incoming.length === 0) return new Map();
+	const rows = (await Database`
+		SELECT t.uuid AS payment, t.amount, t.currency, t.completed_at, i.uuid AS invoice, i.reference, i.buyer_details, i.buyer_email
+		FROM transactions t JOIN invoices i ON i.uuid = t.invoice
+		WHERE t.project = ${project.uuid} AND t.type = 'payment' AND t.processor = 'bank_transfer' AND t.status = 'completed'
+			AND ${UNLINKED(Database)}
+	`) as {
+		payment: string;
+		amount: number;
+		currency: string;
+		completed_at: number | null;
+		invoice: string;
+		reference: string;
+		buyer_details: string | null;
+		buyer_email: string | null;
+	}[];
+	const result = new Map<string, PaidInvoiceSuggestion[]>();
+	for (const transaction of incoming) {
+		const found = rows
+			.filter((row) => row.currency === transaction.currency && Number(row.amount) === transaction.amount && mentions(transaction, row.reference))
+			.slice(0, 3)
+			.map((row) => ({
+				invoice: row.invoice,
+				payment: row.payment,
+				reference: row.reference,
+				name: buyerName(row as unknown as InvoiceRow),
+				amount: Number(row.amount),
+				currency: row.currency,
+				paid_at: row.completed_at === null ? null : Number(row.completed_at),
+			}));
+		if (found.length) result.set(transaction.uuid, found);
+	}
+	return result;
+}
+
+export async function linkPayment(project: ProjectRow, transaction: BankTransactionRow, paymentId: string, author: string) {
+	if (transaction.status !== "open" || transaction.amount <= 0) throw new BankMatchRefused();
+	const [payment] = (await Database`
+		SELECT t.uuid, t.invoice, t.amount, t.currency FROM transactions t
+		WHERE t.uuid = ${paymentId} AND t.project = ${project.uuid} AND t.type = 'payment' AND t.processor = 'bank_transfer' AND t.status = 'completed'
+			AND t.invoice IS NOT NULL AND ${UNLINKED(Database)}
+	`) as { uuid: string; invoice: string; amount: number; currency: string }[];
+	if (!payment || payment.currency !== transaction.currency || Number(payment.amount) !== transaction.amount) throw new BankMatchRefused();
+	const now = Date.now();
+	await Database.begin(async (tx) => {
+		const updated = await tx`
+			UPDATE bank_transactions SET status = 'matched', match_type = 'invoice', match_id = ${payment.invoice}, payment_transaction = ${payment.uuid},
+				ledger_account = NULL, matched_by = ${author}, matched_at = ${now}
+			WHERE uuid = ${transaction.uuid} AND status = 'open'
+		`;
+		if (updated.count === 0) throw new BankMatchRefused();
+		await tx`
+			INSERT INTO bank_transaction_matches(uuid, project, bank_transaction, match_type, match_id, amount, payment_transaction, created)
+			VALUES(${crypto.randomUUID()}, ${project.uuid}, ${transaction.uuid}, 'invoice', ${payment.invoice}, ${Number(payment.amount)}, ${payment.uuid}, ${now})
+		`;
+	});
 }
 
 export async function suggestionsFor(project: ProjectRow, transactions: BankTransactionRow[]): Promise<Map<string, BankSuggestion[]>> {
@@ -327,7 +402,7 @@ export async function matchTransaction(project: ProjectRow, transaction: BankTra
 				processorTxId: transaction.bank_reference,
 				paymentMethod: "bank_transfer",
 				status: "completed",
-				notes: "Bank statement",
+				notes: BANK_PAYMENT_NOTE,
 				recordedBy: author,
 				settledAt: transaction.booking_date,
 			});
@@ -373,12 +448,48 @@ export async function ignoreTransaction(transaction: BankTransactionRow, author:
 
 export class PermanentMatch extends Error {}
 
-export async function reopenTransaction(transaction: BankTransactionRow) {
+function createdByMatch(details: string | null): boolean {
+	try {
+		return (JSON.parse(details ?? "{}") as { notes?: string }).notes === BANK_PAYMENT_NOTE;
+	} catch {
+		return false;
+	}
+}
+
+export async function reopenTransaction(transaction: BankTransactionRow, author: string | null = null) {
 	if (transaction.status === "open") return;
 	const matches = (await matchesOf([transaction.uuid])).get(transaction.uuid) ?? [];
-	if (transaction.match_type === "invoice" || matches.some((match) => match.match_type === "invoice")) throw new PermanentMatch();
+	const payments = matches.filter((match) => match.match_type === "invoice").map((match) => match.payment_transaction);
+	if (payments.some((payment) => payment === null)) throw new PermanentMatch();
+	const recorded = payments.length
+		? ((await Database`
+				SELECT t.uuid, t.invoice, t.payment_details, t.status, t.processor,
+					(SELECT COUNT(*) FROM transactions child WHERE child.parent_transaction = t.uuid)
+						+ (SELECT COUNT(*) FROM refunds r WHERE r.transaction_id = t.uuid) AS refunds
+				FROM transactions t WHERE t.uuid IN ${Database(payments as string[])} AND t.type = 'payment'
+			`) as { uuid: string; invoice: string; payment_details: string | null; status: string; processor: string; refunds: number }[])
+		: [];
+	if (recorded.length !== payments.length) throw new PermanentMatch();
+	const removable = recorded.filter((payment) => createdByMatch(payment.payment_details));
+	if (removable.some((payment) => payment.processor !== "bank_transfer" || payment.status !== "completed" || Number(payment.refunds) > 0))
+		throw new PermanentMatch();
 	await Database.begin(async (tx) => {
 		const now = Date.now();
+		if (removable.length) {
+			await tx`DELETE FROM bank_transaction_matches WHERE bank_transaction = ${transaction.uuid}`;
+			await tx`UPDATE bank_transactions SET payment_transaction = NULL WHERE uuid = ${transaction.uuid}`;
+			for (const payment of removable) {
+				let details: Record<string, unknown> = {};
+				try {
+					details = payment.payment_details ? (JSON.parse(payment.payment_details) as Record<string, unknown>) : {};
+				} catch {
+					details = {};
+				}
+				const removed = JSON.stringify({ ...details, removed_by: author, removed_at: now, removed_reason: "Bank statement match undone" });
+				await tx`UPDATE transactions SET status = 'failed', payment_details = ${removed}, updated = ${now} WHERE uuid = ${payment.uuid}`;
+			}
+			for (const invoice of new Set(removable.map((payment) => payment.invoice))) await applyBalance(tx as SQL, invoice);
+		}
 		for (const match of matches) {
 			if (match.match_type === "expense") await tx`UPDATE expenses SET paid_at = NULL, updated = ${now} WHERE uuid = ${match.match_id}`;
 			if (match.match_type === "recorded_invoice") await tx`UPDATE recorded_invoices SET paid_at = NULL, updated = ${now} WHERE uuid = ${match.match_id}`;

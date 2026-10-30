@@ -89,9 +89,21 @@ export interface BankSuggestion {
 	amount: number;
 	currency: string;
 	exact: boolean;
+	referenced: boolean;
+	named: boolean;
 }
 
-export interface BankCandidate extends Omit<BankSuggestion, "exact"> {
+export interface PaidInvoiceSuggestion {
+	invoice: string;
+	payment: string;
+	reference: string;
+	name: string | null;
+	amount: number;
+	currency: string;
+	paid_at: number | null;
+}
+
+export interface BankCandidate extends Omit<BankSuggestion, "exact" | "referenced" | "named"> {
 	direction: 1 | -1;
 	date: number;
 	partial: boolean;

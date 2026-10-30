@@ -24,6 +24,8 @@ Each new line shows the documents it probably pays, found by the reference, the 
 
 Matching a customer invoice records the payment on the invoice, so it shows as paid everywhere in RabbitPay.
 
+If you already marked the invoice as paid by bank transfer yourself, the line offers **Already paid: link** instead. It links the line to the payment you entered, without recording a second one. A suggestion found only by the amount, from a different customer, is never the main button. You find it under **More**, where **Open** also lets you check any suggested document first.
+
 ![After matching, only the bank charge is left](https://cdn.rabbitpay.net/help/en/dark/accounting/bank-statements/matched.webp)
 
 ## One payment for several documents
@@ -52,4 +54,4 @@ The statements table compares the closing balance of each statement with the **L
 
 ![Every line matched or booked](https://cdn.rabbitpay.net/help/en/dark/accounting/bank-statements/all-lines.webp)
 
-Choose **All** under **Show** to see every line with how it was settled. **Reopen** undoes a match, a booking or an ignored line. A match to a customer invoice cannot be reopened, because it recorded a payment on the invoice.
+Choose **All** under **Show** to see every line with how it was settled. **Reopen** undoes a match, a booking or an ignored line. Reopening a match to a customer invoice also removes the payment it recorded on the invoice, so the invoice is unpaid again. The customer is not notified. A payment that was refunded since cannot be removed this way.

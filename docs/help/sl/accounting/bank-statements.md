@@ -24,6 +24,8 @@ Vsaka nova postavka pokaže listine, ki jih verjetno plačuje, najdene po sklicu
 
 Povezava z računom kupca zabeleži plačilo na računu, zato je račun povsod v RabbitPay prikazan kot plačan.
 
+Če ste račun že sami označili kot plačan z nakazilom, postavka namesto tega ponudi **Že plačano: poveži**. Postavko poveže s plačilom, ki ste ga vnesli, brez drugega plačila. Predlog, najden samo po znesku in pri drugem kupcu, nikoli ni glavni gumb. Najdete ga pod **Več**, kjer lahko z **Odpri** predlagani dokument tudi najprej preverite.
+
 ![Po povezovanju ostane samo bančni strošek](https://cdn.rabbitpay.net/help/sl/dark/accounting/bank-statements/matched.webp)
 
 ## Eno plačilo za več listin
@@ -52,4 +54,4 @@ Tabela izpiskov primerja končno stanje vsakega izpiska s **Stanjem v glavni knj
 
 ![Vse postavke povezane ali knjižene](https://cdn.rabbitpay.net/help/sl/dark/accounting/bank-statements/all-lines.webp)
 
-Pod **Prikaži** izberite **Vse**, da vidite vse postavke in kako so bile poravnane. **Ponovno odpri** razveljavi povezavo, knjiženje ali prezrto postavko. Povezave z računom kupca ni mogoče ponovno odpreti, ker je na računu zabeležila plačilo.
+Pod **Prikaži** izberite **Vse**, da vidite vse postavke in kako so bile poravnane. **Ponovno odpri** razveljavi povezavo, knjiženje ali prezrto postavko. Ponovno odpiranje povezave z računom kupca odstrani tudi plačilo, ki je bilo zabeleženo na računu, zato je račun spet neplačan. Kupec ne prejme obvestila. Plačila, ki je bilo medtem vrnjeno, tako ni mogoče odstraniti.

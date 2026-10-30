@@ -2673,7 +2673,7 @@ export const en = {
 	"error.1268": "Upload a camt.053 bank statement in XML with at least one booked entry.",
 	"error.1269": "This bank statement line does not exist.",
 	"error.1270": "This document cannot be matched to the bank line. The amount, currency and direction must agree and the document must still be unpaid.",
-	"error.1271": "A payment recorded on an invoice cannot be undone from the bank statement. Refund or correct it on the invoice.",
+	"error.1271": "This invoice payment was refunded or not recorded from the bank statement, so it cannot be undone here. Correct it on the invoice.",
 	"error.1272": "Attach a PDF, PNG, JPEG, WEBP, TIFF or XML file of up to 3 MB.",
 	"error.1273": "This recorded invoice has no attached document.",
 	"error.1276":
@@ -3021,6 +3021,12 @@ export const en = {
 	"bank.import_submit": "Import",
 	"bank.import_counts": "New lines: {new} | Already imported: {known}",
 	"bank.create_expense": "Create expense",
+	"bank.link_payment": "Already paid: link {document}",
+	"bank.link_payment_hint": "The invoice was already marked as paid by bank transfer. This links the bank line to that payment without recording a second one.",
+	"bank.open_document": "Open {document}",
+	"bank.reopen_invoice_title": "Remove the payment from the invoice?",
+	"bank.reopen_invoice_body":
+		"The payment recorded on the invoice from this bank line is removed, the invoice is unpaid again and the line is open for a new match. Your customer is not notified.",
 	"bank.private": "Private",
 	"bank.card_purchase": "Card purchase, {merchant}",
 	"bank.expense_notice":

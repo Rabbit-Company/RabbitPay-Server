@@ -9354,3 +9354,10 @@ td a.warn {
 		min-width: 0;
 	}
 }
+
+.bank-matched {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0.25rem 0.75rem;
+}

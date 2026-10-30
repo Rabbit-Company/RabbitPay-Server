@@ -672,6 +672,25 @@ describe("bank statements", () => {
 		const matched = (await call("GET", `${base()}/accounting/bank-transactions?status=matched`)).data.transactions as { uuid: string; match_type: string }[];
 		const invoiceLine = matched.find((row) => row.match_type === "invoice")!;
 		const expenseLine = matched.find((row) => row.match_type === "expense")!;
+		const paymentsOf = async () =>
+			(
+				(await Database`SELECT COUNT(*) AS count FROM transactions WHERE invoice = ${invoice} AND type = 'payment' AND status = 'completed'`) as {
+					count: number;
+				}[]
+			)[0].count;
+		expect(Number(await paymentsOf())).toBe(1);
+		const undone = await call("POST", `${base()}/accounting/bank-transactions/${invoiceLine.uuid}/reopen`);
+		expect(undone.data.status).toBe("open");
+		expect(Number(await paymentsOf())).toBe(0);
+		const [unpaid] = (await Database`SELECT status, paid_amount FROM invoices WHERE uuid = ${invoice}`) as { status: string; paid_amount: number }[];
+		expect(unpaid.status).not.toBe("paid");
+		expect(Number(unpaid.paid_amount)).toBe(0);
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${invoiceLine.uuid}/match`, { type: "invoice", id: invoice })).data.status).toBe(
+			"matched"
+		);
+		const [repaid] = (await Database`SELECT payment_transaction FROM bank_transactions WHERE uuid = ${invoiceLine.uuid}`) as { payment_transaction: string }[];
+		await Database`INSERT INTO transactions(uuid, project, invoice, processor, status, type, currency, amount, fee_amount, net_amount, parent_transaction, created, updated)
+			VALUES(${crypto.randomUUID()}, ${project}, ${invoice}, 'bank_transfer', 'completed', 'refund', 'EUR', 100, 0, 100, ${repaid.payment_transaction}, ${Date.now()}, ${Date.now()})`;
 		expect((await call("POST", `${base()}/accounting/bank-transactions/${invoiceLine.uuid}/reopen`)).error).toBe(1271);
 		expect((await call("POST", `${base()}/accounting/bank-transactions/${expenseLine.uuid}/reopen`)).data.status).toBe("open");
 		const [expense] = (await Database`SELECT paid_at FROM expenses WHERE uuid = ${telekom}`) as { paid_at: number | null }[];
@@ -768,6 +787,46 @@ describe("private spending on a sole trader account", () => {
 		const data = await collectAccountantPackage(row, { from: "2026-03-01", to: "2026-03-31" });
 		const privateLine = data.bank.flatMap((account) => account.lines).find((entry) => entry.amount === -2250 && entry.status === "private");
 		expect(privateLine?.settles).toContain("9190");
+	});
+});
+
+describe("invoice already paid by hand", () => {
+	test("the bank line links to the existing payment and an unrelated invoice with the same amount is not trusted", async () => {
+		const paid = await issueInvoice(10246, 20);
+		const other = await issueInvoice(10246, 21);
+		const [paidRow] = (await Database`SELECT reference, total_amount FROM invoices WHERE uuid = ${paid}`) as { reference: string; total_amount: number }[];
+		const total = Number(paidRow.total_amount);
+		const manual = await call("POST", `${base()}/transactions`, { invoice: paid, processor: "bank_transfer", amount: total, notes: "Placano po izpisku" });
+		expect(manual.error).toBe(0);
+		const xml = camt([entry((total / 100).toFixed(2), "CRDT", "2026-03-25", "P-1", "Plaza d.o.o.", "DRUGO", creditorReference(paidRow.reference)!)]).replace(
+			"<Id>2026-03-001</Id>",
+			"<Id>PAID-03</Id>"
+		);
+		expect((await call("POST", `${base()}/accounting/bank-statements`, { name: "paid.xml", data: Buffer.from(xml).toString("base64") })).data.imported).toBe(1);
+
+		const open = (await call("GET", `${base()}/accounting/bank-transactions?status=open`)).data.transactions as any[];
+		const line = open.find((row) => row.bank_reference === "P-1");
+		expect(line.paid_suggestions.map((entry: any) => entry.invoice)).toEqual([paid]);
+		const sameAmount = line.suggestions.find((entry: any) => entry.id === other);
+		expect(sameAmount).toMatchObject({ referenced: false, named: false, exact: false });
+
+		const payments = async () =>
+			Number(
+				((await Database`SELECT COUNT(*) AS count FROM transactions WHERE invoice = ${paid} AND type = 'payment' AND status = 'completed'`) as any[])[0].count
+			);
+		const linked = await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/link-payment`, { payment: line.paid_suggestions[0].payment });
+		expect(linked.data).toMatchObject({ status: "matched", match_type: "invoice", match_id: paid });
+		expect(await payments()).toBe(1);
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/link-payment`, { payment: line.paid_suggestions[0].payment })).error).toBe(
+			1270
+		);
+
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${line.uuid}/reopen`)).data.status).toBe("open");
+		expect(await payments()).toBe(1);
+		const [still] = (await Database`SELECT status FROM invoices WHERE uuid = ${paid}`) as { status: string }[];
+		expect(still.status).toBe("paid");
+		const [otherRow] = (await Database`SELECT status FROM invoices WHERE uuid = ${other}`) as { status: string }[];
+		expect(otherRow.status).not.toBe("paid");
 	});
 });
 
@@ -1419,7 +1478,19 @@ describe("bank lines settling several documents", () => {
 		expect(matched.data).toMatchObject({ status: "matched", match_type: "invoice", match_id: null });
 		const statuses = (await Database`SELECT uuid, status FROM invoices WHERE uuid IN (${first}, ${second})`) as { uuid: string; status: string }[];
 		expect(Object.fromEntries(statuses.map((row) => [row.uuid, row.status]))).toEqual({ [first]: "paid", [second]: "partially_paid" });
-		expect((await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/reopen`)).error).toBe(1271);
+		expect((await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/reopen`)).data.status).toBe("open");
+		const reverted = (await Database`SELECT uuid, status FROM invoices WHERE uuid IN (${first}, ${second})`) as { uuid: string; status: string }[];
+		expect(reverted.every((row) => row.status !== "paid" && row.status !== "partially_paid")).toBe(true);
+		expect(
+			(
+				await call("POST", `${base()}/accounting/bank-transactions/${many.uuid}/match`, {
+					matches: [
+						{ type: "invoice", id: first },
+						{ type: "invoice", id: second, amount: 17800 },
+					],
+				})
+			).data.status
+		).toBe("matched");
 
 		const before = await trialBalance();
 		expect((await call("POST", `${base()}/accounting/bank-transactions/${foreign.uuid}/match`, { type: "expense", id: vendor })).data.status).toBe("matched");
