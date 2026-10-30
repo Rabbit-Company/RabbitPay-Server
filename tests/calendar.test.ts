@@ -10,6 +10,7 @@ const { default: Auth } = await import("../server/auth");
 const { Realtime } = await import("../server/realtime");
 const { occurrenceDates, readRepeat, timedOccurrences, timestampOfLocalTime } = await import("../server/workforce/recurrence");
 const { dueReminders, sendReminders } = await import("../server/workforce/team-calendar");
+const { localDate, shiftLocalDate, zonedParts } = await import("../server/timezone");
 
 interface Result {
 	status: number;
@@ -361,8 +362,9 @@ describe("calendar feed", () => {
 
 describe("reminders", () => {
 	test("reach the people of a meeting and the owner of an event once", async () => {
-		const now = Date.now();
-		const soon = now + 10 * 60 * 1000;
+		const soon = Math.floor((Date.now() + 10 * 60 * 1000) / 60000) * 60000;
+		const clock = zonedParts(soon, ZONE);
+		const weekAgo = timestampOfLocalTime(shiftLocalDate(localDate(soon, ZONE), -7), clock.hour * 60 + clock.minute, ZONE);
 		const scheduled = await call("POST", `${chat()}/meetings`, tokens.owner, {
 			title: "Planning",
 			starts_at: soon,
@@ -372,7 +374,7 @@ describe("reminders", () => {
 		await call("POST", `${calendar()}/events`, tokens.boris, { title: "Call supplier", visibility: "private", starts_at: soon + 1000, duration_minutes: 15 });
 		await call("POST", `${calendar()}/events`, tokens.boris, {
 			title: "Daily check",
-			starts_at: soon - 7 * 86400000,
+			starts_at: weekAgo,
 			duration_minutes: 15,
 			repeat: { unit: "day" },
 		});
