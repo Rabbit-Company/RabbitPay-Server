@@ -1036,6 +1036,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
 			{
 				key: "metrics.method",
 				label: "Metrics",
+				hint: "Basic counts requests, Detailed adds timings per route, Full adds database timings",
 				kind: "choice",
 				choices: [
 					{ value: "0", label: "Disabled" },

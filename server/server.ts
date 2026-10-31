@@ -28,16 +28,11 @@ export namespace Server {
 		if (configured) return;
 		configured = true;
 
-		app.use(async (ctx, next) => {
-			const start = process.hrtime();
-			const method = Metrics.methodLabel(ctx.req.method);
+		Metrics.configure(() => Settings.metrics.method);
 
-			if (Settings.metrics.method >= 1) {
-				Metrics.http_requests_total.labels({ method }).inc();
-			}
-
+		async function handled(next: () => Promise<Response | void>): Promise<Response | void> {
 			try {
-				await next();
+				return await next();
 			} catch (err) {
 				if (err instanceof NumberingExhausted) return Utils.jsonError(ErrorCode.INVOICE_NUMBERS_EXHAUSTED);
 				if (err instanceof DocumentArchiveDamaged) {
@@ -47,11 +42,28 @@ export namespace Server {
 				Logger.error(`[GENERAL] ${err}`);
 				return Utils.jsonError(ErrorCode.UNKNOWN_ERROR);
 			}
+		}
 
-			const end = process.hrtime(start);
-			if (Settings.metrics.method >= 2) {
-				Metrics.http_request_duration.labels({ method }).observe(end[0] * 1000 + end[1] / 1000000);
+		app.use(async (ctx, next) => {
+			const level = Settings.metrics.method;
+			if (level < Metrics.BASIC) return await handled(next);
+
+			const start = performance.now();
+			const measured = level >= Metrics.FULL ? await Metrics.measureRequest(() => handled(next)) : { result: await handled(next), usage: null };
+			const response = measured.result;
+			const method = Metrics.methodLabel(ctx.req.method);
+			const status = Metrics.statusLabel(response?.status ?? 500);
+
+			Metrics.http_requests_total.labels({ method, status }).inc();
+			if (level < Metrics.DETAILED) return response;
+
+			const route = Metrics.routeLabel(ctx.route);
+			Metrics.http_request_duration.labels({ method, route, status }).observe(performance.now() - start);
+			if (measured.usage) {
+				Metrics.database_queries_per_request.labels({ method, route }).observe(measured.usage.queries);
+				Metrics.database_time_per_request.labels({ method, route }).observe(measured.usage.databaseMs);
 			}
+			return response;
 		});
 
 		app.use(clientIpMiddleware());

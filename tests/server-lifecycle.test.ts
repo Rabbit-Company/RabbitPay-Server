@@ -40,16 +40,20 @@ describe("production defaults", () => {
 		expect(DEFAULT_SETTINGS.metrics.method).toBe(0);
 	});
 
-	test("request metrics never carry the request path", async () => {
+	test("request metrics carry the route pattern and never the request path", async () => {
 		await updateSettings({ "metrics.method": 2 });
-		for (let index = 0; index < 5; index++) {
-			await Server.app.handle(new Request(`http://127.0.0.1/api/v1/invoices/${crypto.randomUUID()}`));
+		const ids = Array.from({ length: 5 }, () => crypto.randomUUID());
+		for (const id of ids) {
+			await Server.app.handle(new Request(`http://127.0.0.1/api/v1/invoices/${id}`));
+			await Server.app.handle(new Request(`http://127.0.0.1/api/v1/projects/${id}`));
 		}
 		await Server.app.handle(new Request("http://127.0.0.1/api/health"));
 		const text = Metrics.registry.metricsText();
-		expect(text).not.toContain("/api/");
-		expect(text).not.toContain("endpoint=");
-		expect(text).toContain('method="GET"');
+		for (const id of ids) expect(text).not.toContain(id);
+		const known = new Set(Server.app.getRoutes().map((route) => route.path));
+		const routes = [...text.matchAll(/route="([^"]*)"/g)].map((match) => match[1]!);
+		expect(routes).toContain("/api/v1/projects/:uuid");
+		for (const route of routes) expect(route === "other" || known.has(route)).toBe(true);
 		await updateSettings({ "metrics.method": 0 });
 	});
 

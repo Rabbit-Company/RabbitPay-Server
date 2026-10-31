@@ -1,14 +1,20 @@
 import { SQL, type TransactionSQL } from "bun";
 import { normalizeIntegers } from "./numbers";
+import Metrics from "../metrics";
 
 export function numericClient<T extends SQL>(client: T): T {
 	function query<T>(pending: SQL.Query<T>): SQL.Query<T> {
+		function settled(target: SQL.Query<T>): Promise<T> {
+			if (Metrics.level() < Metrics.FULL) return target.then(normalizeIntegers);
+			const start = performance.now();
+			return target.then(normalizeIntegers).finally(() => Metrics.observeQuery(performance.now() - start));
+		}
+
 		return new Proxy(pending, {
 			get(target, property, receiver) {
-				if (property === "then")
-					return (resolve: (value: T) => unknown, reject: (error: unknown) => unknown) => target.then(normalizeIntegers).then(resolve, reject);
-				if (property === "catch") return (reject: (error: unknown) => unknown) => target.then(normalizeIntegers).catch(reject);
-				if (property === "finally") return (callback: () => void) => target.then(normalizeIntegers).finally(callback);
+				if (property === "then") return (resolve: (value: T) => unknown, reject: (error: unknown) => unknown) => settled(target).then(resolve, reject);
+				if (property === "catch") return (reject: (error: unknown) => unknown) => settled(target).catch(reject);
+				if (property === "finally") return (callback: () => void) => settled(target).finally(callback);
 				const value = Reflect.get(target, property, target);
 				if (typeof value !== "function") return value;
 				return (...args: unknown[]) => {
