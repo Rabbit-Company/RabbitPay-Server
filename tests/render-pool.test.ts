@@ -71,9 +71,13 @@ describe("render pool", () => {
 		const scratch = `${import.meta.dir}/.render-binary`;
 		const script = ((await Bun.file(`${root}/package.json`).json()) as { scripts: { build: string } }).scripts.build;
 		expect(script).toContain("server/index.ts");
+		const invoice = await previewDocument(project, DEFAULT_INVOICE_DESIGN, "invoice");
+		if (invoice.kind === "credit_note") throw new Error("Unexpected preview kind");
 		await Bun.write(
 			`${root}/server/.render-probe.ts`,
 			`import RenderPool from "./render-pool";
+const pdf = await RenderPool.render({ kind: "invoice", document: ${JSON.stringify(invoice.document)} as never, logo: null, payLink: false });
+console.log("pdf:" + new TextDecoder().decode(pdf.subarray(0, 5)));
 RenderPool.render({ kind: "invoice", document: {} as never, logo: null, payLink: false }).then(
 	() => console.log("rendered"),
 	(error) => console.log("rejected:" + error.message)
@@ -84,8 +88,10 @@ RenderPool.render({ kind: "invoice", document: {} as never, logo: null, payLink:
 			const command = script.replace("server/index.ts", "server/.render-probe.ts").replace("./rabbitpay-server", `${scratch}/probe`);
 			const built = Bun.spawnSync(["sh", "-c", command], { cwd: root, stderr: "pipe" });
 			expect(built.exitCode).toBe(0);
-			const run = Bun.spawnSync([`${scratch}/probe`], { cwd: "/", env: { ...process.env, RABBITPAY_RENDER_WORKERS: "1" }, stdout: "pipe" });
+			const run = Bun.spawnSync([`${scratch}/probe`], { cwd: "/", env: { ...process.env, RABBITPAY_RENDER_WORKERS: "1" }, stdout: "pipe", stderr: "pipe" });
 			const output = run.stdout.toString();
+			expect(run.exitCode, run.stderr.toString()).toBe(0);
+			expect(output).toContain("pdf:%PDF-");
 			expect(output).toContain("rejected:");
 			expect(output).not.toContain("The render worker failed");
 			expect(output).not.toContain("ModuleNotFound");

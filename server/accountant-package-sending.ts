@@ -92,13 +92,13 @@ function nextRun(sendDay: number | null, lastRun: string | null, timezone: strin
 	return `${monthKey(year, month)}-${String(day).padStart(2, "0")}`;
 }
 
-export async function packageSettings(project: Pick<ProjectRow, "uuid" | "timezone">) {
+export async function packageSettings(project: Pick<ProjectRow, "uuid" | "timezone">, now = Date.now()) {
 	const [row] = (await Database`SELECT * FROM accountant_package_settings WHERE project = ${project.uuid}`) as PackageSettingsRow[];
 	const sendDay = row && row.send_day !== null ? Number(row.send_day) : null;
 	return {
 		recipients: row ? recipientList(row.recipients) : [],
 		send_day: sendDay,
-		next_run: nextRun(sendDay, row?.last_run ?? null, project.timezone),
+		next_run: nextRun(sendDay, row?.last_run ?? null, project.timezone, now),
 		updated: row ? Number(row.updated) : null,
 	};
 }

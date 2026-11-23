@@ -18,7 +18,7 @@
 		"format:check": "bun fmt --check",
 		"build:web": "bun build web/index.html --outdir web/dist --minify --splitting --public-path=/ && bun build web/src/push-worker.ts --outfile web/dist/push-worker.js --minify && cp web/embed.js web/bimi.svg web/dist/ && cp web/favicon.svg web/dist/logo.svg",
 		"watch:web": "bun build web/src/push-worker.ts --outfile web/dist/push-worker.js && bun build web/index.html --outdir web/dist --splitting --public-path=/ --watch",
-		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
+		"build": "bun build server/index.ts server/render-worker.ts ./node_modules/tiny-secp256k1/lib/secp256k1.wasm --compile --minify --conditions=browser --asset-naming=\"[name].[ext]\" --outfile ./rabbitpay-server"
 	},
 	"repository": {
 		"type": "git",
@@ -37,7 +37,7 @@
 	},
 	"homepage": "https://github.com/Rabbit-Company/RabbitPay-Server#readme",
 	"devDependencies": {
-		"@types/bun": "^1.4.4",
+		"@types/bun": "^1.4.5",
 		"@types/nodemailer": "^8.0.2",
 		"@types/pdfkit": "^0.17.7"
 	},
@@ -56,9 +56,9 @@
 		"bitcoinjs-lib": "^7.0.5",
 		"ethereumjs-wallet": "^1.0.2",
 		"highlight.js": "^11.12.0",
-		"livekit-client": "^2.23.0",
-		"nodemailer": "^10.3.1",
-		"pdfkit": "^0.20.2",
+		"livekit-client": "^2.25.0",
+		"nodemailer": "^10.6.1",
+		"pdfkit": "^0.21.0",
 		"tiny-secp256k1": "^2.2.5"
 	}
 }

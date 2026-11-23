@@ -8,7 +8,7 @@ const { Server } = await import("../server/server");
 const { default: Database, initialize } = await import("../server/database/database");
 const { default: Cache } = await import("../server/cache");
 const { vatReturnFromEvidence } = await import("../server/accountant-package");
-const { diffSnapshots, runScheduledPackages } = await import("../server/accountant-package-sending");
+const { diffSnapshots, packageSettings, runScheduledPackages } = await import("../server/accountant-package-sending");
 
 await Server.configure();
 
@@ -350,8 +350,8 @@ describe("sending to the accountant", () => {
 		expect(row.period_from).toBe("2026-09-01");
 		expect(Number(row.automatic)).toBe(1);
 		expect(row.sent_by).toBeNull();
-		const settings = await call("GET", `${base()}/accountant-package/settings`);
-		expect(settings.data.next_run).toMatch(/-05$/);
+		const settings = await packageSettings({ uuid: project, timezone: "Europe/Ljubljana" }, Date.UTC(2026, 9, 20, 10));
+		expect(settings.next_run).toBe("2026-11-05");
 	});
 
 	test("compares snapshots by document", () => {
